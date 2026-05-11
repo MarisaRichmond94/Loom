@@ -17,7 +17,10 @@ export async function PATCH(req: Request, { params }: Params) {
         ...(baseContent !== undefined && { baseContent }),
         ...(order !== undefined && { order }),
       },
-      include: { choices: true, overrides: { orderBy: { order: 'asc' } } },
+      include: {
+        choices: { orderBy: { id: 'asc' } },
+        overrides: { orderBy: { order: 'asc' } },
+      },
     })
     return NextResponse.json(block)
   } catch (e) {

@@ -8,7 +8,10 @@ export async function GET(_: Request, { params }: Params) {
   const blocks = await prisma.contentBlock.findMany({
     where: { sceneId },
     orderBy: { order: 'asc' },
-    include: { choices: true, overrides: { orderBy: { order: 'asc' } } },
+    include: {
+      choices: { orderBy: { id: 'asc' } },
+      overrides: { orderBy: { order: 'asc' } },
+    },
   })
   return NextResponse.json(blocks)
 }
