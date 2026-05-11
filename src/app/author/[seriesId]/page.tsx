@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import OutlineTree from '@/components/sidebar/OutlineTree'
 import VariablesPanel from '@/components/sidebar/VariablesPanel'
 
@@ -16,12 +17,12 @@ export default function AuthorSeriesPage() {
   const router = useRouter()
   const [series, setSeries] = useState<Series | null>(null)
 
-  async function load() {
+  const load = useCallback(async () => {
     const res = await fetch(`/api/series/${seriesId}`)
     if (res.ok) setSeries(await res.json())
-  }
+  }, [seriesId])
 
-  useEffect(() => { load() }, [seriesId])
+  useEffect(() => { load() }, [load])
 
   async function addBook(title: string) {
     await fetch(`/api/series/${seriesId}/books`, {
@@ -74,7 +75,7 @@ export default function AuthorSeriesPage() {
   return (
     <div className="min-h-screen bg-surface-base flex flex-col">
       <nav className="bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
-        <a href="/" className="text-accent font-bold tracking-wider">LOOM</a>
+        <Link href="/" className="text-accent font-bold tracking-wider">LOOM</Link>
         <span className="text-ink-faint">›</span>
         <span className="text-ink">{series.title}</span>
       </nav>
@@ -89,7 +90,6 @@ export default function AuthorSeriesPage() {
             onAddScene={addScene}
           />
           <VariablesPanel
-            seriesId={seriesId}
             variables={series.variables}
             onAdd={addVariable}
             onDelete={deleteVariable}

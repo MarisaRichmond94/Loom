@@ -4,7 +4,6 @@ import { useState } from 'react'
 
 type Variable = { id: string; name: string; type: string; defaultValue: string }
 type Props = {
-  seriesId: string
   variables: Variable[]
   onAdd: (name: string, type: string, defaultValue: unknown) => void
   onDelete: (id: string) => void

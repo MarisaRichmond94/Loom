@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 
 type Scene = { id: string; title: string; order: number }
@@ -26,6 +26,19 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
   const [addingChapter, setAddingChapter] = useState<string | null>(null)
   const [addingScene, setAddingScene] = useState<{ bookId: string; chapterId: string } | null>(null)
   const [inputVal, setInputVal] = useState('')
+
+  useEffect(() => {
+    setExpandedBooks(prev => {
+      const next = new Set(prev)
+      books.forEach(b => next.add(b.id))
+      return next
+    })
+    setExpandedChapters(prev => {
+      const next = new Set(prev)
+      books.forEach(b => b.chapters.forEach(c => next.add(c.id)))
+      return next
+    })
+  }, [books])
 
   function toggleBook(id: string) {
     setExpandedBooks(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
