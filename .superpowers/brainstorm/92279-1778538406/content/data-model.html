@@ -1,0 +1,104 @@
+<h2>Data Model</h2>
+<p class="subtitle">How your story content is structured in the database</p>
+
+<div style="display:flex;flex-direction:column;gap:16px;max-width:900px;margin:0 auto">
+
+  <!-- Hierarchy -->
+  <div style="background:#12121e;border-radius:10px;padding:20px">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;margin-bottom:14px">Story Hierarchy</div>
+    <div style="display:flex;align-items:center;gap:0;flex-wrap:wrap;gap:6px">
+      <div style="background:#1e1e4a;border:1px solid #3a3a7a;border-radius:6px;padding:8px 14px;text-align:center">
+        <div style="font-size:11px;color:#8888ff;font-weight:bold">Series</div>
+        <div style="font-size:10px;color:#555;margin-top:2px">title, description</div>
+      </div>
+      <div style="color:#555;font-size:18px">›</div>
+      <div style="background:#1e2a4a;border:1px solid #3a4a7a;border-radius:6px;padding:8px 14px;text-align:center">
+        <div style="font-size:11px;color:#88aaff;font-weight:bold">Book</div>
+        <div style="font-size:10px;color:#555;margin-top:2px">title, order</div>
+      </div>
+      <div style="color:#555;font-size:18px">›</div>
+      <div style="background:#1e3a4a;border:1px solid #3a5a7a;border-radius:6px;padding:8px 14px;text-align:center">
+        <div style="font-size:11px;color:#88ccff;font-weight:bold">Chapter</div>
+        <div style="font-size:10px;color:#555;margin-top:2px">title, order</div>
+      </div>
+      <div style="color:#555;font-size:18px">›</div>
+      <div style="background:#1e3a3a;border:1px solid #3a5a5a;border-radius:6px;padding:8px 14px;text-align:center">
+        <div style="font-size:11px;color:#88dddd;font-weight:bold">Scene</div>
+        <div style="font-size:10px;color:#555;margin-top:2px">title, order</div>
+      </div>
+      <div style="color:#555;font-size:18px">›</div>
+      <div style="background:#1e3a2a;border:1px solid #3a5a4a;border-radius:6px;padding:8px 14px;text-align:center">
+        <div style="font-size:11px;color:#88cc99;font-weight:bold">Content Block</div>
+        <div style="font-size:10px;color:#555;margin-top:2px">the actual content</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content Block Types -->
+  <div style="background:#12121e;border-radius:10px;padding:20px">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;margin-bottom:14px">Content Block — 3 Types</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+
+      <div style="background:#1a2a1a;border:1px solid #3a5a3a;border-radius:8px;padding:14px">
+        <div style="font-size:11px;color:#88cc88;font-weight:bold;margin-bottom:8px">📝 Text</div>
+        <div style="font-size:11px;color:#aaa;line-height:1.6">Regular prose. Stored as rich text (bold, italic, etc). Most blocks are this type.</div>
+      </div>
+
+      <div style="background:#2a1a1a;border:1px solid #5a3a3a;border-radius:8px;padding:14px">
+        <div style="font-size:11px;color:#cc8888;font-weight:bold;margin-bottom:8px">⑂ Choice Point</div>
+        <div style="font-size:11px;color:#aaa;line-height:1.6">A decision node. Has 2–4 choices. Each choice sets story variables and optionally jumps to a different scene (for big branches).</div>
+        <div style="margin-top:8px;font-size:10px;color:#666">display: inline | chapter-gate</div>
+      </div>
+
+      <div style="background:#1a1a2a;border:1px solid #3a3a5a;border-radius:8px;padding:14px">
+        <div style="font-size:11px;color:#8888cc;font-weight:bold;margin-bottom:8px">◈ Conditional Fragment</div>
+        <div style="font-size:11px;color:#aaa;line-height:1.6">Base text + override snippets. At render time, the reader's state is checked and the matching override (if any) replaces the base.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Story Variables -->
+  <div style="background:#12121e;border-radius:10px;padding:20px">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;margin-bottom:14px">Story Variables — the "memory" of choices</div>
+    <div style="display:flex;gap:10px;align-items:flex-start">
+      <div style="flex:1;font-size:11px;color:#aaa;line-height:1.8">
+        Defined per series. Set by choices. Read by conditional fragments. Carry forward through all five books.
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
+          <div style="background:#1a1a2e;border-radius:4px;padding:6px 10px;font-family:monospace;font-size:11px;color:#aaaaff">spare_victim <span style="color:#555">= true</span></div>
+          <div style="background:#1a1a2e;border-radius:4px;padding:6px 10px;font-family:monospace;font-size:11px;color:#aaaaff">burned_letter <span style="color:#555">= false</span></div>
+          <div style="background:#1a1a2e;border-radius:4px;padding:6px 10px;font-family:monospace;font-size:11px;color:#aaaaff">ally_count <span style="color:#555">= 2</span></div>
+        </div>
+      </div>
+      <div style="width:1px;background:#2a2a3a;margin:0 4px"></div>
+      <div style="flex:1;font-size:11px;color:#aaa;line-height:1.8">
+        Supported types:
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
+          <div style="background:#1a1a2e;border-radius:4px;padding:6px 10px;font-size:11px"><span style="color:#cc8888">boolean</span> <span style="color:#555">— true/false flags (most common)</span></div>
+          <div style="background:#1a1a2e;border-radius:4px;padding:6px 10px;font-size:11px"><span style="color:#88ccff">number</span> <span style="color:#555">— counters (e.g. kill count)</span></div>
+          <div style="background:#1a1a2e;border-radius:4px;padding:6px 10px;font-size:11px"><span style="color:#88cc88">string</span> <span style="color:#555">— named choices (e.g. "north")</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reader Session -->
+  <div style="background:#12121e;border-radius:10px;padding:20px">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;margin-bottom:14px">Reader Session — tracking progress & enabling rewind</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div style="background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:12px">
+        <div style="font-size:11px;color:#999;font-weight:bold;margin-bottom:6px">Current Position</div>
+        <div style="font-size:10px;color:#666">Which scene + block the reader is on right now</div>
+      </div>
+      <div style="background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:12px">
+        <div style="font-size:11px;color:#999;font-weight:bold;margin-bottom:6px">Story State</div>
+        <div style="font-size:10px;color:#666">Current values of all story variables (the accumulated result of all choices made)</div>
+      </div>
+      <div style="background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:12px">
+        <div style="font-size:11px;color:#999;font-weight:bold;margin-bottom:6px">Choice History</div>
+        <div style="font-size:10px;color:#666">Ordered list of every choice made. Rewinding pops back to any point and recalculates state.</div>
+      </div>
+    </div>
+  </div>
+
+</div>

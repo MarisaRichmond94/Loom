@@ -1,0 +1,116 @@
+<h2>Author Editor</h2>
+<p class="subtitle">What you see when writing your story</p>
+
+<div style="background:#0d0d18;border-radius:10px;overflow:hidden;border:1px solid #2a2a3a;max-width:960px;margin:0 auto">
+
+  <!-- Top nav -->
+  <div style="background:#12121e;border-bottom:1px solid #2a2a3a;padding:10px 16px;display:flex;align-items:center;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:16px">
+      <span style="font-size:14px;font-weight:bold;color:#8888ff;letter-spacing:1px">LOOM</span>
+      <span style="font-size:11px;color:#555">›</span>
+      <span style="font-size:11px;color:#aaa">The Unnamed Series</span>
+      <span style="font-size:11px;color:#555">›</span>
+      <span style="font-size:11px;color:#aaa">Book 1</span>
+    </div>
+    <div style="display:flex;gap:10px">
+      <div style="background:#1a2a1a;border:1px solid #3a5a3a;border-radius:4px;padding:4px 12px;font-size:11px;color:#88cc88;cursor:pointer">▶ Preview as Reader</div>
+      <div style="background:#1a1a2e;border:1px solid #3a3a6a;border-radius:4px;padding:4px 12px;font-size:11px;color:#8888cc;cursor:pointer">⚙ Variables</div>
+    </div>
+  </div>
+
+  <div style="display:flex;height:480px">
+
+    <!-- Left sidebar: story outline -->
+    <div style="width:200px;background:#0f0f1a;border-right:1px solid #2a2a3a;overflow-y:auto;flex-shrink:0">
+      <div style="padding:10px 12px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#555">Outline</div>
+
+      <div style="padding:0 8px">
+        <!-- Chapter 1 -->
+        <div style="padding:5px 8px;font-size:11px;color:#8888cc;cursor:pointer;border-radius:4px;background:#1a1a2e">▾ Chapter 1</div>
+        <div style="padding:4px 8px 4px 20px;font-size:11px;color:#aaa;cursor:pointer;border-radius:4px">Scene 1</div>
+        <div style="padding:4px 8px 4px 20px;font-size:11px;color:#aaa;cursor:pointer;border-radius:4px;background:#1e1e38">Scene 2 ←</div>
+        <div style="padding:4px 8px 4px 20px;font-size:11px;color:#aaa;cursor:pointer;border-radius:4px">Scene 3</div>
+
+        <!-- Chapter 2 -->
+        <div style="padding:5px 8px;margin-top:4px;font-size:11px;color:#666;cursor:pointer;border-radius:4px">▸ Chapter 2</div>
+        <div style="padding:5px 8px;margin-top:4px;font-size:11px;color:#666;cursor:pointer;border-radius:4px">▸ Chapter 3</div>
+      </div>
+
+      <div style="padding:10px 12px;margin-top:8px;border-top:1px solid #1a1a2a">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#555;margin-bottom:8px">Story Variables</div>
+        <div style="font-size:10px;color:#8888cc;background:#1a1a2e;border-radius:4px;padding:4px 8px;margin-bottom:4px;font-family:monospace">spare_victim</div>
+        <div style="font-size:10px;color:#8888cc;background:#1a1a2e;border-radius:4px;padding:4px 8px;margin-bottom:4px;font-family:monospace">burned_letter</div>
+        <div style="font-size:10px;color:#444;border:1px dashed #333;border-radius:4px;padding:4px 8px;text-align:center;cursor:pointer">+ add variable</div>
+      </div>
+    </div>
+
+    <!-- Main editor -->
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+
+      <!-- Scene header -->
+      <div style="background:#12121e;border-bottom:1px solid #2a2a3a;padding:10px 20px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:13px;color:#ddd;font-weight:bold">Chapter 1, Scene 2</div>
+          <div style="font-size:10px;color:#555;margin-top:2px">The Crossroads</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div style="font-size:10px;color:#888;background:#1a1a2a;border:1px solid #2a2a4a;border-radius:4px;padding:3px 10px;cursor:pointer">+ Text Block</div>
+          <div style="font-size:10px;color:#cc8888;background:#2a1a1a;border:1px solid #4a2a2a;border-radius:4px;padding:3px 10px;cursor:pointer">⑂ Choice Point</div>
+          <div style="font-size:10px;color:#8888cc;background:#1a1a2a;border:1px solid #3a3a5a;border-radius:4px;padding:3px 10px;cursor:pointer">◈ Conditional</div>
+        </div>
+      </div>
+
+      <!-- Blocks -->
+      <div style="flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+
+        <!-- Text block -->
+        <div style="background:#1a1a26;border:1px solid #2a2a3a;border-radius:6px;padding:14px;border-left:3px solid #3a3a6a">
+          <div style="font-size:10px;color:#555;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Text</div>
+          <div style="font-family:Georgia,serif;font-size:12px;color:#ccc;line-height:1.8">The market was quiet that morning. Elara moved through the stalls, eyes low, hands tucked inside her sleeves against the early cold.</div>
+        </div>
+
+        <!-- Conditional fragment block -->
+        <div style="background:#1a1a2e;border:1px solid #3a3a5a;border-radius:6px;padding:14px;border-left:3px solid #6a6acc">
+          <div style="font-size:10px;color:#8888cc;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">◈ Conditional Fragment</div>
+          <div style="background:#131320;border-radius:4px;padding:10px;margin-bottom:8px">
+            <div style="font-size:10px;color:#555;margin-bottom:4px">Base (default)</div>
+            <div style="font-family:Georgia,serif;font-size:12px;color:#aaa;line-height:1.7">The memory she carried was a heavier thing.</div>
+          </div>
+          <div style="background:#0e2010;border:1px solid #2a4a2a;border-radius:4px;padding:10px">
+            <div style="font-size:10px;color:#80c880;margin-bottom:4px">if spare_victim = true</div>
+            <div style="font-family:Georgia,serif;font-size:12px;color:#b0e8b0;line-height:1.7">She kept thinking of his face — alive still, somewhere out there.</div>
+          </div>
+          <div style="font-size:10px;color:#444;border:1px dashed #2a2a3a;border-radius:4px;padding:6px;text-align:center;margin-top:6px;cursor:pointer">+ add override condition</div>
+        </div>
+
+        <!-- Text block -->
+        <div style="background:#1a1a26;border:1px solid #2a2a3a;border-radius:6px;padding:14px;border-left:3px solid #3a3a6a">
+          <div style="font-size:10px;color:#555;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Text</div>
+          <div style="font-family:Georgia,serif;font-size:12px;color:#ccc;line-height:1.8">She bought nothing. She never did anymore.</div>
+        </div>
+
+        <!-- Choice point block -->
+        <div style="background:#2a1a1a;border:1px solid #5a3a3a;border-radius:6px;padding:14px;border-left:3px solid #cc6666">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div style="font-size:10px;color:#cc8888;text-transform:uppercase;letter-spacing:1px">⑂ Choice Point</div>
+            <div style="font-size:10px;color:#555;background:#1a1010;border-radius:3px;padding:2px 8px">inline</div>
+          </div>
+          <div style="font-family:Georgia,serif;font-size:12px;color:#ccc;margin-bottom:10px;font-style:italic">She stood for a long moment. Then she made a decision.</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="background:#1a1010;border:1px solid #3a2020;border-radius:4px;padding:8px 12px;font-size:11px;color:#e0aaaa">
+              → Walk away. Let it go.
+              <span style="float:right;font-size:10px;color:#555">sets: spare_victim=true</span>
+            </div>
+            <div style="background:#1a1010;border:1px solid #3a2020;border-radius:4px;padding:8px 12px;font-size:11px;color:#e0aaaa">
+              → Go back. Finish it.
+              <span style="float:right;font-size:10px;color:#555">sets: spare_victim=false</span>
+            </div>
+            <div style="font-size:10px;color:#444;border:1px dashed #2a1a1a;border-radius:4px;padding:6px;text-align:center;cursor:pointer">+ add choice</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>

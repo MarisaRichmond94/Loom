@@ -1,0 +1,74 @@
+<h2>How do you write conditional text in a scene?</h2>
+<p class="subtitle">Three approaches for authoring text that varies based on earlier choices</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="inline-tags" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#12121e;border-radius:8px;padding:16px;font-family:Georgia,serif;color:#e0d9c8;font-size:12px;line-height:1.8">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#666;margin-bottom:10px">Scene Editor — Chapter 14</div>
+        <p style="margin:0 0 8px">The market was quiet that morning. Elara moved through the stalls, eyes low.</p>
+        <span style="background:#1a3a1a;border:1px solid #3a6a3a;border-radius:4px;padding:2px 6px;color:#80c880;font-size:11px;cursor:pointer" title="if: spare_victim = true">She kept thinking of his face — alive still, somewhere out there.</span>
+        <span style="background:#3a1a1a;border:1px solid #6a3a3a;border-radius:4px;padding:2px 6px;color:#c88080;font-size:11px;cursor:pointer;margin-left:4px" title="if: spare_victim = false">The memory she carried was a heavier thing.</span>
+        <p style="margin:8px 0 0">She bought nothing. She never did anymore.</p>
+        <div style="margin-top:14px;border-top:1px solid #2a2a3a;padding-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <span style="font-size:10px;background:#1a3a1a;border-radius:3px;padding:2px 8px;color:#80c880">■ spare_victim = true</span>
+          <span style="font-size:10px;background:#3a1a1a;border-radius:3px;padding:2px 8px;color:#c88080">■ spare_victim = false</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Inline Conditional Tags</h3>
+      <p>Write normally. Highlight any phrase and tag it with a condition. Color-coded highlights show which fragments are conditional. Click a highlight to edit the condition or the alternate version.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="side-by-side" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#12121e;border-radius:8px;padding:16px;font-size:12px;color:#e0d9c8">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#666;margin-bottom:10px">Scene Editor — Chapter 14</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div style="background:#0e2010;border:1px solid #2a4a2a;border-radius:6px;padding:10px">
+            <div style="font-size:10px;color:#80c880;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">spare_victim = true</div>
+            <p style="font-family:Georgia,serif;font-size:11px;line-height:1.7;margin:0">The market was quiet. Elara moved through the stalls, eyes low. She kept thinking of his face — alive still, somewhere out there. She bought nothing. She never did anymore.</p>
+          </div>
+          <div style="background:#20100e;border:1px solid #4a2a2a;border-radius:6px;padding:10px">
+            <div style="font-size:10px;color:#c88080;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">spare_victim = false</div>
+            <p style="font-family:Georgia,serif;font-size:11px;line-height:1.7;margin:0">The market was quiet. Elara moved through the stalls, eyes low. The memory she carried was a heavier thing. She bought nothing. She never did anymore.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Side-by-Side Variants</h3>
+      <p>The editor splits into columns — one per condition. You write (or paste) both versions in full, seeing them simultaneously. Good for scenes where the variants differ significantly across many lines.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="base-overrides" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#12121e;border-radius:8px;padding:16px;font-size:12px;color:#e0d9c8">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#666;margin-bottom:10px">Scene Editor — Chapter 14</div>
+        <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;margin-bottom:8px">
+          <div style="font-size:10px;color:#8888cc;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Base text (all readers)</div>
+          <p style="font-family:Georgia,serif;font-size:11px;line-height:1.7;margin:0">The market was quiet that morning. Elara moved through the stalls, eyes low. <span style="background:#2a2a5a;border-radius:3px;padding:1px 4px;color:#aaaaff">[fragment_A]</span> She bought nothing. She never did anymore.</p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="background:#0e2010;border:1px solid #2a4a2a;border-radius:6px;padding:8px;display:flex;gap:8px;align-items:flex-start">
+            <span style="font-size:10px;color:#80c880;white-space:nowrap;margin-top:2px">spare_victim=true</span>
+            <span style="font-family:Georgia,serif;font-size:11px;color:#c0e8c0">She kept thinking of his face — alive still, somewhere out there.</span>
+          </div>
+          <div style="background:#20100e;border:1px solid #4a2a2a;border-radius:6px;padding:8px;display:flex;gap:8px;align-items:flex-start">
+            <span style="font-size:10px;color:#c88080;white-space:nowrap;margin-top:2px">spare_victim=false</span>
+            <span style="font-family:Georgia,serif;font-size:11px;color:#e8c0c0">The memory she carried was a heavier thing.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Base + Overrides</h3>
+      <p>Write the full scene once with placeholder slots. Then define small override snippets per condition that drop into those slots. Efficient when variants are short and the surrounding prose is identical.</p>
+    </div>
+  </div>
+
+</div>

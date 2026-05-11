@@ -1,0 +1,91 @@
+<h2>Reader View</h2>
+<p class="subtitle">The reading experience — clean prose with choices and a rewind history</p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:960px;margin:0 auto">
+
+  <!-- Left: inline choice mid-read -->
+  <div style="background:#0d0d18;border-radius:10px;overflow:hidden;border:1px solid #2a2a3a">
+    <div style="background:#12121e;border-bottom:1px solid #2a2a3a;padding:10px 16px;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:11px;color:#666">Book 1 · Chapter 1 · Scene 2</div>
+      <div style="font-size:11px;color:#555;cursor:pointer;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:4px;padding:3px 10px">⏮ Choices</div>
+    </div>
+    <div style="padding:24px 28px;font-family:Georgia,serif;font-size:13px;color:#ccc;line-height:1.9">
+      <p style="margin:0 0 16px">The market was quiet that morning. Elara moved through the stalls, eyes low, hands tucked inside her sleeves against the early cold.</p>
+      <p style="margin:0 0 16px">The memory she carried was a heavier thing.</p>
+      <p style="margin:0 0 20px">She bought nothing. She never did anymore.</p>
+      <p style="margin:0 0 20px;font-style:italic;color:#aaa">She stood for a long moment. Then she made a decision.</p>
+
+      <!-- Inline choice -->
+      <div style="border-top:1px solid #2a2a3a;padding-top:16px;margin-top:4px">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#666;margin-bottom:10px">What does she do?</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="background:#1a2a1a;border:1px solid #3a5a3a;border-radius:6px;padding:10px 14px;font-size:12px;color:#a0d4a0;cursor:pointer">→ Walk away. Let it go.</div>
+          <div style="background:#2a1a1a;border:1px solid #5a3a3a;border-radius:6px;padding:10px 14px;font-size:12px;color:#d4a0a0;cursor:pointer">→ Go back. Finish it.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: choice history panel open -->
+  <div style="background:#0d0d18;border-radius:10px;overflow:hidden;border:1px solid #2a2a3a">
+    <div style="background:#12121e;border-bottom:1px solid #2a2a3a;padding:10px 16px;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:11px;color:#8888cc">⏮ Your Choices</div>
+      <div style="font-size:10px;color:#555">click any to rewind</div>
+    </div>
+    <div style="padding:16px">
+      <div style="font-size:10px;color:#555;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px">Book 1</div>
+
+      <!-- Choice history items -->
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+
+        <div style="background:#1a2a1a;border:1px solid #3a5a3a;border-radius:6px;padding:10px 12px;cursor:pointer">
+          <div style="font-size:10px;color:#666;margin-bottom:3px">Ch. 1, Scene 1</div>
+          <div style="font-size:11px;color:#a0d4a0">Agreed to take the job</div>
+        </div>
+
+        <div style="background:#2a1a1a;border:1px solid #5a3a3a;border-radius:6px;padding:10px 12px;cursor:pointer">
+          <div style="font-size:10px;color:#666;margin-bottom:3px">Ch. 1, Scene 1</div>
+          <div style="font-size:11px;color:#d4a0a0">Kept the letter</div>
+        </div>
+
+        <!-- Current / not yet made -->
+        <div style="background:#1a1a2e;border:1px dashed #3a3a6a;border-radius:6px;padding:10px 12px;opacity:0.6">
+          <div style="font-size:10px;color:#666;margin-bottom:3px">Ch. 1, Scene 2 · now</div>
+          <div style="font-size:11px;color:#8888cc;font-style:italic">Choosing…</div>
+        </div>
+
+      </div>
+
+      <!-- Rewind callout -->
+      <div style="background:#12121e;border:1px solid #2a2a3a;border-radius:6px;padding:12px;font-size:11px;color:#666;line-height:1.6">
+        Tap any past choice to rewind to that moment. Your story state resets to what it was then — everything after is erased and you choose again from there.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Chapter gate example below -->
+<div style="max-width:960px;margin:16px auto 0">
+  <div style="background:#0d0d18;border-radius:10px;overflow:hidden;border:1px solid #2a2a3a">
+    <div style="background:#12121e;border-bottom:1px solid #2a2a3a;padding:10px 16px">
+      <div style="font-size:11px;color:#666">Chapter-gate style — shown at end of chapter instead of inline</div>
+    </div>
+    <div style="padding:32px;text-align:center">
+      <div style="font-size:12px;color:#555;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px">— End of Chapter 1 —</div>
+      <div style="font-family:Georgia,serif;font-size:14px;color:#aaa;font-style:italic;margin-bottom:28px">She stood for a long moment. Then she made a decision.</div>
+      <div style="display:flex;gap:16px;justify-content:center">
+        <div style="background:#1a2a1a;border:1px solid #3a5a3a;border-radius:8px;padding:16px 24px;cursor:pointer;min-width:160px">
+          <div style="font-size:20px;margin-bottom:8px">🕊</div>
+          <div style="font-size:12px;color:#a0d4a0;font-weight:bold">Walk away</div>
+          <div style="font-size:10px;color:#555;margin-top:4px">Let it go</div>
+        </div>
+        <div style="background:#2a1a1a;border:1px solid #5a3a3a;border-radius:8px;padding:16px 24px;cursor:pointer;min-width:160px">
+          <div style="font-size:20px;margin-bottom:8px">🗡</div>
+          <div style="font-size:12px;color:#d4a0a0;font-weight:bold">Go back</div>
+          <div style="font-size:10px;color:#555;margin-top:4px">Finish it</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

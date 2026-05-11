@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-surface-base: #0d0d18;
+  --color-surface-raised: #12121e;
+  --color-surface-overlay: #1a1a2e;
+  --color-surface-muted: #1e1e3a;
+  --color-ink: #e0d9c8;
+  --color-ink-muted: #aaa;
+  --color-ink-faint: #666;
+  --color-accent: #8888ff;
+  --color-accent-muted: #4a4a7a;
+  --color-choice-spare: #88cc88;
+  --color-choice-spare-bg: #1a2a1a;
+  --color-choice-spare-border: #3a5a3a;
+  --color-choice-kill: #cc8888;
+  --color-choice-kill-bg: #2a1a1a;
+  --color-choice-kill-border: #5a3a3a;
+}
+
+body {
+  background-color: #0d0d18;
+  color: #e0d9c8;
+}

@@ -1,0 +1,71 @@
+<h2>How does a reader experience a choice point?</h2>
+<p class="subtitle">When a reader reaches a decision in the story, what happens?</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="inline" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1a1a2e;border-radius:8px;padding:20px;font-family:Georgia,serif;color:#e0d9c8;font-size:13px;line-height:1.7">
+        <p>...She stood at the crossroads, the letter still clutched in her hand. The village lights flickered behind her. Whatever she chose now would echo for years.</p>
+        <div style="border-top:1px solid #444;margin:16px 0;padding-top:16px">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:12px">What does she do?</div>
+          <div style="background:#2a2a4a;border:1px solid #4a4a7a;border-radius:6px;padding:10px 14px;margin-bottom:8px;cursor:pointer;color:#a0c4ff">→ Burn the letter and return home</div>
+          <div style="background:#2a2a4a;border:1px solid #4a4a7a;border-radius:6px;padding:10px 14px;cursor:pointer;color:#a0c4ff">→ Follow the road north toward the capital</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Inline Choice</h3>
+      <p>Choices appear directly in the reading flow. Reader picks an option and the story continues seamlessly. Clean, immersive — closest to traditional CYOA books.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="chapter-end" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1a1a2e;border-radius:8px;padding:20px;font-family:Georgia,serif;color:#e0d9c8;font-size:13px;line-height:1.7">
+        <p>...She stood at the crossroads, the letter still clutched in her hand. The village lights flickered behind her. Whatever she chose now would echo for years.</p>
+        <div style="margin-top:20px;text-align:center">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:16px">— End of Chapter 3 —</div>
+          <div style="font-size:12px;color:#aaa;margin-bottom:16px">Your choice shapes what comes next</div>
+          <div style="display:flex;gap:10px;justify-content:center">
+            <div style="background:#3a1a4a;border:1px solid #7a4a9a;border-radius:8px;padding:12px 16px;color:#d0aaff;font-size:12px;text-align:center;width:130px">
+              <div style="font-size:18px;margin-bottom:6px">🔥</div>
+              Burn the letter
+            </div>
+            <div style="background:#1a3a4a;border:1px solid #4a7a9a;border-radius:8px;padding:12px 16px;color:#aadfff;font-size:12px;text-align:center;width:130px">
+              <div style="font-size:18px;margin-bottom:6px">🧭</div>
+              Head north
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Chapter-End Gate</h3>
+      <p>Story reads normally. At the end of a chapter, a full-screen choice screen appears. More dramatic, lets choices feel like cliffhangers. Common in episodic fiction apps.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="both" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1a1a2e;border-radius:8px;padding:20px;color:#e0d9c8;font-size:12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <div style="width:8px;height:8px;border-radius:50%;background:#a0c4ff"></div>
+          <span style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#888">Author chooses per scene</span>
+        </div>
+        <div style="background:#252540;border-radius:6px;padding:10px;margin-bottom:8px;border-left:3px solid #4a4aaa;font-size:11px">
+          <strong style="color:#9090cc">Inline choice</strong> — small, woven into narrative
+        </div>
+        <div style="background:#252530;border-radius:6px;padding:10px;border-left:3px solid #aa4a4a;font-size:11px">
+          <strong style="color:#cc9090">Chapter gate</strong> — big dramatic moment
+        </div>
+        <div style="margin-top:12px;font-size:11px;color:#888">Author tags each choice point with its display type in the editor</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Author Controls Per Choice</h3>
+      <p>Both styles available. When writing, you tag each choice point as "inline" or "chapter gate." Maximally flexible — lets you match the weight of the decision to the moment.</p>
+    </div>
+  </div>
+
+</div>

@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls /Users/marisarichmond/.claude/plugins/cache/claude-plugins-official/superpowers/5.1.0/scripts/)",
+      "Read(//Users/marisarichmond/.claude/plugins/cache/claude-plugins-official/superpowers/5.1.0/scripts/**)",
+      "Bash(find /Users/marisarichmond/.claude/plugins -name \"start-server.sh\" 2>/dev/null)",
+      "Read(//Users/marisarichmond/.claude/plugins/**)",
+      "Bash(git -C /Users/marisarichmond/Loom rev-parse HEAD)",
+      "Bash(yes)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --app --src-dir --no-eslint --import-alias @/*)",
+      "Bash(npx create-next-app@latest --help)",
+      "Bash(npx create-next-app@latest /tmp/loom-setup --typescript --tailwind --app --src-dir --no-eslint --import-alias @/* --disable-git)",
+      "Bash(ls /tmp/loom-setup/)",
+      "Read(//private/tmp/loom-setup/**)",
+      "Bash(rsync -av --exclude='node_modules' /tmp/loom-setup/ /Users/marisarichmond/Loom/)",
+      "Bash(npm install *)",
+      "Bash(npx prisma *)",
+      "Bash(npm run *)",
+      "Bash(npx jest *)",
+      "Bash(git -C /Users/marisarichmond/Loom init)",
+      "Bash(git -C /Users/marisarichmond/Loom remote add origin https://github.com/MarisaRichmond94/Loom.git)",
+      "Bash(git -C /Users/marisarichmond/Loom add .)",
+      "Bash(git -C /Users/marisarichmond/Loom status)"
+    ]
+  }
+}

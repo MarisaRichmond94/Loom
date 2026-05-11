@@ -1,0 +1,111 @@
+<h2>What kind of app should Loom be?</h2>
+<p class="subtitle">This shapes everything — how you access it, where your data lives, how others could use it later</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="web-app" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#12121e;border-radius:8px;padding:16px;font-size:12px;color:#e0d9c8">
+        <div style="background:#1a1a2e;border-radius:6px;padding:10px;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+          <div style="width:10px;height:10px;border-radius:50%;background:#4a9aff"></div>
+          <span style="font-size:11px;color:#8888cc">localhost:3000/loom</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div style="background:#1e1e3a;border-radius:6px;padding:10px;flex:1;text-align:center">
+            <div style="font-size:18px;margin-bottom:4px">🌐</div>
+            <div style="font-size:10px;color:#8888cc">Access from any device</div>
+          </div>
+          <div style="background:#1e1e3a;border-radius:6px;padding:10px;flex:1;text-align:center">
+            <div style="font-size:18px;margin-bottom:4px">☁️</div>
+            <div style="font-size:10px;color:#8888cc">Data in database</div>
+          </div>
+          <div style="background:#1e1e3a;border-radius:6px;padding:10px;flex:1;text-align:center">
+            <div style="font-size:18px;margin-bottom:4px">🚀</div>
+            <div style="font-size:10px;color:#8888cc">Deploy for others</div>
+          </div>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:#666;text-align:center">Next.js + PostgreSQL + TipTap editor</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Full Web App (Recommended)</h3>
+      <p>Runs in your browser, data stored in a database. Access it from any device. When you're ready to open source it, others can deploy their own instance — just like self-hosted Wattpad. Closest match to your vision.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Access from any device</li><li>Natural fit for open source</li><li>Easiest to share stories</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Needs a server to run</li><li>More setup upfront</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="local-app" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#12121e;border-radius:8px;padding:16px;font-size:12px;color:#e0d9c8">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div style="width:32px;height:32px;border-radius:8px;background:#2a1a4a;display:flex;align-items:center;justify-content:center;font-size:18px">🧶</div>
+          <div>
+            <div style="font-size:13px;font-weight:bold">Loom.app</div>
+            <div style="font-size:10px;color:#666">Desktop Application</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div style="background:#1e1e3a;border-radius:6px;padding:10px;flex:1;text-align:center">
+            <div style="font-size:18px;margin-bottom:4px">💾</div>
+            <div style="font-size:10px;color:#8888cc">Data stays local</div>
+          </div>
+          <div style="background:#1e1e3a;border-radius:6px;padding:10px;flex:1;text-align:center">
+            <div style="font-size:18px;margin-bottom:4px">✈️</div>
+            <div style="font-size:10px;color:#8888cc">Works offline</div>
+          </div>
+          <div style="background:#1e1e3a;border-radius:6px;padding:10px;flex:1;text-align:center">
+            <div style="font-size:18px;margin-bottom:4px">🔒</div>
+            <div style="font-size:10px;color:#8888cc">Fully private</div>
+          </div>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:#666;text-align:center">Tauri + SQLite + TipTap editor</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Desktop App</h3>
+      <p>Like Scrivener — installs on your Mac, data lives on your machine. No internet needed. Great for privacy-focused personal use, but harder to share or use across devices without manual syncing.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Fully offline</li><li>Completely private</li><li>No hosting costs</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Harder to share or open source</li><li>Tied to one machine</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="local-web" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#12121e;border-radius:8px;padding:16px;font-size:12px;color:#e0d9c8">
+        <div style="background:#1a1a2e;border-radius:6px;padding:10px;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+          <div style="width:10px;height:10px;border-radius:50%;background:#80c880"></div>
+          <span style="font-size:11px;color:#8888cc">localhost:3000 (runs on your Mac)</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div style="background:#1e1e3a;border-radius:6px;padding:10px;flex:1;text-align:center">
+            <div style="font-size:18px;margin-bottom:4px">🏠</div>
+            <div style="font-size:10px;color:#8888cc">Runs locally</div>
+          </div>
+          <div style="background:#1e1e3a;border-radius:6px;padding:10px;flex:1;text-align:center">
+            <div style="font-size:18px;margin-bottom:4px">💾</div>
+            <div style="font-size:10px;color:#8888cc">Local database</div>
+          </div>
+          <div style="background:#1e1e3a;border-radius:6px;padding:10px;flex:1;text-align:center">
+            <div style="font-size:18px;margin-bottom:4px">🚀</div>
+            <div style="font-size:10px;color:#8888cc">Easy to deploy later</div>
+          </div>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:#666;text-align:center">Next.js + SQLite locally → PostgreSQL when deployed</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Local Web App</h3>
+      <p>Looks and feels like a website but runs entirely on your Mac — no hosting needed. When you're ready to open source it, it deploys to the cloud with minimal changes. Best of both worlds.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>No hosting costs now</li><li>Clean path to deploy later</li><li>Familiar browser UX</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Need to start a server to use it</li><li>Still tied to one machine until deployed</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
