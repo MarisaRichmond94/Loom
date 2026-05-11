@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@/generated/prisma/client'
 
 type Params = { params: Promise<{ sceneId: string }> }
 
@@ -23,13 +24,30 @@ export async function GET(_: Request, { params }: Params) {
 
 export async function PATCH(req: Request, { params }: Params) {
   const { sceneId } = await params
-  const data = await req.json()
-  const scene = await prisma.scene.update({ where: { id: sceneId }, data })
-  return NextResponse.json(scene)
+  const { title, order } = await req.json()
+  try {
+    const scene = await prisma.scene.update({
+      where: { id: sceneId },
+      data: { ...(title !== undefined && { title }), ...(order !== undefined && { order }) },
+    })
+    return NextResponse.json(scene)
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+    throw e
+  }
 }
 
 export async function DELETE(_: Request, { params }: Params) {
   const { sceneId } = await params
-  await prisma.scene.delete({ where: { id: sceneId } })
-  return new NextResponse(null, { status: 204 })
+  try {
+    await prisma.scene.delete({ where: { id: sceneId } })
+    return new NextResponse(null, { status: 204 })
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+    throw e
+  }
 }
