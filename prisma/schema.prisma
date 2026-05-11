@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -10,4 +5,96 @@ generator client {
 
 datasource db {
   provider = "sqlite"
+}
+
+model Series {
+  id          String          @id @default(cuid())
+  title       String
+  description String          @default("")
+  createdAt   DateTime        @default(now())
+  books       Book[]
+  variables   StoryVariable[]
+  sessions    ReaderSession[]
+}
+
+model Book {
+  id       String    @id @default(cuid())
+  seriesId String
+  title    String
+  order    Int
+  series   Series    @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  chapters Chapter[]
+}
+
+model Chapter {
+  id     String  @id @default(cuid())
+  bookId String
+  title  String
+  order  Int
+  book   Book    @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  scenes Scene[]
+}
+
+model Scene {
+  id             String         @id @default(cuid())
+  chapterId      String
+  title          String
+  order          Int
+  chapter        Chapter        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  blocks         ContentBlock[]
+  inboundChoices Choice[]       @relation("TargetScene")
+}
+
+model ContentBlock {
+  id          String                @id @default(cuid())
+  sceneId     String
+  order       Int
+  type        String
+  content     String?
+  prompt      String?
+  displayType String?
+  baseContent String?
+  scene       Scene                 @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  choices     Choice[]
+  overrides   ConditionalOverride[]
+}
+
+model Choice {
+  id            String       @id @default(cuid())
+  choicePointId String
+  label         String
+  setsVariables String       @default("{}")
+  targetSceneId String?
+  choicePoint   ContentBlock @relation(fields: [choicePointId], references: [id], onDelete: Cascade)
+  targetScene   Scene?       @relation("TargetScene", fields: [targetSceneId], references: [id])
+}
+
+model ConditionalOverride {
+  id                    String       @id @default(cuid())
+  conditionalFragmentId String
+  order                 Int
+  condition             String       @default("{}")
+  content               String
+  conditionalFragment   ContentBlock @relation(fields: [conditionalFragmentId], references: [id], onDelete: Cascade)
+}
+
+model StoryVariable {
+  id           String @id @default(cuid())
+  seriesId     String
+  name         String
+  type         String
+  defaultValue String @default("null")
+  series       Series @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  @@unique([seriesId, name])
+}
+
+model ReaderSession {
+  id             String   @id @default(cuid())
+  seriesId       String
+  createdAt      DateTime @default(now())
+  currentBlockId String?
+  storyState     String   @default("{}")
+  choiceHistory  String   @default("[]")
+  series         Series   @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 }
