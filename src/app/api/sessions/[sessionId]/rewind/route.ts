@@ -24,7 +24,7 @@ export async function POST(req: Request, { params }: Params) {
   const serialized = serializeSession(restoredState, truncatedHistory)
   const updated = await prisma.readerSession.update({
     where: { id: sessionId },
-    data: { ...serialized, currentBlockId: choicePointId },
+    data: { ...serialized, currentBlockId: choicePointId }, // Store the choice point block ID so the reader page can locate the scene via block lookup
   })
 
   const { storyState: state, choiceHistory: history } = deserializeSession(

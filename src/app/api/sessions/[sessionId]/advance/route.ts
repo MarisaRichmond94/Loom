@@ -9,6 +9,10 @@ export async function POST(req: Request, { params }: Params) {
   const { sessionId } = await params
   const { choicePointId, choiceId } = await req.json()
 
+  if (!choicePointId || !choiceId) {
+    return NextResponse.json({ error: 'choicePointId and choiceId required' }, { status: 400 })
+  }
+
   const [session, choice] = await Promise.all([
     prisma.readerSession.findUnique({ where: { id: sessionId } }),
     prisma.choice.findUnique({ where: { id: choiceId } }),
