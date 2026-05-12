@@ -23,15 +23,16 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }
   const [inputVal, setInputVal] = useState('')
 
   useEffect(() => {
-    setSelectedBook(prev => {
-      if (prev && books.some(b => b.id === prev)) return prev
-      // Auto-select the book that contains the active chapter
-      const activeBook = books.find(b => b.chapters.some(c => c.id === params.chapterId))
-      if (activeBook) return activeBook.id
-      // Auto-select the book whose page we're on
-      if (params.bookId) return params.bookId as string
-      return books[0]?.id ?? null
-    })
+    if (params.bookId) {
+      setSelectedBook(params.bookId as string)
+      return
+    }
+    const activeBook = books.find(b => b.chapters.some(c => c.id === params.chapterId))
+    if (activeBook) {
+      setSelectedBook(activeBook.id)
+      return
+    }
+    setSelectedBook(prev => prev && books.some(b => b.id === prev) ? prev : (books[0]?.id ?? null))
   }, [books, params.chapterId, params.bookId])
 
   function selectBook(id: string) {
