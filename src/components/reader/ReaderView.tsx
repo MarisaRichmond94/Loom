@@ -60,6 +60,7 @@ export default function ReaderView({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ choicePointId: choicePointBlock.id, choiceId }),
     })
+    if (!res.ok) return
     const updated = await res.json()
     onSessionUpdate(updated.storyState, updated.choiceHistory)
 
@@ -74,6 +75,7 @@ export default function ReaderView({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ choicePointId }),
     })
+    if (!res.ok) return
     const updated = await res.json()
     onSessionUpdate(updated.storyState, updated.choiceHistory)
   }

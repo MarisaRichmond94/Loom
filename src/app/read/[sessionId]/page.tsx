@@ -50,6 +50,7 @@ export default function ReaderPage() {
         setCurrentSceneId(block.sceneId)
         return
       }
+      // block not found — fall through to first scene
     }
 
     // Fresh session — start at first scene
