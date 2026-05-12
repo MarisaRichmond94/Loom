@@ -16,9 +16,36 @@
   --color-choice-kill: #cc8888;
   --color-choice-kill-bg: #2a1a1a;
   --color-choice-kill-border: #5a3a3a;
+  --color-choice-amber: #ccaa55;
+  --color-choice-amber-bg: #2a2010;
+  --color-choice-amber-border: #5a4a20;
+  --color-choice-blue: #7799cc;
+  --color-choice-blue-bg: #101a2a;
+  --color-choice-blue-border: #203a5a;
+  --color-choice-purple: #aa88cc;
+  --color-choice-purple-bg: #1e1a2a;
+  --color-choice-purple-border: #4a3a5a;
+  --color-choice-teal: #55bbaa;
+  --color-choice-teal-bg: #102420;
+  --color-choice-teal-border: #205040;
 }
 
 body {
   background-color: #0d0d18;
   color: #e0d9c8;
+  cursor: default;
+}
+
+*, *::before, *::after {
+  cursor: inherit;
+  user-select: none;
+}
+
+input, textarea, [contenteditable], .ProseMirror, .ProseMirror * {
+  cursor: text;
+  user-select: text;
+}
+
+button, a, select, [role="button"] {
+  cursor: pointer;
 }

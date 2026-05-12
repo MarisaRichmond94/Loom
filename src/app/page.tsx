@@ -36,12 +36,15 @@ export default function HomePage() {
   return (
     <main className="max-w-3xl mx-auto px-6 py-12">
       <div className="flex items-center justify-between mb-10">
-        <h1 className="text-3xl font-bold tracking-tight text-accent">Loom</h1>
+        <div className="flex items-center gap-2">
+          <img src="/loom-logo.svg" alt="" className="block h-12 w-12" />
+          <h1 className="text-5xl font-bold tracking-tight text-accent leading-none">Loom</h1>
+        </div>
         <button
           onClick={() => setShowForm(s => !s)}
-          className="px-4 py-2 rounded bg-accent/10 border border-accent/30 text-accent text-sm hover:bg-accent/20 transition"
+          className="px-4 py-2 rounded bg-accent text-white text-sm font-medium hover:opacity-90 transition"
         >
-          + New Series
+          Add Series
         </button>
       </div>
 
