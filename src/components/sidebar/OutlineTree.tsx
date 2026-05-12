@@ -85,7 +85,7 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }
           </button>
 
           {selectedBook === book.id && (
-            <div className="ml-1 flex flex-col gap-2">
+            <div className="ml-1 flex flex-col">
               {book.chapters.map(chapter => (
                 <Link
                   key={chapter.id}
