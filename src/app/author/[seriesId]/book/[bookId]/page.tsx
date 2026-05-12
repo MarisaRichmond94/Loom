@@ -6,7 +6,7 @@ import Link from 'next/link'
 import OutlineTree from '@/components/sidebar/OutlineTree'
 import VariablesPanel from '@/components/sidebar/VariablesPanel'
 
-type Stats = { chapterCount: number; uniquePovs: number; choiceCount: number }
+type Stats = { chapterCount: number; uniquePovs: number; choiceCount: number; wordCount: number }
 type Book = { id: string; title: string; synopsis: string; coverPath: string | null; stats: Stats }
 type Variable = { id: string; name: string; type: string; defaultValue: string }
 type Series = {
@@ -115,11 +115,11 @@ export default function BookDetailPage() {
 
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-8 py-8">
-            <div className="flex gap-8 mb-8">
+            <div className="flex gap-8 mb-8 items-stretch">
               {/* Cover */}
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="w-40 h-56 rounded-lg border-2 border-dashed border-accent/20 flex items-center justify-center cursor-pointer hover:border-accent/50 transition overflow-hidden shrink-0 bg-surface-raised"
+                className="w-44 rounded-lg border-2 border-dashed border-accent/20 flex items-center justify-center cursor-pointer hover:border-accent/50 transition overflow-hidden shrink-0 bg-surface-raised self-stretch"
               >
                 {book.coverPath ? (
                   <img src={book.coverPath} alt="Book cover" className="w-full h-full object-cover" />
@@ -150,9 +150,10 @@ export default function BookDetailPage() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-4 mb-8">
+            <div className="grid grid-cols-4 gap-4 mb-8">
               {[
                 { label: 'Chapters', value: book.stats.chapterCount },
+                { label: 'Words', value: book.stats.wordCount.toLocaleString() },
                 { label: 'POV(s)', value: book.stats.uniquePovs },
                 { label: 'Choice(s)', value: book.stats.choiceCount },
               ].map(({ label, value }) => (

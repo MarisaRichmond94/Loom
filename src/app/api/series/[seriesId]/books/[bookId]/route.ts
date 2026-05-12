@@ -4,6 +4,22 @@ import { Prisma } from '@/generated/prisma/client'
 
 type Params = { params: Promise<{ bookId: string }> }
 
+function extractText(json: string | null | undefined): string {
+  if (!json) return ''
+  try {
+    const walk = (node: Record<string, unknown>): string => {
+      if (node.type === 'text') return (node.text as string) ?? ''
+      const children = (node.content as Record<string, unknown>[] | undefined) ?? []
+      return children.map(walk).join(' ')
+    }
+    return walk(JSON.parse(json))
+  } catch { return '' }
+}
+
+function countWords(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length
+}
+
 export async function GET(_: Request, { params }: Params) {
   const { bookId } = await params
   const book = await prisma.book.findUnique({
@@ -12,8 +28,7 @@ export async function GET(_: Request, { params }: Params) {
       chapters: {
         include: {
           blocks: {
-            where: { type: 'choice_point' },
-            include: { choices: true },
+            include: { choices: true, overrides: true },
           },
         },
       },
@@ -24,13 +39,24 @@ export async function GET(_: Request, { params }: Params) {
   const chapterCount = book.chapters.length
   const uniquePovs = new Set(book.chapters.map(c => c.pov).filter(Boolean)).size
   const choiceCount = book.chapters.reduce(
-    (sum, c) => sum + c.blocks.reduce((s, b) => s + b.choices.length, 0),
+    (sum, c) => sum + c.blocks.filter(b => b.type === 'choice_point')
+      .reduce((s, b) => s + b.choices.length, 0),
     0
   )
+  const wordCount = book.chapters.reduce((sum, c) =>
+    sum + c.blocks.reduce((s, b) => {
+      const texts = [
+        b.content,
+        b.baseContent,
+        ...(b.overrides.map(o => o.content)),
+      ]
+      return s + texts.reduce((ws, t) => ws + countWords(extractText(t)), 0)
+    }, 0)
+  , 0)
 
   return NextResponse.json({
     ...book,
-    stats: { chapterCount, uniquePovs, choiceCount },
+    stats: { chapterCount, uniquePovs, choiceCount, wordCount },
   })
 }
 
