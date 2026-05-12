@@ -114,7 +114,7 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }
       {addingBook ? addForm : (
         <button
           onClick={() => { setAddingBook(true); setInputVal('') }}
-          className="px-2 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
+          className="mt-2 px-2 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
         >
           Add Book
         </button>
