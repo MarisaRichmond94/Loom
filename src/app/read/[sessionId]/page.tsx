@@ -17,6 +17,7 @@ export default function ReaderPage() {
   const [blocks, setBlocks] = useState<Block[]>([])
   const [storyState, setStoryState] = useState<StoryState>({})
   const [choiceHistory, setChoiceHistory] = useState<HistoryEntry[]>([])
+  const [seriesId, setSeriesId] = useState('')
   const [seriesTitle, setSeriesTitle] = useState('')
   const [chapterLabel, setChapterLabel] = useState('')
   const [currentChapterId, setCurrentChapterId] = useState<string | null>(null)
@@ -41,6 +42,7 @@ export default function ReaderPage() {
     const seriesRes = await fetch(`/api/series/${session.seriesId}`)
     if (!seriesRes.ok) return
     const series = await seriesRes.json()
+    setSeriesId(series.id)
     setSeriesTitle(series.title)
 
     if (session.currentBlockId) {
@@ -94,6 +96,7 @@ export default function ReaderPage() {
   return (
     <ReaderView
       sessionId={sessionId}
+      seriesId={seriesId}
       blocks={blocks}
       storyState={storyState}
       choiceHistory={choiceHistory}
