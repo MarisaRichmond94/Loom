@@ -119,7 +119,7 @@ export default function BookDetailPage() {
           <VariablesPanel variables={series.variables} onAdd={addVariable} onDelete={deleteVariable} />
         </aside>
 
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto relative">
           <div className="max-w-3xl mx-auto px-8 py-8">
             <div className="flex gap-8 mb-8 items-stretch">
               {/* Cover */}
@@ -180,13 +180,11 @@ export default function BookDetailPage() {
               </button>
             </div>
           </div>
-        </main>
-      </div>
 
-      {/* Delete confirmation modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-surface-raised border border-accent/20 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl relative">
+          {/* Delete confirmation modal — absolute so it centers over content area only */}
+          {showDeleteConfirm && (
+            <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50">
+              <div className="bg-surface-raised border border-accent/20 rounded-xl p-8 max-w-2xl w-full mx-8 shadow-2xl relative">
             <button
               onClick={() => setShowDeleteConfirm(false)}
               className="absolute top-4 right-4 text-ink-faint hover:text-ink text-lg leading-none"
@@ -215,9 +213,11 @@ export default function BookDetailPage() {
                 Delete
               </button>
             </div>
-          </div>
-        </div>
-      )}
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   )
 }
