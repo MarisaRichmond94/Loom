@@ -68,10 +68,10 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }
   )
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-2">
       <div className="text-xs uppercase tracking-widest text-ink-faint mb-2">Outline</div>
       {books.map(book => (
-        <div key={book.id}>
+        <div key={book.id} className="flex flex-col gap-2">
           <button
             onClick={() => selectBook(book.id)}
             className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition text-left ${
@@ -85,7 +85,7 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }
           </button>
 
           {selectedBook === book.id && (
-            <div className="mt-1 ml-1">
+            <div className="ml-1 flex flex-col gap-2">
               {book.chapters.map(chapter => (
                 <Link
                   key={chapter.id}
@@ -102,7 +102,7 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }
               {addingChapter === book.id ? addForm : (
                 <button
                   onClick={() => { setAddingChapter(book.id); setInputVal('') }}
-                  className="mt-1 block px-2 py-1 text-xs bg-accent text-white rounded font-medium hover:opacity-90 transition"
+                  className="block px-2 py-1 text-xs bg-accent text-white rounded font-medium hover:opacity-90 transition"
                 >
                   Add Chapter
                 </button>
@@ -114,7 +114,7 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }
       {addingBook ? addForm : (
         <button
           onClick={() => { setAddingBook(true); setInputVal('') }}
-          className="mt-2 px-2 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
+          className="px-2 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
         >
           Add Book
         </button>
