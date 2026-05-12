@@ -1,6 +1,11 @@
 'use client'
 
 import TextBlock from './TextBlock'
+import TextField from '@mui/material/TextField'
+import Select from '@mui/material/Select'
+import MenuItem from '@mui/material/MenuItem'
+import FormControl from '@mui/material/FormControl'
+import InputLabel from '@mui/material/InputLabel'
 
 type Override = { id: string; order: number; condition: string; content: string }
 type Props = {
@@ -19,7 +24,6 @@ export default function ConditionalBlock({
   baseContent, overrides, variables, onUpdateBase, onAddOverride, onUpdateOverride, onDeleteOverride
 }: Props) {
   function handleAddOverride() {
-    if (variables.length === 0) return
     const varName = variables[0].name
     onAddOverride({ [varName]: true }, EMPTY)
   }
@@ -39,56 +43,58 @@ export default function ConditionalBlock({
         const [varName, varVal] = entries[0] ?? ['', '']
         return (
           <div key={override.id} className="bg-choice-spare-bg border border-choice-spare-border rounded p-3 mb-2">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className="text-xs text-choice-spare">if</span>
-              <select
-                value={varName}
-                onChange={e => {
-                  const newCond = { [e.target.value]: varVal }
-                  onUpdateOverride(override.id, { condition: JSON.stringify(newCond) })
-                }}
-                className="bg-surface-base border border-choice-spare-border/40 rounded px-1.5 py-0.5 text-xs text-accent font-mono outline-none"
-              >
-                {variables.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
-              </select>
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <InputLabel>variable</InputLabel>
+                <Select
+                  label="variable"
+                  value={varName}
+                  onChange={e => {
+                    const newCond = { [e.target.value]: varVal }
+                    onUpdateOverride(override.id, { condition: JSON.stringify(newCond) })
+                  }}
+                >
+                  {variables.map(v => <MenuItem key={v.id} value={v.name}>{v.name}</MenuItem>)}
+                </Select>
+              </FormControl>
               <span className="text-xs text-ink-faint">=</span>
               {(() => {
                 const varType = variables.find(v => v.name === varName)?.type ?? 'boolean'
                 if (varType === 'boolean') {
                   return (
-                    <select
-                      value={String(varVal)}
-                      onChange={e => {
-                        const newVal = e.target.value === 'true'
-                        onUpdateOverride(override.id, { condition: JSON.stringify({ [varName]: newVal }) })
-                      }}
-                      className="bg-surface-base border border-choice-spare-border/40 rounded px-1.5 py-0.5 text-xs text-ink outline-none"
-                    >
-                      <option value="true">true</option>
-                      <option value="false">false</option>
-                    </select>
+                    <FormControl size="small" sx={{ minWidth: 100 }}>
+                      <InputLabel>value</InputLabel>
+                      <Select
+                        label="value"
+                        value={String(varVal)}
+                        onChange={e => {
+                          onUpdateOverride(override.id, { condition: JSON.stringify({ [varName]: e.target.value === 'true' }) })
+                        }}
+                      >
+                        <MenuItem value="true">true</MenuItem>
+                        <MenuItem value="false">false</MenuItem>
+                      </Select>
+                    </FormControl>
                   )
                 }
-                if (varType === 'number') {
-                  return (
-                    <input
-                      type="number"
-                      value={String(varVal ?? '')}
-                      onChange={e => {
-                        onUpdateOverride(override.id, { condition: JSON.stringify({ [varName]: Number(e.target.value) }) })
-                      }}
-                      className="bg-surface-base border border-choice-spare-border/40 rounded px-1.5 py-0.5 text-xs text-ink outline-none w-16"
-                    />
-                  )
-                }
+                const raw = String(varVal ?? '')
+                const isNum = varType === 'number'
+                const invalid = isNum && raw !== '' && isNaN(Number(raw))
                 return (
-                  <input
-                    type="text"
-                    value={String(varVal ?? '')}
+                  <TextField
+                    label="value"
+                    size="small"
+                    value={raw}
+                    error={invalid}
+                    helperText={invalid ? 'Must be a number' : ''}
+                    sx={{ width: isNum ? 100 : 140 }}
                     onChange={e => {
-                      onUpdateOverride(override.id, { condition: JSON.stringify({ [varName]: e.target.value }) })
+                      const val = e.target.value
+                      if (isNum && val !== '' && isNaN(Number(val))) return
+                      const newVal = isNum ? Number(val) : val
+                      onUpdateOverride(override.id, { condition: JSON.stringify({ [varName]: newVal }) })
                     }}
-                    className="bg-surface-base border border-choice-spare-border/40 rounded px-1.5 py-0.5 text-xs text-ink outline-none w-20"
                   />
                 )
               })()}
@@ -102,12 +108,18 @@ export default function ConditionalBlock({
         )
       })}
 
-      <button
-        onClick={handleAddOverride}
-        className="w-full py-1.5 border border-dashed border-choice-spare-border/40 rounded text-xs text-ink-faint hover:text-ink transition"
-      >
-        + add override condition
-      </button>
+      {variables.length === 0 ? (
+        <p className="text-xs text-ink-faint text-center py-1.5">
+          Define a story variable first to add override conditions.
+        </p>
+      ) : (
+        <button
+          onClick={handleAddOverride}
+          className="w-full py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
+        >
+          Add Override
+        </button>
+      )}
     </div>
   )
 }

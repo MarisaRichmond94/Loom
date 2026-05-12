@@ -1,6 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import TextField from '@mui/material/TextField'
+import Select from '@mui/material/Select'
+import MenuItem from '@mui/material/MenuItem'
+import FormControl from '@mui/material/FormControl'
+import InputLabel from '@mui/material/InputLabel'
+import Button from '@mui/material/Button'
 
 type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null }
 type Props = {
@@ -12,6 +18,19 @@ type Props = {
   onAddChoice: (label: string) => void
   onUpdateChoice: (choiceId: string, data: Partial<Choice>) => void
   onDeleteChoice: (choiceId: string) => void
+}
+
+const PALETTE = [
+  'bg-choice-spare-bg border-choice-spare-border',
+  'bg-choice-kill-bg border-choice-kill-border',
+  'bg-choice-amber-bg border-choice-amber-border',
+  'bg-choice-blue-bg border-choice-blue-border',
+  'bg-choice-purple-bg border-choice-purple-border',
+  'bg-choice-teal-bg border-choice-teal-border',
+]
+
+function isValidNumber(val: string) {
+  return val.trim() !== '' && !isNaN(Number(val))
 }
 
 export default function ChoicePointBlock({
@@ -44,67 +63,91 @@ export default function ChoicePointBlock({
       </div>
 
       <div className="flex flex-col gap-2 mb-3">
-        {choices.map(choice => {
+        {choices.map((choice, i) => {
           const vars = JSON.parse(choice.setsVariables || '{}') as Record<string, unknown>
           return (
-            <div key={choice.id} className="bg-choice-kill-bg border border-choice-kill-border rounded p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <input
+            <div key={choice.id} className={`border rounded p-3 ${PALETTE[i % PALETTE.length]}`}>
+              <div className="flex items-center gap-2 mb-3">
+                <TextField
+                  fullWidth
+                  label="Choice label"
                   value={choice.label}
                   onChange={e => onUpdateChoice(choice.id, { label: e.target.value })}
-                  className="flex-1 bg-transparent text-sm text-ink-muted outline-none border-b border-transparent focus:border-choice-kill"
+                  slotProps={{ htmlInput: { style: { fontSize: '0.8rem' } } }}
                 />
-                <button onClick={() => onDeleteChoice(choice.id)} className="text-xs text-ink-faint hover:text-choice-kill">✕</button>
+                <button
+                  onClick={() => onDeleteChoice(choice.id)}
+                  className="text-xs text-ink-faint hover:text-choice-kill shrink-0"
+                >
+                  ✕
+                </button>
               </div>
+
               {variables.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {variables.map(v => (
-                    <div key={v.id} className="flex items-center gap-1 text-xs">
-                      <span className="font-mono text-accent">{v.name}</span>
-                      {v.type === 'boolean' && (
-                        <select
-                          value={vars[v.name] !== undefined ? String(vars[v.name]) : ''}
+                <div className="flex flex-wrap gap-2">
+                  {variables.map(v => {
+                    const currentVal = vars[v.name]
+
+                    if (v.type === 'boolean') {
+                      return (
+                        <FormControl key={v.id} size="small" sx={{ minWidth: 140 }}>
+                          <InputLabel>{v.name}</InputLabel>
+                          <Select
+                            label={v.name}
+                            value={currentVal !== undefined ? String(currentVal) : ''}
+                            onChange={e => {
+                              const updated = { ...vars }
+                              if (e.target.value === '') delete updated[v.name]
+                              else updated[v.name] = e.target.value === 'true'
+                              onUpdateChoice(choice.id, { setsVariables: JSON.stringify(updated) })
+                            }}
+                          >
+                            <MenuItem value="">— unset —</MenuItem>
+                            <MenuItem value="true">true</MenuItem>
+                            <MenuItem value="false">false</MenuItem>
+                          </Select>
+                        </FormControl>
+                      )
+                    }
+
+                    if (v.type === 'number') {
+                      const raw = currentVal !== undefined ? String(currentVal) : ''
+                      return (
+                        <TextField
+                          key={v.id}
+                          label={v.name}
+                          value={raw}
                           onChange={e => {
-                            const updated = { ...vars }
-                            if (e.target.value === '') { delete updated[v.name] }
-                            else { updated[v.name] = e.target.value === 'true' }
-                            onUpdateChoice(choice.id, { setsVariables: JSON.stringify(updated) })
+                            const val = e.target.value
+                            if (val === '' || isValidNumber(val)) {
+                              const updated = { ...vars }
+                              if (val === '') delete updated[v.name]
+                              else updated[v.name] = Number(val)
+                              onUpdateChoice(choice.id, { setsVariables: JSON.stringify(updated) })
+                            }
                           }}
-                          className="bg-surface-base border border-accent/20 rounded px-1 text-ink-faint outline-none"
-                        >
-                          <option value="">—</option>
-                          <option value="true">true</option>
-                          <option value="false">false</option>
-                        </select>
-                      )}
-                      {v.type === 'number' && (
-                        <input
-                          type="number"
-                          value={vars[v.name] !== undefined ? String(vars[v.name]) : ''}
-                          onChange={e => {
-                            const updated = { ...vars }
-                            if (e.target.value === '') { delete updated[v.name] }
-                            else { updated[v.name] = Number(e.target.value) }
-                            onUpdateChoice(choice.id, { setsVariables: JSON.stringify(updated) })
-                          }}
-                          className="bg-surface-base border border-accent/20 rounded px-1 w-16 text-ink-faint outline-none"
+                          error={raw !== '' && !isValidNumber(raw)}
+                          helperText={raw !== '' && !isValidNumber(raw) ? 'Must be a number' : ''}
+                          sx={{ width: 120 }}
                         />
-                      )}
-                      {v.type === 'string' && (
-                        <input
-                          type="text"
-                          value={vars[v.name] !== undefined ? String(vars[v.name]) : ''}
-                          onChange={e => {
-                            const updated = { ...vars }
-                            if (e.target.value === '') { delete updated[v.name] }
-                            else { updated[v.name] = e.target.value }
-                            onUpdateChoice(choice.id, { setsVariables: JSON.stringify(updated) })
-                          }}
-                          className="bg-surface-base border border-accent/20 rounded px-1 w-20 text-ink-faint outline-none"
-                        />
-                      )}
-                    </div>
-                  ))}
+                      )
+                    }
+
+                    return (
+                      <TextField
+                        key={v.id}
+                        label={v.name}
+                        value={currentVal !== undefined ? String(currentVal) : ''}
+                        onChange={e => {
+                          const updated = { ...vars }
+                          if (e.target.value === '') delete updated[v.name]
+                          else updated[v.name] = e.target.value
+                          onUpdateChoice(choice.id, { setsVariables: JSON.stringify(updated) })
+                        }}
+                        sx={{ width: 160 }}
+                      />
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -113,13 +156,21 @@ export default function ChoicePointBlock({
       </div>
 
       <form onSubmit={handleAddChoice} className="flex gap-2">
-        <input
+        <TextField
+          fullWidth
+          placeholder="→ New choice…"
           value={newLabel}
           onChange={e => setNewLabel(e.target.value)}
-          placeholder="→ New choice…"
-          className="flex-1 bg-surface-overlay border border-choice-kill-border/40 rounded px-2 py-1 text-xs text-ink outline-none"
+          slotProps={{ htmlInput: { style: { fontSize: '0.75rem' } } }}
         />
-        <button type="submit" className="px-3 py-1 bg-choice-kill-bg border border-choice-kill-border rounded text-xs text-choice-kill">Add</button>
+        <Button
+          type="submit"
+          variant="contained"
+          size="small"
+          sx={{ bgcolor: 'var(--color-accent)', color: '#fff', whiteSpace: 'nowrap', '&:hover': { bgcolor: 'var(--color-accent)', opacity: 0.9 } }}
+        >
+          Add Choice
+        </Button>
       </form>
     </div>
   )
