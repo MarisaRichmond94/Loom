@@ -1,6 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import TextField from '@mui/material/TextField'
+import Select from '@mui/material/Select'
+import MenuItem from '@mui/material/MenuItem'
+import FormControl from '@mui/material/FormControl'
+import InputLabel from '@mui/material/InputLabel'
+import Button from '@mui/material/Button'
 
 type Variable = { id: string; name: string; type: string; defaultValue: string }
 type Props = {
@@ -26,7 +32,7 @@ export default function VariablesPanel({ variables, onAdd, onDelete }: Props) {
 
   return (
     <div>
-      <div className="text-xs uppercase tracking-widest text-ink-faint mb-2">Story Variables</div>
+      <div className="text-xs uppercase tracking-widest text-ink-faint mb-2">Context</div>
 
       <div className="flex flex-col gap-1 mb-2">
         {variables.map(v => (
@@ -46,34 +52,38 @@ export default function VariablesPanel({ variables, onAdd, onDelete }: Props) {
       </div>
 
       {showForm ? (
-        <form onSubmit={handleAdd} className="flex flex-col gap-1.5">
-          <input
+        <form onSubmit={handleAdd} className="flex flex-col gap-2">
+          <TextField
             autoFocus
+            fullWidth
+            label="Variable name"
             value={name}
             onChange={e => setName(e.target.value)}
-            placeholder="variable_name"
-            className="bg-surface-overlay border border-accent/20 rounded px-2 py-1 text-xs font-mono text-ink outline-none focus:border-accent"
+            slotProps={{ htmlInput: { style: { fontFamily: 'monospace', fontSize: '0.75rem' } } }}
           />
-          <select
-            value={type}
-            onChange={e => setType(e.target.value)}
-            className="bg-surface-overlay border border-accent/20 rounded px-2 py-1 text-xs text-ink outline-none"
-          >
-            <option value="boolean">boolean</option>
-            <option value="number">number</option>
-            <option value="string">string</option>
-          </select>
+          <FormControl fullWidth size="small">
+            <InputLabel>Type</InputLabel>
+            <Select label="Type" value={type} onChange={e => setType(e.target.value)}>
+              <MenuItem value="boolean">boolean</MenuItem>
+              <MenuItem value="number">number</MenuItem>
+              <MenuItem value="string">string</MenuItem>
+            </Select>
+          </FormControl>
           <div className="flex gap-1">
-            <button type="submit" className="flex-1 py-1 bg-accent/10 border border-accent/30 rounded text-xs text-accent">Add</button>
-            <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-1 bg-surface-overlay rounded text-xs text-ink-faint">Cancel</button>
+            <Button type="submit" variant="contained" size="small" fullWidth sx={{ bgcolor: 'var(--color-accent)', color: '#fff', '&:hover': { bgcolor: 'var(--color-accent)', opacity: 0.9 } }}>
+              Add Variable
+            </Button>
+            <Button type="button" variant="text" size="small" fullWidth onClick={() => setShowForm(false)} sx={{ color: 'var(--color-ink-faint)' }}>
+              Cancel
+            </Button>
           </div>
         </form>
       ) : (
         <button
           onClick={() => setShowForm(true)}
-          className="w-full py-1 border border-dashed border-accent/20 rounded text-xs text-ink-faint hover:text-ink transition"
+          className="w-full py-1 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
         >
-          + add variable
+          Add Variable
         </button>
       )}
     </div>

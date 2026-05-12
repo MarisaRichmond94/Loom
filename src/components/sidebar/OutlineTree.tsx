@@ -16,21 +16,20 @@ type Props = {
 
 export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }: Props) {
   const params = useParams()
-  const [expandedBooks, setExpandedBooks] = useState<Set<string>>(new Set(books.map(b => b.id)))
+  const [selectedBook, setSelectedBook] = useState<string | null>(() => books[0]?.id ?? null)
   const [addingBook, setAddingBook] = useState(false)
   const [addingChapter, setAddingChapter] = useState<string | null>(null)
   const [inputVal, setInputVal] = useState('')
 
   useEffect(() => {
-    setExpandedBooks(prev => {
-      const next = new Set(prev)
-      books.forEach(b => next.add(b.id))
-      return next
+    setSelectedBook(prev => {
+      if (prev && books.some(b => b.id === prev)) return prev
+      return books[0]?.id ?? null
     })
   }, [books])
 
   function toggleBook(id: string) {
-    setExpandedBooks(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+    setSelectedBook(prev => prev === id ? null : id)
   }
 
   function submitAdd(e: React.FormEvent) {
@@ -53,10 +52,10 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }
         onChange={e => setInputVal(e.target.value)}
         onKeyDown={e => e.key === 'Escape' && cancelAdd()}
         placeholder="Title…"
-        className="flex-1 bg-surface-base border border-accent/20 rounded px-2 py-0.5 text-xs text-ink outline-none focus:border-accent"
+        className="flex-1 bg-surface-base border border-accent/20 rounded px-2 py-1 text-xs text-ink outline-none focus:border-accent"
       />
-      <button type="submit" className="text-xs text-accent px-1">✓</button>
-      <button type="button" onClick={cancelAdd} className="text-xs text-ink-faint px-1">✕</button>
+      <button type="submit" className="text-xs text-accent px-1 py-1">✓</button>
+      <button type="button" onClick={cancelAdd} className="text-xs text-ink-faint px-1 py-1">✕</button>
     </form>
   )
 
@@ -67,21 +66,25 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }
         <div key={book.id}>
           <button
             onClick={() => toggleBook(book.id)}
-            className="w-full flex items-center gap-1 px-2 py-1.5 rounded text-xs text-accent hover:bg-surface-overlay transition text-left"
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition text-left ${
+              selectedBook === book.id
+                ? 'bg-accent/20 text-accent border border-accent/30'
+                : 'text-ink-muted hover:bg-surface-overlay border border-transparent'
+            }`}
           >
-            <span>{expandedBooks.has(book.id) ? '▾' : '▸'}</span>
-            <span className="font-medium">{book.title}</span>
+            <span>{book.title}</span>
+            <span className="text-ink-faint">{selectedBook === book.id ? '∨' : '∧'}</span>
           </button>
 
-          {expandedBooks.has(book.id) && (
-            <div className="ml-3">
+          {selectedBook === book.id && (
+            <div className="mt-1 ml-1">
               {book.chapters.map(chapter => (
                 <Link
                   key={chapter.id}
                   href={`/author/${seriesId}/chapter/${chapter.id}`}
-                  className={`block px-2 py-1 rounded text-xs transition ${
+                  className={`block px-3 py-1.5 rounded text-xs transition ${
                     params.chapterId === chapter.id
-                      ? 'bg-surface-muted text-ink'
+                      ? 'text-ink font-semibold'
                       : 'text-ink-faint hover:text-ink hover:bg-surface-overlay'
                   }`}
                 >
@@ -91,9 +94,9 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }
               {addingChapter === book.id ? addForm : (
                 <button
                   onClick={() => { setAddingChapter(book.id); setInputVal('') }}
-                  className="block px-2 py-1 text-xs text-ink-faint hover:text-ink transition"
+                  className="mt-1 block px-2 py-1 text-xs bg-accent text-white rounded font-medium hover:opacity-90 transition"
                 >
-                  + chapter
+                  Add Chapter
                 </button>
               )}
             </div>
@@ -103,9 +106,9 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }
       {addingBook ? addForm : (
         <button
           onClick={() => { setAddingBook(true); setInputVal('') }}
-          className="mt-2 px-2 py-1.5 rounded text-xs border border-dashed border-accent/20 text-ink-faint hover:text-ink transition"
+          className="mt-2 px-2 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
         >
-          + book
+          Add Book
         </button>
       )}
     </div>
