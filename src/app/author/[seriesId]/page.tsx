@@ -6,8 +6,7 @@ import Link from 'next/link'
 import OutlineTree from '@/components/sidebar/OutlineTree'
 import VariablesPanel from '@/components/sidebar/VariablesPanel'
 
-type Scene = { id: string; title: string; order: number }
-type Chapter = { id: string; title: string; order: number; scenes: Scene[] }
+type Chapter = { id: string; title: string; order: number }
 type Book = { id: string; title: string; order: number; chapters: Chapter[] }
 type Variable = { id: string; name: string; type: string; defaultValue: string }
 type Series = { id: string; title: string; books: Book[]; variables: Variable[] }
@@ -34,22 +33,14 @@ export default function AuthorSeriesPage() {
   }
 
   async function addChapter(bookId: string, title: string) {
-    await fetch(`/api/series/${seriesId}/books/${bookId}/chapters`, {
+    const res = await fetch(`/api/series/${seriesId}/books/${bookId}/chapters`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title }),
     })
-    load()
-  }
-
-  async function addScene(bookId: string, chapterId: string, title: string) {
-    const res = await fetch(
-      `/api/series/${seriesId}/books/${bookId}/chapters/${chapterId}/scenes`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) }
-    )
-    const scene = await res.json()
+    const chapter = await res.json()
     await load()
-    router.push(`/author/${seriesId}/scene/${scene.id}`)
+    router.push(`/author/${seriesId}/chapter/${chapter.id}`)
   }
 
   async function addVariable(name: string, type: string, defaultValue: unknown) {
@@ -87,7 +78,6 @@ export default function AuthorSeriesPage() {
             books={series.books}
             onAddBook={addBook}
             onAddChapter={addChapter}
-            onAddScene={addScene}
           />
           <VariablesPanel
             variables={series.variables}
@@ -97,7 +87,7 @@ export default function AuthorSeriesPage() {
         </aside>
 
         <main className="flex-1 flex items-center justify-center text-ink-faint text-sm">
-          Select a scene from the outline to start writing.
+          Select a chapter from the outline to start writing.
         </main>
       </div>
     </div>

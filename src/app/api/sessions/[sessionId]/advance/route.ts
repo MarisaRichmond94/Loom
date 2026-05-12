@@ -25,14 +25,14 @@ export async function POST(req: Request, { params }: Params) {
   const choiceRecord = {
     id: choice.id,
     setsVariables: JSON.parse(choice.setsVariables),
-    targetSceneId: choice.targetSceneId,
+    targetChapterId: choice.targetChapterId,
   }
   const { newState, newHistory } = applyChoice(storyState, choiceHistory, choicePointId, choiceRecord)
 
   let currentBlockId = session.currentBlockId
-  if (choice.targetSceneId) {
+  if (choice.targetChapterId) {
     const firstBlock = await prisma.contentBlock.findFirst({
-      where: { sceneId: choice.targetSceneId },
+      where: { chapterId: choice.targetChapterId },
       orderBy: { order: 'asc' },
     })
     currentBlockId = firstBlock?.id ?? null

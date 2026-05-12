@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 
-type Choice = { id: string; label: string; setsVariables: string; targetSceneId: string | null }
+type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null }
 type Props = {
   blockId: string
   displayType: string | null

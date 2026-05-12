@@ -5,7 +5,7 @@ import ChoicePointBlock from './ChoicePointBlock'
 import ConditionalBlock from './ConditionalBlock'
 
 type Override = { id: string; order: number; condition: string; content: string }
-type Choice = { id: string; label: string; setsVariables: string; targetSceneId: string | null }
+type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null }
 type Block = {
   id: string
   order: number
@@ -20,7 +20,7 @@ type Block = {
 type Variable = { id: string; name: string; type: string }
 
 type Props = {
-  sceneId: string
+  chapterId: string
   blocks: Block[]
   variables: Variable[]
   onBlocksChange: () => void
@@ -32,9 +32,9 @@ const BLOCK_BORDER: Record<string, string> = {
   conditional_fragment: 'border-l-accent',
 }
 
-export default function BlockEditor({ sceneId, blocks, variables, onBlocksChange }: Props) {
+export default function BlockEditor({ chapterId, blocks, variables, onBlocksChange }: Props) {
   async function addBlock(type: string) {
-    await fetch(`/api/scenes/${sceneId}/blocks`, {
+    await fetch(`/api/chapters/${chapterId}/blocks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -50,7 +50,7 @@ export default function BlockEditor({ sceneId, blocks, variables, onBlocksChange
   }
 
   async function updateBlock(blockId: string, data: object) {
-    await fetch(`/api/scenes/${sceneId}/blocks/${blockId}`, {
+    await fetch(`/api/chapters/${chapterId}/blocks/${blockId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -58,7 +58,7 @@ export default function BlockEditor({ sceneId, blocks, variables, onBlocksChange
   }
 
   async function deleteBlock(blockId: string) {
-    await fetch(`/api/scenes/${sceneId}/blocks/${blockId}`, { method: 'DELETE' })
+    await fetch(`/api/chapters/${chapterId}/blocks/${blockId}`, { method: 'DELETE' })
     onBlocksChange()
   }
 

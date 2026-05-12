@@ -27,46 +27,37 @@ model Book {
 }
 
 model Chapter {
-  id     String  @id @default(cuid())
-  bookId String
-  title  String
-  order  Int
-  book   Book    @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  scenes Scene[]
-}
-
-model Scene {
   id             String         @id @default(cuid())
-  chapterId      String
+  bookId         String
   title          String
   order          Int
-  chapter        Chapter        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  book           Book           @relation(fields: [bookId], references: [id], onDelete: Cascade)
   blocks         ContentBlock[]
-  inboundChoices Choice[]       @relation("TargetScene")
+  inboundChoices Choice[]       @relation("TargetChapter")
 }
 
 model ContentBlock {
   id          String                @id @default(cuid())
-  sceneId     String
+  chapterId   String
   order       Int
   type        String
   content     String?
   prompt      String?
   displayType String?
   baseContent String?
-  scene       Scene                 @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  chapter     Chapter               @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   choices     Choice[]
   overrides   ConditionalOverride[]
 }
 
 model Choice {
-  id            String       @id @default(cuid())
-  choicePointId String
-  label         String
-  setsVariables String       @default("{}")
-  targetSceneId String?
-  choicePoint   ContentBlock @relation(fields: [choicePointId], references: [id], onDelete: Cascade)
-  targetScene   Scene?       @relation("TargetScene", fields: [targetSceneId], references: [id])
+  id              String       @id @default(cuid())
+  choicePointId   String
+  label           String
+  setsVariables   String       @default("{}")
+  targetChapterId String?
+  choicePoint     ContentBlock @relation(fields: [choicePointId], references: [id], onDelete: Cascade)
+  targetChapter   Chapter?     @relation("TargetChapter", fields: [targetChapterId], references: [id])
 }
 
 model ConditionalOverride {

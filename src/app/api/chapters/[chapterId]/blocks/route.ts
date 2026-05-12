@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-type Params = { params: Promise<{ sceneId: string }> }
+type Params = { params: Promise<{ chapterId: string }> }
 
 export async function GET(_: Request, { params }: Params) {
-  const { sceneId } = await params
+  const { chapterId } = await params
   const blocks = await prisma.contentBlock.findMany({
-    where: { sceneId },
+    where: { chapterId },
     orderBy: { order: 'asc' },
     include: {
       choices: { orderBy: { id: 'asc' } },
@@ -17,15 +17,15 @@ export async function GET(_: Request, { params }: Params) {
 }
 
 export async function POST(req: Request, { params }: Params) {
-  const { sceneId } = await params
+  const { chapterId } = await params
   const { type, content, prompt, displayType, baseContent } = await req.json()
   if (!['text', 'choice_point', 'conditional_fragment'].includes(type)) {
     return NextResponse.json({ error: 'invalid type' }, { status: 400 })
   }
-  const count = await prisma.contentBlock.count({ where: { sceneId } })
+  const count = await prisma.contentBlock.count({ where: { chapterId } })
   const block = await prisma.contentBlock.create({
     data: {
-      sceneId,
+      chapterId,
       type,
       order: count + 1,
       ...(content !== undefined && { content }),

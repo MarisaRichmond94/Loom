@@ -42,7 +42,7 @@ describe('resolveConditional', () => {
 })
 
 describe('applyChoice', () => {
-  const choice: ChoiceRecord = { id: 'c1', setsVariables: { spare_victim: true }, targetSceneId: null }
+  const choice: ChoiceRecord = { id: 'c1', setsVariables: { spare_victim: true }, targetChapterId: null }
 
   it('merges setsVariables into state', () => {
     const { newState } = applyChoice({ spare_victim: false }, [], 'cp1', choice)

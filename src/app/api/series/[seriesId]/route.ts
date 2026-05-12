@@ -14,7 +14,6 @@ export async function GET(_: Request, { params }: Params) {
         include: {
           chapters: {
             orderBy: { order: 'asc' },
-            include: { scenes: { orderBy: { order: 'asc' } } },
           },
         },
       },

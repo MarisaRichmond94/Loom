@@ -4,8 +4,7 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 
-type Scene = { id: string; title: string; order: number }
-type Chapter = { id: string; title: string; order: number; scenes: Scene[] }
+type Chapter = { id: string; title: string; order: number }
 type Book = { id: string; title: string; order: number; chapters: Chapter[] }
 
 type Props = {
@@ -13,18 +12,13 @@ type Props = {
   books: Book[]
   onAddBook: (title: string) => void
   onAddChapter: (bookId: string, title: string) => void
-  onAddScene: (bookId: string, chapterId: string, title: string) => void
 }
 
-export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, onAddScene }: Props) {
+export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }: Props) {
   const params = useParams()
   const [expandedBooks, setExpandedBooks] = useState<Set<string>>(new Set(books.map(b => b.id)))
-  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(
-    new Set(books.flatMap(b => b.chapters.map(c => c.id)))
-  )
   const [addingBook, setAddingBook] = useState(false)
   const [addingChapter, setAddingChapter] = useState<string | null>(null)
-  const [addingScene, setAddingScene] = useState<{ bookId: string; chapterId: string } | null>(null)
   const [inputVal, setInputVal] = useState('')
 
   useEffect(() => {
@@ -33,18 +27,10 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
       books.forEach(b => next.add(b.id))
       return next
     })
-    setExpandedChapters(prev => {
-      const next = new Set(prev)
-      books.forEach(b => b.chapters.forEach(c => next.add(c.id)))
-      return next
-    })
   }, [books])
 
   function toggleBook(id: string) {
     setExpandedBooks(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
-  }
-  function toggleChapter(id: string) {
-    setExpandedChapters(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
   }
 
   function submitAdd(e: React.FormEvent) {
@@ -52,12 +38,11 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
     if (!inputVal.trim()) return
     if (addingBook) { onAddBook(inputVal.trim()); setAddingBook(false) }
     else if (addingChapter) { onAddChapter(addingChapter, inputVal.trim()); setAddingChapter(null) }
-    else if (addingScene) { onAddScene(addingScene.bookId, addingScene.chapterId, inputVal.trim()); setAddingScene(null) }
     setInputVal('')
   }
 
   function cancelAdd() {
-    setAddingBook(false); setAddingChapter(null); setAddingScene(null); setInputVal('')
+    setAddingBook(false); setAddingChapter(null); setInputVal('')
   }
 
   const addForm = (
@@ -91,41 +76,17 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
           {expandedBooks.has(book.id) && (
             <div className="ml-3">
               {book.chapters.map(chapter => (
-                <div key={chapter.id}>
-                  <button
-                    onClick={() => toggleChapter(chapter.id)}
-                    className="w-full flex items-center gap-1 px-2 py-1 rounded text-xs text-ink-muted hover:bg-surface-overlay transition text-left"
-                  >
-                    <span>{expandedChapters.has(chapter.id) ? '▾' : '▸'}</span>
-                    {chapter.title}
-                  </button>
-
-                  {expandedChapters.has(chapter.id) && (
-                    <div className="ml-3">
-                      {chapter.scenes.map(scene => (
-                        <Link
-                          key={scene.id}
-                          href={`/author/${seriesId}/scene/${scene.id}`}
-                          className={`block px-2 py-1 rounded text-xs transition ${
-                            params.sceneId === scene.id
-                              ? 'bg-surface-muted text-ink'
-                              : 'text-ink-faint hover:text-ink hover:bg-surface-overlay'
-                          }`}
-                        >
-                          {scene.title}
-                        </Link>
-                      ))}
-                      {addingScene?.chapterId === chapter.id ? addForm : (
-                        <button
-                          onClick={() => { setAddingScene({ bookId: book.id, chapterId: chapter.id }); setInputVal('') }}
-                          className="block px-2 py-1 text-xs text-ink-faint hover:text-ink transition"
-                        >
-                          + scene
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <Link
+                  key={chapter.id}
+                  href={`/author/${seriesId}/chapter/${chapter.id}`}
+                  className={`block px-2 py-1 rounded text-xs transition ${
+                    params.chapterId === chapter.id
+                      ? 'bg-surface-muted text-ink'
+                      : 'text-ink-faint hover:text-ink hover:bg-surface-overlay'
+                  }`}
+                >
+                  {chapter.title}
+                </Link>
               ))}
               {addingChapter === book.id ? addForm : (
                 <button

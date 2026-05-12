@@ -19,7 +19,7 @@ export type ConditionalBlock = {
 export type ChoiceRecord = {
   id: string
   setsVariables: Record<string, boolean | number | string>
-  targetSceneId: string | null
+  targetChapterId: string | null
 }
 
 export function resolveConditional(block: ConditionalBlock, storyState: StoryState): string {

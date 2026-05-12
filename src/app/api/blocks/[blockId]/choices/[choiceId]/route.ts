@@ -6,14 +6,14 @@ type Params = { params: Promise<{ choiceId: string }> }
 
 export async function PATCH(req: Request, { params }: Params) {
   const { choiceId } = await params
-  const { label, setsVariables, targetSceneId } = await req.json()
+  const { label, setsVariables, targetChapterId } = await req.json()
   try {
     const choice = await prisma.choice.update({
       where: { id: choiceId },
       data: {
         ...(label !== undefined && { label }),
         ...(setsVariables !== undefined && { setsVariables: JSON.stringify(setsVariables) }),
-        ...(targetSceneId !== undefined && { targetSceneId }),
+        ...(targetChapterId !== undefined && { targetChapterId }),
       },
     })
     return NextResponse.json(choice)

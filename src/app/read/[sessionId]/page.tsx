@@ -8,7 +8,7 @@ import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
 type Block = {
   id: string; order: number; type: string
   content?: string | null; prompt?: string | null; displayType?: string | null; baseContent?: string | null
-  choices: { id: string; label: string; setsVariables: string; targetSceneId: string | null }[]
+  choices: { id: string; label: string; setsVariables: string; targetChapterId: string | null }[]
   overrides: { id: string; order: number; condition: string; content: string }[]
 }
 
@@ -18,17 +18,17 @@ export default function ReaderPage() {
   const [storyState, setStoryState] = useState<StoryState>({})
   const [choiceHistory, setChoiceHistory] = useState<HistoryEntry[]>([])
   const [seriesTitle, setSeriesTitle] = useState('')
-  const [sceneLabel, setSceneLabel] = useState('')
-  const [currentSceneId, setCurrentSceneId] = useState<string | null>(null)
+  const [chapterLabel, setChapterLabel] = useState('')
+  const [currentChapterId, setCurrentChapterId] = useState<string | null>(null)
   const [noContent, setNoContent] = useState(false)
 
-  const loadScene = useCallback(async (sceneId: string) => {
-    const res = await fetch(`/api/scenes/${sceneId}`)
+  const loadChapter = useCallback(async (chapterId: string) => {
+    const res = await fetch(`/api/chapters/${chapterId}`)
     if (!res.ok) return
-    const scene = await res.json()
-    setBlocks(scene.blocks)
-    setSceneLabel(scene.title)
-    setCurrentSceneId(sceneId)
+    const chapter = await res.json()
+    setBlocks(chapter.blocks)
+    setChapterLabel(chapter.title)
+    setCurrentChapterId(chapterId)
   }, [])
 
   const loadSession = useCallback(async () => {
@@ -47,43 +47,43 @@ export default function ReaderPage() {
       const blockRes = await fetch(`/api/blocks/${session.currentBlockId}`)
       if (blockRes.ok) {
         const block = await blockRes.json()
-        setCurrentSceneId(block.sceneId)
+        setCurrentChapterId(block.chapterId)
         return
       }
-      // block not found — fall through to first scene
+      // block not found — fall through to first chapter
     }
 
-    // Fresh session — start at first scene
-    if (series.books?.[0]?.chapters?.[0]?.scenes?.[0]) {
-      setCurrentSceneId(series.books[0].chapters[0].scenes[0].id)
+    // Fresh session — start at first chapter
+    if (series.books?.[0]?.chapters?.[0]) {
+      setCurrentChapterId(series.books[0].chapters[0].id)
     } else {
       setNoContent(true)
     }
   }, [sessionId])
 
   useEffect(() => { loadSession() }, [loadSession])
-  useEffect(() => { if (currentSceneId) loadScene(currentSceneId) }, [currentSceneId, loadScene])
+  useEffect(() => { if (currentChapterId) loadChapter(currentChapterId) }, [currentChapterId, loadChapter])
 
   function handleSessionUpdate(state: StoryState, history: HistoryEntry[]) {
     setStoryState(state)
     setChoiceHistory(history)
   }
 
-  function handleNavigate(sceneId: string) {
-    loadScene(sceneId)
+  function handleNavigate(chapterId: string) {
+    loadChapter(chapterId)
   }
 
   if (noContent) {
     return (
       <div className="min-h-screen bg-surface-base flex items-center justify-center">
         <p className="text-ink-faint text-sm">
-          {seriesTitle ? `"${seriesTitle}" has no scenes yet. Add some in the author editor.` : 'Loading…'}
+          {seriesTitle ? `"${seriesTitle}" has no chapters yet. Add some in the author editor.` : 'Loading…'}
         </p>
       </div>
     )
   }
 
-  if (!currentSceneId || blocks.length === 0) {
+  if (!currentChapterId || blocks.length === 0) {
     return (
       <div className="min-h-screen bg-surface-base flex items-center justify-center">
         <p className="text-ink-faint text-sm">Loading…</p>
@@ -98,7 +98,7 @@ export default function ReaderPage() {
       storyState={storyState}
       choiceHistory={choiceHistory}
       seriesTitle={seriesTitle}
-      sceneLabel={sceneLabel}
+      chapterLabel={chapterLabel}
       onSessionUpdate={handleSessionUpdate}
       onNavigate={handleNavigate}
     />

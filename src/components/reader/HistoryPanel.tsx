@@ -34,7 +34,7 @@ export default function HistoryPanel({
             onClick={() => onRewind(entry.choicePointId)}
             className="text-left bg-choice-spare-bg border border-choice-spare-border rounded p-3 hover:opacity-80 transition"
           >
-            <div className="text-xs text-ink-faint mb-1">{choicePointLocations[entry.choicePointId] ?? 'Scene'}</div>
+            <div className="text-xs text-ink-faint mb-1">{choicePointLocations[entry.choicePointId] ?? 'Chapter'}</div>
             <div className="text-sm text-choice-spare">{choiceLabels[entry.choiceId] ?? entry.choiceId}</div>
           </button>
         ))}

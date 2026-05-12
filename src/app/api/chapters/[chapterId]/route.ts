@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-type Params = { params: Promise<{ sceneId: string }> }
+type Params = { params: Promise<{ chapterId: string }> }
 
 export async function GET(_: Request, { params }: Params) {
-  const { sceneId } = await params
-  const scene = await prisma.scene.findUnique({
-    where: { id: sceneId },
+  const { chapterId } = await params
+  const chapter = await prisma.chapter.findUnique({
+    where: { id: chapterId },
     include: {
       blocks: {
         orderBy: { order: 'asc' },
@@ -17,6 +17,6 @@ export async function GET(_: Request, { params }: Params) {
       },
     },
   })
-  if (!scene) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json(scene)
+  if (!chapter) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  return NextResponse.json(chapter)
 }

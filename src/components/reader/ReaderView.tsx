@@ -10,7 +10,7 @@ import ChapterGate from './ChapterGate'
 import HistoryPanel from './HistoryPanel'
 
 type Override = { id: string; order: number; condition: string; content: string }
-type Choice = { id: string; label: string; setsVariables: string; targetSceneId: string | null }
+type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null }
 type Block = {
   id: string; order: number; type: string
   content?: string | null; prompt?: string | null; displayType?: string | null; baseContent?: string | null
@@ -24,9 +24,9 @@ type Props = {
   storyState: StoryState
   choiceHistory: HistoryEntry[]
   seriesTitle: string
-  sceneLabel: string
+  chapterLabel: string
   onSessionUpdate: (state: StoryState, history: HistoryEntry[]) => void
-  onNavigate: (sceneId: string) => void
+  onNavigate: (chapterId: string) => void
 }
 
 function renderTipTap(json: string | null | undefined): string {
@@ -39,7 +39,7 @@ function renderTipTap(json: string | null | undefined): string {
 }
 
 export default function ReaderView({
-  sessionId, blocks, storyState, choiceHistory, seriesTitle, sceneLabel, onSessionUpdate, onNavigate
+  sessionId, blocks, storyState, choiceHistory, seriesTitle, chapterLabel, onSessionUpdate, onNavigate
 }: Props) {
   const [showHistory, setShowHistory] = useState(false)
   const [pendingChoiceBlock, setPendingChoiceBlock] = useState<Block | null>(null)
@@ -49,7 +49,7 @@ export default function ReaderView({
   blocks.forEach(b => {
     if (b.type === 'choice_point') {
       b.choices.forEach(c => { choiceLabels[c.id] = c.label })
-      choicePointLocations[b.id] = sceneLabel
+      choicePointLocations[b.id] = chapterLabel
     }
   })
 
@@ -65,7 +65,7 @@ export default function ReaderView({
     onSessionUpdate(updated.storyState, updated.choiceHistory)
 
     const choice = choicePointBlock.choices.find(c => c.id === choiceId)
-    if (choice?.targetSceneId) onNavigate(choice.targetSceneId)
+    if (choice?.targetChapterId) onNavigate(choice.targetChapterId)
   }
 
   async function handleRewind(choicePointId: string) {
@@ -83,7 +83,7 @@ export default function ReaderView({
   return (
     <div className="min-h-screen bg-surface-base">
       <div className="sticky top-0 bg-surface-base/80 backdrop-blur border-b border-accent/10 px-6 py-3 flex items-center justify-between z-30">
-        <span className="text-xs text-ink-faint">{seriesTitle} · {sceneLabel}</span>
+        <span className="text-xs text-ink-faint">{seriesTitle} · {chapterLabel}</span>
         <button
           onClick={() => setShowHistory(s => !s)}
           className="text-xs px-3 py-1.5 rounded bg-surface-raised border border-accent/20 text-ink-muted hover:text-ink transition"

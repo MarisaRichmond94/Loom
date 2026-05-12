@@ -25,25 +25,16 @@ CREATE TABLE "Chapter" (
 );
 
 -- CreateTable
-CREATE TABLE "Scene" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "chapterId" TEXT NOT NULL,
-    "title" TEXT NOT NULL,
-    "order" INTEGER NOT NULL,
-    CONSTRAINT "Scene_chapterId_fkey" FOREIGN KEY ("chapterId") REFERENCES "Chapter" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- CreateTable
 CREATE TABLE "ContentBlock" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "sceneId" TEXT NOT NULL,
+    "chapterId" TEXT NOT NULL,
     "order" INTEGER NOT NULL,
     "type" TEXT NOT NULL,
     "content" TEXT,
     "prompt" TEXT,
     "displayType" TEXT,
     "baseContent" TEXT,
-    CONSTRAINT "ContentBlock_sceneId_fkey" FOREIGN KEY ("sceneId") REFERENCES "Scene" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    CONSTRAINT "ContentBlock_chapterId_fkey" FOREIGN KEY ("chapterId") REFERENCES "Chapter" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -52,9 +43,9 @@ CREATE TABLE "Choice" (
     "choicePointId" TEXT NOT NULL,
     "label" TEXT NOT NULL,
     "setsVariables" TEXT NOT NULL DEFAULT '{}',
-    "targetSceneId" TEXT,
+    "targetChapterId" TEXT,
     CONSTRAINT "Choice_choicePointId_fkey" FOREIGN KEY ("choicePointId") REFERENCES "ContentBlock" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "Choice_targetSceneId_fkey" FOREIGN KEY ("targetSceneId") REFERENCES "Scene" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+    CONSTRAINT "Choice_targetChapterId_fkey" FOREIGN KEY ("targetChapterId") REFERENCES "Chapter" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 -- CreateTable
