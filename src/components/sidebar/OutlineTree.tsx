@@ -68,10 +68,10 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }
   )
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col">
       <div className="text-xs uppercase tracking-widest text-ink-faint mb-2">Outline</div>
       {books.map(book => (
-        <div key={book.id} className="flex flex-col gap-2">
+        <div key={book.id} className="flex flex-col">
           <button
             onClick={() => selectBook(book.id)}
             className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition text-left ${
@@ -102,7 +102,7 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }
               {addingChapter === book.id ? addForm : (
                 <button
                   onClick={() => { setAddingChapter(book.id); setInputVal('') }}
-                  className="block px-2 py-1 text-xs bg-accent text-white rounded font-medium hover:opacity-90 transition"
+                  className="block px-2 py-1 text-xs bg-accent text-white rounded font-medium hover:opacity-90 transition my-2"
                 >
                   Add Chapter
                 </button>
