@@ -186,11 +186,20 @@ export default function BookDetailPage() {
       {/* Delete confirmation modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-surface-raised border border-choice-kill/30 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl">
-            <h2 className="text-lg font-bold text-ink mb-2">Delete "{book.title}"?</h2>
-            <p className="text-sm text-ink-muted mb-6 leading-relaxed">
-              This will permanently delete the book and all its chapters, blocks, and choices.
-              <span className="text-choice-kill font-medium"> This cannot be undone.</span>
+          <div className="bg-surface-raised border border-accent/20 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl relative">
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              className="absolute top-4 right-4 text-ink-faint hover:text-ink text-lg leading-none"
+            >
+              ✕
+            </button>
+            <h2 className="text-base font-bold text-ink mb-3 pr-6">
+              Are you sure you want to delete "{book.title}"?
+            </h2>
+            <p className="text-sm text-ink-muted mb-6 leading-relaxed italic">
+              Deleting this book is permanent and cannot be undone. All of its chapters, written content,
+              and choices will be removed. Any story branches in later books that depended on choices
+              made here will fall back to their default text.
             </p>
             <div className="flex gap-3 justify-end">
               <button
@@ -203,7 +212,7 @@ export default function BookDetailPage() {
                 onClick={handleDelete}
                 className="px-4 py-2 rounded-lg bg-choice-kill text-white text-sm font-semibold hover:opacity-90 transition"
               >
-                Yes, delete forever
+                Delete
               </button>
             </div>
           </div>
