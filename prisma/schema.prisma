@@ -18,12 +18,14 @@ model Series {
 }
 
 model Book {
-  id       String    @id @default(cuid())
-  seriesId String
-  title    String
-  order    Int
-  series   Series    @relation(fields: [seriesId], references: [id], onDelete: Cascade)
-  chapters Chapter[]
+  id        String    @id @default(cuid())
+  seriesId  String
+  title     String
+  synopsis  String    @default("")
+  coverPath String?
+  order     Int
+  series    Series    @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  chapters  Chapter[]
 }
 
 model Chapter {

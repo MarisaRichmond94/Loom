@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 
 type Chapter = { id: string; title: string; order: number }
 type Book = { id: string; title: string; order: number; chapters: Chapter[] }
@@ -16,6 +16,7 @@ type Props = {
 
 export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }: Props) {
   const params = useParams()
+  const router = useRouter()
   const [selectedBook, setSelectedBook] = useState<string | null>(() => books[0]?.id ?? null)
   const [addingBook, setAddingBook] = useState(false)
   const [addingChapter, setAddingChapter] = useState<string | null>(null)
@@ -24,12 +25,18 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }
   useEffect(() => {
     setSelectedBook(prev => {
       if (prev && books.some(b => b.id === prev)) return prev
+      // Auto-select the book that contains the active chapter
+      const activeBook = books.find(b => b.chapters.some(c => c.id === params.chapterId))
+      if (activeBook) return activeBook.id
+      // Auto-select the book whose page we're on
+      if (params.bookId) return params.bookId as string
       return books[0]?.id ?? null
     })
-  }, [books])
+  }, [books, params.chapterId, params.bookId])
 
-  function toggleBook(id: string) {
+  function selectBook(id: string) {
     setSelectedBook(prev => prev === id ? null : id)
+    router.push(`/author/${seriesId}/book/${id}`)
   }
 
   function submitAdd(e: React.FormEvent) {
@@ -65,7 +72,7 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter }
       {books.map(book => (
         <div key={book.id}>
           <button
-            onClick={() => toggleBook(book.id)}
+            onClick={() => selectBook(book.id)}
             className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition text-left ${
               selectedBook === book.id
                 ? 'bg-accent/20 text-accent border border-accent/30'
