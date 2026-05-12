@@ -119,7 +119,7 @@ export default function BookDetailPage() {
           <VariablesPanel variables={series.variables} onAdd={addVariable} onDelete={deleteVariable} />
         </aside>
 
-        <main className="flex-1 overflow-y-auto relative">
+        <main className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-8 py-8">
             <div className="flex gap-8 mb-8 items-stretch">
               {/* Cover */}
@@ -181,10 +181,19 @@ export default function BookDetailPage() {
             </div>
           </div>
 
-          {/* Delete confirmation modal — absolute so it centers over content area only */}
-          {showDeleteConfirm && (
-            <div className="absolute inset-0 bg-black/60 flex items-start justify-center z-50" style={{ paddingTop: '20%' }}>
-              <div className="bg-surface-raised border border-accent/20 rounded-xl p-8 max-w-2xl w-full mx-8 shadow-2xl relative">
+        </main>
+      </div>
+
+      {showDeleteConfirm && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-start justify-center z-50"
+          style={{ paddingTop: '20%' }}
+          onClick={() => setShowDeleteConfirm(false)}
+        >
+          <div
+            className="bg-surface-raised border border-accent/20 rounded-xl p-8 max-w-2xl w-full mx-8 shadow-2xl relative"
+            onClick={e => e.stopPropagation()}
+          >
             <button
               onClick={() => setShowDeleteConfirm(false)}
               className="absolute top-4 right-4 text-ink-faint hover:text-ink text-lg leading-none"
@@ -202,7 +211,7 @@ export default function BookDetailPage() {
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 rounded-lg border border-accent/20 text-ink-muted text-sm hover:text-ink transition"
+                className="px-4 py-2 rounded-lg text-ink-muted text-sm hover:text-ink transition"
               >
                 Cancel
               </button>
@@ -213,11 +222,9 @@ export default function BookDetailPage() {
                 Delete
               </button>
             </div>
-              </div>
-            </div>
-          )}
-        </main>
-      </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
