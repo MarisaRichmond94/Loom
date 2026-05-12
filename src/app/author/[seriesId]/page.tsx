@@ -65,10 +65,13 @@ export default function AuthorSeriesPage() {
 
   return (
     <div className="min-h-screen bg-surface-base flex flex-col">
-      <nav className="bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
-        <Link href="/" className="text-accent font-bold tracking-wider">LOOM</Link>
-        <span className="text-ink-faint">›</span>
-        <span className="text-ink">{series.title}</span>
+      <nav className="sticky top-0 z-10 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
+        <Link href="/" className="flex items-center gap-2">
+          <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
+          <span className="text-accent font-bold tracking-wider text-2xl leading-none">LOOM</span>
+        </Link>
+        <span className="text-ink-faint self-center">›</span>
+        <span className="text-ink self-center">{series.title}</span>
       </nav>
 
       <div className="flex flex-1 overflow-hidden">

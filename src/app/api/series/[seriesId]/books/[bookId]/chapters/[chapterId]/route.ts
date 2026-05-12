@@ -6,11 +6,16 @@ type Params = { params: Promise<{ chapterId: string }> }
 
 export async function PATCH(req: Request, { params }: Params) {
   const { chapterId } = await params
-  const { title, order } = await req.json()
+  const { title, order, pov, date } = await req.json()
   try {
     const chapter = await prisma.chapter.update({
       where: { id: chapterId },
-      data: { ...(title !== undefined && { title }), ...(order !== undefined && { order }) },
+      data: {
+        ...(title !== undefined && { title }),
+        ...(order !== undefined && { order }),
+        ...(pov !== undefined && { pov }),
+        ...(date !== undefined && { date }),
+      },
     })
     return NextResponse.json(chapter)
   } catch (e) {

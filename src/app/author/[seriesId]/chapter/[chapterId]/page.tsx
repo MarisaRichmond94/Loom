@@ -13,7 +13,7 @@ type Block = {
   choices: { id: string; label: string; setsVariables: string; targetChapterId: string | null }[]
   overrides: { id: string; order: number; condition: string; content: string }[]
 }
-type Chapter = { id: string; title: string; blocks: Block[] }
+type Chapter = { id: string; title: string; pov: string | null; date: string | null; blocks: Block[] }
 type Variable = { id: string; name: string; type: string; defaultValue: string }
 type Series = {
   id: string; title: string
@@ -26,6 +26,18 @@ export default function ChapterEditorPage() {
   const router = useRouter()
   const [series, setSeries] = useState<Series | null>(null)
   const [chapter, setChapter] = useState<Chapter | null>(null)
+  async function patchChapter(field: 'pov' | 'date', value: string) {
+    await fetch(`/api/chapters/${chapterId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [field]: value || null }),
+    })
+  }
+
+  function handleMetaChange(field: 'pov' | 'date', value: string) {
+    setChapter(prev => prev ? { ...prev, [field]: value } : null)
+    patchChapter(field, value)
+  }
 
   const loadSeries = useCallback(async () => {
     const res = await fetch(`/api/series/${seriesId}`)
@@ -75,24 +87,29 @@ export default function ChapterEditorPage() {
 
   return (
     <div className="min-h-screen bg-surface-base flex flex-col">
-      <nav className="bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
-        <Link href="/" className="text-accent font-bold tracking-wider">LOOM</Link>
-        <span className="text-ink-faint">›</span>
-        <Link href={`/author/${seriesId}`} className="text-ink-muted hover:text-ink">{series.title}</Link>
-        <span className="text-ink-faint">›</span>
-        <span className="text-ink">{chapter.title}</span>
-        <div className="ml-auto">
-          <button
-            onClick={async () => {
-              const res = await fetch('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seriesId }) })
-              const session = await res.json()
-              router.push(`/read/${session.id}`)
-            }}
-            className="px-3 py-1.5 rounded text-xs bg-choice-spare-bg border border-choice-spare-border text-choice-spare hover:opacity-80 transition"
-          >
-            ▶ Preview as Reader
-          </button>
-        </div>
+      <nav className="sticky top-0 z-10 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
+        <Link href="/" className="flex items-center gap-2">
+          <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
+          <span className="text-accent font-bold tracking-wider text-2xl leading-none">LOOM</span>
+        </Link>
+        <span className="text-ink-faint self-center">›</span>
+        <Link href={`/author/${seriesId}`} className="text-ink-muted hover:text-ink self-center">{series.title}</Link>
+        <span className="text-ink-faint self-center">›</span>
+        <span className="text-ink-muted self-center">
+          {series.books.find(b => b.chapters.some(c => c.id === chapterId))?.title}
+        </span>
+        <span className="text-ink-faint self-center">›</span>
+        <span className="text-ink self-center">{chapter.title}</span>
+        <button
+          onClick={async () => {
+            const res = await fetch('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seriesId }) })
+            const session = await res.json()
+            router.push(`/read/${session.id}`)
+          }}
+          className="ml-auto px-3 py-1.5 rounded text-xs bg-choice-spare-bg border border-choice-spare-border text-choice-spare hover:opacity-80 transition"
+        >
+          ▶ Preview as Reader
+        </button>
       </nav>
 
       <div className="flex flex-1 overflow-hidden">
@@ -103,7 +120,27 @@ export default function ChapterEditorPage() {
 
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-2xl mx-auto px-8 py-8">
-            <h2 className="text-lg font-semibold text-ink mb-6">{chapter.title}</h2>
+            <h2 className="text-lg font-semibold text-ink mb-3">{chapter.title}</h2>
+            <div className="flex gap-4 mb-6">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-ink-faint uppercase tracking-widest">POV</span>
+                <input
+                  value={chapter.pov ?? ''}
+                  onChange={e => handleMetaChange('pov', e.target.value)}
+                  placeholder="Character name"
+                  className="bg-surface-overlay border border-accent/15 rounded px-2 py-0.5 text-xs text-ink placeholder:text-ink-faint outline-none focus:border-accent w-36"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-ink-faint uppercase tracking-widest">Date</span>
+                <input
+                  value={chapter.date ?? ''}
+                  onChange={e => handleMetaChange('date', e.target.value)}
+                  placeholder="In-story date"
+                  className="bg-surface-overlay border border-accent/15 rounded px-2 py-0.5 text-xs text-ink placeholder:text-ink-faint outline-none focus:border-accent w-40"
+                />
+              </div>
+            </div>
             <BlockEditor
               chapterId={chapterId}
               blocks={chapter.blocks}
