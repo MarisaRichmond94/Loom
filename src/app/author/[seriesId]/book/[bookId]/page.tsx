@@ -187,7 +187,7 @@ export default function BookDetailPage() {
       {showDeleteConfirm && (
         <div
           className="fixed inset-0 bg-black/60 flex items-start justify-center z-50"
-          style={{ paddingTop: '20%' }}
+          style={{ paddingTop: 'calc(60px + 20vh)' }}
           onClick={() => setShowDeleteConfirm(false)}
         >
           <div
