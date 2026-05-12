@@ -12,7 +12,7 @@ export async function PATCH(req: Request, { params }: Params) {
       where: { id: choiceId },
       data: {
         ...(label !== undefined && { label }),
-        ...(setsVariables !== undefined && { setsVariables: JSON.stringify(setsVariables) }),
+        ...(setsVariables !== undefined && { setsVariables }),
         ...(targetChapterId !== undefined && { targetChapterId }),
       },
     })

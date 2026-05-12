@@ -11,7 +11,7 @@ export async function PATCH(req: Request, { params }: Params) {
     const override = await prisma.conditionalOverride.update({
       where: { id: overrideId },
       data: {
-        ...(condition !== undefined && { condition: JSON.stringify(condition) }),
+        ...(condition !== undefined && { condition }),
         ...(content !== undefined && { content }),
         ...(order !== undefined && { order }),
       },

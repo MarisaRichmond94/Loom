@@ -14,6 +14,7 @@ const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
 
 export default function TextBlock({ content, onChange }: Props) {
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit,
       Placeholder.configure({ placeholder: 'Write your prose here…' }),

@@ -79,7 +79,9 @@ export default function BlockEditor({ chapterId, blocks, variables, onBlocksChan
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     })
-    onBlocksChange()
+    // Don't reload for label edits — only reload for structural changes
+    // (setsVariables, targetChapterId) that other parts of the UI depend on.
+    if (!('label' in data)) onBlocksChange()
   }
 
   async function deleteChoice(choiceId: string) {
@@ -106,7 +108,9 @@ export default function BlockEditor({ chapterId, blocks, variables, onBlocksChan
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     })
-    onBlocksChange()
+    // Don't reload for content edits — TipTap manages its own state and a reload
+    // would interrupt typing. Only reload for structural changes (condition, order).
+    if (!('content' in data)) onBlocksChange()
   }
 
   async function deleteOverride(overrideId: string) {
@@ -119,9 +123,9 @@ export default function BlockEditor({ chapterId, blocks, variables, onBlocksChan
   return (
     <div>
       <div className="flex gap-2 mb-4">
-        <button onClick={() => addBlock('text')} className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition">+ Text</button>
-        <button onClick={() => addBlock('choice_point')} className="px-3 py-1.5 rounded text-xs bg-choice-kill-bg border border-choice-kill-border text-choice-kill hover:opacity-80 transition">⑂ Choice Point</button>
-        <button onClick={() => addBlock('conditional_fragment')} className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/30 text-accent hover:opacity-80 transition">◈ Conditional</button>
+        <button onClick={() => addBlock('text')} className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition">Add Text</button>
+        <button onClick={() => addBlock('choice_point')} className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition">Add Choice Point</button>
+        <button onClick={() => addBlock('conditional_fragment')} className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition">Add Conditional</button>
       </div>
 
       <div className="flex flex-col gap-3">
