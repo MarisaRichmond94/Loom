@@ -52,17 +52,46 @@ export default function ConditionalBlock({
                 {variables.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
               </select>
               <span className="text-xs text-ink-faint">=</span>
-              <select
-                value={String(varVal)}
-                onChange={e => {
-                  const newVal = e.target.value === 'true' ? true : e.target.value === 'false' ? false : e.target.value
-                  onUpdateOverride(override.id, { condition: JSON.stringify({ [varName]: newVal }) })
-                }}
-                className="bg-surface-base border border-choice-spare-border/40 rounded px-1.5 py-0.5 text-xs text-ink outline-none"
-              >
-                <option value="true">true</option>
-                <option value="false">false</option>
-              </select>
+              {(() => {
+                const varType = variables.find(v => v.name === varName)?.type ?? 'boolean'
+                if (varType === 'boolean') {
+                  return (
+                    <select
+                      value={String(varVal)}
+                      onChange={e => {
+                        const newVal = e.target.value === 'true'
+                        onUpdateOverride(override.id, { condition: JSON.stringify({ [varName]: newVal }) })
+                      }}
+                      className="bg-surface-base border border-choice-spare-border/40 rounded px-1.5 py-0.5 text-xs text-ink outline-none"
+                    >
+                      <option value="true">true</option>
+                      <option value="false">false</option>
+                    </select>
+                  )
+                }
+                if (varType === 'number') {
+                  return (
+                    <input
+                      type="number"
+                      value={String(varVal ?? '')}
+                      onChange={e => {
+                        onUpdateOverride(override.id, { condition: JSON.stringify({ [varName]: Number(e.target.value) }) })
+                      }}
+                      className="bg-surface-base border border-choice-spare-border/40 rounded px-1.5 py-0.5 text-xs text-ink outline-none w-16"
+                    />
+                  )
+                }
+                return (
+                  <input
+                    type="text"
+                    value={String(varVal ?? '')}
+                    onChange={e => {
+                      onUpdateOverride(override.id, { condition: JSON.stringify({ [varName]: e.target.value }) })
+                    }}
+                    className="bg-surface-base border border-choice-spare-border/40 rounded px-1.5 py-0.5 text-xs text-ink outline-none w-20"
+                  />
+                )
+              })()}
               <button onClick={() => onDeleteOverride(override.id)} className="ml-auto text-xs text-ink-faint hover:text-choice-kill">✕</button>
             </div>
             <TextBlock

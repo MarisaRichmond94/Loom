@@ -27,7 +27,7 @@ export default function TextBlock({ content, onChange }: Props) {
       const current = JSON.stringify(editor.getJSON())
       if (current !== content) editor.commands.setContent(JSON.parse(content))
     }
-  }, [content])
+  }, [editor, content])
 
   return (
     <EditorContent
