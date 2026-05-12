@@ -34,7 +34,10 @@ export default function BookDetailPage() {
     const res = await fetch(`/api/series/${seriesId}/books/${bookId}`)
     if (res.ok) {
       const data = await res.json()
-      setBook(data)
+      setBook({
+        ...data,
+        coverPath: data.coverPath ? `${data.coverPath}?t=${Date.now()}` : null,
+      })
       setTitle(data.title)
       setSynopsis(data.synopsis ?? '')
     }
@@ -62,8 +65,11 @@ export default function BookDetailPage() {
     })
     if (res.ok) {
       const { coverPath } = await res.json()
-      setBook(prev => prev ? { ...prev, coverPath } : null)
+      // Append cache-buster so the browser fetches the new image even if path is the same
+      setBook(prev => prev ? { ...prev, coverPath: `${coverPath}?t=${Date.now()}` } : null)
     }
+    // Reset input so re-uploading the same file triggers onChange again
+    e.target.value = ''
   }
 
   async function handleDelete() {
@@ -152,8 +158,8 @@ export default function BookDetailPage() {
             {/* Stats */}
             <div className="grid grid-cols-4 gap-4 mb-8">
               {[
-                { label: 'Chapters', value: book.stats.chapterCount },
-                { label: 'Words', value: book.stats.wordCount.toLocaleString() },
+                { label: 'Chapter(s)', value: book.stats.chapterCount },
+                { label: 'Word(s)', value: book.stats.wordCount.toLocaleString() },
                 { label: 'POV(s)', value: book.stats.uniquePovs },
                 { label: 'Choice(s)', value: book.stats.choiceCount },
               ].map(({ label, value }) => (
