@@ -183,7 +183,7 @@ export default function BookDetailPage() {
 
           {/* Delete confirmation modal — absolute so it centers over content area only */}
           {showDeleteConfirm && (
-            <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50">
+            <div className="absolute inset-0 bg-black/60 flex items-start justify-center pt-[20%] z-50">
               <div className="bg-surface-raised border border-accent/20 rounded-xl p-8 max-w-2xl w-full mx-8 shadow-2xl relative">
             <button
               onClick={() => setShowDeleteConfirm(false)}
