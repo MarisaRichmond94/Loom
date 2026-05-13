@@ -88,6 +88,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
   // character state
   const [showCharPicker, setShowCharPicker] = useState(false)
   const [characterViewMode, setCharacterViewMode] = useState(false)
+  const [characterViewId, setCharacterViewId] = useState('')
   const [characterViewName, setCharacterViewName] = useState('')
 
   const [focused, setFocused] = useState(false)
@@ -144,6 +145,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
       if (editor.isActive('character')) {
         const coords = editor.view.coordsAtPos(from)
         savedSelection.current = { from, to: empty ? from : to }
+        setCharacterViewId(editor.getAttributes('character').id ?? '')
         setCharacterViewName(editor.getAttributes('character').name ?? '')
         setCharacterViewMode(true)
         setFootnoteViewMode(false)
@@ -329,7 +331,12 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
             </>
           ) : characterViewMode ? (
             <>
-              <span className="w-5 h-5 rounded-full bg-accent/20 flex items-center justify-center ml-2 shrink-0"><LuUser size={10} className="text-accent" /></span>
+              {(() => {
+                const char = characters.find(c => c.id === characterViewId)
+                return char?.hasAvatar
+                  ? <img src={`/characters/${characterViewId}.jpg`} className="w-5 h-5 rounded-full object-cover shrink-0 ml-2" alt="" />
+                  : <span className="w-5 h-5 rounded-full bg-accent/20 flex items-center justify-center ml-2 shrink-0"><LuUser size={10} className="text-accent" /></span>
+              })()}
               <span className="px-2 py-1.5 text-xs text-accent truncate max-w-[160px]">{characterViewName}</span>
               <button onClick={removeCharacter} title="Remove character tag" className="px-2 py-1.5 text-ink-faint hover:text-choice-kill hover:bg-surface-muted transition"><LuX size={13} /></button>
             </>
