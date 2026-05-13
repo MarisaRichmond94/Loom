@@ -140,6 +140,7 @@ export default function BookDetailPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: charName.trim(), age }),
         })
+        if (!res.ok) return
         saved = await res.json()
       } else {
         const res = await fetch(`/api/series/${seriesId}/characters/${(charModal as Character).id}`, {
@@ -147,6 +148,7 @@ export default function BookDetailPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: charName.trim(), age }),
         })
+        if (!res.ok) return
         saved = await res.json()
       }
       if (charImageSrc && charCroppedArea) {
@@ -333,7 +335,7 @@ export default function BookDetailPage() {
             </div>
 
             {/* Characters */}
-            <div className="mb-2">
+            <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-semibold uppercase tracking-widest text-ink">Character(s)</h2>
                 <button
