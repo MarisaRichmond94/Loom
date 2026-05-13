@@ -62,7 +62,7 @@ export default function ReaderView({
   const [lightMode, setLightMode] = useState(() =>
     typeof window !== 'undefined' && localStorage.getItem('loom-light-mode') === 'true'
   )
-  const [charCard, setCharCard] = useState<{ character: Character; x: number; y: number } | null>(null)
+  const [charCard, setCharCard] = useState<{ character: Character; x: number; y: number; above: boolean } | null>(null)
 
   useEffect(() => {
     if (choiceHistory.length <= prevChoiceCountRef.current) {
@@ -101,7 +101,12 @@ export default function ReaderView({
       const character = characters.find(c => c.id === id)
       if (!character) return
       const rect = span.getBoundingClientRect()
-      setCharCard({ character, x: rect.left + rect.width / 2, y: rect.top })
+      const cardW = 256
+      const margin = 12
+      const rawX = rect.left + rect.width / 2
+      const x = Math.min(Math.max(rawX, cardW / 2 + margin), window.innerWidth - cardW / 2 - margin)
+      const above = rect.top > 140
+      setCharCard({ character, x, y: above ? rect.top : rect.bottom, above })
     }
     function onLeave() { setCharCard(null) }
     const spans = container.querySelectorAll<HTMLElement>('.character-ref')
@@ -250,18 +255,27 @@ export default function ReaderView({
       {/* Character hover card */}
       {charCard && (
         <div
-          className="pointer-events-none fixed z-50 bg-surface-raised border border-accent/20 rounded-xl shadow-2xl p-4 flex items-center gap-4 w-64"
-          style={{ left: charCard.x, top: charCard.y - 8, transform: 'translate(-50%, -100%)' }}
+          className="pointer-events-none fixed z-50 rounded-xl shadow-2xl p-4 flex items-center gap-3 w-64"
+          style={{
+            left: charCard.x,
+            top: charCard.above ? charCard.y - 8 : charCard.y + 8,
+            transform: charCard.above ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
+            background: lightMode ? '#ffffff' : '#1a1a2e',
+            border: lightMode ? '1px solid #d4d0c8' : '1px solid rgba(136,136,255,0.25)',
+          }}
         >
-          <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-accent/20 bg-surface-overlay flex items-center justify-center shrink-0">
+          <div
+            className="w-14 h-14 rounded-full overflow-hidden flex items-center justify-center shrink-0"
+            style={{ border: lightMode ? '2px solid #d4d0c8' : '2px solid rgba(136,136,255,0.3)', background: lightMode ? '#ede9e0' : '#12121e' }}
+          >
             {charCard.character.hasAvatar
               ? <img src={`/characters/${charCard.character.id}.jpg`} alt={charCard.character.name} className="w-full h-full object-cover" />
-              : <LuUser size={22} className="text-ink-faint" />
+              : <LuUser size={22} style={{ color: lightMode ? '#888' : '#666' }} />
             }
           </div>
           <div>
-            <p className="text-sm font-semibold text-ink">{charCard.character.name}</p>
-            {charCard.character.age != null && <p className="text-xs text-ink-faint mt-0.5">Age {charCard.character.age}</p>}
+            <p className="text-sm font-semibold" style={{ color: lightMode ? '#1a1a2a' : '#e0d9c8' }}>{charCard.character.name}</p>
+            {charCard.character.age != null && <p className="text-xs mt-0.5" style={{ color: lightMode ? '#666' : '#aaa' }}>Age {charCard.character.age}</p>}
           </div>
         </div>
       )}
