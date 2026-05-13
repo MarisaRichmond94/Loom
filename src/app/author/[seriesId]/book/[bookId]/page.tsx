@@ -350,12 +350,12 @@ export default function BookDetailPage() {
                   <p className="text-sm text-ink-faint italic text-center px-8">No characters yet. Add one to start tagging appearances in your chapters.</p>
                 </div>
               ) : (
-                <div className="flex flex-wrap gap-4 content-start" style={{ minHeight: 300 }}>
+                <div className="flex flex-wrap gap-2 content-start" style={{ minHeight: 300 }}>
                   {characters.map(c => (
                     <button
                       key={c.id}
                       onClick={() => openEditModal(c)}
-                      className="flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border border-accent/10 hover:border-accent/30 transition w-24"
+                      className="flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border border-accent/10 hover:border-accent/30 transition w-24 h-[146px]"
                     >
                       <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-accent/20 bg-surface-overlay flex items-center justify-center shrink-0">
                         {c.hasAvatar
