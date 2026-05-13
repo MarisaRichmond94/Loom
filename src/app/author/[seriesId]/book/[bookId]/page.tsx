@@ -355,12 +355,12 @@ export default function BookDetailPage() {
                     <button
                       key={c.id}
                       onClick={() => openEditModal(c)}
-                      className="flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border border-accent/10 hover:border-accent/30 transition w-24 h-[146px]"
+                      className="flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border border-accent/10 hover:border-accent/30 transition w-28 h-[146px]"
                     >
-                      <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-accent/20 bg-surface-overlay flex items-center justify-center shrink-0">
+                      <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-accent/20 bg-surface-overlay flex items-center justify-center shrink-0">
                         {c.hasAvatar
                           ? <img src={`/characters/${c.id}.jpg?t=${charAvatarTs}`} alt={c.name} className="w-full h-full object-cover" />
-                          : <LuUser size={26} className="text-ink-faint" />
+                          : <LuUser size={32} className="text-ink-faint" />
                         }
                       </div>
                       <div className="text-center">
