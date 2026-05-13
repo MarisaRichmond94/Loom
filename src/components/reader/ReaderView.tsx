@@ -101,18 +101,27 @@ export default function ReaderView({
       const character = characters.find(c => c.id === id)
       if (!character) return
       const rect = span.getBoundingClientRect()
-      const cardW = 256
+      const cardW = 300
       const margin = 12
       const rawX = rect.left + rect.width / 2
       const x = Math.min(Math.max(rawX, cardW / 2 + margin), window.innerWidth - cardW / 2 - margin)
       const above = rect.top > 140
       setCharCard({ character, x, y: above ? rect.top : rect.bottom, above })
     }
-    function onLeave() { setCharCard(null) }
     const spans = container.querySelectorAll<HTMLElement>('.character-ref')
-    spans.forEach(s => { s.addEventListener('mouseenter', onEnter); s.addEventListener('mouseleave', onLeave) })
-    return () => { spans.forEach(s => { s.removeEventListener('mouseenter', onEnter); s.removeEventListener('mouseleave', onLeave) }) }
+    spans.forEach(s => s.addEventListener('mouseenter', onEnter))
+    return () => { spans.forEach(s => s.removeEventListener('mouseenter', onEnter)) }
   }, [blocks, characters])
+
+  useEffect(() => {
+    if (!charCard) return
+    function onMove(e: MouseEvent) {
+      const el = document.elementFromPoint(e.clientX, e.clientY)
+      if (!el?.closest('.character-ref')) setCharCard(null)
+    }
+    document.addEventListener('mousemove', onMove)
+    return () => document.removeEventListener('mousemove', onMove)
+  }, [charCard])
 
   async function handleChoose(choicePointBlock: Block, choiceId: string) {
     setPendingChoiceBlock(null)
@@ -255,22 +264,23 @@ export default function ReaderView({
       {/* Character hover card */}
       {charCard && (
         <div
-          className="pointer-events-none fixed z-50 rounded-xl shadow-2xl p-4 flex items-center gap-3 w-64"
+          className="pointer-events-none fixed z-50 rounded-xl shadow-2xl p-4 flex items-center gap-4"
           style={{
             left: charCard.x,
             top: charCard.above ? charCard.y - 8 : charCard.y + 8,
             transform: charCard.above ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
             background: lightMode ? '#ffffff' : '#1a1a2e',
             border: lightMode ? '1px solid #d4d0c8' : '1px solid rgba(136,136,255,0.25)',
+            whiteSpace: 'nowrap',
           }}
         >
           <div
-            className="w-14 h-14 rounded-full overflow-hidden flex items-center justify-center shrink-0"
-            style={{ border: lightMode ? '2px solid #d4d0c8' : '2px solid rgba(136,136,255,0.3)', background: lightMode ? '#ede9e0' : '#12121e' }}
+            className="rounded-full overflow-hidden flex items-center justify-center shrink-0"
+            style={{ width: 64, height: 64, border: lightMode ? '2px solid #d4d0c8' : '2px solid rgba(136,136,255,0.3)', background: lightMode ? '#ede9e0' : '#12121e' }}
           >
             {charCard.character.hasAvatar
               ? <img src={`/characters/${charCard.character.id}.jpg`} alt={charCard.character.name} className="w-full h-full object-cover" />
-              : <LuUser size={22} style={{ color: lightMode ? '#888' : '#666' }} />
+              : <LuUser size={28} style={{ color: lightMode ? '#888' : '#666' }} />
             }
           </div>
           <div>
