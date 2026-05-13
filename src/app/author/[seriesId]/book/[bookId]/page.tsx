@@ -403,7 +403,7 @@ export default function BookDetailPage() {
             {/* Avatar */}
             <div className="flex flex-col items-center mb-6">
               {charImageSrc ? (
-                <div className="relative w-full h-52 rounded-xl overflow-hidden bg-black mb-3">
+                <div className="relative w-full h-52 rounded-xl overflow-hidden bg-black">
                   <Cropper
                     image={charImageSrc}
                     crop={charCrop}
@@ -416,19 +416,19 @@ export default function BookDetailPage() {
                   />
                 </div>
               ) : (
-                <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-accent/20 bg-surface-overlay flex items-center justify-center mb-3">
+                <div
+                  onClick={() => charFileInputRef.current?.click()}
+                  className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-accent/20 bg-surface-overlay flex items-center justify-center cursor-pointer group"
+                >
                   {charModal !== 'create' && (charModal as Character).hasAvatar
                     ? <img src={`/characters/${(charModal as Character).id}.jpg?t=${charAvatarTs}`} alt="" className="w-full h-full object-cover" />
                     : <LuUser size={32} className="text-ink-faint" />
                   }
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                    <LuPencil size={16} className="text-white" />
+                  </div>
                 </div>
               )}
-              <button
-                onClick={() => charFileInputRef.current?.click()}
-                className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition"
-              >
-                <LuPencil size={12} /> {charImageSrc ? 'Choose different photo' : 'Upload photo'}
-              </button>
               <input
                 ref={charFileInputRef}
                 type="file"
