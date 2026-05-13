@@ -332,8 +332,8 @@ export default function BookDetailPage() {
             </div>
 
             {/* Characters */}
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-4">
+            <div className="mb-2">
+              <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-semibold uppercase tracking-widest text-ink">Characters</h2>
                 <button
                   onClick={openCreateModal}
