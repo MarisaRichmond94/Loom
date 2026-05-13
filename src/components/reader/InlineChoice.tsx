@@ -1,33 +1,37 @@
 type Choice = { id: string; label: string }
 
 type Props = {
+  prompt: string | null
   choices: Choice[]
   onChoose: (choiceId: string) => void
 }
 
-const PALETTE = [
-  'bg-choice-spare-bg border-choice-spare-border text-choice-spare',
-  'bg-choice-kill-bg border-choice-kill-border text-choice-kill',
-  'bg-choice-amber-bg border-choice-amber-border text-choice-amber',
-  'bg-choice-blue-bg border-choice-blue-border text-choice-blue',
-  'bg-choice-purple-bg border-choice-purple-border text-choice-purple',
-  'bg-choice-teal-bg border-choice-teal-border text-choice-teal',
-]
+export default function InlineChoice({ prompt, choices, onChoose }: Props) {
+  const yesChoice = choices.find(c => c.label === 'Yes')
+  const noChoice  = choices.find(c => c.label === 'No')
 
-export default function InlineChoice({ choices, onChoose }: Props) {
   return (
-    <div className="border-t border-accent/10 pt-4 mt-4">
-      <div className="text-xs uppercase tracking-widest text-ink-faint mb-3">What happens next?</div>
-      <div className="flex flex-col gap-2">
-        {choices.map((choice, i) => (
+    <div className="border-t border-accent/10 pt-4 mt-4 flex flex-col items-center">
+      {prompt && (
+        <p className="text-sm text-ink italic mb-3 text-center">{prompt}</p>
+      )}
+      <div className="flex gap-3">
+        {yesChoice && (
           <button
-            key={choice.id}
-            onClick={() => onChoose(choice.id)}
-            className={`text-left px-4 py-2.5 rounded border text-sm transition hover:opacity-80 ${PALETTE[i % PALETTE.length]}`}
+            onClick={() => onChoose(yesChoice.id)}
+            className="px-5 py-2 rounded border text-sm font-medium transition hover:opacity-80 bg-choice-spare-bg border-choice-spare-border text-white"
           >
-            → {choice.label}
+            Yes
           </button>
-        ))}
+        )}
+        {noChoice && (
+          <button
+            onClick={() => onChoose(noChoice.id)}
+            className="px-5 py-2 rounded border text-sm font-medium transition hover:opacity-80 bg-choice-kill-bg border-choice-kill-border text-white"
+          >
+            No
+          </button>
+        )}
       </div>
     </div>
   )

@@ -19,7 +19,7 @@ export async function GET(_: Request, { params }: Params) {
 export async function POST(req: Request, { params }: Params) {
   const { chapterId } = await params
   const { type, content, prompt, displayType, baseContent } = await req.json()
-  if (!['text', 'choice_point', 'conditional_fragment'].includes(type)) {
+  if (!['text', 'choice_point', 'conditional_fragment', 'soundtrack'].includes(type)) {
     return NextResponse.json({ error: 'invalid type' }, { status: 400 })
   }
   const count = await prisma.contentBlock.count({ where: { chapterId } })
@@ -34,5 +34,19 @@ export async function POST(req: Request, { params }: Params) {
       ...(baseContent !== undefined && { baseContent }),
     },
   })
-  return NextResponse.json(block, { status: 201 })
+
+  if (type === 'choice_point') {
+    await prisma.choice.createMany({
+      data: [
+        { choicePointId: block.id, label: 'Yes', setsVariables: '{}' },
+        { choicePointId: block.id, label: 'No',  setsVariables: '{}' },
+      ],
+    })
+  }
+
+  const blockWithRelations = await prisma.contentBlock.findUnique({
+    where: { id: block.id },
+    include: { choices: { orderBy: { id: 'asc' } }, overrides: { orderBy: { order: 'asc' } } },
+  })
+  return NextResponse.json(blockWithRelations, { status: 201 })
 }

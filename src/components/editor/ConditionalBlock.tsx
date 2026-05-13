@@ -1,18 +1,19 @@
 'use client'
 
+import { LuSplit, LuX } from 'react-icons/lu'
 import TextBlock from './TextBlock'
-import TextField from '@mui/material/TextField'
 import Select from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
 import FormControl from '@mui/material/FormControl'
-import InputLabel from '@mui/material/InputLabel'
+import TextField from '@mui/material/TextField'
+import { ThemeProvider, createTheme } from '@mui/material/styles'
+
+const darkTheme = createTheme({ palette: { mode: 'dark' } })
 
 type Override = { id: string; order: number; condition: string; content: string }
 type Props = {
-  baseContent: string | null
   overrides: Override[]
   variables: { id: string; name: string; type: string }[]
-  onUpdateBase: (content: string) => void
   onAddOverride: (condition: Record<string, unknown>, content: string) => void
   onUpdateOverride: (overrideId: string, data: Partial<Override>) => void
   onDeleteOverride: (overrideId: string) => void
@@ -20,9 +21,7 @@ type Props = {
 
 const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
 
-export default function ConditionalBlock({
-  baseContent, overrides, variables, onUpdateBase, onAddOverride, onUpdateOverride, onDeleteOverride
-}: Props) {
+export default function ConditionalBlock({ overrides, variables, onAddOverride, onUpdateOverride, onDeleteOverride }: Props) {
   function handleAddOverride() {
     const varName = variables[0].name
     onAddOverride({ [varName]: true }, EMPTY)
@@ -30,94 +29,85 @@ export default function ConditionalBlock({
 
   return (
     <div>
-      <div className="text-xs text-accent uppercase tracking-widest mb-3">◈ Conditional Fragment</div>
+      <div className="flex items-center gap-1.5 text-xs text-accent uppercase tracking-widest mb-3"><LuSplit size={12} /> Conditional</div>
 
-      <div className="bg-surface-base border border-accent/20 rounded p-3 mb-2">
-        <div className="text-xs text-ink-faint mb-2">Base (default)</div>
-        <TextBlock content={baseContent} onChange={onUpdateBase} />
-      </div>
-
-      {overrides.map(override => {
-        const condition = JSON.parse(override.condition || '{}') as Record<string, unknown>
-        const entries = Object.entries(condition)
-        const [varName, varVal] = entries[0] ?? ['', '']
-        return (
-          <div key={override.id} className="bg-choice-spare-bg border border-choice-spare-border rounded p-3 mb-2">
-            <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <span className="text-xs text-choice-spare">if</span>
-              <FormControl size="small" sx={{ minWidth: 120 }}>
-                <InputLabel>variable</InputLabel>
-                <Select
-                  label="variable"
-                  value={varName}
-                  onChange={e => {
-                    const newCond = { [e.target.value]: varVal }
-                    onUpdateOverride(override.id, { condition: JSON.stringify(newCond) })
-                  }}
-                >
-                  {variables.map(v => <MenuItem key={v.id} value={v.name}>{v.name}</MenuItem>)}
-                </Select>
-              </FormControl>
-              <span className="text-xs text-ink-faint">=</span>
-              {(() => {
-                const varType = variables.find(v => v.name === varName)?.type ?? 'boolean'
-                if (varType === 'boolean') {
-                  return (
-                    <FormControl size="small" sx={{ minWidth: 100 }}>
-                      <InputLabel>value</InputLabel>
-                      <Select
-                        label="value"
-                        value={String(varVal)}
-                        onChange={e => {
-                          onUpdateOverride(override.id, { condition: JSON.stringify({ [varName]: e.target.value === 'true' }) })
-                        }}
-                      >
-                        <MenuItem value="true">true</MenuItem>
-                        <MenuItem value="false">false</MenuItem>
-                      </Select>
-                    </FormControl>
-                  )
-                }
-                const raw = String(varVal ?? '')
-                const isNum = varType === 'number'
-                const invalid = isNum && raw !== '' && isNaN(Number(raw))
-                return (
-                  <TextField
-                    label="value"
-                    size="small"
-                    value={raw}
-                    error={invalid}
-                    helperText={invalid ? 'Must be a number' : ''}
-                    sx={{ width: isNum ? 100 : 140 }}
+      <ThemeProvider theme={darkTheme}>
+        {overrides.map(override => {
+          const condition = JSON.parse(override.condition || '{}') as Record<string, unknown>
+          const entries = Object.entries(condition)
+          const [varName, varVal] = entries[0] ?? ['', '']
+          const varType = variables.find(v => v.name === varName)?.type ?? 'boolean'
+          const isKill = varType === 'boolean' && varVal === false
+          return (
+            <div key={override.id} className={`border rounded p-3 mb-2 ${isKill ? 'bg-choice-kill-bg border-choice-kill-border' : 'bg-choice-spare-bg border-choice-spare-border'}`}>
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className={`text-xs ${isKill ? 'text-choice-kill' : 'text-choice-spare'}`}>if</span>
+                <FormControl size="small" sx={{ minWidth: 120 }}>
+                  <Select
+                    value={varName}
                     onChange={e => {
-                      const val = e.target.value
-                      if (isNum && val !== '' && isNaN(Number(val))) return
-                      const newVal = isNum ? Number(val) : val
-                      onUpdateOverride(override.id, { condition: JSON.stringify({ [varName]: newVal }) })
+                      onUpdateOverride(override.id, { condition: JSON.stringify({ [e.target.value]: varVal }) })
                     }}
-                  />
-                )
-              })()}
-              <button onClick={() => onDeleteOverride(override.id)} className="ml-auto text-xs text-ink-faint hover:text-choice-kill">✕</button>
+                  >
+                    {variables.map(v => <MenuItem key={v.id} value={v.name}>{v.name}</MenuItem>)}
+                  </Select>
+                </FormControl>
+                <span className="text-xs text-ink-faint">=</span>
+                {(() => {
+                  if (varType === 'boolean') {
+                    return (
+                      <FormControl size="small" sx={{ minWidth: 100 }}>
+                        <Select
+                          value={String(varVal)}
+                          onChange={e => {
+                            onUpdateOverride(override.id, { condition: JSON.stringify({ [varName]: e.target.value === 'true' }) })
+                          }}
+                        >
+                          <MenuItem value="true">true</MenuItem>
+                          <MenuItem value="false">false</MenuItem>
+                        </Select>
+                      </FormControl>
+                    )
+                  }
+                  const raw = String(varVal ?? '')
+                  const isNum = varType === 'number'
+                  const invalid = isNum && raw !== '' && isNaN(Number(raw))
+                  return (
+                    <TextField
+                      size="small"
+                      value={raw}
+                      error={invalid}
+                      helperText={invalid ? 'Must be a number' : ''}
+                      sx={{ width: isNum ? 100 : 140 }}
+                      onChange={e => {
+                        const val = e.target.value
+                        if (isNum && val !== '' && isNaN(Number(val))) return
+                        onUpdateOverride(override.id, { condition: JSON.stringify({ [varName]: isNum ? Number(val) : val }) })
+                      }}
+                    />
+                  )
+                })()}
+                <button onClick={() => onDeleteOverride(override.id)} className="ml-auto text-ink-faint hover:text-choice-kill"><LuX size={13} /></button>
+              </div>
+              <TextBlock
+                content={override.content}
+                onChange={content => onUpdateOverride(override.id, { content })}
+              />
             </div>
-            <TextBlock
-              content={override.content}
-              onChange={content => onUpdateOverride(override.id, { content })}
-            />
-          </div>
-        )
-      })}
+          )
+        })}
+      </ThemeProvider>
 
       {variables.length === 0 ? (
         <p className="text-xs text-ink-faint text-center py-1.5">
-          Define a story variable first to add override conditions.
+          Define a context variable first to add conditions.
         </p>
       ) : (
         <button
           onClick={handleAddOverride}
           className="w-full py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
         >
-          Add Override
+          Add Condition
         </button>
       )}
     </div>

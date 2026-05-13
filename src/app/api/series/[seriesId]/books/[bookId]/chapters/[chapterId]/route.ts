@@ -4,6 +4,14 @@ import { Prisma } from '@/generated/prisma/client'
 
 type Params = { params: Promise<{ chapterId: string }> }
 
+function bumpTitle(title: string, delta: number): string {
+  const bare = /^(\d+)$/.exec(title)
+  if (bare) return String(Number(bare[1]) + delta)
+  const named = /^(Chapter )(\d+)$/i.exec(title)
+  if (named) return `${named[1]}${Number(named[2]) + delta}`
+  return title
+}
+
 export async function PATCH(req: Request, { params }: Params) {
   const { chapterId } = await params
   const { title, order, pov, date } = await req.json()
@@ -29,7 +37,23 @@ export async function PATCH(req: Request, { params }: Params) {
 export async function DELETE(_: Request, { params }: Params) {
   const { chapterId } = await params
   try {
-    await prisma.chapter.delete({ where: { id: chapterId } })
+    const target = await prisma.chapter.findUnique({ where: { id: chapterId } })
+    if (!target) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    const subsequent = await prisma.chapter.findMany({
+      where: { bookId: target.bookId, order: { gt: target.order } },
+    })
+
+    await prisma.$transaction([
+      prisma.chapter.delete({ where: { id: chapterId } }),
+      ...subsequent.map(c =>
+        prisma.chapter.update({
+          where: { id: c.id },
+          data: { order: c.order - 1, title: bumpTitle(c.title, -1) },
+        })
+      ),
+    ])
+
     return new NextResponse(null, { status: 204 })
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {

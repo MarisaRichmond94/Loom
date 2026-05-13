@@ -1,14 +1,20 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { LuMoon, LuSun, LuArrowLeft, LuMusic } from 'react-icons/lu'
 import { generateHTML } from '@tiptap/html'
 import StarterKit from '@tiptap/starter-kit'
+import TextAlign from '@tiptap/extension-text-align'
+import { TextStyle } from '@tiptap/extension-text-style'
+import Color from '@tiptap/extension-color'
+import { Footnote } from '@/lib/extensions/footnote'
 import { resolveConditional } from '@/lib/storyEngine'
 import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
 import InlineChoice from './InlineChoice'
 import ChapterGate from './ChapterGate'
-import HistoryPanel from './HistoryPanel'
+import AvatarButton from '@/components/AvatarButton'
+import Greeting from '@/components/Greeting'
 
 type Override = { id: string; order: number; condition: string; content: string }
 type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null }
@@ -27,6 +33,9 @@ type Props = {
   choiceHistory: HistoryEntry[]
   seriesTitle: string
   chapterLabel: string
+  chapterPov?: string | null
+  chapterDate?: string | null
+  returnTo?: string
   onSessionUpdate: (state: StoryState, history: HistoryEntry[]) => void
   onNavigate: (chapterId: string) => void
 }
@@ -34,27 +43,50 @@ type Props = {
 function renderTipTap(json: string | null | undefined): string {
   if (!json) return ''
   try {
-    return generateHTML(JSON.parse(json), [StarterKit])
+    return generateHTML(JSON.parse(json), [StarterKit, TextAlign.configure({ types: ['paragraph', 'heading'] }), TextStyle, Color, Footnote])
   } catch {
     return ''
   }
 }
 
 export default function ReaderView({
-  sessionId, seriesId, blocks, storyState, choiceHistory, seriesTitle, chapterLabel, onSessionUpdate, onNavigate
+  sessionId, seriesId, blocks, storyState, choiceHistory, seriesTitle, chapterLabel, chapterPov, chapterDate, returnTo, onSessionUpdate, onNavigate
 }: Props) {
   const router = useRouter()
-  const [showHistory, setShowHistory] = useState(false)
+  const mainRef = useRef<HTMLElement>(null)
+  const prevChoiceCountRef = useRef(choiceHistory.length)
   const [pendingChoiceBlock, setPendingChoiceBlock] = useState<Block | null>(null)
+  const [lightMode, setLightMode] = useState(() =>
+    typeof window !== 'undefined' && localStorage.getItem('loom-light-mode') === 'true'
+  )
 
-  const choiceLabels: Record<string, string> = {}
-  const choicePointLocations: Record<string, string> = {}
-  blocks.forEach(b => {
-    if (b.type === 'choice_point') {
-      b.choices.forEach(c => { choiceLabels[c.id] = c.label })
-      choicePointLocations[b.id] = chapterLabel
+  useEffect(() => {
+    if (choiceHistory.length <= prevChoiceCountRef.current) {
+      prevChoiceCountRef.current = choiceHistory.length
+      return
     }
-  })
+    prevChoiceCountRef.current = choiceHistory.length
+
+    const lastEntry = choiceHistory[choiceHistory.length - 1]
+    if (!lastEntry) return
+    const choiceIdx = blocks.findIndex(b => b.id === lastEntry.choicePointId)
+    const nextBlock = blocks[choiceIdx + 1]
+    if (!nextBlock) return
+
+    const el = document.getElementById(`block-${nextBlock.id}`)
+    const container = mainRef.current
+    if (!el || !container) return
+    const offset = el.getBoundingClientRect().top - container.getBoundingClientRect().top
+    container.scrollBy({ top: offset - 16, behavior: 'smooth' })
+  }, [choiceHistory, blocks])
+
+  function toggleLightMode() {
+    setLightMode(m => {
+      const next = !m
+      localStorage.setItem('loom-light-mode', String(next))
+      return next
+    })
+  }
 
   async function handleChoose(choicePointBlock: Block, choiceId: string) {
     setPendingChoiceBlock(null)
@@ -71,39 +103,48 @@ export default function ReaderView({
     if (choice?.targetChapterId) onNavigate(choice.targetChapterId)
   }
 
-  async function handleRewind(choicePointId: string) {
-    setShowHistory(false)
-    const res = await fetch(`/api/sessions/${sessionId}/rewind`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ choicePointId }),
-    })
-    if (!res.ok) return
-    const updated = await res.json()
-    onSessionUpdate(updated.storyState, updated.choiceHistory)
-  }
-
   return (
-    <div className="min-h-screen bg-surface-base">
-      <div className="sticky top-0 bg-surface-base/80 backdrop-blur border-b border-accent/10 px-6 py-3 flex items-center justify-between z-30">
-        <span className="text-xs text-ink-faint">{seriesTitle} · {chapterLabel}</span>
+    <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
+      <nav className="bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center justify-between z-30">
         <div className="flex items-center gap-2">
+          <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
+          <span className="text-accent font-bold tracking-wider text-2xl leading-none">LOOM</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Greeting />
           <button
-            onClick={() => setShowHistory(s => !s)}
-            className="text-xs px-3 py-1.5 rounded bg-surface-raised border border-accent/20 text-ink-muted hover:text-ink transition"
+            role="switch"
+            aria-checked={lightMode}
+            onClick={toggleLightMode}
+            title={lightMode ? 'Switch to dark mode' : 'Switch to light mode'}
+            className="flex items-center gap-1.5 text-ink-faint hover:text-ink transition"
           >
-            ⏮ Choices
+            <LuMoon size={13} />
+            <span className={`relative inline-flex w-9 h-5 rounded-full transition-colors duration-200 ${lightMode ? 'bg-accent' : 'bg-surface-muted'}`}>
+              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${lightMode ? 'left-4' : 'left-0.5'}`} />
+            </span>
+            <LuSun size={13} />
           </button>
+          <AvatarButton />
+        </div>
+      </nav>
+
+      <main ref={mainRef} className={`flex-1 overflow-y-auto px-8${lightMode ? ' light-body' : ''}`}>
+        {/* Sticky action row */}
+        <div className="sticky top-0 z-10 flex justify-end items-center px-0 py-3">
           <button
-            onClick={() => router.push(`/author/${seriesId}`)}
-            className="text-xs px-3 py-1.5 rounded bg-surface-raised border border-accent/20 text-ink-muted hover:text-ink transition"
+            onClick={() => router.push(returnTo ?? `/author/${seriesId}`)}
+            className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
           >
-            ✎ Write Mode
+            <span className="flex items-center gap-1.5"><LuArrowLeft size={13} /> Go Back To Writing</span>
           </button>
         </div>
-      </div>
-
-      <main className="max-w-xl mx-auto px-6 py-12">
+        {/* Chapter header */}
+        <div className="flex flex-col items-center mb-8 pt-6">
+          <h1 className="text-3xl font-bold uppercase tracking-wide text-ink mb-1">{chapterLabel}</h1>
+          {chapterPov && <p className="text-accent text-base">{chapterPov}</p>}
+        </div>
+        {chapterDate && <p className="text-base text-ink-faint mb-2">{chapterDate}</p>}
         {(() => {
           let pendingChoice = false
           return blocks.map(block => {
@@ -113,7 +154,8 @@ export default function ReaderView({
               return (
                 <div
                   key={block.id}
-                  className="prose prose-invert max-w-none mb-6 text-ink leading-relaxed"
+                  id={`block-${block.id}`}
+                  className="prose prose-invert max-w-none mb-6 text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6"
                   dangerouslySetInnerHTML={{ __html: renderTipTap(block.content) }}
                 />
               )
@@ -122,7 +164,6 @@ export default function ReaderView({
             if (block.type === 'conditional_fragment') {
               const resolved = resolveConditional(
                 {
-                  baseContent: block.baseContent ?? '',
                   overrides: block.overrides.map(o => ({
                     id: o.id,
                     order: o.order,
@@ -132,10 +173,12 @@ export default function ReaderView({
                 },
                 storyState
               )
+              if (!resolved) return null
               return (
                 <div
                   key={block.id}
-                  className="prose prose-invert max-w-none mb-6 text-ink leading-relaxed"
+                  id={`block-${block.id}`}
+                  className="prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6"
                   dangerouslySetInnerHTML={{ __html: renderTipTap(resolved) }}
                 />
               )
@@ -144,22 +187,13 @@ export default function ReaderView({
             if (block.type === 'choice_point') {
               const answered = choiceHistory.find(h => h.choicePointId === block.id)
 
-              if (answered) {
-                const chosenLabel = block.choices.find(c => c.id === answered.choiceId)?.label ?? '…'
-                return (
-                  <div key={block.id} className="mb-6 border-t border-accent/10 pt-4">
-                    <p className="text-xs uppercase tracking-widest text-ink-faint mb-2">You chose</p>
-                    <p className="text-sm text-ink-muted italic">→ {chosenLabel}</p>
-                  </div>
-                )
-              }
+              if (answered) return null
 
               pendingChoice = true
 
               if (block.displayType === 'chapter_gate') {
                 return (
-                  <div key={block.id} className="mt-8 text-center">
-                    {block.prompt && <p className="text-ink-muted italic mb-4">{block.prompt}</p>}
+                  <div key={block.id} id={`block-${block.id}`} className="mt-8 text-center">
                     <button
                       onClick={() => setPendingChoiceBlock(block)}
                       className="px-4 py-2 rounded bg-surface-raised border border-accent/20 text-ink-muted text-sm hover:text-ink transition"
@@ -171,9 +205,18 @@ export default function ReaderView({
               }
 
               return (
-                <div key={block.id} className="mb-6">
-                  {block.prompt && <p className="text-ink-muted italic mb-3">{block.prompt}</p>}
-                  <InlineChoice choices={block.choices} onChoose={id => handleChoose(block, id)} />
+                <div key={block.id} id={`block-${block.id}`} className="mb-6">
+                  <InlineChoice prompt={block.prompt ?? null} choices={block.choices} onChoose={id => handleChoose(block, id)} />
+                </div>
+              )
+            }
+
+            if (block.type === 'soundtrack' && block.content) {
+              return (
+                <div key={block.id} id={`block-${block.id}`} className="my-4 flex items-center gap-3 px-4 py-3 rounded-lg bg-surface-raised border border-accent/10">
+                  <LuMusic size={14} className="text-accent shrink-0" />
+                  {block.prompt && <span className="text-xs text-ink-faint italic truncate">{block.prompt}</span>}
+                  <audio controls src={block.content} className="flex-1 h-8 min-w-0" />
                 </div>
               )
             }
@@ -185,21 +228,13 @@ export default function ReaderView({
 
       {pendingChoiceBlock && (
         <ChapterGate
+          prompt={pendingChoiceBlock.prompt ?? null}
           choices={pendingChoiceBlock.choices}
           onChoose={id => handleChoose(pendingChoiceBlock, id)}
         />
       )}
 
-      {showHistory && (
-        <HistoryPanel
-          history={choiceHistory}
-          choiceLabels={choiceLabels}
-          choicePointLocations={choicePointLocations}
-          currentlyChoosing={blocks.some(b => b.type === 'choice_point')}
-          onRewind={handleRewind}
-          onClose={() => setShowHistory(false)}
-        />
-      )}
+
     </div>
   )
 }

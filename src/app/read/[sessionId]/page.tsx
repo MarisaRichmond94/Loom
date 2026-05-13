@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import ReaderView from '@/components/reader/ReaderView'
 import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
 
@@ -14,12 +14,15 @@ type Block = {
 
 export default function ReaderPage() {
   const { sessionId } = useParams() as { sessionId: string }
+  const returnTo = useSearchParams().get('returnTo') ?? undefined
   const [blocks, setBlocks] = useState<Block[]>([])
   const [storyState, setStoryState] = useState<StoryState>({})
   const [choiceHistory, setChoiceHistory] = useState<HistoryEntry[]>([])
   const [seriesId, setSeriesId] = useState('')
   const [seriesTitle, setSeriesTitle] = useState('')
   const [chapterLabel, setChapterLabel] = useState('')
+  const [chapterPov, setChapterPov] = useState<string | null>(null)
+  const [chapterDate, setChapterDate] = useState<string | null>(null)
   const [currentChapterId, setCurrentChapterId] = useState<string | null>(null)
   const [noContent, setNoContent] = useState(false)
 
@@ -29,6 +32,8 @@ export default function ReaderPage() {
     const chapter = await res.json()
     setBlocks(chapter.blocks)
     setChapterLabel(chapter.title)
+    setChapterPov(chapter.pov ?? null)
+    setChapterDate(chapter.date ?? null)
     setCurrentChapterId(chapterId)
   }, [])
 
@@ -102,6 +107,9 @@ export default function ReaderPage() {
       choiceHistory={choiceHistory}
       seriesTitle={seriesTitle}
       chapterLabel={chapterLabel}
+      chapterPov={chapterPov}
+      chapterDate={chapterDate}
+      returnTo={returnTo}
       onSessionUpdate={handleSessionUpdate}
       onNavigate={handleNavigate}
     />

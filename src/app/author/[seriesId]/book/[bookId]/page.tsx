@@ -3,8 +3,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { LuMoon, LuSun } from 'react-icons/lu'
 import OutlineTree from '@/components/sidebar/OutlineTree'
 import VariablesPanel from '@/components/sidebar/VariablesPanel'
+import ChoicesPanel from '@/components/sidebar/ChoicesPanel'
+import AvatarButton from '@/components/AvatarButton'
+import Greeting from '@/components/Greeting'
 
 type Stats = { chapterCount: number; uniquePovs: number; choiceCount: number; wordCount: number }
 type Book = { id: string; title: string; synopsis: string; coverPath: string | null; stats: Stats }
@@ -14,21 +18,37 @@ type Series = {
   books: { id: string; title: string; order: number; chapters: { id: string; title: string; order: number }[] }[]
   variables: Variable[]
 }
+type ChoiceQuestion = { id: string; prompt: string; chapterId: string; chapterTitle: string; bookTitle: string }
 
 export default function BookDetailPage() {
   const { seriesId, bookId } = useParams() as { seriesId: string; bookId: string }
   const router = useRouter()
   const [series, setSeries] = useState<Series | null>(null)
   const [book, setBook] = useState<Book | null>(null)
+  const [choiceQuestions, setChoiceQuestions] = useState<ChoiceQuestion[]>([])
   const [title, setTitle] = useState('')
   const [synopsis, setSynopsis] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [lightMode, setLightMode] = useState(() => typeof window !== 'undefined' && localStorage.getItem('loom-light-mode') === 'true')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function toggleLightMode() {
+    setLightMode(prev => {
+      const next = !prev
+      localStorage.setItem('loom-light-mode', String(next))
+      return next
+    })
+  }
 
   const loadSeries = useCallback(async () => {
     const res = await fetch(`/api/series/${seriesId}`)
     if (res.ok) setSeries(await res.json())
   }, [seriesId])
+
+  const loadChoices = useCallback(async () => {
+    const res = await fetch(`/api/series/${seriesId}/choices?upToBookId=${bookId}`)
+    if (res.ok) setChoiceQuestions(await res.json())
+  }, [seriesId, bookId])
 
   const loadBook = useCallback(async () => {
     const res = await fetch(`/api/series/${seriesId}/books/${bookId}`)
@@ -45,6 +65,7 @@ export default function BookDetailPage() {
 
   useEffect(() => { loadSeries() }, [loadSeries])
   useEffect(() => { loadBook() }, [loadBook])
+  useEffect(() => { loadChoices() }, [loadChoices])
 
   async function patchBook(data: object) {
     await fetch(`/api/series/${seriesId}/books/${bookId}`, {
@@ -87,8 +108,23 @@ export default function BookDetailPage() {
     loadSeries()
     router.push(`/author/${seriesId}/chapter/${c.id}`)
   }
+
+  async function insertChapter(bookId: string, title: string, atOrder: number) {
+    const res = await fetch(`/api/series/${seriesId}/books/${bookId}/chapters`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, insertAtOrder: atOrder }),
+    })
+    const c = await res.json()
+    loadSeries()
+    router.push(`/author/${seriesId}/chapter/${c.id}`)
+  }
   async function addVariable(name: string, type: string, defaultValue: unknown) {
     await fetch(`/api/series/${seriesId}/variables`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, type, defaultValue }) })
+    loadSeries()
+  }
+  async function updateVariable(id: string, name: string, type: string) {
+    await fetch(`/api/variables/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, type }) })
     loadSeries()
   }
   async function deleteVariable(id: string) {
@@ -101,7 +137,7 @@ export default function BookDetailPage() {
   )
 
   return (
-    <div className="min-h-screen bg-surface-base flex flex-col">
+    <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
       <nav className="sticky top-0 z-10 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
         <Link href="/" className="flex items-center gap-2">
           <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
@@ -111,15 +147,39 @@ export default function BookDetailPage() {
         <Link href={`/author/${seriesId}`} className="text-ink-muted hover:text-ink self-center">{series.title}</Link>
         <span className="text-ink-faint self-center">›</span>
         <span className="text-ink self-center">{book.title}</span>
+        <div className="ml-auto flex items-center gap-2">
+          <Greeting />
+          <button
+            role="switch"
+            aria-checked={lightMode}
+            onClick={toggleLightMode}
+            title={lightMode ? 'Switch to dark mode' : 'Switch to light mode'}
+            className="flex items-center gap-1.5 text-ink-faint hover:text-ink transition"
+          >
+            <LuMoon size={13} />
+            <span className={`relative inline-flex w-9 h-5 rounded-full transition-colors duration-200 ${lightMode ? 'bg-accent' : 'bg-surface-muted'}`}>
+              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${lightMode ? 'left-4' : 'left-0.5'}`} />
+            </span>
+            <LuSun size={13} />
+          </button>
+          <AvatarButton />
+        </div>
       </nav>
 
       <div className="flex flex-1 overflow-hidden">
-        <aside className="w-56 bg-surface-raised border-r border-accent/10 p-4 flex flex-col gap-6 overflow-y-auto">
-          <OutlineTree seriesId={seriesId} books={series.books} onAddBook={addBook} onAddChapter={addChapter} />
-          <VariablesPanel variables={series.variables} onAdd={addVariable} onDelete={deleteVariable} />
+        <aside className="w-56 bg-surface-raised border-r border-accent/10 flex flex-col overflow-hidden">
+          <div className="flex flex-col min-h-0 max-h-[50%] p-4">
+            <OutlineTree seriesId={seriesId} books={series.books} onAddBook={addBook} onAddChapter={addChapter} onInsertChapter={insertChapter} />
+          </div>
+          <div className="flex flex-col min-h-0 max-h-[25%] p-4 pt-3 border-t border-accent/10">
+            <ChoicesPanel seriesId={seriesId} questions={choiceQuestions} />
+          </div>
+          <div className="flex flex-col min-h-0 max-h-[25%] p-4 pt-3 border-t border-accent/10">
+            <VariablesPanel variables={series.variables} onAdd={addVariable} onUpdate={updateVariable} onDelete={deleteVariable} />
+          </div>
         </aside>
 
-        <main className="flex-1 overflow-y-auto">
+        <main className={`flex-1 overflow-y-auto${lightMode ? ' light-body' : ''}`}>
           <div className="max-w-3xl mx-auto px-8 py-8">
             <div className="flex gap-8 mb-8 items-stretch">
               {/* Cover */}

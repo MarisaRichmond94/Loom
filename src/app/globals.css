@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-@theme inline {
+@theme {
   --color-surface-base: #0d0d18;
   --color-surface-raised: #12121e;
   --color-surface-overlay: #1a1a2e;
@@ -48,4 +48,64 @@ input, textarea, [contenteditable], .ProseMirror, .ProseMirror * {
 
 button, a, select, [role="button"] {
   cursor: pointer;
+}
+
+/* Footnote mark — editor + reader */
+.footnote-ref {
+  border-bottom: 1px dotted currentColor;
+  cursor: default;
+  position: relative;
+}
+
+.footnote-ref::after {
+  content: attr(data-footnote);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a2e;
+  color: #e0d9c8;
+  border: 1px solid rgba(136, 136, 255, 0.2);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: normal;
+  width: max-content;
+  max-width: 260px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 50;
+  text-indent: 0;
+}
+
+.footnote-ref:hover::after {
+  opacity: 1;
+}
+
+/* Light mode — scoped to the main writing area only */
+.light-body {
+  --color-surface-base: #f5f2eb;
+  --color-surface-raised: #ede9e0;
+  --color-surface-overlay: #e5e0d5;
+  --color-surface-muted: #ddd8cc;
+  --color-ink: #1a1a2a;
+  --color-ink-muted: #444;
+  --color-ink-faint: #888;
+  background-color: var(--color-surface-base);
+  color: var(--color-ink);
+}
+
+.light-body {
+  --color-choice-kill-bg: #cc8888;
+  --color-choice-kill-border: #bb6666;
+  --color-choice-spare-bg: #a3c377;
+  --color-choice-spare-border: #8aaa5e;
+  --color-choice-spare: #1a5a1a;
+}
+
+.light-body .ProseMirror,
+.light-body .ProseMirror * {
+  color: #1a1a2a;
 }

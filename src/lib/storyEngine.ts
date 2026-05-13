@@ -7,7 +7,6 @@ export type HistoryEntry = {
 }
 
 export type ConditionalBlock = {
-  baseContent: string
   overrides: Array<{
     id: string
     order: number
@@ -22,13 +21,13 @@ export type ChoiceRecord = {
   targetChapterId: string | null
 }
 
-export function resolveConditional(block: ConditionalBlock, storyState: StoryState): string {
+export function resolveConditional(block: ConditionalBlock, storyState: StoryState): string | null {
   const sorted = [...block.overrides].sort((a, b) => a.order - b.order)
   for (const override of sorted) {
     const matches = Object.entries(override.condition).every(([k, v]) => storyState[k] === v)
     if (matches) return override.content
   }
-  return block.baseContent
+  return null
 }
 
 export function applyChoice(

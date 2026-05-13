@@ -1,54 +1,219 @@
 'use client'
 
-import { useState } from 'react'
-import TextField from '@mui/material/TextField'
-import Select from '@mui/material/Select'
-import MenuItem from '@mui/material/MenuItem'
-import FormControl from '@mui/material/FormControl'
-import InputLabel from '@mui/material/InputLabel'
-import Button from '@mui/material/Button'
+import { useState, useRef, useEffect } from 'react'
+import { LuCheck, LuX } from 'react-icons/lu'
 
 type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null }
+type Variable = { id: string; name: string; type: string }
+
 type Props = {
-  blockId: string
+  prompt: string | null
   displayType: string | null
   choices: Choice[]
-  variables: { id: string; name: string; type: string }[]
+  variables: Variable[]
   onUpdateBlock: (data: Partial<{ displayType: string; prompt: string }>) => void
-  onAddChoice: (label: string) => void
   onUpdateChoice: (choiceId: string, data: Partial<Choice>) => void
-  onDeleteChoice: (choiceId: string) => void
+  onCreateVariable: (name: string, type: string) => Promise<void>
 }
 
-const PALETTE = [
-  'bg-choice-spare-bg border-choice-spare-border',
-  'bg-choice-kill-bg border-choice-kill-border',
-  'bg-choice-amber-bg border-choice-amber-border',
-  'bg-choice-blue-bg border-choice-blue-border',
-  'bg-choice-purple-bg border-choice-purple-border',
-  'bg-choice-teal-bg border-choice-teal-border',
-]
+const VAR_TYPES = ['string', 'number', 'boolean'] as const
+const DEFAULT_VALUE: Record<string, unknown> = { string: '', number: 0, boolean: false }
 
-function isValidNumber(val: string) {
-  return val.trim() !== '' && !isNaN(Number(val))
+const baseCls = 'bg-black/20 border border-black/20 rounded pl-2 py-1 text-xs text-ink outline-none focus:border-accent/50 w-full'
+
+function ValueSetter({ v, currentVal, onChange }: { v: Variable; currentVal: unknown; onChange: (val: unknown) => void }) {
+  if (v.type === 'boolean') {
+    return (
+      <div className="relative w-full">
+        <select
+          value={currentVal !== undefined ? String(currentVal) : ''}
+          onChange={e => onChange(e.target.value === '' ? undefined : e.target.value === 'true')}
+          className={`${baseCls} appearance-none pr-6`}
+        >
+          <option value="">— unset —</option>
+          <option value="true">true</option>
+          <option value="false">false</option>
+        </select>
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none text-xs">▾</span>
+      </div>
+    )
+  }
+  return (
+    <input
+      type={v.type === 'number' ? 'number' : 'text'}
+      value={currentVal !== undefined ? String(currentVal) : ''}
+      onChange={e => {
+        const val = e.target.value
+        if (val === '') onChange(undefined)
+        else if (v.type === 'number') { if (!isNaN(Number(val))) onChange(Number(val)) }
+        else onChange(val)
+      }}
+      className={`${baseCls} pr-2`}
+    />
+  )
 }
 
-export default function ChoicePointBlock({
-  displayType, choices, variables, onUpdateBlock, onAddChoice, onUpdateChoice, onDeleteChoice
-}: Props) {
-  const [newLabel, setNewLabel] = useState('')
+function ChoicePanel({
+  choice, label, labelClass, bgClass, borderClass,
+  variables, onUpdateChoice, onCreateVariable,
+}: {
+  choice: Choice; label: string; labelClass: string; bgClass: string; borderClass: string
+  variables: Variable[]
+  onUpdateChoice: Props['onUpdateChoice']
+  onCreateVariable: Props['onCreateVariable']
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
+  const [showAttach, setShowAttach] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newType, setNewType] = useState<typeof VAR_TYPES[number]>('string')
+  const menuRef = useRef<HTMLDivElement>(null)
 
-  function handleAddChoice(e: React.FormEvent) {
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false); setShowCreate(false); setShowAttach(false)
+      }
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [])
+
+  const vars = JSON.parse(choice.setsVariables || '{}') as Record<string, unknown>
+  const attachedNames = new Set(Object.keys(vars))
+  const attachedVars = variables.filter(v => attachedNames.has(v.name))
+  const unattachedVars = variables.filter(v => !attachedNames.has(v.name))
+
+  function save(updated: Record<string, unknown>) {
+    const cleaned: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(updated)) { if (v !== undefined) cleaned[k] = v }
+    onUpdateChoice(choice.id, { setsVariables: JSON.stringify(cleaned) })
+  }
+
+  function setVal(name: string, val: unknown) {
+    const updated = { ...vars }
+    if (val === undefined) delete updated[name]; else updated[name] = val
+    save(updated)
+  }
+
+  function detach(name: string) {
+    const updated = { ...vars }; delete updated[name]; save(updated)
+  }
+
+  function attach(v: Variable) {
+    save({ ...vars, [v.name]: DEFAULT_VALUE[v.type] ?? '' })
+    setShowAttach(false); setMenuOpen(false)
+  }
+
+  async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
-    if (!newLabel.trim()) return
-    onAddChoice(newLabel.trim())
-    setNewLabel('')
+    const name = newName.trim(); if (!name) return
+    save({ ...vars, [name]: DEFAULT_VALUE[newType] ?? '' })
+    await onCreateVariable(name, newType)
+    setNewName(''); setNewType('string'); setShowCreate(false); setMenuOpen(false)
   }
 
   return (
+    <div className={`flex-1 ${bgClass} border ${borderClass} rounded-lg p-3`}>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <span className={`text-xs font-semibold ${labelClass} uppercase tracking-widest`}>{label}</span>
+        <div ref={menuRef} className="relative">
+          <button
+            onClick={() => { setMenuOpen(o => !o); setShowCreate(false); setShowAttach(false) }}
+            className="text-ink-muted hover:text-ink transition text-lg font-bold leading-none"
+          >
+            +
+          </button>
+
+          {menuOpen && !showCreate && !showAttach && (
+            <div className="absolute right-0 top-full mt-1 bg-surface-raised border border-accent/20 rounded-lg shadow-xl z-10 overflow-hidden min-w-[200px]">
+              <button
+                onClick={() => { setShowCreate(true); setMenuOpen(false) }}
+                className="w-full px-4 py-2.5 text-sm text-ink-muted hover:text-ink hover:bg-surface-overlay transition text-left"
+              >
+                Create New Context
+              </button>
+              {unattachedVars.length > 0 && (
+                <button
+                  onClick={() => { setShowAttach(true); setMenuOpen(false) }}
+                  className="w-full px-4 py-2.5 text-sm text-ink-muted hover:text-ink hover:bg-surface-overlay transition text-left"
+                >
+                  Attach Existing Context
+                </button>
+              )}
+            </div>
+          )}
+
+          {showAttach && (
+            <div className="absolute right-0 top-full mt-1 bg-surface-raised border border-accent/20 rounded-lg shadow-xl z-10 overflow-hidden min-w-[200px]">
+              {unattachedVars.map(v => (
+                <button
+                  key={v.id}
+                  onClick={() => attach(v)}
+                  className="flex items-center justify-between w-full px-4 py-2.5 text-sm text-ink-muted hover:text-ink hover:bg-surface-overlay transition text-left gap-4"
+                >
+                  <span>{v.name}</span>
+                  <span className="text-ink-faint text-xs">{v.type}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Attached variables */}
+      <div className="flex flex-col gap-2 mb-2">
+        {attachedVars.length === 0 && !showCreate && (
+          <p className="text-xs text-ink-faint italic">No context applied yet</p>
+        )}
+        {attachedVars.map(v => (
+          <div key={v.id} className="flex items-center gap-2">
+            <span className="text-xs text-ink-muted truncate min-w-0" title={v.name}>{v.name}</span>
+            <div className="flex-1">
+              <ValueSetter v={v} currentVal={vars[v.name]} onChange={val => setVal(v.name, val)} />
+            </div>
+            <button onClick={() => detach(v.name)} className="text-ink-muted hover:text-choice-kill transition shrink-0"><LuX size={13} /></button>
+          </div>
+        ))}
+      </div>
+
+      {/* Create new inline form */}
+      {showCreate && (
+        <form onSubmit={handleCreate} className="flex items-center gap-2 mt-2">
+          <input
+            autoFocus
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => e.key === 'Escape' && (setShowCreate(false))}
+            placeholder="Variable name"
+            className="flex-1 bg-black/20 border border-black/20 rounded px-2 py-1 text-xs text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
+          />
+          <select
+            value={newType}
+            onChange={e => setNewType(e.target.value as typeof VAR_TYPES[number])}
+            className="bg-black/20 border border-black/20 rounded px-2 py-1 text-xs text-ink outline-none"
+          >
+            <option value="string">Text</option>
+            <option value="number">Number</option>
+            <option value="boolean">Boolean</option>
+          </select>
+          <button type="submit" className="text-accent px-1"><LuCheck size={13} /></button>
+          <button type="button" onClick={() => setShowCreate(false)} className="text-ink-faint px-1"><LuX size={13} /></button>
+        </form>
+      )}
+    </div>
+  )
+}
+
+export default function ChoicePointBlock({ prompt, displayType, choices, variables, onUpdateBlock, onUpdateChoice, onCreateVariable }: Props) {
+  const yesChoice = choices.find(c => c.label === 'Yes')
+  const noChoice  = choices.find(c => c.label === 'No')
+
+  return (
     <div>
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-xs text-choice-kill uppercase tracking-widest">⑂ Choice Point</span>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-sm font-bold text-ink uppercase tracking-widest">Choose</span>
         <div className="flex rounded overflow-hidden border border-accent/20 text-xs">
           {(['inline', 'chapter_gate'] as const).map(t => (
             <button
@@ -62,116 +227,30 @@ export default function ChoicePointBlock({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 mb-3">
-        {choices.map((choice, i) => {
-          const vars = JSON.parse(choice.setsVariables || '{}') as Record<string, unknown>
-          return (
-            <div key={choice.id} className={`border rounded p-3 ${PALETTE[i % PALETTE.length]}`}>
-              <div className="flex items-center gap-2 mb-3">
-                <TextField
-                  fullWidth
-                  label="Choice label"
-                  value={choice.label}
-                  onChange={e => onUpdateChoice(choice.id, { label: e.target.value })}
-                  slotProps={{ htmlInput: { style: { fontSize: '0.8rem' } } }}
-                />
-                <button
-                  onClick={() => onDeleteChoice(choice.id)}
-                  className="text-xs text-ink-faint hover:text-choice-kill shrink-0"
-                >
-                  ✕
-                </button>
-              </div>
+      <input
+        type="text"
+        placeholder="Yes or no question (e.g. Does Jared take the shot?)"
+        defaultValue={prompt ?? ''}
+        onBlur={e => onUpdateBlock({ prompt: e.target.value })}
+        className="w-full bg-transparent border-none outline-none text-sm italic text-ink-muted placeholder:text-ink-faint mb-3 px-0"
+      />
 
-              {variables.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {variables.map(v => {
-                    const currentVal = vars[v.name]
-
-                    if (v.type === 'boolean') {
-                      return (
-                        <FormControl key={v.id} size="small" sx={{ minWidth: 140 }}>
-                          <InputLabel>{v.name}</InputLabel>
-                          <Select
-                            label={v.name}
-                            value={currentVal !== undefined ? String(currentVal) : ''}
-                            onChange={e => {
-                              const updated = { ...vars }
-                              if (e.target.value === '') delete updated[v.name]
-                              else updated[v.name] = e.target.value === 'true'
-                              onUpdateChoice(choice.id, { setsVariables: JSON.stringify(updated) })
-                            }}
-                          >
-                            <MenuItem value="">— unset —</MenuItem>
-                            <MenuItem value="true">true</MenuItem>
-                            <MenuItem value="false">false</MenuItem>
-                          </Select>
-                        </FormControl>
-                      )
-                    }
-
-                    if (v.type === 'number') {
-                      const raw = currentVal !== undefined ? String(currentVal) : ''
-                      return (
-                        <TextField
-                          key={v.id}
-                          label={v.name}
-                          value={raw}
-                          onChange={e => {
-                            const val = e.target.value
-                            if (val === '' || isValidNumber(val)) {
-                              const updated = { ...vars }
-                              if (val === '') delete updated[v.name]
-                              else updated[v.name] = Number(val)
-                              onUpdateChoice(choice.id, { setsVariables: JSON.stringify(updated) })
-                            }
-                          }}
-                          error={raw !== '' && !isValidNumber(raw)}
-                          helperText={raw !== '' && !isValidNumber(raw) ? 'Must be a number' : ''}
-                          sx={{ width: 120 }}
-                        />
-                      )
-                    }
-
-                    return (
-                      <TextField
-                        key={v.id}
-                        label={v.name}
-                        value={currentVal !== undefined ? String(currentVal) : ''}
-                        onChange={e => {
-                          const updated = { ...vars }
-                          if (e.target.value === '') delete updated[v.name]
-                          else updated[v.name] = e.target.value
-                          onUpdateChoice(choice.id, { setsVariables: JSON.stringify(updated) })
-                        }}
-                        sx={{ width: 160 }}
-                      />
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )
-        })}
+      <div className="flex gap-3">
+        {yesChoice && (
+          <ChoicePanel
+            choice={yesChoice} label="If yes:" labelClass="text-choice-spare"
+            bgClass="bg-choice-spare-bg" borderClass="border-choice-spare-border"
+            variables={variables} onUpdateChoice={onUpdateChoice} onCreateVariable={onCreateVariable}
+          />
+        )}
+        {noChoice && (
+          <ChoicePanel
+            choice={noChoice} label="If no:" labelClass="text-choice-kill"
+            bgClass="bg-choice-kill-bg" borderClass="border-choice-kill-border"
+            variables={variables} onUpdateChoice={onUpdateChoice} onCreateVariable={onCreateVariable}
+          />
+        )}
       </div>
-
-      <form onSubmit={handleAddChoice} className="flex gap-2">
-        <TextField
-          fullWidth
-          placeholder="→ New choice…"
-          value={newLabel}
-          onChange={e => setNewLabel(e.target.value)}
-          slotProps={{ htmlInput: { style: { fontSize: '0.75rem' } } }}
-        />
-        <Button
-          type="submit"
-          variant="contained"
-          size="small"
-          sx={{ bgcolor: 'var(--color-accent)', color: '#fff', whiteSpace: 'nowrap', '&:hover': { bgcolor: 'var(--color-accent)', opacity: 0.9 } }}
-        >
-          Add Choice
-        </Button>
-      </form>
     </div>
   )
 }
