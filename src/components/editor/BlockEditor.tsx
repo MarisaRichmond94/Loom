@@ -25,11 +25,13 @@ type Block = {
   overrides: Override[]
 }
 type Variable = { id: string; name: string; type: string }
+type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
 
 type Props = {
   chapterId: string
   blocks: Block[]
   variables: Variable[]
+  characters: Character[]
   onBlocksChange: () => void
   onCreateVariable: (name: string, type: string) => Promise<void>
 }
@@ -87,7 +89,7 @@ function SortableBlock({
   )
 }
 
-export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, onBlocksChange, onCreateVariable }: Props) {
+export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onCreateVariable }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const [newBlockId, setNewBlockId] = useState<string | null>(null)
@@ -251,6 +253,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                     content={block.content ?? null}
                     onChange={content => updateBlock(block.id, { content })}
                     autoFocus={block.id === newBlockId}
+                    characters={characters}
                   />
                 )}
 

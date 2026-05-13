@@ -25,6 +25,7 @@ export default function ReaderPage() {
   const [chapterDate, setChapterDate] = useState<string | null>(null)
   const [currentChapterId, setCurrentChapterId] = useState<string | null>(null)
   const [noContent, setNoContent] = useState(false)
+  const [characters, setCharacters] = useState<{ id: string; name: string; age: number | null; hasAvatar: boolean }[]>([])
 
   const loadChapter = useCallback(async (chapterId: string) => {
     const res = await fetch(`/api/chapters/${chapterId}`)
@@ -49,6 +50,7 @@ export default function ReaderPage() {
     const series = await seriesRes.json()
     setSeriesId(series.id)
     setSeriesTitle(series.title)
+    fetch(`/api/series/${series.id}/characters`).then(r => r.ok ? r.json() : []).then(setCharacters)
 
     if (session.currentBlockId) {
       const blockRes = await fetch(`/api/blocks/${session.currentBlockId}`)
@@ -110,6 +112,7 @@ export default function ReaderPage() {
       chapterPov={chapterPov}
       chapterDate={chapterDate}
       returnTo={returnTo}
+      characters={characters}
       onSessionUpdate={handleSessionUpdate}
       onNavigate={handleNavigate}
     />

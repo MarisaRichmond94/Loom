@@ -84,6 +84,14 @@ button, a, select, [role="button"] {
   opacity: 1;
 }
 
+.character-ref {
+  color: rgba(var(--color-accent-rgb, 136, 136, 255), 0.85);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: rgba(var(--color-accent-rgb, 136, 136, 255), 0.4);
+  cursor: default;
+}
+
 /* Light mode — scoped to the main writing area only */
 .light-body {
   --color-surface-base: #f5f2eb;

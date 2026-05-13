@@ -15,6 +15,15 @@ model Series {
   books       Book[]
   variables   StoryVariable[]
   sessions    ReaderSession[]
+  characters  Character[]
+}
+
+model Character {
+  id       String  @id @default(cuid())
+  seriesId String
+  name     String
+  age      Int?
+  series   Series  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 }
 
 model Book {

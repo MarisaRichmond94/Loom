@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { LuMoon, LuSun, LuArrowLeft, LuMusic } from 'react-icons/lu'
+import { LuMoon, LuSun, LuArrowLeft, LuMusic, LuUser } from 'react-icons/lu'
 import { generateHTML } from '@tiptap/html'
 import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
 import { TextStyle } from '@tiptap/extension-text-style'
 import Color from '@tiptap/extension-color'
 import { Footnote } from '@/lib/extensions/footnote'
+import { CharacterMark } from '@/lib/extensions/character'
 import { resolveConditional } from '@/lib/storyEngine'
 import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
 import InlineChoice from './InlineChoice'
@@ -24,6 +25,7 @@ type Block = {
   choices: Choice[]
   overrides: Override[]
 }
+type Character = { id: string; name: string; age: number | null; hasAvatar: boolean }
 
 type Props = {
   sessionId: string
@@ -36,6 +38,7 @@ type Props = {
   chapterPov?: string | null
   chapterDate?: string | null
   returnTo?: string
+  characters?: Character[]
   onSessionUpdate: (state: StoryState, history: HistoryEntry[]) => void
   onNavigate: (chapterId: string) => void
 }
@@ -43,14 +46,14 @@ type Props = {
 function renderTipTap(json: string | null | undefined): string {
   if (!json) return ''
   try {
-    return generateHTML(JSON.parse(json), [StarterKit, TextAlign.configure({ types: ['paragraph', 'heading'] }), TextStyle, Color, Footnote])
+    return generateHTML(JSON.parse(json), [StarterKit, TextAlign.configure({ types: ['paragraph', 'heading'] }), TextStyle, Color, Footnote, CharacterMark])
   } catch {
     return ''
   }
 }
 
 export default function ReaderView({
-  sessionId, seriesId, blocks, storyState, choiceHistory, seriesTitle, chapterLabel, chapterPov, chapterDate, returnTo, onSessionUpdate, onNavigate
+  sessionId, seriesId, blocks, storyState, choiceHistory, seriesTitle, chapterLabel, chapterPov, chapterDate, returnTo, characters = [], onSessionUpdate, onNavigate
 }: Props) {
   const router = useRouter()
   const mainRef = useRef<HTMLElement>(null)
@@ -59,6 +62,7 @@ export default function ReaderView({
   const [lightMode, setLightMode] = useState(() =>
     typeof window !== 'undefined' && localStorage.getItem('loom-light-mode') === 'true'
   )
+  const [charCard, setCharCard] = useState<{ character: Character; x: number; y: number } | null>(null)
 
   useEffect(() => {
     if (choiceHistory.length <= prevChoiceCountRef.current) {
@@ -87,6 +91,23 @@ export default function ReaderView({
       return next
     })
   }
+
+  useEffect(() => {
+    if (!mainRef.current || characters.length === 0) return
+    const container = mainRef.current
+    function onEnter(e: MouseEvent) {
+      const span = e.currentTarget as HTMLElement
+      const id = span.dataset.characterId
+      const character = characters.find(c => c.id === id)
+      if (!character) return
+      const rect = span.getBoundingClientRect()
+      setCharCard({ character, x: rect.left + rect.width / 2, y: rect.top })
+    }
+    function onLeave() { setCharCard(null) }
+    const spans = container.querySelectorAll<HTMLElement>('.character-ref')
+    spans.forEach(s => { s.addEventListener('mouseenter', onEnter); s.addEventListener('mouseleave', onLeave) })
+    return () => { spans.forEach(s => { s.removeEventListener('mouseenter', onEnter); s.removeEventListener('mouseleave', onLeave) }) }
+  }, [blocks, characters])
 
   async function handleChoose(choicePointBlock: Block, choiceId: string) {
     setPendingChoiceBlock(null)
@@ -225,6 +246,25 @@ export default function ReaderView({
           })
         })()}
       </main>
+
+      {/* Character hover card */}
+      {charCard && (
+        <div
+          className="pointer-events-none fixed z-50 bg-surface-raised border border-accent/20 rounded-xl shadow-2xl p-4 flex items-center gap-4 w-64"
+          style={{ left: charCard.x, top: charCard.y - 8, transform: 'translate(-50%, -100%)' }}
+        >
+          <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-accent/20 bg-surface-overlay flex items-center justify-center shrink-0">
+            {charCard.character.hasAvatar
+              ? <img src={`/characters/${charCard.character.id}.jpg`} alt={charCard.character.name} className="w-full h-full object-cover" />
+              : <LuUser size={22} className="text-ink-faint" />
+            }
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-ink">{charCard.character.name}</p>
+            {charCard.character.age != null && <p className="text-xs text-ink-faint mt-0.5">Age {charCard.character.age}</p>}
+          </div>
+        </div>
+      )}
 
       {pendingChoiceBlock && (
         <ChapterGate

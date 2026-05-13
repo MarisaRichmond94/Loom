@@ -26,18 +26,23 @@ const SectionBreak = Extension.create({
     }
   },
 })
+
 import { useEffect, useRef, useState } from 'react'
 import {
-  LuMessageSquare, LuCheck, LuX, LuPencil,
+  LuMessageSquare, LuCheck, LuX, LuPencil, LuUser,
   LuAlignLeft, LuAlignCenter, LuAlignRight, LuAlignJustify,
   LuBold, LuItalic, LuMinus,
 } from 'react-icons/lu'
 import { Footnote } from '@/lib/extensions/footnote'
+import { CharacterMark } from '@/lib/extensions/character'
+
+type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
 
 type Props = {
   content: string | null
   onChange: (json: string) => void
   autoFocus?: boolean
+  characters?: Character[]
 }
 
 const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
@@ -74,11 +79,17 @@ function ToolBtn({ active, onClick, title, children }: {
   )
 }
 
-export default function TextBlock({ content, onChange, autoFocus }: Props) {
+export default function TextBlock({ content, onChange, autoFocus, characters = [] }: Props) {
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
+  // footnote state
   const [showInput, setShowInput] = useState(false)
   const [footnoteViewMode, setFootnoteViewMode] = useState(false)
   const [footnoteText, setFootnoteText] = useState('')
+  // character state
+  const [showCharPicker, setShowCharPicker] = useState(false)
+  const [characterViewMode, setCharacterViewMode] = useState(false)
+  const [characterViewName, setCharacterViewName] = useState('')
+
   const [focused, setFocused] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const savedSelection = useRef<{ from: number; to: number } | null>(null)
@@ -89,6 +100,7 @@ export default function TextBlock({ content, onChange, autoFocus }: Props) {
       StarterKit,
       Placeholder.configure({ placeholder: 'Write your prose here…' }),
       Footnote,
+      CharacterMark,
       TextAlign.configure({ types: ['paragraph', 'heading'] }),
       TextStyle,
       Color,
@@ -116,7 +128,7 @@ export default function TextBlock({ content, onChange, autoFocus }: Props) {
   useEffect(() => {
     if (!editor) return
     const update = () => {
-      if (showInput) return
+      if (showInput || showCharPicker) return
       const { empty, from, to } = editor.state.selection
 
       if (editor.isActive('footnote')) {
@@ -124,11 +136,23 @@ export default function TextBlock({ content, onChange, autoFocus }: Props) {
         savedSelection.current = { from, to: empty ? from : to }
         setFootnoteText(editor.getAttributes('footnote').content ?? '')
         setFootnoteViewMode(true)
+        setCharacterViewMode(false)
+        setMenuPos({ x: coords.left, y: coords.top })
+        return
+      }
+
+      if (editor.isActive('character')) {
+        const coords = editor.view.coordsAtPos(from)
+        savedSelection.current = { from, to: empty ? from : to }
+        setCharacterViewName(editor.getAttributes('character').name ?? '')
+        setCharacterViewMode(true)
+        setFootnoteViewMode(false)
         setMenuPos({ x: coords.left, y: coords.top })
         return
       }
 
       setFootnoteViewMode(false)
+      setCharacterViewMode(false)
       if (empty || from === to) { setMenuPos(null); return }
       const start = editor.view.coordsAtPos(from)
       const end = editor.view.coordsAtPos(to)
@@ -137,7 +161,7 @@ export default function TextBlock({ content, onChange, autoFocus }: Props) {
     }
     editor.on('selectionUpdate', update)
     return () => { editor.off('selectionUpdate', update) }
-  }, [editor, showInput])
+  }, [editor, showInput, showCharPicker])
 
   useEffect(() => {
     if (showInput) inputRef.current?.focus()
@@ -173,19 +197,39 @@ export default function TextBlock({ content, onChange, autoFocus }: Props) {
     savedSelection.current = null
   }
 
+  function applyCharacter(character: Character) {
+    if (!editor || !savedSelection.current) return
+    const { from, to } = savedSelection.current
+    editor.chain().focus().setTextSelection({ from, to }).setMark('character', { id: character.id, name: character.name }).run()
+    setShowCharPicker(false)
+    setMenuPos(null)
+    savedSelection.current = null
+  }
+
+  function removeCharacter() {
+    if (!editor) return
+    editor.chain().focus().extendMarkRange('character').unsetMark('character').run()
+    setCharacterViewMode(false)
+    setMenuPos(null)
+    savedSelection.current = null
+  }
+
   function cancel() {
     setFootnoteText('')
     setShowInput(false)
     setFootnoteViewMode(false)
+    setShowCharPicker(false)
+    setCharacterViewMode(false)
     setMenuPos(null)
     savedSelection.current = null
   }
 
   const currentColor = editor?.getAttributes('textStyle').color as string | undefined
+  const menuOpen = !!(menuPos || showInput || showCharPicker)
 
   return (
     <div>
-      {/* Formatting toolbar — visible when editor is focused */}
+      {/* Formatting toolbar */}
       {focused && editor && (
         <div
           onMouseDown={e => e.preventDefault()}
@@ -234,12 +278,14 @@ export default function TextBlock({ content, onChange, autoFocus }: Props) {
         </div>
       )}
 
-      {/* Floating footnote menu */}
-      {(menuPos || showInput) && (
+      {/* Floating mark menu */}
+      {menuOpen && (
         <div
           onMouseDown={e => e.preventDefault()}
-          style={menuPos ? { position: 'fixed', left: menuPos.x, top: menuPos.y - 8, transform: 'translate(-50%, -100%)', zIndex: 9999 } : { position: 'fixed', left: '50%', top: '40%', transform: 'translate(-50%, -50%)', zIndex: 9999 }}
-          className="flex items-center bg-surface-overlay border border-accent/20 rounded shadow-lg overflow-hidden"
+          style={menuPos
+            ? { position: 'fixed', left: menuPos.x, top: menuPos.y - 8, transform: 'translate(-50%, -100%)', zIndex: 9999 }
+            : { position: 'fixed', left: '50%', top: '40%', transform: 'translate(-50%, -50%)', zIndex: 9999 }}
+          className={`bg-surface-overlay border border-accent/20 rounded shadow-lg overflow-hidden ${showCharPicker ? 'flex flex-col min-w-[160px]' : 'flex items-center'}`}
         >
           {showInput ? (
             <>
@@ -254,35 +300,65 @@ export default function TextBlock({ content, onChange, autoFocus }: Props) {
               <button onClick={applyFootnote} className="px-2 py-1.5 text-accent hover:bg-surface-muted transition"><LuCheck size={13} /></button>
               <button onClick={cancel} className="px-2 py-1.5 text-ink-faint hover:bg-surface-muted transition"><LuX size={13} /></button>
             </>
+          ) : showCharPicker ? (
+            <>
+              <div className="px-3 py-1.5 text-xs text-ink-faint uppercase tracking-widest border-b border-accent/10">Tag character</div>
+              {characters.length === 0
+                ? <span className="px-3 py-2 text-xs text-ink-faint italic">No characters yet</span>
+                : characters.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => applyCharacter(c)}
+                    className="w-full text-left px-3 py-2 text-xs text-ink-muted hover:text-ink hover:bg-surface-muted transition flex items-center gap-2"
+                  >
+                    {c.hasAvatar
+                      ? <img src={`/characters/${c.id}.jpg`} className="w-5 h-5 rounded-full object-cover shrink-0" alt="" />
+                      : <span className="w-5 h-5 rounded-full bg-accent/20 flex items-center justify-center shrink-0"><LuUser size={10} /></span>
+                    }
+                    {c.name}
+                  </button>
+                ))
+              }
+              <button onClick={cancel} className="px-3 py-1.5 text-xs text-ink-faint hover:text-ink hover:bg-surface-muted transition border-t border-accent/10 text-left">Cancel</button>
+            </>
           ) : footnoteViewMode ? (
             <>
               <span className="px-3 py-1.5 text-xs text-ink-muted italic truncate max-w-[180px]">{footnoteText}</span>
-              <button
-                onClick={() => setShowInput(true)}
-                title="Edit footnote"
-                className="px-2 py-1.5 text-ink-faint hover:text-ink hover:bg-surface-muted transition"
-              ><LuPencil size={13} /></button>
-              <button
-                onClick={removeFootnote}
-                title="Remove footnote"
-                className="px-2 py-1.5 text-ink-faint hover:text-choice-kill hover:bg-surface-muted transition"
-              ><LuX size={13} /></button>
+              <button onClick={() => setShowInput(true)} title="Edit footnote" className="px-2 py-1.5 text-ink-faint hover:text-ink hover:bg-surface-muted transition"><LuPencil size={13} /></button>
+              <button onClick={removeFootnote} title="Remove footnote" className="px-2 py-1.5 text-ink-faint hover:text-choice-kill hover:bg-surface-muted transition"><LuX size={13} /></button>
+            </>
+          ) : characterViewMode ? (
+            <>
+              <span className="w-5 h-5 rounded-full bg-accent/20 flex items-center justify-center ml-2 shrink-0"><LuUser size={10} className="text-accent" /></span>
+              <span className="px-2 py-1.5 text-xs text-accent truncate max-w-[160px]">{characterViewName}</span>
+              <button onClick={removeCharacter} title="Remove character tag" className="px-2 py-1.5 text-ink-faint hover:text-choice-kill hover:bg-surface-muted transition"><LuX size={13} /></button>
             </>
           ) : (
-            <button
-              onClick={openInput}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-ink-muted hover:text-ink hover:bg-surface-muted transition"
-            >
-              <LuMessageSquare size={13} />
-              Footnote
-            </button>
+            <>
+              <button onClick={openInput} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-ink-muted hover:text-ink hover:bg-surface-muted transition">
+                <LuMessageSquare size={13} />
+                Footnote
+              </button>
+              {characters.length > 0 && (
+                <>
+                  <span className="w-px h-4 bg-accent/20 shrink-0" />
+                  <button
+                    onClick={() => setShowCharPicker(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-ink-muted hover:text-ink hover:bg-surface-muted transition"
+                  >
+                    <LuUser size={13} />
+                    Character
+                  </button>
+                </>
+              )}
+            </>
           )}
         </div>
       )}
 
       <EditorContent
         editor={editor}
-        className="prose prose-invert max-w-none text-ink text-sm leading-relaxed [&_.ProseMirror]:outline-none [&_.ProseMirror_p]:text-justify [&_.ProseMirror_p]:indent-8 [&_.ProseMirror_p]:my-0 [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ink-faint [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror:focus_p.is-editor-empty:first-child::before]:hidden [&_.ProseMirror_hr]:border-none [&_.ProseMirror_hr]:h-px [&_.ProseMirror_hr]:bg-accent/20 [&_.ProseMirror_hr]:w-1/3 [&_.ProseMirror_hr]:mx-auto [&_.ProseMirror_hr]:my-6 [&_.ProseMirror_hr.ProseMirror-selectednode]:bg-accent/60"
+        className="prose prose-invert max-w-none text-ink text-sm leading-relaxed [&_.ProseMirror]:outline-none [&_.ProseMirror_p]:text-justify [&_.ProseMirror_p]:indent-8 [&_.ProseMirror_p]:my-0 [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ink-faint [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror:focus_p.is-editor-empty:first-child::before]:hidden [&_.ProseMirror_hr]:border-none [&_.ProseMirror_hr]:h-px [&_.ProseMirror_hr]:bg-accent/20 [&_.ProseMirror_hr]:w-1/3 [&_.ProseMirror_hr]:mx-auto [&_.ProseMirror_hr]:my-6 [&_.ProseMirror_hr.ProseMirror-selectednode]:bg-accent/60 [&_.character-ref]:text-accent/80 [&_.character-ref]:underline [&_.character-ref]:decoration-dotted [&_.character-ref]:decoration-accent/40 [&_.character-ref]:cursor-default"
       />
     </div>
   )

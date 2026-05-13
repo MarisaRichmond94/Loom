@@ -20,6 +20,7 @@ type Block = {
 type Chapter = { id: string; title: string; pov: string | null; date: string | null; blocks: Block[] }
 type Variable = { id: string; name: string; type: string; defaultValue: string }
 type ChoiceQuestion = { id: string; prompt: string; chapterId: string; chapterTitle: string; bookTitle: string }
+type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
 type Series = {
   id: string; title: string
   books: { id: string; title: string; order: number; chapters: { id: string; title: string; order: number }[] }[]
@@ -32,6 +33,7 @@ export default function ChapterEditorPage() {
   const [series, setSeries] = useState<Series | null>(null)
   const [chapter, setChapter] = useState<Chapter | null>(null)
   const [choiceQuestions, setChoiceQuestions] = useState<ChoiceQuestion[]>([])
+  const [characters, setCharacters] = useState<Character[]>([])
   const [titleDraft, setTitleDraft] = useState('')
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -109,6 +111,9 @@ export default function ChapterEditorPage() {
   useEffect(() => { loadSeries() }, [loadSeries])
   useEffect(() => { loadChapter() }, [loadChapter])
   useEffect(() => { loadChoices() }, [loadChoices])
+  useEffect(() => {
+    fetch(`/api/series/${seriesId}/characters`).then(r => r.ok ? r.json() : []).then(setCharacters)
+  }, [seriesId])
 
   // Keep stable refs so the hotkey listener never goes stale
   const addBlockRef = useRef<(type: string) => Promise<void>>(async () => {})
@@ -338,6 +343,7 @@ export default function ChapterEditorPage() {
               chapterId={chapterId}
               blocks={chapter.blocks}
               variables={series.variables}
+              characters={characters}
               onBlocksChange={reloadBlocks}
               onCreateVariable={createVariable}
             />
