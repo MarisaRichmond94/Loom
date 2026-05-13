@@ -334,7 +334,7 @@ export default function BookDetailPage() {
             {/* Characters */}
             <div className="mb-2">
               <div className="flex items-center justify-between mb-2">
-                <h2 className="text-sm font-semibold uppercase tracking-widest text-ink">Characters</h2>
+                <h2 className="text-sm font-semibold uppercase tracking-widest text-ink">Character(s)</h2>
                 <button
                   onClick={openCreateModal}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
