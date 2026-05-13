@@ -93,13 +93,13 @@ export default function ReaderView({
   }
 
   useEffect(() => {
-    if (!mainRef.current || characters.length === 0) return
-    const container = mainRef.current
-    function onEnter(e: MouseEvent) {
-      const span = e.currentTarget as HTMLElement
+    if (characters.length === 0) return
+    function onOver(e: MouseEvent) {
+      const span = (e.target as Element).closest<HTMLElement>('.character-ref')
+      if (!span) { setCharCard(null); return }
       const id = span.dataset.characterId
       const character = characters.find(c => c.id === id)
-      if (!character) return
+      if (!character) { setCharCard(null); return }
       const rect = span.getBoundingClientRect()
       const cardW = 300
       const margin = 12
@@ -108,20 +108,9 @@ export default function ReaderView({
       const above = rect.top > 140
       setCharCard({ character, x, y: above ? rect.top : rect.bottom, above })
     }
-    const spans = container.querySelectorAll<HTMLElement>('.character-ref')
-    spans.forEach(s => s.addEventListener('mouseenter', onEnter))
-    return () => { spans.forEach(s => s.removeEventListener('mouseenter', onEnter)) }
-  }, [blocks, characters])
-
-  useEffect(() => {
-    if (!charCard) return
-    function onMove(e: MouseEvent) {
-      const el = document.elementFromPoint(e.clientX, e.clientY)
-      if (!el?.closest('.character-ref')) setCharCard(null)
-    }
-    document.addEventListener('mousemove', onMove)
-    return () => document.removeEventListener('mousemove', onMove)
-  }, [charCard])
+    document.addEventListener('mouseover', onOver)
+    return () => document.removeEventListener('mouseover', onOver)
+  }, [characters])
 
   async function handleChoose(choicePointBlock: Block, choiceId: string) {
     setPendingChoiceBlock(null)
