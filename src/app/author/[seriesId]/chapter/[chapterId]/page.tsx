@@ -280,7 +280,7 @@ export default function ChapterEditorPage() {
               onClick={async () => {
                 const res = await fetch('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seriesId }) })
                 const session = await res.json()
-                router.push(`/read/${session.id}?returnTo=/author/${seriesId}/chapter/${chapterId}`)
+                router.push(`/read/${session.id}?returnTo=/author/${seriesId}/chapter/${chapterId}&startChapterId=${chapterId}`)
               }}
               className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
             >

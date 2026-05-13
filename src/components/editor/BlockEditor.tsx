@@ -273,6 +273,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                   <ConditionalBlock
                     overrides={block.overrides}
                     variables={variables}
+                    characters={characters}
                     onAddOverride={(condition, content) => addOverride(block.id, condition, content)}
                     onUpdateOverride={updateOverride}
                     onDeleteOverride={deleteOverride}

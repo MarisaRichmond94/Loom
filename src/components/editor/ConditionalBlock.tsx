@@ -11,9 +11,11 @@ import { ThemeProvider, createTheme } from '@mui/material/styles'
 const darkTheme = createTheme({ palette: { mode: 'dark' } })
 
 type Override = { id: string; order: number; condition: string; content: string }
+type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
 type Props = {
   overrides: Override[]
   variables: { id: string; name: string; type: string }[]
+  characters?: Character[]
   onAddOverride: (condition: Record<string, unknown>, content: string) => void
   onUpdateOverride: (overrideId: string, data: Partial<Override>) => void
   onDeleteOverride: (overrideId: string) => void
@@ -21,7 +23,7 @@ type Props = {
 
 const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
 
-export default function ConditionalBlock({ overrides, variables, onAddOverride, onUpdateOverride, onDeleteOverride }: Props) {
+export default function ConditionalBlock({ overrides, variables, characters, onAddOverride, onUpdateOverride, onDeleteOverride }: Props) {
   function handleAddOverride() {
     const varName = variables[0].name
     onAddOverride({ [varName]: true }, EMPTY)
@@ -92,6 +94,7 @@ export default function ConditionalBlock({ overrides, variables, onAddOverride, 
               <TextBlock
                 content={override.content}
                 onChange={content => onUpdateOverride(override.id, { content })}
+                characters={characters}
               />
             </div>
           )

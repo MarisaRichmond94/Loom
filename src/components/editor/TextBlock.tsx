@@ -111,7 +111,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
     content: content ? JSON.parse(content) : JSON.parse(EMPTY),
     onUpdate: ({ editor }) => onChange(JSON.stringify(editor.getJSON())),
     onFocus: () => setFocused(true),
-    onBlur: () => setFocused(false),
+    onBlur: ({ editor }) => { setFocused(false); editor.commands.setTextSelection(editor.state.selection.anchor) },
   })
 
   useEffect(() => {
@@ -227,7 +227,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
   }
 
   const currentColor = editor?.getAttributes('textStyle').color as string | undefined
-  const menuOpen = !!(menuPos || showInput || showCharPicker)
+  const menuOpen = showInput || showCharPicker || (focused && !!menuPos)
 
   return (
     <div>

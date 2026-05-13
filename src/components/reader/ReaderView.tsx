@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { LuMoon, LuSun, LuArrowLeft, LuMusic, LuUser } from 'react-icons/lu'
+import { LuMoon, LuSun, LuArrowLeft, LuArrowRight, LuMusic, LuUser } from 'react-icons/lu'
 import { generateHTML } from '@tiptap/html'
 import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
@@ -26,6 +26,8 @@ type Block = {
   overrides: Override[]
 }
 type Character = { id: string; name: string; age: number | null; hasAvatar: boolean }
+type BookChapter = { id: string; title: string; order: number }
+type Book = { id: string; title: string; order: number; chapters: BookChapter[] }
 
 type Props = {
   sessionId: string
@@ -39,6 +41,8 @@ type Props = {
   chapterDate?: string | null
   returnTo?: string
   characters?: Character[]
+  books?: Book[]
+  currentChapterId?: string
   onSessionUpdate: (state: StoryState, history: HistoryEntry[]) => void
   onNavigate: (chapterId: string) => void
 }
@@ -53,8 +57,12 @@ function renderTipTap(json: string | null | undefined): string {
 }
 
 export default function ReaderView({
-  sessionId, seriesId, blocks, storyState, choiceHistory, seriesTitle, chapterLabel, chapterPov, chapterDate, returnTo, characters = [], onSessionUpdate, onNavigate
+  sessionId, seriesId, blocks, storyState, choiceHistory, chapterLabel, chapterPov, chapterDate, returnTo, characters = [], books = [], currentChapterId, onSessionUpdate, onNavigate
 }: Props) {
+  const allChapters = books.flatMap(b => b.chapters)
+  const currentIdx = allChapters.findIndex(c => c.id === currentChapterId)
+  const prevChapter = currentIdx > 0 ? allChapters[currentIdx - 1] : null
+  const nextChapter = currentIdx !== -1 && currentIdx < allChapters.length - 1 ? allChapters[currentIdx + 1] : null
   const router = useRouter()
   const mainRef = useRef<HTMLElement>(null)
   const prevChoiceCountRef = useRef(choiceHistory.length)
@@ -63,6 +71,43 @@ export default function ReaderView({
     typeof window !== 'undefined' && localStorage.getItem('loom-light-mode') === 'true'
   )
   const [charCard, setCharCard] = useState<{ character: Character; x: number; y: number; above: boolean } | null>(null)
+  const [scrollProgress, setScrollProgress] = useState(0)
+  const [choiceMarkers, setChoiceMarkers] = useState<{ id: string; position: number }[]>([])
+
+  useEffect(() => {
+    const el = mainRef.current
+    if (!el) return
+    function onScroll() {
+      const { scrollTop, scrollHeight, clientHeight } = el!
+      const max = scrollHeight - clientHeight
+      setScrollProgress(max > 0 ? scrollTop / max : 0)
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
+
+  useEffect(() => {
+    if (mainRef.current) mainRef.current.scrollTop = 0
+    setScrollProgress(0)
+  }, [blocks])
+
+  useEffect(() => {
+    const el = mainRef.current
+    if (!el) return
+    const id = requestAnimationFrame(() => {
+      const unanswered = blocks.filter(
+        b => b.type === 'choice_point' && !choiceHistory.some(h => h.choicePointId === b.id)
+      )
+      const markers = unanswered.flatMap(block => {
+        const blockEl = document.getElementById(`block-${block.id}`)
+        if (!blockEl) return []
+        const blockTop = blockEl.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop
+        return [{ id: block.id, position: blockTop / el.scrollHeight }]
+      })
+      setChoiceMarkers(markers)
+    })
+    return () => cancelAnimationFrame(id)
+  }, [blocks, choiceHistory])
 
   useEffect(() => {
     if (choiceHistory.length <= prevChoiceCountRef.current) {
@@ -166,24 +211,35 @@ export default function ReaderView({
         {/* Chapter header */}
         <div className="flex flex-col items-center mb-8 pt-6">
           <h1 className="text-3xl font-bold uppercase tracking-wide text-ink mb-1">{chapterLabel}</h1>
-          {chapterPov && <p className="text-accent text-base">{chapterPov}</p>}
+          {chapterPov && (
+            <p className="text-accent text-base">
+              {(() => {
+                const povChar = characters.find(c => c.name === chapterPov)
+                return povChar
+                  ? <span className="character-ref cursor-default" data-character-id={povChar.id}>{chapterPov}</span>
+                  : chapterPov
+              })()}
+            </p>
+          )}
         </div>
+        <div className="px-8">
         {chapterDate && <p className="text-base text-ink-faint mb-2">{chapterDate}</p>}
         {(() => {
           let pendingChoice = false
           return blocks.map(block => {
-            if (pendingChoice) return null
-
             if (block.type === 'text') {
               return (
                 <div
                   key={block.id}
                   id={`block-${block.id}`}
                   className="prose prose-invert max-w-none mb-6 text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6"
+                  style={pendingChoice ? { filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' } : undefined}
                   dangerouslySetInnerHTML={{ __html: renderTipTap(block.content) }}
                 />
               )
             }
+
+            if (pendingChoice) return null
 
             if (block.type === 'conditional_fragment') {
               const resolved = resolveConditional(
@@ -248,6 +304,7 @@ export default function ReaderView({
             return null
           })
         })()}
+        </div>
       </main>
 
       {/* Character hover card */}
@@ -287,6 +344,39 @@ export default function ReaderView({
         />
       )}
 
+      {(prevChapter || nextChapter) && (
+        <footer className="shrink-0 bg-surface-raised border-t border-accent/10 px-4 py-3 flex items-center gap-4 z-20">
+          {prevChapter ? (
+            <button
+              onClick={() => onNavigate(prevChapter.id)}
+              className="shrink-0 flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition"
+            >
+              <LuArrowLeft size={13} /> {prevChapter.title}
+            </button>
+          ) : <div />}
+          <div className="flex-1 relative h-1 bg-surface-muted rounded-full">
+            <div
+              className="h-full bg-accent/60 rounded-full transition-[width] duration-75"
+              style={{ width: `${scrollProgress * 100}%` }}
+            />
+            {choiceMarkers.map(marker => (
+              <div
+                key={marker.id}
+                className="absolute top-1/2 w-2.5 h-2.5 rounded-full bg-accent border-2 border-surface-raised"
+                style={{ left: `${marker.position * 100}%`, transform: 'translate(-50%, -50%)', zIndex: 1 }}
+              />
+            ))}
+          </div>
+          {nextChapter ? (
+            <button
+              onClick={() => onNavigate(nextChapter.id)}
+              className={`shrink-0 flex items-center gap-1.5 text-xs transition ${scrollProgress >= 0.99 ? 'text-white font-medium' : 'text-ink-muted hover:text-ink'}`}
+            >
+              {nextChapter.title} <LuArrowRight size={13} />
+            </button>
+          ) : <div />}
+        </footer>
+      )}
 
     </div>
   )

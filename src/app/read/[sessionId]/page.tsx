@@ -11,10 +11,13 @@ type Block = {
   choices: { id: string; label: string; setsVariables: string; targetChapterId: string | null }[]
   overrides: { id: string; order: number; condition: string; content: string }[]
 }
+type SeriesBook = { id: string; title: string; order: number; chapters: { id: string; title: string; order: number }[] }
 
 export default function ReaderPage() {
   const { sessionId } = useParams() as { sessionId: string }
-  const returnTo = useSearchParams().get('returnTo') ?? undefined
+  const searchParams = useSearchParams()
+  const returnTo = searchParams.get('returnTo') ?? undefined
+  const startChapterId = searchParams.get('startChapterId')
   const [blocks, setBlocks] = useState<Block[]>([])
   const [storyState, setStoryState] = useState<StoryState>({})
   const [choiceHistory, setChoiceHistory] = useState<HistoryEntry[]>([])
@@ -26,6 +29,7 @@ export default function ReaderPage() {
   const [currentChapterId, setCurrentChapterId] = useState<string | null>(null)
   const [noContent, setNoContent] = useState(false)
   const [characters, setCharacters] = useState<{ id: string; name: string; age: number | null; hasAvatar: boolean }[]>([])
+  const [seriesBooks, setSeriesBooks] = useState<SeriesBook[]>([])
 
   const loadChapter = useCallback(async (chapterId: string) => {
     const res = await fetch(`/api/chapters/${chapterId}`)
@@ -50,6 +54,7 @@ export default function ReaderPage() {
     const series = await seriesRes.json()
     setSeriesId(series.id)
     setSeriesTitle(series.title)
+    setSeriesBooks(series.books ?? [])
     fetch(`/api/series/${series.id}/characters`).then(r => r.ok ? r.json() : []).then(setCharacters)
 
     if (session.currentBlockId) {
@@ -62,13 +67,15 @@ export default function ReaderPage() {
       // block not found — fall through to first chapter
     }
 
-    // Fresh session — start at first chapter
-    if (series.books?.[0]?.chapters?.[0]) {
+    // Fresh session — start at requested chapter or first chapter
+    if (startChapterId) {
+      setCurrentChapterId(startChapterId)
+    } else if (series.books?.[0]?.chapters?.[0]) {
       setCurrentChapterId(series.books[0].chapters[0].id)
     } else {
       setNoContent(true)
     }
-  }, [sessionId])
+  }, [sessionId, startChapterId])
 
   useEffect(() => { loadSession() }, [loadSession])
   useEffect(() => { if (currentChapterId) loadChapter(currentChapterId) }, [currentChapterId, loadChapter])
@@ -100,6 +107,10 @@ export default function ReaderPage() {
     )
   }
 
+  const dynamicReturnTo = currentChapterId && seriesId
+    ? `/author/${seriesId}/chapter/${currentChapterId}`
+    : returnTo
+
   return (
     <ReaderView
       sessionId={sessionId}
@@ -111,8 +122,10 @@ export default function ReaderPage() {
       chapterLabel={chapterLabel}
       chapterPov={chapterPov}
       chapterDate={chapterDate}
-      returnTo={returnTo}
+      returnTo={dynamicReturnTo}
       characters={characters}
+      books={seriesBooks}
+      currentChapterId={currentChapterId ?? undefined}
       onSessionUpdate={handleSessionUpdate}
       onNavigate={handleNavigate}
     />
