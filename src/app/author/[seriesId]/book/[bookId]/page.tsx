@@ -129,6 +129,7 @@ export default function BookDetailPage() {
 
   async function saveCharacter() {
     if (!charName.trim()) return
+    if (charAge.trim() !== '' && isNaN(Number(charAge))) return
     setSavingChar(true)
     try {
       const age = charAge.trim() !== '' ? Number(charAge) : null
@@ -460,13 +461,15 @@ export default function BookDetailPage() {
               <div>
                 <label className="block text-xs text-ink-faint mb-1 uppercase tracking-widest">Age <span className="normal-case">(optional)</span></label>
                 <input
-                  type="number"
+                  type="text"
                   value={charAge}
                   onChange={e => setCharAge(e.target.value)}
                   placeholder="—"
-                  min={0}
-                  className="w-24 bg-surface-overlay border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+                  className={`w-24 bg-surface-overlay border rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-accent ${charAge.trim() !== '' && isNaN(Number(charAge)) ? 'border-choice-kill' : 'border-accent/20'}`}
                 />
+                {charAge.trim() !== '' && isNaN(Number(charAge)) && (
+                  <p className="text-xs text-choice-kill mt-1">Age must be a number</p>
+                )}
               </div>
             </div>
 
@@ -483,7 +486,7 @@ export default function BookDetailPage() {
                 <button onClick={closeCharModal} className="px-4 py-2 rounded-lg text-ink-muted text-sm hover:text-ink transition">Cancel</button>
                 <button
                   onClick={saveCharacter}
-                  disabled={savingChar || !charName.trim()}
+                  disabled={savingChar || !charName.trim() || (charAge.trim() !== '' && isNaN(Number(charAge)))}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50"
                 >
                   <LuCheck size={14} /> {savingChar ? 'Saving…' : 'Save'}
