@@ -350,7 +350,7 @@ export default function BookDetailPage() {
                   <p className="text-sm text-ink-faint italic text-center px-8">No characters yet. Add one to start tagging appearances in your chapters.</p>
                 </div>
               ) : (
-                <div className="flex flex-wrap gap-4">
+                <div className="flex flex-wrap gap-4 content-start" style={{ minHeight: 300 }}>
                   {characters.map(c => (
                     <button
                       key={c.id}
