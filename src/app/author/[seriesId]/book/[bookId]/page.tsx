@@ -18,7 +18,7 @@ type Variable = { id: string; name: string; type: string; defaultValue: string }
 type Character = { id: string; name: string; age: number | null; hasAvatar: boolean }
 type Series = {
   id: string; title: string
-  books: { id: string; title: string; order: number; chapters: { id: string; title: string; order: number }[] }[]
+  books: { id: string; title: string; order: number; chapters: { id: string; title: string; order: number; pov?: string | null }[] }[]
   variables: Variable[]
 }
 type ChoiceQuestion = { id: string; prompt: string; chapterId: string; chapterTitle: string; bookTitle: string }
@@ -349,15 +349,19 @@ export default function BookDetailPage() {
                 <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-accent/20" style={{ height: 300 }}>
                   <p className="text-sm text-ink-faint italic text-center px-8">No characters yet. Add one to start tagging appearances in your chapters.</p>
                 </div>
-              ) : (
+              ) : (() => {
+                  const povNames = new Set(series.books.flatMap(b => b.chapters.map(ch => ch.pov)).filter(Boolean) as string[])
+                  return (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))', gap: 8, minHeight: 300, alignContent: 'start' }}>
-                  {characters.map(c => (
+                  {characters.map(c => {
+                    const isPov = povNames.has(c.name)
+                    return (
                     <button
                       key={c.id}
                       onClick={() => openEditModal(c)}
-                      className="flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border border-accent/10 hover:border-accent/30 transition h-[146px] w-full"
+                      className={`flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border transition h-[146px] w-full ${isPov ? 'border-accent hover:border-accent/70' : 'border-accent/10 hover:border-accent/30'}`}
                     >
-                      <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-accent/20 bg-surface-overlay flex items-center justify-center shrink-0">
+                      <div className={`w-20 h-20 rounded-full overflow-hidden border-2 bg-surface-overlay flex items-center justify-center shrink-0 ${isPov ? 'border-accent' : 'border-accent/20'}`}>
                         {c.hasAvatar
                           ? <img src={`/characters/${c.id}.jpg?t=${charAvatarTs}`} alt={c.name} className="w-full h-full object-cover" />
                           : <LuUser size={32} className="text-ink-faint" />
@@ -368,9 +372,10 @@ export default function BookDetailPage() {
                         {c.age != null && <p className="text-xs text-ink-faint">Age {c.age}</p>}
                       </div>
                     </button>
-                  ))}
+                  )})}
                 </div>
-              )}
+                  )
+              })()}
             </div>
 
             {/* Delete */}
