@@ -329,15 +329,28 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
         <DragOverlay>
           {draggingBlock && (
             <div className="flex items-start cursor-grabbing" style={{ transform: 'rotate(0.75deg) scale(1.02)' }}>
-              <div className={`flex-1 min-w-0 bg-surface-raised border border-accent/20 border-l-4 ${BLOCK_BORDER[draggingBlock.type] ?? ''} rounded-r-lg px-4 py-3 shadow-2xl`}>
-                <div className="pl-4 flex items-center gap-2">
-                  <LuGripVertical size={14} className="text-accent/60 shrink-0" />
-                  <span className="text-xs text-ink-muted">
-                    {draggingBlock.type === 'choice_point' ? 'Choice point'
-                      : draggingBlock.type === 'conditional_fragment' ? 'Conditional'
-                      : draggingBlock.type === 'soundtrack' ? 'Soundtrack'
-                      : 'Text block'}
-                  </span>
+              <div className={`flex-1 min-w-0 bg-surface-raised border border-accent/20 border-l-4 ${BLOCK_BORDER[draggingBlock.type] ?? ''} rounded-r-lg p-4 shadow-2xl`}>
+                <div className="pl-4 flex flex-col gap-3 animate-pulse">
+                  {/* skeleton toolbar */}
+                  <div className="flex items-center gap-1.5">
+                    {[18, 18, 18, 18].map((_, i) => (
+                      <div key={i} className="h-5 w-5 rounded bg-ink-faint/20" />
+                    ))}
+                    <div className="mx-1 w-px h-4 bg-ink-faint/15" />
+                    {[18, 18].map((_, i) => (
+                      <div key={i} className="h-5 w-5 rounded bg-ink-faint/20" />
+                    ))}
+                    <div className="mx-1 w-px h-4 bg-ink-faint/15" />
+                    <div className="h-5 w-14 rounded bg-ink-faint/20" />
+                  </div>
+                  {/* skeleton text lines */}
+                  <div className="flex flex-col gap-2">
+                    <div className="h-2.5 rounded-full bg-ink-faint/20 w-full" />
+                    <div className="h-2.5 rounded-full bg-ink-faint/20 w-[91%]" />
+                    <div className="h-2.5 rounded-full bg-ink-faint/20 w-[97%]" />
+                    <div className="h-2.5 rounded-full bg-ink-faint/20 w-[83%]" />
+                    <div className="h-2.5 rounded-full bg-ink-faint/20 w-[52%]" />
+                  </div>
                 </div>
               </div>
             </div>
