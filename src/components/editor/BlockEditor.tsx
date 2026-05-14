@@ -98,6 +98,11 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   const blocksContainerRef = useRef<HTMLDivElement>(null)
   const prevBlockCountRef = useRef(initialBlocks.length)
   const mountedRef = useRef(false)
+  // Written every render so the ⌥⇧D handler never reads a stale value
+  const activeBlockIdRef = useRef<string | null>(null)
+  const onBlocksChangeRef = useRef(onBlocksChange)
+  activeBlockIdRef.current = activeBlockId
+  onBlocksChangeRef.current = onBlocksChange
 
   // Sync when the set of blocks changes structurally (add/delete), but not during drags
   useEffect(() => {
@@ -156,18 +161,21 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [activeBlockId, blocks, chapterId])
 
-  // ⌥⇧D — delete active block
+  // ⌥⇧D — delete active block (refs avoid stale-closure bugs with activeBlockId)
   useEffect(() => {
     async function handleKeyDown(e: KeyboardEvent) {
       if (!e.altKey || !e.shiftKey || e.code !== 'KeyD') return
-      if (!activeBlockId) return
+      const blockId = activeBlockIdRef.current
+      if (!blockId) return
       e.preventDefault()
-      await fetch(`/api/chapters/${chapterId}/blocks/${activeBlockId}`, { method: 'DELETE' })
-      onBlocksChange()
+      await fetch(`/api/chapters/${chapterId}/blocks/${blockId}`, { method: 'DELETE' })
+      onBlocksChangeRef.current()
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [activeBlockId, chapterId, onBlocksChange])
+  // chapterId never changes within a page session; refs handle the rest
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chapterId])
 
   async function updateBlock(blockId: string, data: object) {
     setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, ...data } : b))
