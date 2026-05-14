@@ -4,9 +4,31 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import TextAlign from '@tiptap/extension-text-align'
-import { TextStyle } from '@tiptap/extension-text-style'
-import Color from '@tiptap/extension-color'
-import { Extension, InputRule } from '@tiptap/core'
+import { Extension, InputRule, Mark, mergeAttributes } from '@tiptap/core'
+
+// Custom mark — addAttributes() path guarantees color renders in the live editor
+const TextStyleColor = Mark.create({
+  name: 'textStyle',
+  priority: 101,
+  addAttributes() {
+    return {
+      color: {
+        default: null,
+        parseHTML: element => (element as HTMLElement).style?.color?.replace(/['"]+/g, '') || null,
+        renderHTML: attributes => {
+          if (!attributes.color) return {}
+          return { style: `color: ${attributes.color}` }
+        },
+      },
+    }
+  },
+  parseHTML() {
+    return [{ tag: 'span', consuming: false, getAttrs: element => (element as HTMLElement).style?.color ? {} : false }]
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['span', mergeAttributes(HTMLAttributes), 0]
+  },
+})
 
 const EmDash = Extension.create({
   name: 'emDash',
@@ -106,8 +128,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
       Footnote,
       CharacterMark,
       TextAlign.configure({ types: ['paragraph', 'heading'] }),
-      TextStyle,
-      Color,
+      TextStyleColor,
       EmDash,
       SectionBreak,
     ],
@@ -277,9 +298,9 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
                 e.preventDefault()
                 const sel = savedSelection.current
                 if (sel && sel.from !== sel.to) {
-                  editor.chain().focus().setTextSelection(sel).setColor(value).run()
+                  editor.chain().focus().setTextSelection(sel).setMark('textStyle', { color: value }).run()
                 } else {
-                  editor.chain().focus().setColor(value).run()
+                  editor.chain().focus().setMark('textStyle', { color: value }).run()
                 }
               }}
               title={label}
@@ -292,9 +313,9 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
               e.preventDefault()
               const sel = savedSelection.current
               if (sel && sel.from !== sel.to) {
-                editor.chain().focus().setTextSelection(sel).unsetColor().run()
+                editor.chain().focus().setTextSelection(sel).unsetMark('textStyle').run()
               } else {
-                editor.chain().focus().unsetColor().run()
+                editor.chain().focus().unsetMark('textStyle').run()
               }
             }}
             title="Remove color"
