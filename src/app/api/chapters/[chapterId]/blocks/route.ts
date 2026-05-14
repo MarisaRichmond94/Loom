@@ -18,16 +18,28 @@ export async function GET(_: Request, { params }: Params) {
 
 export async function POST(req: Request, { params }: Params) {
   const { chapterId } = await params
-  const { type, content, prompt, displayType, baseContent } = await req.json()
+  const { type, content, prompt, displayType, baseContent, insertAtOrder } = await req.json()
   if (!['text', 'choice_point', 'conditional_fragment', 'soundtrack'].includes(type)) {
     return NextResponse.json({ error: 'invalid type' }, { status: 400 })
   }
-  const count = await prisma.contentBlock.count({ where: { chapterId } })
+
+  let order: number
+  if (insertAtOrder != null) {
+    await prisma.contentBlock.updateMany({
+      where: { chapterId, order: { gte: insertAtOrder } },
+      data: { order: { increment: 1 } },
+    })
+    order = insertAtOrder
+  } else {
+    const count = await prisma.contentBlock.count({ where: { chapterId } })
+    order = count + 1
+  }
+
   const block = await prisma.contentBlock.create({
     data: {
       chapterId,
       type,
-      order: count + 1,
+      order,
       ...(content !== undefined && { content }),
       ...(prompt !== undefined && { prompt }),
       ...(displayType !== undefined && { displayType }),

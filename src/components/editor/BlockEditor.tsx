@@ -34,6 +34,7 @@ type Props = {
   characters: Character[]
   onBlocksChange: () => void
   onCreateVariable: (name: string, type: string) => Promise<void>
+  onActiveBlockChange?: (blockId: string | null) => void
 }
 
 const BLOCK_BORDER: Record<string, string> = {
@@ -89,7 +90,7 @@ function SortableBlock({
   )
 }
 
-export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onCreateVariable }: Props) {
+export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onCreateVariable, onActiveBlockChange }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const [newBlockId, setNewBlockId] = useState<string | null>(null)
@@ -111,6 +112,8 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialBlocks])
+
+  useEffect(() => { onActiveBlockChange?.(activeBlockId) }, [activeBlockId, onActiveBlockChange])
 
   // Scroll newly added block into view
   useEffect(() => {

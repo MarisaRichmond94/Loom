@@ -37,6 +37,7 @@ export default function ChapterEditorPage() {
   const [titleDraft, setTitleDraft] = useState('')
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const [lightMode, setLightMode] = useState(() =>
     typeof window !== 'undefined' && localStorage.getItem('loom-light-mode') === 'true'
   )
@@ -198,11 +199,14 @@ export default function ChapterEditorPage() {
 
   async function addBlock(type: string) {
     setAddMenuOpen(false)
+    const activeBlock = activeBlockId ? chapter?.blocks.find(b => b.id === activeBlockId) : null
+    const insertAtOrder = activeBlock ? activeBlock.order + 1 : undefined
     await fetch(`/api/chapters/${chapterId}/blocks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         type,
+        insertAtOrder,
         ...(type === 'text' && { content: '{"type":"doc","content":[{"type":"paragraph"}]}' }),
         ...(type === 'choice_point' && { displayType: 'inline' }),
         ...(type === 'conditional_fragment' && { baseContent: '{"type":"doc","content":[{"type":"paragraph"}]}' }),
@@ -346,6 +350,7 @@ export default function ChapterEditorPage() {
               characters={characters}
               onBlocksChange={reloadBlocks}
               onCreateVariable={createVariable}
+              onActiveBlockChange={setActiveBlockId}
             />
           </div>
         </main>
