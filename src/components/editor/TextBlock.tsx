@@ -241,10 +241,10 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
   return (
     <div>
       {/* Formatting toolbar */}
-      {focused && editor && (
+      {editor && (
         <div
           onMouseDown={e => e.preventDefault()}
-          className="flex items-center flex-wrap gap-0.5 mb-2 px-1.5 py-1 bg-surface-raised rounded border border-accent/10"
+          className={`flex items-center flex-wrap gap-0.5 mb-2 px-1.5 py-1 bg-surface-raised rounded border border-accent/10 transition-opacity ${focused ? 'opacity-100' : 'opacity-40'}`}
         >
           <ToolBtn active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="Bold">
             <LuBold size={13} />
@@ -277,9 +277,9 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
                 e.preventDefault()
                 const sel = savedSelection.current
                 if (sel && sel.from !== sel.to) {
-                  editor.chain().setTextSelection(sel).setColor(value).run()
+                  editor.chain().focus().setTextSelection(sel).setColor(value).run()
                 } else {
-                  editor.chain().setColor(value).run()
+                  editor.chain().focus().setColor(value).run()
                 }
               }}
               title={label}
@@ -292,9 +292,9 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
               e.preventDefault()
               const sel = savedSelection.current
               if (sel && sel.from !== sel.to) {
-                editor.chain().setTextSelection(sel).unsetColor().run()
+                editor.chain().focus().setTextSelection(sel).unsetColor().run()
               } else {
-                editor.chain().unsetColor().run()
+                editor.chain().focus().unsetColor().run()
               }
             }}
             title="Remove color"
