@@ -87,13 +87,16 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
   const [footnoteText, setFootnoteText] = useState('')
   // character state
   const [showCharPicker, setShowCharPicker] = useState(false)
+  const [charSearch, setCharSearch] = useState('')
   const [characterViewMode, setCharacterViewMode] = useState(false)
   const [characterViewId, setCharacterViewId] = useState('')
   const [characterViewName, setCharacterViewName] = useState('')
 
   const [focused, setFocused] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const charSearchRef = useRef<HTMLInputElement>(null)
   const savedSelection = useRef<{ from: number; to: number } | null>(null)
+  const localEditRef = useRef(false)
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -109,13 +112,14 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
       SectionBreak,
     ],
     content: content ? JSON.parse(content) : JSON.parse(EMPTY),
-    onUpdate: ({ editor }) => onChange(JSON.stringify(editor.getJSON())),
+    onUpdate: ({ editor }) => { localEditRef.current = true; onChange(JSON.stringify(editor.getJSON())) },
     onFocus: () => setFocused(true),
     onBlur: ({ editor }) => { setFocused(false); editor.commands.setTextSelection(editor.state.selection.anchor) },
   })
 
   useEffect(() => {
     if (editor && content) {
+      if (localEditRef.current) { localEditRef.current = false; return }
       const current = JSON.stringify(editor.getJSON())
       if (current !== content) editor.commands.setContent(JSON.parse(content))
     }
@@ -168,6 +172,11 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
   useEffect(() => {
     if (showInput) inputRef.current?.focus()
   }, [showInput])
+
+  useEffect(() => {
+    if (showCharPicker) charSearchRef.current?.focus()
+    else setCharSearch('')
+  }, [showCharPicker])
 
   function openInput() {
     if (!editor) return
@@ -264,14 +273,30 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
           {COLOR_PRESETS.map(({ label, value }) => (
             <button
               key={value}
-              onMouseDown={e => { e.preventDefault(); editor.chain().focus().setColor(value).run() }}
+              onMouseDown={e => {
+                e.preventDefault()
+                const sel = savedSelection.current
+                if (sel && sel.from !== sel.to) {
+                  editor.chain().setTextSelection(sel).setColor(value).run()
+                } else {
+                  editor.chain().setColor(value).run()
+                }
+              }}
               title={label}
               style={{ background: value }}
               className={`w-4 h-4 rounded-full border-2 transition hover:scale-110 ${currentColor === value ? 'border-white' : 'border-transparent'}`}
             />
           ))}
           <button
-            onMouseDown={e => { e.preventDefault(); editor.chain().focus().unsetColor().run() }}
+            onMouseDown={e => {
+              e.preventDefault()
+              const sel = savedSelection.current
+              if (sel && sel.from !== sel.to) {
+                editor.chain().setTextSelection(sel).unsetColor().run()
+              } else {
+                editor.chain().unsetColor().run()
+              }
+            }}
             title="Remove color"
             className="w-4 h-4 rounded-full border border-dashed border-accent/40 hover:border-accent transition flex items-center justify-center text-ink-faint hover:text-ink"
           >
@@ -305,22 +330,34 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
           ) : showCharPicker ? (
             <>
               <div className="px-3 py-1.5 text-xs text-ink-faint uppercase tracking-widest border-b border-accent/10">Tag character</div>
-              {characters.length === 0
-                ? <span className="px-3 py-2 text-xs text-ink-faint italic">No characters yet</span>
-                : characters.map(c => (
-                  <button
-                    key={c.id}
-                    onClick={() => applyCharacter(c)}
-                    className="w-full text-left px-3 py-2 text-xs text-ink-muted hover:text-ink hover:bg-surface-muted transition flex items-center gap-2"
-                  >
-                    {c.hasAvatar
-                      ? <img src={`/characters/${c.id}.jpg`} className="w-5 h-5 rounded-full object-cover shrink-0" alt="" />
-                      : <span className="w-5 h-5 rounded-full bg-accent/20 flex items-center justify-center shrink-0"><LuUser size={10} /></span>
-                    }
-                    {c.name}
-                  </button>
-                ))
-              }
+              <input
+                ref={charSearchRef}
+                value={charSearch}
+                onChange={e => setCharSearch(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Escape') cancel() }}
+                placeholder="Search…"
+                className="px-3 py-1.5 text-xs bg-transparent text-ink outline-none w-full placeholder:text-ink-faint border-b border-accent/10"
+              />
+              <div className="overflow-y-auto" style={{ maxHeight: '144px' }}>
+                {(() => {
+                  const filtered = characters.filter(c => c.name.toLowerCase().includes(charSearch.toLowerCase()))
+                  if (characters.length === 0) return <span className="block px-3 py-2 text-xs text-ink-faint italic">No characters yet</span>
+                  if (filtered.length === 0) return <span className="block px-3 py-2 text-xs text-ink-faint italic">No matches</span>
+                  return filtered.map(c => (
+                    <button
+                      key={c.id}
+                      onClick={() => applyCharacter(c)}
+                      className="w-full text-left px-3 py-2 text-xs text-ink-muted hover:text-ink hover:bg-surface-muted transition flex items-center gap-2"
+                    >
+                      {c.hasAvatar
+                        ? <img src={`/characters/${c.id}.jpg`} className="w-5 h-5 rounded-full object-cover shrink-0" alt="" />
+                        : <span className="w-5 h-5 rounded-full bg-accent/20 flex items-center justify-center shrink-0"><LuUser size={10} /></span>
+                      }
+                      {c.name}
+                    </button>
+                  ))
+                })()}
+              </div>
               <button onClick={cancel} className="px-3 py-1.5 text-xs text-ink-faint hover:text-ink hover:bg-surface-muted transition border-t border-accent/10 text-left">Cancel</button>
             </>
           ) : footnoteViewMode ? (

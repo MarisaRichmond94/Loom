@@ -11,7 +11,7 @@ export default function InlineChoice({ prompt, choices, onChoose }: Props) {
   const noChoice  = choices.find(c => c.label === 'No')
 
   return (
-    <div className="border-t border-accent/10 pt-4 mt-4 flex flex-col items-center">
+    <div className="flex flex-col items-center">
       {prompt && (
         <p className="text-sm text-ink italic mb-3 text-center">{prompt}</p>
       )}
