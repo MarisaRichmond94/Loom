@@ -156,6 +156,19 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [activeBlockId, blocks, chapterId])
 
+  // ⌥⇧D — delete active block
+  useEffect(() => {
+    async function handleKeyDown(e: KeyboardEvent) {
+      if (!e.altKey || !e.shiftKey || e.code !== 'KeyD') return
+      if (!activeBlockId) return
+      e.preventDefault()
+      await fetch(`/api/chapters/${chapterId}/blocks/${activeBlockId}`, { method: 'DELETE' })
+      onBlocksChange()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [activeBlockId, chapterId, onBlocksChange])
+
   async function updateBlock(blockId: string, data: object) {
     setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, ...data } : b))
     await fetch(`/api/chapters/${chapterId}/blocks/${blockId}`, {
