@@ -326,7 +326,7 @@ export default function ChapterEditorPage() {
               <input
                 value={chapter.pov ?? ''}
                 onChange={e => handleMetaChange('pov', e.target.value)}
-                placeholder="Point of view"
+                onFocus={e => e.target.setSelectionRange(0, 0)}
                 className="mt-1 bg-surface-raised border border-accent/20 rounded-lg px-3 py-1 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent text-center w-48"
               />
             </div>
@@ -335,7 +335,7 @@ export default function ChapterEditorPage() {
             <input
               value={chapter.date ?? ''}
               onChange={e => handleMetaChange('date', e.target.value)}
-              placeholder="In-story date"
+              onFocus={e => e.target.setSelectionRange(0, 0)}
               className="bg-surface-raised border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent w-44 mb-2"
             />
 
