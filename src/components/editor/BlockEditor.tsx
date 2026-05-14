@@ -62,6 +62,7 @@ function SortableBlock({
   return (
     <div
       ref={setNodeRef}
+      data-block-id={block.id}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
       className="flex items-start group"
       onClick={onActivate}
@@ -96,13 +97,12 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   const [newBlockId, setNewBlockId] = useState<string | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
   const blocksContainerRef = useRef<HTMLDivElement>(null)
-  const prevBlockCountRef = useRef(initialBlocks.length)
-  const mountedRef = useRef(false)
   // Written every render so the ⌥⇧D handler never reads a stale value
   const activeBlockIdRef = useRef<string | null>(null)
   const onBlocksChangeRef = useRef(onBlocksChange)
   activeBlockIdRef.current = activeBlockId
   onBlocksChangeRef.current = onBlocksChange
+
 
   // Sync when the set of blocks changes structurally (add/delete), but not during drags
   useEffect(() => {
@@ -111,7 +111,10 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     if (incomingIds !== localIds) {
       if (initialBlocks.length > blocks.length) {
         const added = initialBlocks.find(b => !blocks.some(lb => lb.id === b.id))
-        if (added?.type === 'text') setNewBlockId(added.id)
+        if (added) {
+          setNewBlockId(added.id)
+          setActiveBlockId(added.id)
+        }
       }
       setBlocks(initialBlocks)
     }
@@ -122,17 +125,10 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
 
   // Scroll newly added block into view
   useEffect(() => {
-    if (!mountedRef.current) {
-      mountedRef.current = true
-      prevBlockCountRef.current = blocks.length
-      return
-    }
-    if (blocks.length > prevBlockCountRef.current) {
-      const last = blocksContainerRef.current?.lastElementChild as HTMLElement | null
-      last?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    }
-    prevBlockCountRef.current = blocks.length
-  }, [blocks.length])
+    if (!newBlockId || !blocksContainerRef.current) return
+    const el = blocksContainerRef.current.querySelector(`[data-block-id="${newBlockId}"]`) as HTMLElement | null
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [newBlockId])
 
   // Cmd/Ctrl+Shift+Up/Down — move active block
   useEffect(() => {
