@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
-import type { DragEndEvent } from '@dnd-kit/core'
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core'
+import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { LuGripVertical, LuX } from 'react-icons/lu'
@@ -63,7 +63,7 @@ function SortableBlock({
     <div
       ref={setNodeRef}
       data-block-id={block.id}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.3 : 1 }}
       className="flex items-start group"
       onClick={onActivate}
     >
@@ -95,6 +95,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const [newBlockId, setNewBlockId] = useState<string | null>(null)
+  const [draggingBlock, setDraggingBlock] = useState<Block | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
   const blocksContainerRef = useRef<HTMLDivElement>(null)
   // Written every render so the ⌥⇧D handler never reads a stale value
@@ -243,7 +244,13 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     onBlocksChange()
   }
 
+  function handleDragStart(event: DragStartEvent) {
+    const block = blocks.find(b => b.id === event.active.id)
+    if (block) setDraggingBlock(block)
+  }
+
   async function handleDragEnd(event: DragEndEvent) {
+    setDraggingBlock(null)
     const { active, over } = event
     if (!over || active.id === over.id) return
 
@@ -261,7 +268,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
 
   return (
     <div>
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <SortableContext items={blocks.map(b => b.id)} strategy={verticalListSortingStrategy}>
           <div ref={blocksContainerRef} className="flex flex-col gap-3">
             {blocks.map(block => (
@@ -318,6 +325,24 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
             )}
           </div>
         </SortableContext>
+
+        <DragOverlay>
+          {draggingBlock && (
+            <div className="flex items-start cursor-grabbing" style={{ transform: 'rotate(0.75deg) scale(1.02)' }}>
+              <div className={`flex-1 min-w-0 bg-surface-raised border border-accent/20 border-l-4 ${BLOCK_BORDER[draggingBlock.type] ?? ''} rounded-r-lg px-4 py-3 shadow-2xl`}>
+                <div className="pl-4 flex items-center gap-2">
+                  <LuGripVertical size={14} className="text-accent/60 shrink-0" />
+                  <span className="text-xs text-ink-muted">
+                    {draggingBlock.type === 'choice_point' ? 'Choice point'
+                      : draggingBlock.type === 'conditional_fragment' ? 'Conditional'
+                      : draggingBlock.type === 'soundtrack' ? 'Soundtrack'
+                      : 'Text block'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </DragOverlay>
       </DndContext>
     </div>
   )
