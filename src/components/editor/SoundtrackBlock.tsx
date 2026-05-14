@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { LuMusic, LuUpload, LuX } from 'react-icons/lu'
+import { LuMusic, LuUpload, LuX, LuDownload } from 'react-icons/lu'
 
 type Props = {
   block: { id: string; prompt?: string | null; content?: string | null }
@@ -12,6 +12,9 @@ export default function SoundtrackBlock({ block, onUpdateBlock }: Props) {
   const [title, setTitle] = useState(block.prompt ?? '')
   const [audioSrc, setAudioSrc] = useState(block.content ?? null)
   const [uploading, setUploading] = useState(false)
+  const [youtubeUrl, setYoutubeUrl] = useState('')
+  const [downloading, setDownloading] = useState(false)
+  const [ytError, setYtError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -29,6 +32,27 @@ export default function SoundtrackBlock({ block, onUpdateBlock }: Props) {
     }
     setUploading(false)
     e.target.value = ''
+  }
+
+  async function handleYoutubeDownload() {
+    if (!youtubeUrl.trim()) return
+    setDownloading(true)
+    setYtError(null)
+    const res = await fetch(`/api/blocks/${block.id}/audio/youtube`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: youtubeUrl.trim() }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      const src = `${data.audioPath}?t=${Date.now()}`
+      setAudioSrc(src)
+      setYoutubeUrl('')
+      onUpdateBlock({ content: src })
+    } else {
+      setYtError(data.error ?? 'Download failed')
+    }
+    setDownloading(false)
   }
 
   async function handleRemove() {
@@ -71,14 +95,49 @@ export default function SoundtrackBlock({ block, onUpdateBlock }: Props) {
           </button>
         </div>
       ) : (
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          className="flex items-center justify-center gap-2 w-full py-3 rounded-lg border border-dashed border-accent/30 text-xs text-ink-faint hover:border-accent/60 hover:text-ink transition disabled:opacity-50"
-        >
-          <LuUpload size={12} />
-          {uploading ? 'Uploading…' : 'Upload MP3'}
-        </button>
+        <div className="flex flex-col gap-2">
+          {/* File upload */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading || downloading}
+            className="flex items-center justify-center gap-2 w-full py-3 rounded-lg border border-dashed border-accent/30 text-xs text-ink-faint hover:border-accent/60 hover:text-ink transition disabled:opacity-50"
+          >
+            <LuUpload size={12} />
+            {uploading ? 'Uploading…' : 'Upload audio file'}
+          </button>
+
+          {/* Divider */}
+          <div className="flex items-center gap-2 text-ink-faint text-xs">
+            <span className="flex-1 h-px bg-accent/10" />
+            <span>or</span>
+            <span className="flex-1 h-px bg-accent/10" />
+          </div>
+
+          {/* YouTube URL */}
+          <div className="flex gap-2">
+            <input
+              value={youtubeUrl}
+              onChange={e => { setYoutubeUrl(e.target.value); setYtError(null) }}
+              onKeyDown={e => e.key === 'Enter' && handleYoutubeDownload()}
+              placeholder="Paste YouTube URL…"
+              disabled={downloading || uploading}
+              className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-surface-muted border border-accent/10 text-xs text-ink placeholder:text-ink-faint outline-none focus:border-accent/30 transition disabled:opacity-50"
+            />
+            <button
+              onClick={handleYoutubeDownload}
+              disabled={!youtubeUrl.trim() || downloading || uploading}
+              title="Download audio from YouTube"
+              className="shrink-0 px-2.5 py-1.5 rounded-lg bg-surface-muted border border-accent/10 text-xs text-ink-faint hover:text-ink hover:border-accent/30 transition disabled:opacity-40 flex items-center gap-1.5"
+            >
+              <LuDownload size={12} />
+              {downloading ? 'Downloading…' : 'Download'}
+            </button>
+          </div>
+
+          {ytError && (
+            <p className="text-xs text-choice-kill leading-snug">{ytError}</p>
+          )}
+        </div>
       )}
 
       <input
