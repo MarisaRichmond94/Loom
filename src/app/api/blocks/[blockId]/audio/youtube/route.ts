@@ -31,8 +31,9 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   try {
+    // -f bestaudio: download an audio-only stream directly — no ffmpeg needed
     await runYtDlp([
-      '--extract-audio',
+      '-f', 'bestaudio',
       '--no-playlist',
       '-o', path.join(dir, `${blockId}.%(ext)s`),
       url,
