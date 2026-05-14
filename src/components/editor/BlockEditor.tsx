@@ -185,11 +185,15 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   }
 
   async function addOverride(blockId: string, condition: object, content: string) {
-    await fetch(`/api/blocks/${blockId}/overrides`, {
+    const res = await fetch(`/api/blocks/${blockId}/overrides`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ condition, content }),
     })
+    const newOverride = await res.json()
+    setBlocks(prev => prev.map(b =>
+      b.id !== blockId ? b : { ...b, overrides: [...b.overrides, newOverride] }
+    ))
     onBlocksChange()
   }
 
