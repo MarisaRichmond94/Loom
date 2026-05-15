@@ -200,7 +200,7 @@ export default function ReaderView({
 
       <main ref={mainRef} className={`flex-1 overflow-y-auto px-8${lightMode ? ' light-body' : ''}`}>
         {/* Sticky action row */}
-        <div className="sticky top-0 z-10 flex justify-end items-center px-0 py-3">
+        <div className="flex justify-end items-center px-0 py-3">
           <button
             onClick={() => router.push(returnTo ?? `/author/${seriesId}`)}
             className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
