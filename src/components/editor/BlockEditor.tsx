@@ -131,12 +131,10 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [newBlockId])
 
-  // Cmd/Ctrl+Shift+Up/Down — move active block
+  // Ctrl+Shift+Up/Down — move active block
   useEffect(() => {
-    const isMac = /Mac/i.test(navigator.platform)
     async function handleKeyDown(e: KeyboardEvent) {
-      const meta = isMac ? e.metaKey : e.ctrlKey
-      if (!meta || !e.shiftKey) return
+      if (!e.ctrlKey || !e.shiftKey) return
       if (e.code !== 'ArrowUp' && e.code !== 'ArrowDown') return
       e.preventDefault()
       if (!activeBlockId) return
