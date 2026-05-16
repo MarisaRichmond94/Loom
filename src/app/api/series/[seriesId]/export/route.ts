@@ -8,6 +8,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ser
     where: { id: seriesId },
     include: {
       variables: true,
+      characters: true,
       books: {
         orderBy: { order: 'asc' },
         include: {
@@ -31,7 +32,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ser
   if (!series) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const payload = {
-    loomVersion: '1',
+    loomVersion: '2',
     exportedAt: new Date().toISOString(),
     series: {
       title: series.title,
@@ -41,9 +42,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ser
         type: v.type,
         defaultValue: v.defaultValue,
       })),
+      characters: series.characters.map(c => ({
+        _ref: c.id,
+        name: c.name,
+        age: c.age,
+      })),
       books: series.books.map(book => ({
         title: book.title,
         synopsis: book.synopsis,
+        coverPath: book.coverPath,
         order: book.order,
         chapters: book.chapters.map(chapter => ({
           _ref: chapter.id,

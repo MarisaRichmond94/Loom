@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  if (payload.loomVersion !== '1') {
+  if (payload.loomVersion !== '1' && payload.loomVersion !== '2') {
     return NextResponse.json({ error: 'Unsupported export version' }, { status: 400 })
   }
 
@@ -32,12 +32,31 @@ export async function POST(req: NextRequest) {
     })
   }
 
+  // 2b. Characters (v2+). Preserve original IDs so character marks in block content
+  // still resolve and avatar files (named <charId>.jpg) line up after asset restore.
+  if (s.characters?.length) {
+    await prisma.character.createMany({
+      data: s.characters.map((c: { _ref: string; name: string; age: number | null }) => ({
+        id: c._ref,
+        seriesId: series.id,
+        name: c.name,
+        age: c.age,
+      })),
+    })
+  }
+
   // 3. Books + chapters — collect ref→newId map for choices
   const chapterRefMap: Record<string, string> = {}
 
   for (const book of s.books ?? []) {
     const newBook = await prisma.book.create({
-      data: { seriesId: series.id, title: book.title, synopsis: book.synopsis ?? '', order: book.order },
+      data: {
+        seriesId: series.id,
+        title: book.title,
+        synopsis: book.synopsis ?? '',
+        coverPath: book.coverPath ?? null,
+        order: book.order,
+      },
     })
 
     for (const chapter of book.chapters ?? []) {

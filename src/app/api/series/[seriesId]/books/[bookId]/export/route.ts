@@ -8,7 +8,7 @@ export async function GET(_: Request, { params }: Params) {
 
   const series = await prisma.series.findUnique({
     where: { id: seriesId },
-    select: { title: true, description: true, variables: true },
+    select: { title: true, description: true, variables: true, characters: true },
   })
   if (!series) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -32,7 +32,7 @@ export async function GET(_: Request, { params }: Params) {
   if (!book) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const payload = {
-    loomVersion: '1',
+    loomVersion: '2',
     exportedAt: new Date().toISOString(),
     series: {
       title: series.title,
@@ -42,9 +42,15 @@ export async function GET(_: Request, { params }: Params) {
         type: v.type,
         defaultValue: v.defaultValue,
       })),
+      characters: series.characters.map(c => ({
+        _ref: c.id,
+        name: c.name,
+        age: c.age,
+      })),
       books: [{
         title: book.title,
         synopsis: book.synopsis,
+        coverPath: book.coverPath,
         order: book.order,
         chapters: book.chapters.map(chapter => ({
           _ref: chapter.id,

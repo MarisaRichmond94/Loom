@@ -1,4 +1,4 @@
-import { mkdir, writeFile, readdir, stat, unlink } from 'fs/promises'
+import { mkdir, writeFile, readdir, stat, unlink, copyFile, rm } from 'fs/promises'
 import path from 'path'
 import { prisma } from '@/lib/prisma'
 import { readBackupSettings } from '@/lib/backupSettings'
@@ -7,20 +7,27 @@ function sanitize(name: string): string {
   return name.replace(/[/\\?%*:|"<>]/g, '_').trim()
 }
 
-function buildBookPayload(series: { title: string; description: string | null; variables: unknown[] }, book: {
-  title: string; synopsis: string | null; order: number
-  chapters: {
-    id: string; title: string; order: number; pov: string | null; date: string | null
-    blocks: {
-      order: number; type: string; content: string | null; prompt: string | null
-      displayType: string | null
-      choices: { label: string; setsVariables: string; targetChapterId: string | null }[]
-      overrides: { order: number; condition: string; content: string }[]
+function buildBookPayload(
+  series: {
+    title: string; description: string | null
+    variables: unknown[]
+    characters: { id: string; name: string; age: number | null }[]
+  },
+  book: {
+    title: string; synopsis: string | null; coverPath: string | null; order: number
+    chapters: {
+      id: string; title: string; order: number; pov: string | null; date: string | null
+      blocks: {
+        order: number; type: string; content: string | null; prompt: string | null
+        displayType: string | null
+        choices: { label: string; setsVariables: string; targetChapterId: string | null }[]
+        overrides: { order: number; condition: string; content: string }[]
+      }[]
     }[]
-  }[]
-}) {
+  },
+) {
   return {
-    loomVersion: '1',
+    loomVersion: '2',
     exportedAt: new Date().toISOString(),
     series: {
       title: series.title,
@@ -28,9 +35,15 @@ function buildBookPayload(series: { title: string; description: string | null; v
       variables: (series.variables as { name: string; type: string; defaultValue: string }[]).map(v => ({
         name: v.name, type: v.type, defaultValue: v.defaultValue,
       })),
+      characters: series.characters.map(c => ({
+        _ref: c.id,
+        name: c.name,
+        age: c.age,
+      })),
       books: [{
         title: book.title,
         synopsis: book.synopsis,
+        coverPath: book.coverPath,
         order: book.order,
         chapters: book.chapters.map(chapter => ({
           _ref: chapter.id,
@@ -72,6 +85,8 @@ async function deleteOldBackups(folder: string, retentionDays: number) {
         await sweep(full)
       } else if (entry.endsWith('.loom.json') && s.mtimeMs < cutoff) {
         await unlink(full).catch(() => null)
+        const assetDir = path.join(dir, entry.slice(0, -'.loom.json'.length))
+        await rm(assetDir, { recursive: true, force: true }).catch(() => null)
       }
     }
   }
@@ -87,6 +102,7 @@ export async function runBackup(): Promise<{ ok: boolean; message: string }> {
   const allSeries = await prisma.series.findMany({
     include: {
       variables: true,
+      characters: true,
       books: {
         orderBy: { order: 'asc' },
         include: {
@@ -108,15 +124,37 @@ export async function runBackup(): Promise<{ ok: boolean; message: string }> {
   })
 
   const dateStamp = new Date().toISOString().slice(0, 10)
+  const publicDir = path.join(process.cwd(), 'public')
+
+  async function copyAsset(publicRelPath: string, destDir: string) {
+    // publicRelPath is like "/covers/foo.jpg"; copy into destDir mirroring that subpath
+    const src = path.join(publicDir, publicRelPath)
+    const dest = path.join(destDir, publicRelPath)
+    await mkdir(path.dirname(dest), { recursive: true })
+    await copyFile(src, dest).catch(() => null)
+  }
 
   for (const series of allSeries) {
     const seriesDir = path.join(settings.folder, sanitize(series.title))
     for (const book of series.books) {
       const bookDir = path.join(seriesDir, sanitize(book.title))
       await mkdir(bookDir, { recursive: true })
+      const baseName = `${sanitize(book.title)}_${dateStamp}`
       const payload = buildBookPayload(series, book)
-      const filename = `${sanitize(book.title)}_${dateStamp}.loom.json`
-      await writeFile(path.join(bookDir, filename), JSON.stringify(payload, null, 2), 'utf-8')
+      await writeFile(path.join(bookDir, `${baseName}.loom.json`), JSON.stringify(payload, null, 2), 'utf-8')
+
+      const assetDir = path.join(bookDir, baseName)
+      if (book.coverPath) await copyAsset(book.coverPath, assetDir)
+      for (const character of series.characters) {
+        await copyAsset(`/characters/${character.id}.jpg`, assetDir)
+      }
+      for (const chapter of book.chapters) {
+        for (const block of chapter.blocks) {
+          if (block.content?.startsWith('/music/')) {
+            await copyAsset(block.content, assetDir)
+          }
+        }
+      }
     }
   }
 
