@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Loom
 
-## Getting Started
+A local-first interactive fiction authoring tool. Write branching narratives with choice points, conditional text, per-character POV, and an in-app reader to preview the experience.
 
-First, run the development server:
+---
+
+## Prerequisites
+
+### Node.js
+
+Install via [nvm](https://github.com/nvm-sh/nvm) or download from [nodejs.org](https://nodejs.org). Node 20+ recommended.
+
+### Homebrew packages
+
+```bash
+brew install yt-dlp
+```
+
+`yt-dlp` is required for the **Download from YouTube** feature in Soundtrack blocks. Without it, file upload still works — only the YouTube option will fail.
+
+---
+
+## Setup
+
+### 1. Install dependencies
+
+```bash
+npm install
+```
+
+### 2. Set up the database
+
+The app uses a local SQLite database managed by Prisma. Run migrations to create it:
+
+```bash
+npx prisma migrate dev
+```
+
+This creates `data/dev.db`. You only need to run this once (and again any time the schema changes).
+
+### 3. Generate the Prisma client
+
+```bash
+npx prisma generate
+```
+
+This is also run automatically during `migrate dev`, but run it manually if you ever see Prisma import errors.
+
+---
+
+## Running the app
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Project structure
 
-## Learn More
+| Path | Purpose |
+|---|---|
+| `src/app/` | Next.js App Router pages and API routes |
+| `src/components/` | React components (editor, reader, sidebar) |
+| `src/lib/` | Shared utilities, Prisma client, story engine |
+| `prisma/` | Database schema and migrations |
+| `public/` | Static assets (covers, music, avatars — not committed) |
+| `data/` | SQLite database file (not committed) |
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Notes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- All data is stored locally — there is no backend server or cloud sync.
+- `public/covers/`, `public/music/`, and `public/characters/` are created at runtime when you upload assets. They are gitignored, so a fresh clone starts with no uploaded files.
+- The database is also gitignored. Each environment gets its own `data/dev.db` after running migrations.
