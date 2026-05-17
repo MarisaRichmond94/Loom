@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { LuCheck, LuX, LuGripVertical, LuEllipsisVertical } from 'react-icons/lu'
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
@@ -37,6 +37,10 @@ function SortableChapter({ chapter, seriesId, isActive, openMenu, onOpenMenu, on
   onCloseMenu: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: chapter.id })
+  const linkRef = useRef<HTMLAnchorElement>(null)
+  useEffect(() => {
+    if (isActive) linkRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [isActive])
   return (
     <div
       ref={setNodeRef}
@@ -51,6 +55,7 @@ function SortableChapter({ chapter, seriesId, isActive, openMenu, onOpenMenu, on
         <LuGripVertical size={13} />
       </button>
       <Link
+        ref={linkRef}
         href={`/author/${seriesId}/chapter/${chapter.id}`}
         className={`flex-1 block px-2 py-1.5 rounded text-xs transition truncate ${
           isActive ? 'text-ink font-semibold' : 'text-ink-faint hover:text-ink hover:bg-surface-overlay'
