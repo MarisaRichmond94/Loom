@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { LuMoon, LuSun, LuArrowLeft, LuArrowRight, LuMusic, LuUser } from 'react-icons/lu'
+import { LuMoon, LuSun, LuArrowLeft, LuArrowRight, LuMusic, LuUser, LuSlidersHorizontal } from 'react-icons/lu'
 import { generateHTML } from '@tiptap/html'
 import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
@@ -10,10 +10,11 @@ import { TextStyle } from '@tiptap/extension-text-style'
 import Color from '@tiptap/extension-color'
 import { Footnote } from '@/lib/extensions/footnote'
 import { CharacterMark } from '@/lib/extensions/character'
-import { resolveConditional } from '@/lib/storyEngine'
+import { resolveConditional, matchesCondition } from '@/lib/storyEngine'
 import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
 import InlineChoice from './InlineChoice'
 import ChapterGate from './ChapterGate'
+import ChoiceConfigModal from './ChoiceConfigModal'
 import AvatarButton from '@/components/AvatarButton'
 import Greeting from '@/components/Greeting'
 
@@ -22,12 +23,14 @@ type Choice = { id: string; label: string; setsVariables: string; targetChapterI
 type Block = {
   id: string; order: number; type: string
   content?: string | null; prompt?: string | null; displayType?: string | null; baseContent?: string | null
+  condition?: string | null
   choices: Choice[]
   overrides: Override[]
 }
 type Character = { id: string; name: string; age: number | null; hasAvatar: boolean }
 type BookChapter = { id: string; title: string; order: number }
 type Book = { id: string; title: string; order: number; chapters: BookChapter[] }
+type Variable = { id: string; name: string; type: string; defaultValue: string }
 
 type Props = {
   sessionId: string
@@ -42,22 +45,36 @@ type Props = {
   returnTo?: string
   characters?: Character[]
   books?: Book[]
+  variables?: Variable[]
   currentChapterId?: string
   onSessionUpdate: (state: StoryState, history: HistoryEntry[]) => void
   onNavigate: (chapterId: string) => void
 }
 
-function renderTipTap(json: string | null | undefined): string {
+const VAR_PATTERN = /\{\{([a-zA-Z_$][a-zA-Z0-9_$]*)\}\}/g
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+function renderTipTap(json: string | null | undefined, storyState?: StoryState): string {
   if (!json) return ''
   try {
-    return generateHTML(JSON.parse(json), [StarterKit, TextAlign.configure({ types: ['paragraph', 'heading'] }), TextStyle, Color, Footnote, CharacterMark])
+    const html = generateHTML(JSON.parse(json), [StarterKit, TextAlign.configure({ types: ['paragraph', 'heading'] }), TextStyle, Color, Footnote, CharacterMark])
+    // Strip empty paragraphs (TipTap leaves trailing/leading <p></p> or <p><br></p> behind editing)
+    const stripped = html.replace(/<p[^>]*>(?:\s|<br\s*\/?>)*<\/p>/g, '')
+    // Substitute {{varName}} with storyState value when the variable is known; leave literal otherwise.
+    if (!storyState) return stripped
+    return stripped.replace(VAR_PATTERN, (match, name) =>
+      name in storyState ? escapeHtml(String(storyState[name])) : match
+    )
   } catch {
     return ''
   }
 }
 
 export default function ReaderView({
-  sessionId, seriesId, blocks, storyState, choiceHistory, chapterLabel, chapterPov, chapterDate, returnTo, characters = [], books = [], currentChapterId, onSessionUpdate, onNavigate
+  sessionId, seriesId, blocks, storyState, choiceHistory, chapterLabel, chapterPov, chapterDate, returnTo, characters = [], books = [], variables = [], currentChapterId, onSessionUpdate, onNavigate
 }: Props) {
   const allChapters = books.flatMap(b => b.chapters)
   const currentIdx = allChapters.findIndex(c => c.id === currentChapterId)
@@ -73,6 +90,12 @@ export default function ReaderView({
   const [charCard, setCharCard] = useState<{ character: Character; x: number; y: number; above: boolean } | null>(null)
   const [scrollProgress, setScrollProgress] = useState(0)
   const [choiceMarkers, setChoiceMarkers] = useState<{ id: string; position: number }[]>([])
+  const [showConfig, setShowConfig] = useState(false)
+  const [isAuthor, setIsAuthor] = useState(false)
+
+  useEffect(() => {
+    setIsAuthor((localStorage.getItem('loom-author-name') ?? '').trim() !== '')
+  }, [])
 
   useEffect(() => {
     const el = mainRef.current
@@ -200,12 +223,20 @@ export default function ReaderView({
 
       <main ref={mainRef} className={`flex-1 overflow-y-auto px-8${lightMode ? ' light-body' : ''}`}>
         {/* Sticky action row */}
-        <div className="flex justify-end items-center px-0 py-3">
+        <div className="flex justify-end items-center gap-2 px-0 py-3">
+          {isAuthor && (
+            <button
+              onClick={() => setShowConfig(true)}
+              className="px-3 py-1.5 rounded text-xs bg-surface-raised border border-accent/20 text-ink-muted font-medium hover:text-ink hover:border-accent/40 transition"
+            >
+              <span className="flex items-center gap-1.5"><LuSlidersHorizontal size={13} /> Configure</span>
+            </button>
+          )}
           <button
             onClick={() => router.push(returnTo ?? `/author/${seriesId}`)}
             className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
           >
-            <span className="flex items-center gap-1.5"><LuArrowLeft size={13} /> Go Back To Writing</span>
+            <span className="flex items-center gap-1.5"><LuArrowLeft size={13} /> Return</span>
           </button>
         </div>
         {/* Chapter header */}
@@ -222,7 +253,7 @@ export default function ReaderView({
             </p>
           )}
         </div>
-        <div className="px-8">
+        <div className="px-8 pb-8">
         {chapterDate && <p className="text-base text-ink-faint mb-2">{chapterDate}</p>}
         {(() => {
           let pendingChoice = false
@@ -232,9 +263,9 @@ export default function ReaderView({
                 <div
                   key={block.id}
                   id={`block-${block.id}`}
-                  className="prose prose-invert max-w-none mb-6 text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6"
+                  className="prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6"
                   style={pendingChoice ? { filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' } : undefined}
-                  dangerouslySetInnerHTML={{ __html: renderTipTap(block.content) }}
+                  dangerouslySetInnerHTML={{ __html: renderTipTap(block.content, storyState) }}
                 />
               )
             }
@@ -259,7 +290,7 @@ export default function ReaderView({
                   key={block.id}
                   id={`block-${block.id}`}
                   className="prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6"
-                  dangerouslySetInnerHTML={{ __html: renderTipTap(resolved) }}
+                  dangerouslySetInnerHTML={{ __html: renderTipTap(resolved, storyState) }}
                 />
               )
             }
@@ -268,6 +299,11 @@ export default function ReaderView({
               const answered = choiceHistory.find(h => h.choicePointId === block.id)
 
               if (answered) return null
+
+              if (block.condition) {
+                const parsed = JSON.parse(block.condition) as Record<string, boolean | number | string>
+                if (!matchesCondition(parsed, storyState)) return null
+              }
 
               pendingChoice = true
 
@@ -285,7 +321,7 @@ export default function ReaderView({
               }
 
               return (
-                <div key={block.id} id={`block-${block.id}`} className="mb-6">
+                <div key={block.id} id={`block-${block.id}`} className="mt-6 mb-6">
                   <InlineChoice prompt={block.prompt ?? null} choices={block.choices} onChoose={id => handleChoose(block, id)} />
                 </div>
               )
@@ -341,6 +377,21 @@ export default function ReaderView({
           prompt={pendingChoiceBlock.prompt ?? null}
           choices={pendingChoiceBlock.choices}
           onChoose={id => handleChoose(pendingChoiceBlock, id)}
+        />
+      )}
+
+      {showConfig && (
+        <ChoiceConfigModal
+          seriesId={seriesId}
+          sessionId={sessionId}
+          choiceHistory={choiceHistory}
+          variables={variables}
+          onApply={(state, history) => {
+            onSessionUpdate(state, history)
+            setShowConfig(false)
+            if (currentChapterId) onNavigate(currentChapterId)
+          }}
+          onClose={() => setShowConfig(false)}
         />
       )}
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import ReaderView from '@/components/reader/ReaderView'
 import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
@@ -12,6 +12,7 @@ type Block = {
   overrides: { id: string; order: number; condition: string; content: string }[]
 }
 type SeriesBook = { id: string; title: string; order: number; chapters: { id: string; title: string; order: number }[] }
+type Variable = { id: string; name: string; type: string; defaultValue: string }
 
 export default function ReaderPage() {
   const { sessionId } = useParams() as { sessionId: string }
@@ -30,6 +31,7 @@ export default function ReaderPage() {
   const [noContent, setNoContent] = useState(false)
   const [characters, setCharacters] = useState<{ id: string; name: string; age: number | null; hasAvatar: boolean }[]>([])
   const [seriesBooks, setSeriesBooks] = useState<SeriesBook[]>([])
+  const [variables, setVariables] = useState<Variable[]>([])
 
   const loadChapter = useCallback(async (chapterId: string) => {
     const res = await fetch(`/api/chapters/${chapterId}`)
@@ -55,6 +57,7 @@ export default function ReaderPage() {
     setSeriesId(series.id)
     setSeriesTitle(series.title)
     setSeriesBooks(series.books ?? [])
+    setVariables(series.variables ?? [])
     fetch(`/api/series/${series.id}/characters`).then(r => r.ok ? r.json() : []).then(setCharacters)
 
     if (session.currentBlockId) {
@@ -89,6 +92,17 @@ export default function ReaderPage() {
     loadChapter(chapterId)
   }
 
+  // Merge variable defaults under the session's storyState so that any variable
+  // missing from the session (created after the session, wiped by a state reset,
+  // or never set by a choice) falls back to its declared default.
+  const mergedStoryState = useMemo(() => {
+    const defaults: StoryState = {}
+    for (const v of variables) {
+      try { defaults[v.name] = JSON.parse(v.defaultValue) } catch { /* ignore malformed default */ }
+    }
+    return { ...defaults, ...storyState }
+  }, [variables, storyState])
+
   if (noContent) {
     return (
       <div className="min-h-screen bg-surface-base flex items-center justify-center">
@@ -116,8 +130,9 @@ export default function ReaderPage() {
       sessionId={sessionId}
       seriesId={seriesId}
       blocks={blocks}
-      storyState={storyState}
+      storyState={mergedStoryState}
       choiceHistory={choiceHistory}
+      variables={variables}
       seriesTitle={seriesTitle}
       chapterLabel={chapterLabel}
       chapterPov={chapterPov}

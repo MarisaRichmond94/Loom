@@ -58,6 +58,7 @@ model ContentBlock {
   prompt      String?
   displayType String?
   baseContent String?
+  condition   String?
   chapter     Chapter               @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   choices     Choice[]
   overrides   ConditionalOverride[]

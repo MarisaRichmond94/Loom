@@ -95,6 +95,7 @@ export default function ConditionalBlock({ overrides, variables, characters, onA
                 content={override.content}
                 onChange={content => onUpdateOverride(override.id, { content })}
                 characters={characters}
+                variables={variables}
               />
             </div>
           )

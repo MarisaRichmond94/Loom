@@ -21,6 +21,7 @@ type Block = {
   prompt?: string | null
   displayType?: string | null
   baseContent?: string | null
+  condition?: string | null
   choices: Choice[]
   overrides: Override[]
 }
@@ -283,6 +284,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                     onChange={content => updateBlock(block.id, { content })}
                     autoFocus={block.id === newBlockId}
                     characters={characters}
+                    variables={variables}
                   />
                 )}
 
@@ -290,6 +292,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                   <ChoicePointBlock
                     prompt={block.prompt ?? null}
                     displayType={block.displayType ?? 'inline'}
+                    condition={block.condition ?? null}
                     choices={block.choices}
                     variables={variables}
                     onUpdateBlock={data => updateBlock(block.id, data)}

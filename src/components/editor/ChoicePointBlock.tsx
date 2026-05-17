@@ -9,9 +9,10 @@ type Variable = { id: string; name: string; type: string }
 type Props = {
   prompt: string | null
   displayType: string | null
+  condition: string | null
   choices: Choice[]
   variables: Variable[]
-  onUpdateBlock: (data: Partial<{ displayType: string; prompt: string }>) => void
+  onUpdateBlock: (data: Partial<{ displayType: string; prompt: string; condition: string | null }>) => void
   onUpdateChoice: (choiceId: string, data: Partial<Choice>) => void
   onCreateVariable: (name: string, type: string) => Promise<void>
 }
@@ -72,7 +73,7 @@ function ChoicePanel({
   useEffect(() => {
     function onDown(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false); setShowCreate(false); setShowAttach(false)
+        setMenuOpen(false); setShowAttach(false)
       }
     }
     document.addEventListener('mousedown', onDown)
@@ -206,7 +207,95 @@ function ChoicePanel({
   )
 }
 
-export default function ChoicePointBlock({ prompt, displayType, choices, variables, onUpdateBlock, onUpdateChoice, onCreateVariable }: Props) {
+function ConditionRow({ condition, variables, onChange }: {
+  condition: string | null
+  variables: Variable[]
+  onChange: (next: string | null) => void
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [])
+
+  const parsed = condition ? JSON.parse(condition) as Record<string, unknown> : {}
+  const attachedNames = new Set(Object.keys(parsed))
+  const attachedVars = variables.filter(v => attachedNames.has(v.name))
+  const unattachedVars = variables.filter(v => !attachedNames.has(v.name))
+
+  function save(next: Record<string, unknown>) {
+    const cleaned: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(next)) if (v !== undefined) cleaned[k] = v
+    onChange(Object.keys(cleaned).length === 0 ? null : JSON.stringify(cleaned))
+  }
+
+  function setVal(name: string, val: unknown) {
+    const updated = { ...parsed }
+    if (val === undefined) delete updated[name]; else updated[name] = val
+    save(updated)
+  }
+
+  function detach(name: string) {
+    const updated = { ...parsed }; delete updated[name]; save(updated)
+  }
+
+  function attach(v: Variable) {
+    save({ ...parsed, [v.name]: DEFAULT_VALUE[v.type] ?? '' })
+    setMenuOpen(false)
+  }
+
+  return (
+    <div className="flex items-center gap-2 mb-2 flex-wrap">
+      <span className="text-xs text-ink-faint uppercase tracking-widest shrink-0">Show if:</span>
+      {attachedVars.length === 0 && (
+        <span className="text-xs text-ink-faint italic">always</span>
+      )}
+      {attachedVars.map(v => (
+        <div key={v.id} className="flex items-center gap-1 bg-black/20 border border-black/20 rounded px-2 py-0.5">
+          <span className="text-xs text-ink-muted">{v.name}</span>
+          <span className="text-xs text-ink-faint">=</span>
+          <div className="w-24">
+            <ValueSetter v={v} currentVal={parsed[v.name]} onChange={val => setVal(v.name, val)} />
+          </div>
+          <button onClick={() => detach(v.name)} className="text-ink-muted hover:text-choice-kill transition shrink-0">
+            <LuX size={11} />
+          </button>
+        </div>
+      ))}
+      {unattachedVars.length > 0 && (
+        <div ref={menuRef} className="relative">
+          <button
+            onClick={() => setMenuOpen(o => !o)}
+            className="text-ink-muted hover:text-ink transition text-sm leading-none px-1"
+          >
+            +
+          </button>
+          {menuOpen && (
+            <div className="absolute left-0 top-full mt-1 bg-surface-raised border border-accent/20 rounded-lg shadow-xl z-10 overflow-hidden min-w-[200px]">
+              {unattachedVars.map(v => (
+                <button
+                  key={v.id}
+                  onClick={() => attach(v)}
+                  className="flex items-center justify-between w-full px-4 py-2 text-sm text-ink-muted hover:text-ink hover:bg-surface-overlay transition text-left gap-4"
+                >
+                  <span>{v.name}</span>
+                  <span className="text-ink-faint text-xs">{v.type}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function ChoicePointBlock({ prompt, displayType, condition, choices, variables, onUpdateBlock, onUpdateChoice, onCreateVariable }: Props) {
   const yesChoice = choices.find(c => c.label === 'Yes')
   const noChoice  = choices.find(c => c.label === 'No')
 
@@ -226,6 +315,12 @@ export default function ChoicePointBlock({ prompt, displayType, choices, variabl
           ))}
         </div>
       </div>
+
+      <ConditionRow
+        condition={condition}
+        variables={variables}
+        onChange={next => onUpdateBlock({ condition: next })}
+      />
 
       <input
         type="text"

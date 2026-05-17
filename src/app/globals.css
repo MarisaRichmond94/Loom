@@ -92,6 +92,9 @@ button, a, select, [role="button"] {
   cursor: default;
 }
 
+.var-ref-known { color: #10b981; }
+.var-ref-unknown { color: #ef4444; }
+
 /* Light mode — scoped to the main writing area only */
 .light-body {
   --color-surface-base: #f5f2eb;

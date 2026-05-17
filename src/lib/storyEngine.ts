@@ -21,11 +21,17 @@ export type ChoiceRecord = {
   targetChapterId: string | null
 }
 
+export function matchesCondition(
+  condition: Record<string, boolean | number | string>,
+  storyState: StoryState,
+): boolean {
+  return Object.entries(condition).every(([k, v]) => storyState[k] === v)
+}
+
 export function resolveConditional(block: ConditionalBlock, storyState: StoryState): string | null {
   const sorted = [...block.overrides].sort((a, b) => a.order - b.order)
   for (const override of sorted) {
-    const matches = Object.entries(override.condition).every(([k, v]) => storyState[k] === v)
-    if (matches) return override.content
+    if (matchesCondition(override.condition, storyState)) return override.content
   }
   return null
 }

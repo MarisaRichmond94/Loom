@@ -64,6 +64,7 @@ export async function GET(_: Request, { params }: Params) {
             content: block.content,
             prompt: block.prompt,
             displayType: block.displayType,
+            condition: block.condition,
             choices: block.choices.map(c => ({
               label: c.label,
               setsVariables: c.setsVariables,

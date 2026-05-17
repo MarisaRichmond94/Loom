@@ -64,6 +64,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ser
             content: block.content,
             prompt: block.prompt,
             displayType: block.displayType,
+            condition: block.condition,
             choices: block.choices.map(c => ({
               label: c.label,
               setsVariables: c.setsVariables,

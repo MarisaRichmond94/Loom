@@ -20,6 +20,7 @@ function buildBookPayload(
       blocks: {
         order: number; type: string; content: string | null; prompt: string | null
         displayType: string | null
+        condition: string | null
         choices: { label: string; setsVariables: string; targetChapterId: string | null }[]
         overrides: { order: number; condition: string; content: string }[]
       }[]
@@ -57,6 +58,7 @@ function buildBookPayload(
             content: block.content,
             prompt: block.prompt,
             displayType: block.displayType,
+            condition: block.condition,
             choices: block.choices.map(c => ({
               label: c.label,
               setsVariables: c.setsVariables,

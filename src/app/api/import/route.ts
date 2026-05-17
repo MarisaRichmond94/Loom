@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
             content: block.content ?? null,
             prompt: block.prompt ?? null,
             displayType: block.displayType ?? null,
+            condition: block.condition ?? null,
           },
         })
 

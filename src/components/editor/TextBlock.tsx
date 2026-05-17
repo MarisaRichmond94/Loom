@@ -57,14 +57,18 @@ import {
 } from 'react-icons/lu'
 import { Footnote } from '@/lib/extensions/footnote'
 import { CharacterMark } from '@/lib/extensions/character'
+import { VariableHighlight } from '@/lib/extensions/variableHighlight'
+import VariableSuggestionList from './VariableSuggestionList'
 
 type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
+type Variable = { id: string; name: string; type: string }
 
 type Props = {
   content: string | null
   onChange: (json: string) => void
   autoFocus?: boolean
   characters?: Character[]
+  variables?: Variable[]
 }
 
 const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
@@ -101,7 +105,7 @@ function ToolBtn({ active, onClick, title, children }: {
   )
 }
 
-export default function TextBlock({ content, onChange, autoFocus, characters = [] }: Props) {
+export default function TextBlock({ content, onChange, autoFocus, characters = [], variables = [] }: Props) {
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
   // footnote state
   const [showInput, setShowInput] = useState(false)
@@ -119,6 +123,10 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
   const charSearchRef = useRef<HTMLInputElement>(null)
   const savedSelection = useRef<{ from: number; to: number } | null>(null)
   const localEditRef = useRef(false)
+  const variablesRef = useRef(variables)
+  variablesRef.current = variables
+  const [varSuggest, setVarSuggest] = useState<{ from: number; query: string; coords: { x: number; y: number } } | null>(null)
+  const [varSelectedIdx, setVarSelectedIdx] = useState(0)
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -127,6 +135,9 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
       Placeholder.configure({ placeholder: 'Write your prose here…' }),
       Footnote,
       CharacterMark,
+      VariableHighlight.configure({
+        getVariableNames: () => variablesRef.current.map(v => v.name),
+      }),
       TextAlign.configure({ types: ['paragraph', 'heading'] }),
       TextStyleColor,
       EmDash,
@@ -145,6 +156,88 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
       if (current !== content) editor.commands.setContent(JSON.parse(content))
     }
   }, [editor, content])
+
+  // When the variables list changes, force decorations to re-evaluate
+  // (the ref already has the latest; this just triggers redraw)
+  useEffect(() => {
+    if (editor) editor.view.dispatch(editor.state.tr)
+  }, [editor, variables])
+
+  // Detect `{{` trigger and track the query for the variable suggestion popover
+  useEffect(() => {
+    if (!editor) return
+    function check() {
+      if (!editor) return
+      const { selection } = editor.state
+      if (!selection.empty) { setVarSuggest(null); return }
+      const cursorPos = selection.from
+      const lookback = Math.max(0, cursorPos - 50)
+      const before = editor.state.doc.textBetween(lookback, cursorPos, '\n', '')
+      const match = before.match(/\{\{([a-zA-Z0-9_$]*)$/)
+      if (match) {
+        const from = cursorPos - match[0].length
+        const coords = editor.view.coordsAtPos(cursorPos)
+        setVarSuggest({ from, query: match[1], coords: { x: coords.left, y: coords.bottom } })
+        setVarSelectedIdx(0)
+      } else {
+        setVarSuggest(null)
+      }
+    }
+    editor.on('update', check)
+    editor.on('selectionUpdate', check)
+    return () => {
+      editor.off('update', check)
+      editor.off('selectionUpdate', check)
+    }
+  }, [editor])
+
+  const filteredVars = varSuggest
+    ? variables.filter(v => v.name.toLowerCase().includes(varSuggest.query.toLowerCase()))
+    : []
+
+  // Keep selectedIdx in bounds when filter narrows
+  useEffect(() => {
+    if (varSelectedIdx >= filteredVars.length && filteredVars.length > 0) {
+      setVarSelectedIdx(filteredVars.length - 1)
+    }
+  }, [filteredVars.length, varSelectedIdx])
+
+  // Keyboard nav while the popover is open — capture phase so we beat ProseMirror
+  useEffect(() => {
+    if (!varSuggest) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') { e.preventDefault(); setVarSuggest(null); return }
+      if (filteredVars.length === 0) return
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setVarSelectedIdx(i => Math.min(i + 1, filteredVars.length - 1))
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setVarSelectedIdx(i => Math.max(i - 1, 0))
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        const v = filteredVars[varSelectedIdx]
+        if (v) applyVarSuggest(v)
+      }
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [varSuggest, filteredVars, varSelectedIdx])
+
+  function applyVarSuggest(v: Variable) {
+    if (!editor || !varSuggest) return
+    const cursorPos = editor.state.selection.from
+    const docSize = editor.state.doc.content.size
+    // If cursor is already in front of an existing `}}`, don't add a duplicate closer
+    const lookAhead = editor.state.doc.textBetween(cursorPos, Math.min(cursorPos + 2, docSize), '', '')
+    const insertion = lookAhead === '}}' ? `{{${v.name}` : `{{${v.name}}}`
+    editor.chain().focus()
+      .deleteRange({ from: varSuggest.from, to: cursorPos })
+      .insertContent(insertion)
+      .run()
+    setVarSuggest(null)
+  }
 
   useEffect(() => {
     if (autoFocus && editor) editor.commands.focus('end')
@@ -425,6 +518,16 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
         editor={editor}
         className="prose prose-invert max-w-none text-ink text-sm leading-relaxed [&_.ProseMirror]:outline-none [&_.ProseMirror_p]:text-justify [&_.ProseMirror_p]:indent-8 [&_.ProseMirror_p]:my-0 [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ink-faint [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror:focus_p.is-editor-empty:first-child::before]:hidden [&_.ProseMirror_hr]:border-none [&_.ProseMirror_hr]:h-px [&_.ProseMirror_hr]:bg-accent/20 [&_.ProseMirror_hr]:w-1/3 [&_.ProseMirror_hr]:mx-auto [&_.ProseMirror_hr]:my-6 [&_.ProseMirror_hr.ProseMirror-selectednode]:bg-accent/60 [&_.character-ref]:text-accent/80 [&_.character-ref]:underline [&_.character-ref]:decoration-dotted [&_.character-ref]:decoration-accent/40 [&_.character-ref]:cursor-default"
       />
+
+      {varSuggest && (
+        <VariableSuggestionList
+          variables={filteredVars}
+          selectedIdx={varSelectedIdx}
+          coords={varSuggest.coords}
+          onSelect={applyVarSuggest}
+          emptyMessage={variables.length === 0 ? 'No variables yet' : 'No matches'}
+        />
+      )}
     </div>
   )
 }
