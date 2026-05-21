@@ -39,7 +39,7 @@ function SortableChapter({ chapter, seriesId, isActive, openMenu, onOpenMenu, on
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: chapter.id })
   const linkRef = useRef<HTMLAnchorElement>(null)
   useEffect(() => {
-    if (isActive) linkRef.current?.scrollIntoView({ block: 'nearest' })
+    if (isActive) linkRef.current?.scrollIntoView({ block: 'start' })
   }, [isActive])
   return (
     <div
