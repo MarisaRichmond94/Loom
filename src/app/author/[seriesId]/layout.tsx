@@ -21,9 +21,10 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
   const [series, setSeries] = useState<AuthorSeries | null>(null)
   const [choiceQuestions, setChoiceQuestions] = useState<ChoiceQuestion[]>([])
   const [addChoice, setAddChoice] = useState<(() => void) | null>(null)
-  const [lightMode, setLightMode] = useState(() =>
-    typeof window !== 'undefined' && localStorage.getItem('loom-light-mode') === 'true',
-  )
+  const [lightMode, setLightMode] = useState(false)
+  useEffect(() => {
+    setLightMode(localStorage.getItem('loom-light-mode') === 'true')
+  }, [])
 
   function toggleLightMode() {
     setLightMode(prev => {

@@ -12,7 +12,7 @@ import ConditionalBlock from './ConditionalBlock'
 import SoundtrackBlock from './SoundtrackBlock'
 
 type Override = { id: string; order: number; condition: string; content: string }
-type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null }
+type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null }
 type Block = {
   id: string
   order: number
@@ -22,6 +22,8 @@ type Block = {
   displayType?: string | null
   baseContent?: string | null
   condition?: string | null
+  pinStart?: number | null
+  pinEnd?: number | null
   choices: Choice[]
   overrides: Override[]
 }

@@ -6,7 +6,7 @@ type Params = { params: Promise<{ blockId: string }> }
 
 export async function PATCH(req: Request, { params }: Params) {
   const { blockId } = await params
-  const { content, prompt, displayType, baseContent, condition, order } = await req.json()
+  const { content, prompt, displayType, baseContent, condition, pinStart, pinEnd, order } = await req.json()
   try {
     const block = await prisma.contentBlock.update({
       where: { id: blockId },
@@ -16,6 +16,8 @@ export async function PATCH(req: Request, { params }: Params) {
         ...(displayType !== undefined && { displayType }),
         ...(baseContent !== undefined && { baseContent }),
         ...(condition !== undefined && { condition }),
+        ...(pinStart !== undefined && { pinStart }),
+        ...(pinEnd !== undefined && { pinEnd }),
         ...(order !== undefined && { order }),
       },
       include: {

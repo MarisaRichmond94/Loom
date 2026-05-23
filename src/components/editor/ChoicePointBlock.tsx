@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { LuCheck, LuX } from 'react-icons/lu'
 
-type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null }
+type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null }
 type Variable = { id: string; name: string; type: string }
 
 type Props = {
@@ -203,6 +203,28 @@ function ChoicePanel({
           <button type="button" onClick={() => setShowCreate(false)} className="text-ink-faint px-1"><LuX size={13} /></button>
         </form>
       )}
+
+      {/* Bad ending toggle + message */}
+      <div className="mt-3 pt-3 border-t border-black/20">
+        <label className="flex items-center gap-2 text-xs text-ink-muted cursor-pointer">
+          <input
+            type="checkbox"
+            checked={choice.endingMessage != null}
+            onChange={e => onUpdateChoice(choice.id, { endingMessage: e.target.checked ? '' : null })}
+            className="accent-choice-kill"
+          />
+          <span>Bad ending</span>
+        </label>
+        {choice.endingMessage != null && (
+          <textarea
+            defaultValue={choice.endingMessage}
+            onBlur={e => onUpdateChoice(choice.id, { endingMessage: e.target.value })}
+            placeholder="What happens (shown to the reader on a full-screen overlay)…"
+            rows={3}
+            className="w-full mt-2 bg-black/20 border border-black/20 rounded px-2 py-1.5 text-xs text-ink placeholder:text-ink-faint outline-none focus:border-accent/50 resize-none"
+          />
+        )}
+      </div>
     </div>
   )
 }

@@ -65,10 +65,13 @@ export async function GET(_: Request, { params }: Params) {
             prompt: block.prompt,
             displayType: block.displayType,
             condition: block.condition,
+            pinStart: block.pinStart,
+            pinEnd: block.pinEnd,
             choices: block.choices.map(c => ({
               label: c.label,
               setsVariables: c.setsVariables,
               targetChapterRef: c.targetChapterId,
+              endingMessage: c.endingMessage,
             })),
             overrides: block.overrides.map(o => ({
               order: o.order,

@@ -33,9 +33,10 @@ type BackupSettings = {
 }
 
 export default function SettingsPage() {
-  const [lightMode, setLightMode] = useState(() =>
-    typeof window !== 'undefined' && localStorage.getItem('loom-light-mode') === 'true'
-  )
+  const [lightMode, setLightMode] = useState(false)
+  useEffect(() => {
+    setLightMode(localStorage.getItem('loom-light-mode') === 'true')
+  }, [])
   const [authorName, setAuthorName] = useState('')
   const [backup, setBackup] = useState<BackupSettings>({
     enabled: false,

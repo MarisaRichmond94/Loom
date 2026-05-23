@@ -2,10 +2,11 @@
 
 import { useRef, useState } from 'react'
 import { LuMusic, LuUpload, LuX, LuDownload } from 'react-icons/lu'
+import { formatPinTime, parsePinTime, pinLabel } from '@/lib/pinLabel'
 
 type Props = {
-  block: { id: string; prompt?: string | null; content?: string | null }
-  onUpdateBlock: (data: { prompt?: string; content?: string | null }) => void
+  block: { id: string; prompt?: string | null; content?: string | null; pinStart?: number | null; pinEnd?: number | null }
+  onUpdateBlock: (data: { prompt?: string; content?: string | null; pinStart?: number | null; pinEnd?: number | null }) => void
 }
 
 export default function SoundtrackBlock({ block, onUpdateBlock }: Props) {
@@ -15,6 +16,10 @@ export default function SoundtrackBlock({ block, onUpdateBlock }: Props) {
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [downloading, setDownloading] = useState(false)
   const [ytError, setYtError] = useState<string | null>(null)
+  const [pinStartInput, setPinStartInput] = useState(block.pinStart != null ? formatPinTime(block.pinStart) : '')
+  const [pinEndInput, setPinEndInput] = useState(block.pinEnd != null ? formatPinTime(block.pinEnd) : '')
+  const [pinStartError, setPinStartError] = useState(false)
+  const [pinEndError, setPinEndError] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -68,6 +73,30 @@ export default function SoundtrackBlock({ block, onUpdateBlock }: Props) {
     }
   }
 
+  function commitPin(which: 'start' | 'end', raw: string) {
+    if (raw.trim() === '') {
+      if (which === 'start') { setPinStartError(false); onUpdateBlock({ pinStart: null }) }
+      else { setPinEndError(false); onUpdateBlock({ pinEnd: null }) }
+      return
+    }
+    const parsed = parsePinTime(raw)
+    if (parsed == null) {
+      if (which === 'start') setPinStartError(true); else setPinEndError(true)
+      return
+    }
+    if (which === 'start') {
+      setPinStartError(false)
+      setPinStartInput(formatPinTime(parsed))
+      onUpdateBlock({ pinStart: parsed })
+    } else {
+      setPinEndError(false)
+      setPinEndInput(formatPinTime(parsed))
+      onUpdateBlock({ pinEnd: parsed })
+    }
+  }
+
+  const label = pinLabel(block.pinStart, block.pinEnd)
+
   return (
     <div className="flex flex-col gap-3">
       {/* Title row */}
@@ -84,15 +113,38 @@ export default function SoundtrackBlock({ block, onUpdateBlock }: Props) {
 
       {/* Audio area */}
       {audioSrc ? (
-        <div className="flex items-center gap-2">
-          <audio controls src={audioSrc} className="flex-1 h-8 min-w-0" />
-          <button
-            onClick={handleRemove}
-            title="Remove audio"
-            className="shrink-0 text-ink-faint hover:text-choice-kill transition"
-          >
-            <LuX size={14} />
-          </button>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <audio controls src={audioSrc} className="flex-1 h-8 min-w-0" />
+            <button
+              onClick={handleRemove}
+              title="Remove audio"
+              className="shrink-0 text-ink-faint hover:text-choice-kill transition"
+            >
+              <LuX size={14} />
+            </button>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-ink-faint shrink-0">Pin:</span>
+            <input
+              value={pinStartInput}
+              onChange={e => setPinStartInput(e.target.value)}
+              onBlur={() => commitPin('start', pinStartInput)}
+              placeholder="start"
+              className={`w-16 bg-surface-muted border rounded px-2 py-0.5 text-ink placeholder:text-ink-faint outline-none focus:border-accent/40 ${pinStartError ? 'border-choice-kill/60' : 'border-accent/10'}`}
+            />
+            <span className="text-ink-faint">to</span>
+            <input
+              value={pinEndInput}
+              onChange={e => setPinEndInput(e.target.value)}
+              onBlur={() => commitPin('end', pinEndInput)}
+              placeholder="end"
+              className={`w-16 bg-surface-muted border rounded px-2 py-0.5 text-ink placeholder:text-ink-faint outline-none focus:border-accent/40 ${pinEndError ? 'border-choice-kill/60' : 'border-accent/10'}`}
+            />
+            <span className="text-ink-faint italic ml-1">
+              {label ?? 'Plays the full track'}
+            </span>
+          </div>
         </div>
       ) : (
         <div className="flex flex-col gap-2">

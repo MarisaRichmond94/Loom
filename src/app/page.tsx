@@ -16,7 +16,10 @@ export default function HomePage() {
   const [creating, setCreating] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [importing, setImporting] = useState(false)
-  const [lightMode, setLightMode] = useState(() => typeof window !== 'undefined' && localStorage.getItem('loom-light-mode') === 'true')
+  const [lightMode, setLightMode] = useState(false)
+  useEffect(() => {
+    setLightMode(localStorage.getItem('loom-light-mode') === 'true')
+  }, [])
   const importRef = useRef<HTMLInputElement>(null)
 
   function toggleLightMode() {

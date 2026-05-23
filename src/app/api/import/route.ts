@@ -82,6 +82,8 @@ export async function POST(req: NextRequest) {
             prompt: block.prompt ?? null,
             displayType: block.displayType ?? null,
             condition: block.condition ?? null,
+            pinStart: block.pinStart ?? null,
+            pinEnd: block.pinEnd ?? null,
           },
         })
 
@@ -117,7 +119,7 @@ export async function POST(req: NextRequest) {
   // 4. Second pass: create all choices now that chapterRefMap is complete
   // Re-fetch blocks to get their choices data (we stored pending choices on the object above — simpler to re-query structure)
   // Instead, rebuild from payload directly using the block creation order
-  const choiceData: { choicePointId: string; label: string; setsVariables: string; targetChapterId: string | null }[] = []
+  const choiceData: { choicePointId: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage: string | null }[] = []
 
   // Walk payload again to collect choices with resolved target IDs
   const allNewBlocks = await prisma.contentBlock.findMany({
@@ -126,7 +128,7 @@ export async function POST(req: NextRequest) {
   })
 
   // Flatten payload blocks in the same order
-  const payloadBlocks: { choices: { label: string; setsVariables: string; targetChapterRef: string | null }[] }[] = []
+  const payloadBlocks: { choices: { label: string; setsVariables: string; targetChapterRef: string | null; endingMessage?: string | null }[] }[] = []
   for (const book of s.books ?? []) {
     for (const chapter of book.chapters ?? []) {
       for (const block of chapter.blocks ?? []) {
@@ -144,6 +146,7 @@ export async function POST(req: NextRequest) {
         label: c.label,
         setsVariables: c.setsVariables,
         targetChapterId: c.targetChapterRef ? (chapterRefMap[c.targetChapterRef] ?? null) : null,
+        endingMessage: c.endingMessage ?? null,
       })
     }
   }

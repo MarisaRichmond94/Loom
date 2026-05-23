@@ -11,19 +11,23 @@ import Color from '@tiptap/extension-color'
 import { Footnote } from '@/lib/extensions/footnote'
 import { CharacterMark } from '@/lib/extensions/character'
 import { resolveConditional, matchesCondition } from '@/lib/storyEngine'
+import { pinLabel } from '@/lib/pinLabel'
 import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
 import InlineChoice from './InlineChoice'
 import ChapterGate from './ChapterGate'
 import ChoiceConfigModal from './ChoiceConfigModal'
+import BadEndingModal from './BadEndingModal'
 import AvatarButton from '@/components/AvatarButton'
 import Greeting from '@/components/Greeting'
 
 type Override = { id: string; order: number; condition: string; content: string }
-type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null }
+type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null }
 type Block = {
   id: string; order: number; type: string
   content?: string | null; prompt?: string | null; displayType?: string | null; baseContent?: string | null
   condition?: string | null
+  pinStart?: number | null
+  pinEnd?: number | null
   choices: Choice[]
   overrides: Override[]
 }
@@ -84,14 +88,17 @@ export default function ReaderView({
   const mainRef = useRef<HTMLElement>(null)
   const prevChoiceCountRef = useRef(choiceHistory.length)
   const [pendingChoiceBlock, setPendingChoiceBlock] = useState<Block | null>(null)
-  const [lightMode, setLightMode] = useState(() =>
-    typeof window !== 'undefined' && localStorage.getItem('loom-light-mode') === 'true'
-  )
+  const [lightMode, setLightMode] = useState(false)
+  useEffect(() => {
+    setLightMode(localStorage.getItem('loom-light-mode') === 'true')
+  }, [])
   const [charCard, setCharCard] = useState<{ character: Character; x: number; y: number; above: boolean } | null>(null)
   const [scrollProgress, setScrollProgress] = useState(0)
   const [choiceMarkers, setChoiceMarkers] = useState<{ id: string; position: number }[]>([])
   const [showConfig, setShowConfig] = useState(false)
   const [isAuthor, setIsAuthor] = useState(false)
+  const [endingMessage, setEndingMessage] = useState<string | null>(null)
+  const pendingScrollBlockRef = useRef<string | null>(null)
 
   useEffect(() => {
     setIsAuthor((localStorage.getItem('loom-author-name') ?? '').trim() !== '')
@@ -110,7 +117,19 @@ export default function ReaderView({
   }, [])
 
   useEffect(() => {
-    if (mainRef.current) mainRef.current.scrollTop = 0
+    const el = mainRef.current
+    if (!el) return
+    if (pendingScrollBlockRef.current) {
+      const target = pendingScrollBlockRef.current
+      pendingScrollBlockRef.current = null
+      const raf = requestAnimationFrame(() => {
+        const blockEl = document.getElementById(`block-${target}`)
+        if (blockEl) blockEl.scrollIntoView({ block: 'start' })
+        else { el.scrollTop = 0; setScrollProgress(0) }
+      })
+      return () => cancelAnimationFrame(raf)
+    }
+    el.scrollTop = 0
     setScrollProgress(0)
   }, [blocks])
 
@@ -128,6 +147,10 @@ export default function ReaderView({
         return [{ id: block.id, position: blockTop / el.scrollHeight }]
       })
       setChoiceMarkers(markers)
+      // Recompute progress fill: choice expansion / collapse changes scrollHeight,
+      // so the cached ratio from the onScroll listener is stale until the user scrolls.
+      const max = el.scrollHeight - el.clientHeight
+      setScrollProgress(max > 0 ? el.scrollTop / max : 0)
     })
     return () => cancelAnimationFrame(id)
   }, [blocks, choiceHistory])
@@ -192,6 +215,10 @@ export default function ReaderView({
     onSessionUpdate(updated.storyState, updated.choiceHistory)
 
     const choice = choicePointBlock.choices.find(c => c.id === choiceId)
+    if (choice?.endingMessage) {
+      setEndingMessage(choice.endingMessage)
+      return
+    }
     if (choice?.targetChapterId) onNavigate(choice.targetChapterId)
   }
 
@@ -328,11 +355,17 @@ export default function ReaderView({
             }
 
             if (block.type === 'soundtrack' && block.content) {
+              const label = pinLabel(block.pinStart, block.pinEnd)
               return (
-                <div key={block.id} id={`block-${block.id}`} className="my-4 flex items-center gap-3 px-4 py-3 rounded-lg bg-surface-raised border border-accent/10">
-                  <LuMusic size={14} className="text-accent shrink-0" />
-                  {block.prompt && <span className="text-xs text-ink-faint italic truncate">{block.prompt}</span>}
-                  <audio controls src={block.content} className="flex-1 h-8 min-w-0" />
+                <div key={block.id} id={`block-${block.id}`} className="my-4 px-4 py-3 rounded-lg bg-surface-raised border border-accent/10">
+                  <div className="flex items-center gap-3">
+                    <LuMusic size={14} className="text-accent shrink-0" />
+                    {block.prompt && <span className="text-xs text-ink-faint italic truncate">{block.prompt}</span>}
+                    <audio controls src={block.content} className="flex-1 h-8 min-w-0" />
+                  </div>
+                  {label && (
+                    <p className="text-xs text-ink-faint italic mt-2 pl-6">{label}</p>
+                  )}
                 </div>
               )
             }
@@ -392,6 +425,23 @@ export default function ReaderView({
             if (currentChapterId) onNavigate(currentChapterId)
           }}
           onClose={() => setShowConfig(false)}
+        />
+      )}
+
+      {endingMessage != null && (
+        <BadEndingModal
+          message={endingMessage}
+          sessionId={sessionId}
+          seriesId={seriesId}
+          choiceHistory={choiceHistory}
+          variables={variables}
+          firstChapterId={books[0]?.chapters[0]?.id ?? null}
+          onApply={(state, history, chapterId, scrollToBlockId) => {
+            onSessionUpdate(state, history)
+            setEndingMessage(null)
+            if (scrollToBlockId) pendingScrollBlockRef.current = scrollToBlockId
+            onNavigate(chapterId)
+          }}
         />
       )}
 

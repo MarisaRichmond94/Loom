@@ -8,7 +8,8 @@ import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
 type Block = {
   id: string; order: number; type: string
   content?: string | null; prompt?: string | null; displayType?: string | null; baseContent?: string | null
-  choices: { id: string; label: string; setsVariables: string; targetChapterId: string | null }[]
+  pinStart?: number | null; pinEnd?: number | null
+  choices: { id: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null }[]
   overrides: { id: string; order: number; condition: string; content: string }[]
 }
 type SeriesBook = { id: string; title: string; order: number; chapters: { id: string; title: string; order: number }[] }

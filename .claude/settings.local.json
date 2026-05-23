@@ -20,7 +20,12 @@
       "Bash(git -C /Users/marisarichmond/Loom init)",
       "Bash(git -C /Users/marisarichmond/Loom remote add origin https://github.com/MarisaRichmond94/Loom.git)",
       "Bash(git -C /Users/marisarichmond/Loom add .)",
-      "Bash(git -C /Users/marisarichmond/Loom status)"
+      "Bash(git -C /Users/marisarichmond/Loom status)",
+      "Bash(npx tsc *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(grep -n \"^export default function\\\\|content, onChange\\\\|\\({ content\" /Users/marisarichmond/Documents/GitHub/Loom/src/components/editor/TextBlock.tsx)",
+      "Bash(git push *)"
     ]
   }
 }

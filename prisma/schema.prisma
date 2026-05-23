@@ -59,6 +59,8 @@ model ContentBlock {
   displayType String?
   baseContent String?
   condition   String?
+  pinStart    Int?
+  pinEnd      Int?
   chapter     Chapter               @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   choices     Choice[]
   overrides   ConditionalOverride[]
@@ -70,6 +72,7 @@ model Choice {
   label           String
   setsVariables   String       @default("{}")
   targetChapterId String?
+  endingMessage   String?
   choicePoint     ContentBlock @relation(fields: [choicePointId], references: [id], onDelete: Cascade)
   targetChapter   Chapter?     @relation("TargetChapter", fields: [targetChapterId], references: [id])
 }
