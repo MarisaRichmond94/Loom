@@ -17,7 +17,9 @@ export async function GET(_: Request, { params }: Params) {
           },
         },
       },
-      variables: { orderBy: { name: 'asc' } },
+      // Order by id (cuid is timestamp-prefixed) so newer variables appear last —
+      // helps the writer locate recently-added context in dropdowns.
+      variables: { orderBy: { id: 'asc' } },
     },
   })
   if (!series) return NextResponse.json({ error: 'Not found' }, { status: 404 })

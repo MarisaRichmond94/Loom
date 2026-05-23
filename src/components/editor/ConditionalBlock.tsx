@@ -19,8 +19,9 @@ const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
 
 export default function ConditionalBlock({ overrides, variables, characters, onAddOverride, onUpdateOverride, onDeleteOverride }: Props) {
   function handleAddOverride() {
-    const varName = variables[0].name
-    onAddOverride({ [varName]: true }, EMPTY)
+    // Start with an empty condition (renders as "always"); the writer attaches
+    // variables via the + menu on the ConditionRow when they're ready.
+    onAddOverride({}, EMPTY)
   }
 
   return (

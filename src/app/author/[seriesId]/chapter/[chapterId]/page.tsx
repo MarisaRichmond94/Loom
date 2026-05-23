@@ -131,7 +131,6 @@ export default function ChapterEditorPage() {
 
   async function addChoiceBlock() {
     await addBlock('choice_point')
-    loadChoices()
   }
 
   async function addBlock(type: string) {
@@ -150,6 +149,9 @@ export default function ChapterEditorPage() {
       }),
     })
     await reloadBlocks()
+    // Sidebar's CHOICES list keys off choice_point blocks; refresh on every
+    // create path (FAB, hotkey, sidebar "+") rather than only addChoiceBlock.
+    if (type === 'choice_point') loadChoices()
   }
 
   // Always point at the latest versions of these functions
@@ -254,6 +256,7 @@ export default function ChapterEditorPage() {
           variables={series.variables}
           characters={characters}
           onBlocksChange={reloadBlocks}
+          onChoicesChanged={loadChoices}
           onCreateVariable={createVariable}
           onActiveBlockChange={setActiveBlockId}
         />

@@ -198,17 +198,19 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
             +
           </button>
           {menuOpen && (
-            <div className="absolute left-0 top-full mt-1 bg-surface-raised border border-accent/20 rounded-lg shadow-xl z-10 overflow-hidden min-w-[200px]">
-              {unattachedVars.map(v => (
-                <button
-                  key={v.id}
-                  onClick={() => attach(v)}
-                  className="flex items-center justify-between w-full px-4 py-2 text-sm text-ink-muted hover:text-ink hover:bg-surface-overlay transition text-left gap-4"
-                >
-                  <span>{v.name}</span>
-                  <span className="text-ink-faint text-xs">{v.type}</span>
-                </button>
-              ))}
+            <div className="absolute left-0 bottom-full mb-1 bg-surface-raised border border-accent/20 rounded-lg shadow-xl z-10 overflow-hidden min-w-[200px]">
+              <div className="overflow-y-auto" style={{ maxHeight: '126px' }}>
+                {unattachedVars.map(v => (
+                  <button
+                    key={v.id}
+                    onClick={() => attach(v)}
+                    className="flex items-center justify-between w-full px-4 py-2 text-sm text-ink-muted hover:text-ink hover:bg-surface-overlay transition text-left gap-4"
+                  >
+                    <span>{v.name}</span>
+                    <span className="text-ink-faint text-xs">{v.type}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>

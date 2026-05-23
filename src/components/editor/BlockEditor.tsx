@@ -36,6 +36,7 @@ type Props = {
   variables: Variable[]
   characters: Character[]
   onBlocksChange: () => void
+  onChoicesChanged?: () => void
   onCreateVariable: (name: string, type: string) => Promise<void>
   onActiveBlockChange?: (blockId: string | null) => void
 }
@@ -94,7 +95,7 @@ function SortableBlock({
   )
 }
 
-export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onCreateVariable, onActiveBlockChange }: Props) {
+export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const [newBlockId, setNewBlockId] = useState<string | null>(null)
@@ -176,17 +177,25 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   }, [chapterId])
 
   async function updateBlock(blockId: string, data: object) {
+    const existing = blocks.find(b => b.id === blockId)
     setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, ...data } : b))
     await fetch(`/api/chapters/${chapterId}/blocks/${blockId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     })
+    // Sidebar choices list keys off choice_point.prompt; nudge a refresh when that
+    // (or the block's existence as a choice_point) could have changed.
+    if (existing?.type === 'choice_point' && 'prompt' in data) {
+      onChoicesChanged?.()
+    }
   }
 
   async function deleteBlock(blockId: string) {
+    const existing = blocks.find(b => b.id === blockId)
     await fetch(`/api/chapters/${chapterId}/blocks/${blockId}`, { method: 'DELETE' })
     onBlocksChange()
+    if (existing?.type === 'choice_point') onChoicesChanged?.()
   }
 
   async function updateChoice(choiceId: string, data: object) {

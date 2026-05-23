@@ -7,7 +7,7 @@ export async function GET(_: Request, { params }: Params) {
   const { seriesId } = await params
   const variables = await prisma.storyVariable.findMany({
     where: { seriesId },
-    orderBy: { name: 'asc' },
+    orderBy: { id: 'asc' },
   })
   return NextResponse.json(variables)
 }
