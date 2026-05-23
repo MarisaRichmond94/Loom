@@ -45,6 +45,69 @@ export function ValueSetter({ v, currentVal, onChange }: {
   )
 }
 
+export type ConditionOp = 'and' | 'or'
+export type ConditionClause = { var: string; value: unknown }
+
+type ParsedCondition = { op: ConditionOp; clauses: ConditionClause[] }
+
+// Reads either legacy (`{ a: 1, b: 2 }`) or compound (`{ op, clauses }`) JSON shapes
+// and normalizes to a single in-memory form for the editor.
+export function parseCondition(raw: string | null): ParsedCondition {
+  if (!raw) return { op: 'and', clauses: [] }
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object') {
+      if ('op' in parsed && Array.isArray((parsed as { clauses?: unknown }).clauses)) {
+        const compound = parsed as { op: unknown; clauses: ConditionClause[] }
+        return {
+          op: compound.op === 'or' ? 'or' : 'and',
+          clauses: compound.clauses,
+        }
+      }
+      return {
+        op: 'and',
+        clauses: Object.entries(parsed as Record<string, unknown>).map(([k, v]) => ({ var: k, value: v })),
+      }
+    }
+  } catch { /* fall through */ }
+  return { op: 'and', clauses: [] }
+}
+
+// Writes back to legacy shape when op=AND (or single clause) to stay backwards
+// compatible on disk; only emits the compound shape when op=OR with 2+ clauses.
+export function stringifyCondition(op: ConditionOp, clauses: ConditionClause[]): string | null {
+  if (clauses.length === 0) return null
+  if (op === 'and' || clauses.length === 1) {
+    const obj: Record<string, unknown> = {}
+    for (const c of clauses) obj[c.var] = c.value
+    return JSON.stringify(obj)
+  }
+  return JSON.stringify({ op: 'or', clauses })
+}
+
+function OpToggle({ value, onChange, disabled }: {
+  value: ConditionOp
+  onChange?: (next: ConditionOp) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className={`flex rounded overflow-hidden border border-accent/20 text-xs shrink-0 ${disabled ? 'opacity-40' : ''}`}>
+      {(['and', 'or'] as const).map(o => (
+        <button
+          key={o}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange?.(o)}
+          title={o === 'and' ? 'All listed variables must match' : 'At least one listed variable must match'}
+          className={`px-2 py-0.5 transition uppercase tracking-wider ${value === o ? 'bg-accent text-surface-base' : 'text-ink-faint'} ${!disabled && value !== o ? 'hover:text-ink' : ''} ${disabled ? 'cursor-default' : ''}`}
+        >
+          {o}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export function ConditionRow({ condition, variables, onChange, label = 'Show if:', labelExtra }: {
   condition: string | null
   variables: ConditionVariable[]
@@ -63,49 +126,67 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
     return () => document.removeEventListener('mousedown', onDown)
   }, [])
 
-  const parsed = condition ? JSON.parse(condition) as Record<string, unknown> : {}
-  const attachedNames = new Set(Object.keys(parsed))
+  const { op, clauses } = parseCondition(condition)
+  const valueByName: Record<string, unknown> = {}
+  for (const c of clauses) valueByName[c.var] = c.value
+  const attachedNames = new Set(clauses.map(c => c.var))
   const attachedVars = variables.filter(v => attachedNames.has(v.name))
   const unattachedVars = variables.filter(v => !attachedNames.has(v.name))
 
-  function save(next: Record<string, unknown>) {
-    const cleaned: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(next)) if (v !== undefined) cleaned[k] = v
-    onChange(Object.keys(cleaned).length === 0 ? null : JSON.stringify(cleaned))
+  function save(nextOp: ConditionOp, nextClauses: ConditionClause[]) {
+    onChange(stringifyCondition(nextOp, nextClauses.filter(c => c.value !== undefined)))
   }
 
   function setVal(name: string, val: unknown) {
-    const updated = { ...parsed }
-    if (val === undefined) delete updated[name]; else updated[name] = val
-    save(updated)
+    if (val === undefined) {
+      save(op, clauses.filter(c => c.var !== name))
+      return
+    }
+    const updated = clauses.map(c => c.var === name ? { var: c.var, value: val } : c)
+    save(op, updated)
   }
 
   function detach(name: string) {
-    const updated = { ...parsed }; delete updated[name]; save(updated)
+    save(op, clauses.filter(c => c.var !== name))
   }
 
   function attach(v: ConditionVariable) {
-    save({ ...parsed, [v.name]: TYPE_DEFAULT_VALUE[v.type] ?? '' })
+    save(op, [...clauses, { var: v.name, value: TYPE_DEFAULT_VALUE[v.type] ?? '' }])
     setMenuOpen(false)
+  }
+
+  function setOp(nextOp: ConditionOp) {
+    save(nextOp, clauses)
   }
 
   return (
     <div className="flex items-center gap-2 mb-2 flex-wrap">
       <span className="text-xs text-ink-faint uppercase tracking-widest shrink-0">{label}</span>
       {labelExtra}
-      {attachedVars.length === 0 && (
+      {clauses.length === 0 && (
         <span className="text-xs text-ink-faint italic">always</span>
       )}
-      {attachedVars.map(v => (
-        <div key={v.id} className="flex items-center gap-1 bg-black/20 border border-black/20 rounded px-2 py-0.5">
-          <span className="text-xs text-ink-muted">{v.name}</span>
-          <span className="text-xs text-ink-faint">=</span>
-          <div className="w-24">
-            <ValueSetter v={v} currentVal={parsed[v.name]} onChange={val => setVal(v.name, val)} />
+      {attachedVars.map((v, i) => (
+        <div key={v.id} className="flex items-center gap-2">
+          {i > 0 && (
+            <OpToggle
+              value={op}
+              // Only the first operator (between clauses 1 and 2) is interactive —
+              // all clauses share one op, the rest are display-only reminders.
+              onChange={i === 1 ? setOp : undefined}
+              disabled={i > 1}
+            />
+          )}
+          <div className="flex items-center gap-1 bg-black/20 border border-black/20 rounded px-2 py-0.5">
+            <span className="text-xs text-ink-muted">{v.name}</span>
+            <span className="text-xs text-ink-faint">=</span>
+            <div className="w-24">
+              <ValueSetter v={v} currentVal={valueByName[v.name]} onChange={val => setVal(v.name, val)} />
+            </div>
+            <button onClick={() => detach(v.name)} className="text-ink-muted hover:text-choice-kill transition shrink-0">
+              <LuX size={11} />
+            </button>
           </div>
-          <button onClick={() => detach(v.name)} className="text-ink-muted hover:text-choice-kill transition shrink-0">
-            <LuX size={11} />
-          </button>
         </div>
       ))}
       {unattachedVars.length > 0 && (

@@ -2,13 +2,7 @@
 
 import { LuSplit, LuX } from 'react-icons/lu'
 import TextBlock from './TextBlock'
-import Select from '@mui/material/Select'
-import MenuItem from '@mui/material/MenuItem'
-import FormControl from '@mui/material/FormControl'
-import TextField from '@mui/material/TextField'
-import { ThemeProvider, createTheme } from '@mui/material/styles'
-
-const darkTheme = createTheme({ palette: { mode: 'dark' } })
+import { ConditionRow } from './conditionUI'
 
 type Override = { id: string; order: number; condition: string; content: string }
 type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
@@ -33,74 +27,33 @@ export default function ConditionalBlock({ overrides, variables, characters, onA
     <div>
       <div className="flex items-center gap-1.5 text-xs text-accent uppercase tracking-widest mb-3"><LuSplit size={12} /> Conditional</div>
 
-      <ThemeProvider theme={darkTheme}>
-        {overrides.map(override => {
-          const condition = JSON.parse(override.condition || '{}') as Record<string, unknown>
-          const entries = Object.entries(condition)
-          const [varName, varVal] = entries[0] ?? ['', '']
-          const varType = variables.find(v => v.name === varName)?.type ?? 'boolean'
-          const isKill = varType === 'boolean' && varVal === false
-          return (
-            <div key={override.id} className={`border rounded p-3 mb-2 ${isKill ? 'bg-choice-kill-bg border-choice-kill-border' : 'bg-choice-spare-bg border-choice-spare-border'}`}>
-              <div className="flex items-center gap-2 mb-2 flex-wrap">
-                <span className={`text-xs ${isKill ? 'text-choice-kill' : 'text-choice-spare'}`}>if</span>
-                <FormControl size="small" sx={{ minWidth: 120 }}>
-                  <Select
-                    value={varName}
-                    onChange={e => {
-                      onUpdateOverride(override.id, { condition: JSON.stringify({ [e.target.value]: varVal }) })
-                    }}
-                  >
-                    {variables.map(v => <MenuItem key={v.id} value={v.name}>{v.name}</MenuItem>)}
-                  </Select>
-                </FormControl>
-                <span className="text-xs text-ink-faint">=</span>
-                {(() => {
-                  if (varType === 'boolean') {
-                    return (
-                      <FormControl size="small" sx={{ minWidth: 100 }}>
-                        <Select
-                          value={String(varVal)}
-                          onChange={e => {
-                            onUpdateOverride(override.id, { condition: JSON.stringify({ [varName]: e.target.value === 'true' }) })
-                          }}
-                        >
-                          <MenuItem value="true">true</MenuItem>
-                          <MenuItem value="false">false</MenuItem>
-                        </Select>
-                      </FormControl>
-                    )
-                  }
-                  const raw = String(varVal ?? '')
-                  const isNum = varType === 'number'
-                  const invalid = isNum && raw !== '' && isNaN(Number(raw))
-                  return (
-                    <TextField
-                      size="small"
-                      value={raw}
-                      error={invalid}
-                      helperText={invalid ? 'Must be a number' : ''}
-                      sx={{ width: isNum ? 100 : 140 }}
-                      onChange={e => {
-                        const val = e.target.value
-                        if (isNum && val !== '' && isNaN(Number(val))) return
-                        onUpdateOverride(override.id, { condition: JSON.stringify({ [varName]: isNum ? Number(val) : val }) })
-                      }}
-                    />
-                  )
-                })()}
-                <button onClick={() => onDeleteOverride(override.id)} className="ml-auto text-ink-faint hover:text-choice-kill"><LuX size={13} /></button>
-              </div>
-              <TextBlock
-                content={override.content}
-                onChange={content => onUpdateOverride(override.id, { content })}
-                characters={characters}
+      {overrides.map(override => (
+        <div key={override.id} className="border border-accent/20 bg-surface-overlay rounded p-3 mb-2">
+          <div className="flex items-start gap-2 mb-2">
+            <div className="flex-1 min-w-0">
+              <ConditionRow
+                label="If:"
+                condition={override.condition || null}
                 variables={variables}
+                onChange={next => onUpdateOverride(override.id, { condition: next ?? '{}' })}
               />
             </div>
-          )
-        })}
-      </ThemeProvider>
+            <button
+              onClick={() => onDeleteOverride(override.id)}
+              className="text-ink-faint hover:text-choice-kill transition shrink-0 mt-1"
+              title="Delete this condition"
+            >
+              <LuX size={13} />
+            </button>
+          </div>
+          <TextBlock
+            content={override.content}
+            onChange={content => onUpdateOverride(override.id, { content })}
+            characters={characters}
+            variables={variables}
+          />
+        </div>
+      ))}
 
       {variables.length === 0 ? (
         <p className="text-xs text-ink-faint text-center py-1.5">

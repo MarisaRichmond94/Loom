@@ -6,11 +6,34 @@ export type HistoryEntry = {
   stateSnapshot: StoryState
 }
 
+// Conditions can be stored in two shapes that the engine reads transparently:
+//   1. Legacy: `{ varA: 1, varB: 2 }` — implicit AND of equalities. Continues to be
+//      the on-disk format for single-variable or all-AND conditions (no migration).
+//   2. Compound: `{ op: 'and' | 'or', clauses: [{ var, value }, ...] }` — explicit
+//      operator. The editor only writes this when the writer picks "any of" (OR).
+export type ConditionLeafValue = boolean | number | string
+export type LegacyCondition = Record<string, ConditionLeafValue>
+export type CompoundCondition = {
+  op: 'and' | 'or'
+  clauses: Array<{ var: string; value: ConditionLeafValue }>
+}
+export type Condition = LegacyCondition | CompoundCondition
+
+function isCompoundCondition(c: unknown): c is CompoundCondition {
+  return (
+    typeof c === 'object' &&
+    c !== null &&
+    'op' in c &&
+    'clauses' in c &&
+    Array.isArray((c as CompoundCondition).clauses)
+  )
+}
+
 export type ConditionalBlock = {
   overrides: Array<{
     id: string
     order: number
-    condition: Record<string, boolean | number | string>
+    condition: Condition
     content: string
   }>
 }
@@ -21,10 +44,11 @@ export type ChoiceRecord = {
   targetChapterId: string | null
 }
 
-export function matchesCondition(
-  condition: Record<string, boolean | number | string>,
-  storyState: StoryState,
-): boolean {
+export function matchesCondition(condition: Condition, storyState: StoryState): boolean {
+  if (isCompoundCondition(condition)) {
+    const test = (cl: { var: string; value: ConditionLeafValue }) => storyState[cl.var] === cl.value
+    return condition.op === 'or' ? condition.clauses.some(test) : condition.clauses.every(test)
+  }
   return Object.entries(condition).every(([k, v]) => storyState[k] === v)
 }
 

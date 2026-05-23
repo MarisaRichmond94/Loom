@@ -333,7 +333,7 @@ export default function ReaderView({
               if (answered) return null
 
               if (block.condition) {
-                const parsed = JSON.parse(block.condition) as Record<string, boolean | number | string>
+                const parsed = JSON.parse(block.condition)
                 if (!matchesCondition(parsed, storyState)) return null
               }
 

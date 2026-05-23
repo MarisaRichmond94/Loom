@@ -56,7 +56,7 @@ export function computeChapterLabels(books: BookIn[], storyState: StoryState): R
 export function isChapterVisible(chapter: ChapterIn, storyState: StoryState): boolean {
   if (!chapter.condition) return true
   try {
-    const parsed = JSON.parse(chapter.condition) as Record<string, boolean | number | string>
+    const parsed = JSON.parse(chapter.condition)
     return matchesCondition(parsed, storyState)
   } catch {
     return true
