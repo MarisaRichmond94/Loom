@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import ReaderView from '@/components/reader/ReaderView'
 import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
+import { computeChapterLabels } from '@/lib/chapterLabels'
 
 type Block = {
   id: string; order: number; type: string
@@ -12,7 +13,10 @@ type Block = {
   choices: { id: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null }[]
   overrides: { id: string; order: number; condition: string; content: string }[]
 }
-type SeriesBook = { id: string; title: string; order: number; chapters: { id: string; title: string; order: number }[] }
+type SeriesBook = {
+  id: string; title: string; order: number
+  chapters: { id: string; title: string; order: number; condition?: string | null; numbered?: boolean }[]
+}
 type Variable = { id: string; name: string; type: string; defaultValue: string }
 
 export default function ReaderPage() {
@@ -104,6 +108,27 @@ export default function ReaderPage() {
     return { ...defaults, ...storyState }
   }, [variables, storyState])
 
+  // Compute the reader-facing label and visibility for every chapter under the current state.
+  const chapterLabels = useMemo(() => computeChapterLabels(seriesBooks, mergedStoryState), [seriesBooks, mergedStoryState])
+
+  // If the chapter we're currently on becomes hidden (e.g., after a rewind that flipped
+  // the gating variable), jump to the first visible chapter in book order. No-op if
+  // labels haven't been computed yet or if the current chapter is still visible.
+  useEffect(() => {
+    if (!currentChapterId) return
+    if (Object.keys(chapterLabels).length === 0) return
+    const label = chapterLabels[currentChapterId]
+    if (label && label.visible) return
+    const visibleNext = seriesBooks.flatMap(b => b.chapters).find(c => chapterLabels[c.id]?.visible)
+    if (visibleNext) setCurrentChapterId(visibleNext.id)
+    else setNoContent(true)
+  }, [chapterLabels, currentChapterId, seriesBooks])
+
+  // Reader-facing chapter label, taking the dynamic numbering into account.
+  const displayChapterLabel = currentChapterId
+    ? chapterLabels[currentChapterId]?.readerLabel ?? chapterLabel
+    : chapterLabel
+
   if (noContent) {
     return (
       <div className="min-h-screen bg-surface-base flex items-center justify-center">
@@ -135,12 +160,13 @@ export default function ReaderPage() {
       choiceHistory={choiceHistory}
       variables={variables}
       seriesTitle={seriesTitle}
-      chapterLabel={chapterLabel}
+      chapterLabel={displayChapterLabel}
       chapterPov={chapterPov}
       chapterDate={chapterDate}
       returnTo={dynamicReturnTo}
       characters={characters}
       books={seriesBooks}
+      chapterLabels={chapterLabels}
       currentChapterId={currentChapterId ?? undefined}
       onSessionUpdate={handleSessionUpdate}
       onNavigate={handleNavigate}

@@ -58,6 +58,8 @@ export async function GET(_: Request, { params }: Params) {
           order: chapter.order,
           pov: chapter.pov,
           date: chapter.date,
+          condition: chapter.condition,
+          numbered: chapter.numbered,
           blocks: chapter.blocks.map(block => ({
             order: block.order,
             type: block.type,

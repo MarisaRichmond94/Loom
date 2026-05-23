@@ -12,6 +12,7 @@ import { Footnote } from '@/lib/extensions/footnote'
 import { CharacterMark } from '@/lib/extensions/character'
 import { resolveConditional, matchesCondition } from '@/lib/storyEngine'
 import { pinLabel } from '@/lib/pinLabel'
+import type { ChapterLabel } from '@/lib/chapterLabels'
 import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
 import InlineChoice from './InlineChoice'
 import ChapterGate from './ChapterGate'
@@ -50,6 +51,7 @@ type Props = {
   characters?: Character[]
   books?: Book[]
   variables?: Variable[]
+  chapterLabels?: Record<string, ChapterLabel>
   currentChapterId?: string
   onSessionUpdate: (state: StoryState, history: HistoryEntry[]) => void
   onNavigate: (chapterId: string) => void
@@ -78,9 +80,12 @@ function renderTipTap(json: string | null | undefined, storyState?: StoryState):
 }
 
 export default function ReaderView({
-  sessionId, seriesId, blocks, storyState, choiceHistory, chapterLabel, chapterPov, chapterDate, returnTo, characters = [], books = [], variables = [], currentChapterId, onSessionUpdate, onNavigate
+  sessionId, seriesId, blocks, storyState, choiceHistory, chapterLabel, chapterPov, chapterDate, returnTo, characters = [], books = [], variables = [], chapterLabels = {}, currentChapterId, onSessionUpdate, onNavigate
 }: Props) {
-  const allChapters = books.flatMap(b => b.chapters)
+  // Only visible chapters participate in prev/next navigation.
+  const allChapters = books
+    .flatMap(b => b.chapters)
+    .filter(c => chapterLabels[c.id]?.visible ?? true)
   const currentIdx = allChapters.findIndex(c => c.id === currentChapterId)
   const prevChapter = currentIdx > 0 ? allChapters[currentIdx - 1] : null
   const nextChapter = currentIdx !== -1 && currentIdx < allChapters.length - 1 ? allChapters[currentIdx + 1] : null
@@ -435,6 +440,7 @@ export default function ReaderView({
           seriesId={seriesId}
           choiceHistory={choiceHistory}
           variables={variables}
+          chapterLabels={chapterLabels}
           firstChapterId={books[0]?.chapters[0]?.id ?? null}
           onApply={(state, history, chapterId, scrollToBlockId) => {
             onSessionUpdate(state, history)
@@ -452,7 +458,7 @@ export default function ReaderView({
               onClick={() => onNavigate(prevChapter.id)}
               className="shrink-0 flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition"
             >
-              <LuArrowLeft size={13} /> {prevChapter.title}
+              <LuArrowLeft size={13} /> {chapterLabels[prevChapter.id]?.readerLabel ?? prevChapter.title}
             </button>
           ) : <div />}
           <div className="flex-1 relative h-1 bg-surface-muted rounded-full">
@@ -473,7 +479,7 @@ export default function ReaderView({
               onClick={() => onNavigate(nextChapter.id)}
               className={`shrink-0 flex items-center gap-1.5 text-xs transition ${scrollProgress >= 0.99 ? 'text-white font-medium' : 'text-ink-muted hover:text-ink'}`}
             >
-              {nextChapter.title} <LuArrowRight size={13} />
+              {chapterLabels[nextChapter.id]?.readerLabel ?? nextChapter.title} <LuArrowRight size={13} />
             </button>
           ) : <div />}
         </footer>

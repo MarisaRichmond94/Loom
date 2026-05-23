@@ -17,6 +17,7 @@ function buildBookPayload(
     title: string; synopsis: string | null; coverPath: string | null; order: number
     chapters: {
       id: string; title: string; order: number; pov: string | null; date: string | null
+      condition: string | null; numbered: boolean
       blocks: {
         order: number; type: string; content: string | null; prompt: string | null
         displayType: string | null
@@ -54,6 +55,8 @@ function buildBookPayload(
           order: chapter.order,
           pov: chapter.pov,
           date: chapter.date,
+          condition: chapter.condition,
+          numbered: chapter.numbered,
           blocks: chapter.blocks.map(block => ({
             order: block.order,
             type: block.type,

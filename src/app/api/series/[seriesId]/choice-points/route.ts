@@ -30,7 +30,11 @@ export async function GET(_: Request, { params }: Params) {
     prompt: string
     chapterId: string
     chapterTitle: string
+    chapterOrder: number
+    chapterCondition: string | null
+    chapterNumbered: boolean
     bookTitle: string
+    bookOrder: number
     choices: { id: string; label: string; setsVariables: string }[]
   }[] = []
 
@@ -42,7 +46,11 @@ export async function GET(_: Request, { params }: Params) {
           prompt: block.prompt!,
           chapterId: chapter.id,
           chapterTitle: chapter.title,
+          chapterOrder: chapter.order,
+          chapterCondition: chapter.condition,
+          chapterNumbered: chapter.numbered,
           bookTitle: book.title,
+          bookOrder: book.order,
           choices: block.choices.map(c => ({
             id: c.id,
             label: c.label,

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
+import type { ChapterLabel } from '@/lib/chapterLabels'
 
 type Variable = { id: string; name: string; type: string; defaultValue: string }
 
@@ -20,12 +21,13 @@ type Props = {
   seriesId: string
   choiceHistory: HistoryEntry[]
   variables: Variable[]
+  chapterLabels?: Record<string, ChapterLabel>
   firstChapterId: string | null
   onApply: (state: StoryState, history: HistoryEntry[], navigateToChapterId: string, scrollToBlockId?: string) => void
 }
 
 export default function BadEndingModal({
-  message, sessionId, seriesId, choiceHistory, variables, firstChapterId, onApply,
+  message, sessionId, seriesId, choiceHistory, variables, chapterLabels = {}, firstChapterId, onApply,
 }: Props) {
   const [choicePoints, setChoicePoints] = useState<ChoicePoint[]>([])
   const [working, setWorking] = useState(false)
@@ -107,30 +109,37 @@ export default function BadEndingModal({
         <p className="text-base text-ink leading-relaxed mb-6 whitespace-pre-wrap text-center">{message}</p>
         <div className="text-xs uppercase tracking-widest text-ink-faint mb-2">Go back to</div>
         <div className="flex-1 overflow-y-auto -mx-2 px-2">
-          {eligibleCps.length === 0 ? (
-            <p className="text-xs text-ink-faint italic py-2">No earlier questions to return to.</p>
-          ) : (
-            <div className="flex flex-col gap-1">
-              {eligibleCps.map(cp => {
-                const entry = choiceHistory.find(e => e.choicePointId === cp.id)
-                const chosen = entry ? cp.choices.find(c => c.id === entry.choiceId) : null
-                return (
-                  <button
-                    key={cp.id}
-                    onClick={() => goTo(cp)}
-                    disabled={working}
-                    className="text-left px-3 py-2 rounded bg-surface-overlay border border-accent/10 hover:border-accent/40 transition disabled:opacity-50 flex items-baseline gap-3"
-                  >
-                    <span className="text-xs text-ink-faint shrink-0">{cp.chapterTitle}</span>
-                    <span className="text-sm text-ink-muted flex-1 truncate">{cp.prompt}</span>
-                    {chosen && (
-                      <span className="text-xs text-ink-faint shrink-0">[{chosen.label}]</span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          )}
+          {(() => {
+            // Filter out choice points in chapters whose condition currently fails
+            // (decision: hidden chapters don't appear as rewind targets).
+            const visibleCps = eligibleCps.filter(cp => chapterLabels[cp.chapterId]?.visible !== false)
+            if (visibleCps.length === 0) {
+              return <p className="text-xs text-ink-faint italic py-2">No earlier questions to return to.</p>
+            }
+            return (
+              <div className="flex flex-col gap-1">
+                {visibleCps.map(cp => {
+                  const entry = choiceHistory.find(e => e.choicePointId === cp.id)
+                  const chosen = entry ? cp.choices.find(c => c.id === entry.choiceId) : null
+                  const label = chapterLabels[cp.chapterId]?.readerLabel ?? cp.chapterTitle
+                  return (
+                    <button
+                      key={cp.id}
+                      onClick={() => goTo(cp)}
+                      disabled={working}
+                      className="text-left px-3 py-2 rounded bg-surface-overlay border border-accent/10 hover:border-accent/40 transition disabled:opacity-50 flex items-baseline gap-3"
+                    >
+                      <span className="text-xs text-ink-faint shrink-0">{label}</span>
+                      <span className="text-sm text-ink-muted flex-1 truncate">{cp.prompt}</span>
+                      {chosen && (
+                        <span className="text-xs text-ink-faint shrink-0">[{chosen.label}]</span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          })()}
         </div>
         {firstChapterId && (
           <button

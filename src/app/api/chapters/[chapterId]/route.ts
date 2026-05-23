@@ -24,7 +24,7 @@ export async function GET(_: Request, { params }: Params) {
 
 export async function PATCH(req: Request, { params }: Params) {
   const { chapterId } = await params
-  const { title, pov, date } = await req.json()
+  const { title, pov, date, condition, numbered } = await req.json()
   try {
     const chapter = await prisma.chapter.update({
       where: { id: chapterId },
@@ -32,6 +32,8 @@ export async function PATCH(req: Request, { params }: Params) {
         ...(title !== undefined && { title }),
         ...(pov !== undefined && { pov }),
         ...(date !== undefined && { date }),
+        ...(condition !== undefined && { condition }),
+        ...(numbered !== undefined && { numbered }),
       },
     })
     return NextResponse.json(chapter)

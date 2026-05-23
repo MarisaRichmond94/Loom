@@ -44,6 +44,8 @@ model Chapter {
   order          Int
   pov            String?
   date           String?
+  condition      String?
+  numbered       Boolean        @default(true)
   book           Book           @relation(fields: [bookId], references: [id], onDelete: Cascade)
   blocks         ContentBlock[]
   inboundChoices Choice[]       @relation("TargetChapter")

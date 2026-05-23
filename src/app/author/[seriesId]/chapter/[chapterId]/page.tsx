@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic } from 'react-icons/lu'
+import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuSettings, LuCircleHelp, LuX } from 'react-icons/lu'
 import BlockEditor from '@/components/editor/BlockEditor'
+import { ConditionRow } from '@/components/editor/conditionUI'
 import { useAuthor } from '@/lib/authorContext'
 
 type Block = {
@@ -12,7 +13,7 @@ type Block = {
   choices: { id: string; label: string; setsVariables: string; targetChapterId: string | null }[]
   overrides: { id: string; order: number; condition: string; content: string }[]
 }
-type Chapter = { id: string; title: string; pov: string | null; date: string | null; blocks: Block[] }
+type Chapter = { id: string; title: string; pov: string | null; date: string | null; condition: string | null; numbered: boolean; blocks: Block[] }
 type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
 
 export default function ChapterEditorPage() {
@@ -24,6 +25,8 @@ export default function ChapterEditorPage() {
   const [titleDraft, setTitleDraft] = useState('')
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showChapterSettings, setShowChapterSettings] = useState(false)
+  const [showIfTooltip, setShowIfTooltip] = useState(false)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
 
@@ -37,7 +40,7 @@ export default function ChapterEditorPage() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  async function patchChapter(data: Record<string, string | null>) {
+  async function patchChapter(data: Record<string, string | boolean | null>) {
     await fetch(`/api/chapters/${chapterId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -48,6 +51,16 @@ export default function ChapterEditorPage() {
   function handleMetaChange(field: 'pov' | 'date', value: string) {
     setChapter(prev => prev ? { ...prev, [field]: value } : null)
     patchChapter({ [field]: value || null })
+  }
+
+  function handleConditionChange(next: string | null) {
+    setChapter(prev => prev ? { ...prev, condition: next } : null)
+    patchChapter({ condition: next })
+  }
+
+  function handleNumberedChange(next: boolean) {
+    setChapter(prev => prev ? { ...prev, numbered: next } : null)
+    patchChapter({ numbered: next })
   }
 
   async function handleTitleBlur() {
@@ -158,6 +171,13 @@ export default function ChapterEditorPage() {
       {/* Sticky action row */}
       <div className="sticky top-0 z-10 flex justify-end items-center gap-2 py-3 pr-3">
         <button
+          onClick={() => setShowChapterSettings(true)}
+          title="Chapter settings"
+          className="text-ink-faint hover:text-ink transition flex items-center"
+        >
+          <LuSettings size={20} />
+        </button>
+        <button
           onClick={() => setShowDeleteConfirm(true)}
           className="px-3 py-1.5 rounded text-xs border border-choice-kill/40 text-choice-kill font-medium hover:bg-choice-kill/10 transition"
         >
@@ -238,6 +258,63 @@ export default function ChapterEditorPage() {
           onActiveBlockChange={setActiveBlockId}
         />
       </div>
+
+      {showChapterSettings && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-start justify-center z-50"
+          style={{ paddingTop: 'calc(60px + 8vh)', paddingLeft: '14rem' }}
+          onClick={() => setShowChapterSettings(false)}
+        >
+          <div
+            className="bg-surface-raised border border-accent/20 rounded-xl p-6 max-w-md w-full mx-8 shadow-2xl relative"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-sm font-semibold text-ink uppercase tracking-widest">Chapter Settings</h2>
+              <button onClick={() => setShowChapterSettings(false)} className="text-ink-faint hover:text-ink"><LuX size={16} /></button>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="flex items-center gap-2 text-sm text-ink-muted cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={chapter.numbered}
+                    onChange={e => handleNumberedChange(e.target.checked)}
+                    className="accent-accent"
+                  />
+                  <span>Auto-numbered chapter</span>
+                </label>
+                <p className="text-xs text-ink-faint italic mt-1 ml-6">
+                  {chapter.numbered
+                    ? 'Reader sees "Chapter N", auto-counted across visible chapters.'
+                    : 'Reader sees the title verbatim — Prologue, Epilogue, etc.'}
+                </p>
+              </div>
+
+              <ConditionRow
+                condition={chapter.condition}
+                variables={series.variables}
+                onChange={handleConditionChange}
+                labelExtra={
+                  <span
+                    className="relative inline-flex"
+                    onMouseEnter={() => setShowIfTooltip(true)}
+                    onMouseLeave={() => setShowIfTooltip(false)}
+                  >
+                    <LuCircleHelp size={12} className="text-ink-faint hover:text-ink transition cursor-help" />
+                    {showIfTooltip && (
+                      <span className="absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 w-60 bg-surface-overlay border border-accent/20 rounded px-3 py-2 text-xs text-ink-muted shadow-lg normal-case tracking-normal font-normal leading-snug">
+                        Pick variables and the values they must have for this chapter to render to the reader. All listed variables must match. Leave empty to always show.
+                      </span>
+                    )}
+                  </span>
+                }
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {showDeleteConfirm && (
         <div

@@ -67,6 +67,8 @@ export async function POST(req: NextRequest) {
           order: chapter.order,
           pov: chapter.pov ?? null,
           date: chapter.date ?? null,
+          condition: chapter.condition ?? null,
+          numbered: chapter.numbered ?? true,
         },
       })
 
