@@ -95,6 +95,13 @@ button, a, select, [role="button"] {
 .var-ref-known { color: #10b981; }
 .var-ref-unknown { color: #ef4444; }
 
+/* Reader prose, when the current user is the writer — overrides the global
+   `*, *::before, *::after { user-select: none }` for the chapter content. */
+.reader-selectable, .reader-selectable * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* Light mode — scoped to the main writing area only */
 .light-body {
   --color-surface-base: #f5f2eb;
