@@ -277,6 +277,33 @@ export default function BookDetailPage() {
     closeCharModal()
   }
 
+  // Quick-toggle handlers — used by the hover buttons on each character
+  // card so the writer doesn't have to open the modal for these common
+  // ops. Both PATCH the canonical row and refetch the resolved list so
+  // the dependent fields (`hidden`, `starred`) come back consistent.
+  async function toggleStarred(c: Character) {
+    await fetch(`/api/series/${seriesId}/characters/${c.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ starred: !c.starred }),
+    })
+    await loadCharacters()
+  }
+
+  async function toggleHidden(c: Character) {
+    // c.hidden being true means `lastBookId` already points at an earlier
+    // book; unhiding clears it. From a not-hidden card, hide sets
+    // lastBookId to THIS book — the character keeps appearing here and
+    // disappears starting in the next book.
+    const nextLastBookId = c.hidden ? null : bookId
+    await fetch(`/api/series/${seriesId}/characters/${c.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lastBookId: nextLastBookId }),
+    })
+    await loadCharacters()
+  }
+
   // Wipes the per-book override row + per-book avatar for the character open
   // in the modal; the book grid then snaps back to the canonical character.
   async function resetOverridesForBook(characterId: string) {
@@ -431,23 +458,33 @@ export default function BookDetailPage() {
               {characters.map(c => {
                 const isPov = povNames.has(c.name)
                 return (
-                <button
+                <div
                   key={c.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => openEditModal(c)}
-                  className={`relative flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border transition h-[146px] w-full ${c.hidden ? 'opacity-60 ' : ''}${isPov ? 'border-accent hover:border-accent/70' : 'border-accent/10 hover:border-accent/30'}`}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEditModal(c) } }}
+                  className={`group/charcard relative flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border transition h-[146px] w-full cursor-pointer ${c.hidden ? 'opacity-60 ' : ''}${isPov ? 'border-accent hover:border-accent/70' : 'border-accent/10 hover:border-accent/30'}`}
                 >
-                  {c.starred && (
-                    <LuStar
-                      size={12}
-                      className="absolute top-1.5 right-1.5 fill-accent text-accent"
-                    />
-                  )}
-                  {c.hidden && (
-                    <LuEyeOff
-                      size={12}
-                      className="absolute top-1.5 left-1.5 text-ink-faint"
-                    />
-                  )}
+                  {/* Quick toggles. Active state stays visible permanently;
+                      idle state fades in on card hover. stopPropagation so
+                      clicking these doesn't open the edit modal. */}
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); toggleHidden(c) }}
+                    title={c.hidden ? 'Make visible to readers from this book on' : 'Hide from readers in later books'}
+                    className={`absolute top-1.5 left-1.5 p-0.5 rounded hover:bg-accent/20 transition ${c.hidden ? 'opacity-100' : 'opacity-0 group-hover/charcard:opacity-80'}`}
+                  >
+                    <LuEyeOff size={12} className="text-ink-faint" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); toggleStarred(c) }}
+                    title={c.starred ? 'Unstar (no longer primary)' : 'Star as primary character'}
+                    className={`absolute top-1.5 right-1.5 p-0.5 rounded hover:bg-accent/20 transition ${c.starred ? 'opacity-100' : 'opacity-0 group-hover/charcard:opacity-80'}`}
+                  >
+                    <LuStar size={12} className={c.starred ? 'fill-accent text-accent' : 'text-ink-faint'} />
+                  </button>
                   <div className={`w-20 h-20 rounded-full overflow-hidden border-2 bg-surface-overlay flex items-center justify-center shrink-0 ${isPov ? 'border-accent' : 'border-accent/20'}`}>
                     {(() => {
                       const url = avatarUrlFor(c, charAvatarTs)
@@ -464,7 +501,7 @@ export default function BookDetailPage() {
                         ? <p className="text-[10px] uppercase tracking-widest text-ink-faint italic">Deceased</p>
                         : c.age != null && <p className="text-xs text-ink-faint">Age {c.age}</p>}
                   </div>
-                </button>
+                </div>
               )})}
             </div>
               )
