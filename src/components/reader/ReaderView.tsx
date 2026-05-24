@@ -18,6 +18,7 @@ import InlineChoice from './InlineChoice'
 import ChapterGate from './ChapterGate'
 import ChoiceConfigModal from './ChoiceConfigModal'
 import BadEndingModal from './BadEndingModal'
+import InlineBadEnding from './InlineBadEnding'
 import AvatarButton from '@/components/AvatarButton'
 import Greeting from '@/components/Greeting'
 import { stripEmptyParagraphs, htmlToPlainText, inlineParagraphStyles, PASTE_FONT_FAMILY } from '@/lib/clipboardFormatting'
@@ -168,44 +169,6 @@ export default function ReaderView({
     return () => cancelAnimationFrame(id)
   }, [blocks, choiceHistory])
 
-  // Detect a Bad Ending triggered by a conditional fragment whose matched
-  // override carries an endingMessage. Walks blocks in story order and stops
-  // at the first unanswered, visible choice point so a conditional sitting
-  // AFTER a still-pending choice doesn't fire prematurely.
-  useEffect(() => {
-    if (endingMessage != null) return
-    for (const block of blocks) {
-      if (block.type === 'choice_point') {
-        const answered = choiceHistory.some(h => h.choicePointId === block.id)
-        if (answered) continue
-        if (block.condition) {
-          try {
-            if (!matchesCondition(JSON.parse(block.condition), storyState)) continue
-          } catch { return }
-        }
-        return  // unanswered visible choice gates everything past it
-      }
-      if (block.type === 'conditional_fragment') {
-        const matched = resolveConditionalOverride(
-          {
-            overrides: block.overrides.map(o => ({
-              id: o.id,
-              order: o.order,
-              condition: JSON.parse(o.condition),
-              content: o.content,
-              endingMessage: o.endingMessage ?? null,
-            })),
-          },
-          storyState,
-        )
-        if (matched?.endingMessage) {
-          setEndingMessage(matched.endingMessage)
-          return
-        }
-      }
-    }
-  }, [blocks, storyState, choiceHistory, endingMessage])
-
   useEffect(() => {
     if (choiceHistory.length <= prevChoiceCountRef.current) {
       prevChoiceCountRef.current = choiceHistory.length
@@ -298,9 +261,15 @@ export default function ReaderView({
           },
           storyState,
         )
-        // Bad-ending overrides interrupt the chapter — stop copying here.
-        if (matched?.endingMessage) break
-        if (matched) html = renderTipTap(matched.content, storyState)
+        if (matched) {
+          html = renderTipTap(matched.content, storyState)
+          // Bad-ending override: copy its prose (the death scene IS the
+          // ending), then stop — everything after is hidden in the chapter.
+          if (matched.endingMessage != null) {
+            if (html) { htmlParts.push(html); textParts.push(htmlToPlainText(html)) }
+            break
+          }
+        }
       } else if (block.type === 'choice_point') {
         const answered = choiceHistory.some(h => h.choicePointId === block.id)
         if (answered) continue
@@ -402,7 +371,12 @@ export default function ReaderView({
         {chapterDate && <p className="text-base text-ink-faint mb-2">{chapterDate}</p>}
         {(() => {
           let pendingChoice = false
-          return blocks.map(block => {
+          let hitBadEnding = false
+          const elements = blocks.map(block => {
+            // A conditional bad-ending earlier in the chapter ends the run;
+            // every block after it is hidden (not blurred — the story is over).
+            if (hitBadEnding) return null
+
             if (block.type === 'text') {
               return (
                 <div
@@ -430,9 +404,11 @@ export default function ReaderView({
                 },
                 storyState
               )
-              // Bad-ending overrides render nothing inline; the BadEndingModal
-              // (fired by the detection useEffect above) is the ending content.
-              if (!matched || matched.endingMessage) return null
+              if (!matched) return null
+              // Render the override's prose either way — for bad endings the
+              // prose IS the death scene. Flip hitBadEnding so the rest of
+              // the chapter (and the InlineBadEnding controls below) take over.
+              if (matched.endingMessage != null) hitBadEnding = true
               return (
                 <div
                   key={block.id}
@@ -493,6 +469,26 @@ export default function ReaderView({
 
             return null
           })
+          return (
+            <>
+              {elements}
+              {hitBadEnding && (
+                <InlineBadEnding
+                  sessionId={sessionId}
+                  seriesId={seriesId}
+                  choiceHistory={choiceHistory}
+                  variables={variables}
+                  chapterLabels={chapterLabels}
+                  firstChapterId={books[0]?.chapters[0]?.id ?? null}
+                  onApply={(state, history, chapterId, scrollToBlockId) => {
+                    onSessionUpdate(state, history)
+                    if (scrollToBlockId) pendingScrollBlockRef.current = scrollToBlockId
+                    onNavigate(chapterId)
+                  }}
+                />
+              )}
+            </>
+          )
         })()}
         </div>
       </main>

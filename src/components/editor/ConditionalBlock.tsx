@@ -53,22 +53,12 @@ export default function ConditionalBlock({ overrides, variables, characters, onA
               </button>
             </div>
 
-            {isEnding ? (
-              <textarea
-                defaultValue={override.endingMessage ?? ''}
-                onBlur={e => onUpdateOverride(override.id, { endingMessage: e.target.value })}
-                placeholder="What happens (shown to the reader on a full-screen overlay)…"
-                rows={3}
-                className="w-full bg-surface-base border border-accent/20 rounded px-2 py-1.5 text-xs text-ink placeholder:text-ink-faint outline-none focus:border-accent/50 resize-none"
-              />
-            ) : (
-              <TextBlock
-                content={override.content}
-                onChange={content => onUpdateOverride(override.id, { content })}
-                characters={characters}
-                variables={variables}
-              />
-            )}
+            <TextBlock
+              content={override.content}
+              onChange={content => onUpdateOverride(override.id, { content })}
+              characters={characters}
+              variables={variables}
+            />
 
             <label className="mt-2 flex items-center gap-2 text-xs text-ink-muted cursor-pointer">
               <input
@@ -78,6 +68,9 @@ export default function ConditionalBlock({ overrides, variables, characters, onA
                 className="accent-choice-kill"
               />
               <span>Bad ending</span>
+              {isEnding && (
+                <span className="text-[10px] uppercase tracking-widest text-choice-kill/80 ml-1">truncates the rest of the chapter</span>
+              )}
             </label>
           </div>
         )
