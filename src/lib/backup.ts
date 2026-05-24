@@ -20,6 +20,7 @@ function buildBookPayload(
   },
   book: {
     id: string; title: string; synopsis: string | null; coverPath: string | null; order: number
+    published: boolean
     chapters: {
       id: string; title: string; order: number; pov: string | null; date: string | null
       condition: string | null; numbered: boolean
@@ -67,6 +68,7 @@ function buildBookPayload(
         synopsis: book.synopsis,
         coverPath: book.coverPath,
         order: book.order,
+        published: book.published,
         chapters: book.chapters.map(chapter => ({
           _ref: chapter.id,
           title: chapter.title,

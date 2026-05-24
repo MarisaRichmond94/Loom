@@ -12,7 +12,7 @@ import { pinLabel } from '@/lib/pinLabel'
 import PinnedAudio from '@/components/PinnedAudio'
 
 type Stats = { chapterCount: number; uniquePovs: number; choiceCount: number; wordCount: number }
-type Book = { id: string; title: string; synopsis: string; coverPath: string | null; stats: Stats }
+type Book = { id: string; title: string; synopsis: string; coverPath: string | null; published: boolean; stats: Stats }
 // Resolved-for-this-book shape returned by /api/series/[seriesId]/books/[bookId]/characters
 type Character = {
   id: string
@@ -307,17 +307,45 @@ export default function BookDetailPage() {
 
   if (!book) return <BookSkeleton />
 
+  async function togglePublished() {
+    if (!book) return
+    const next = !book.published
+    setBook({ ...book, published: next })
+    await fetch(`/api/series/${seriesId}/books/${bookId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ published: next }),
+    })
+  }
+
   return (
     <>
       <div className="max-w-3xl mx-auto px-8 py-8 relative">
-        <a
-          href={`/preview/book/${bookId}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="absolute top-8 right-8 px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition flex items-center gap-1.5 z-10"
-        >
-          <LuEye size={12} /> Preview
-        </a>
+        <div className="absolute top-8 right-8 flex items-center gap-2 z-10">
+          {/* Publish toggle. Drafts still appear in the public series landing
+              but are gated behind a "Coming Soon" state so readers see the
+              full series roadmap without being able to open unfinished books. */}
+          <button
+            onClick={togglePublished}
+            className={`px-3 py-1.5 rounded text-xs font-medium transition border flex items-center gap-1.5 ${
+              book.published
+                ? 'bg-accent/10 text-ink border-accent/30 hover:bg-accent/15'
+                : 'bg-surface-overlay text-ink-muted border-accent/20 hover:text-ink'
+            }`}
+            title={book.published ? 'Click to revert to draft' : 'Click to publish to readers'}
+          >
+            <span className={`inline-block w-1.5 h-1.5 rounded-full ${book.published ? 'bg-accent' : 'bg-ink-faint'}`} />
+            {book.published ? 'Published' : 'Draft'}
+          </button>
+          <a
+            href={`/preview/book/${bookId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition flex items-center gap-1.5"
+          >
+            <LuEye size={12} /> Preview
+          </a>
+        </div>
         <div className="flex gap-8 mb-8 items-stretch">
           {/* Cover */}
           <div

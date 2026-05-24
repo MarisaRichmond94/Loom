@@ -62,7 +62,7 @@ export async function GET(_: Request, { params }: Params) {
 
 export async function PATCH(req: Request, { params }: Params) {
   const { bookId } = await params
-  const { title, order, synopsis, coverPath } = await req.json()
+  const { title, order, synopsis, coverPath, published } = await req.json()
   try {
     const book = await prisma.book.update({
       where: { id: bookId },
@@ -71,6 +71,7 @@ export async function PATCH(req: Request, { params }: Params) {
         ...(order !== undefined && { order }),
         ...(synopsis !== undefined && { synopsis }),
         ...(coverPath !== undefined && { coverPath }),
+        ...(published !== undefined && { published }),
       },
     })
     return NextResponse.json(book)

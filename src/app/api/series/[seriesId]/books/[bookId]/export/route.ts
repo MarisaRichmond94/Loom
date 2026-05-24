@@ -68,6 +68,7 @@ export async function GET(_: Request, { params }: Params) {
         synopsis: book.synopsis,
         coverPath: book.coverPath,
         order: book.order,
+        published: book.published,
         chapters: book.chapters.map(chapter => ({
           _ref: chapter.id,
           title: chapter.title,

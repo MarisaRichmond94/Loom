@@ -59,6 +59,11 @@ model Book {
   synopsis                     String                  @default("")
   coverPath                    String?
   order                        Int
+  // Publish gate for public preview pages. Drafts still appear in the
+  // series landing's book list but with a "Coming Soon" treatment instead
+  // of a link; the book landing disables its Start Reading CTA. New books
+  // start as drafts; the migration backfills existing books to published.
+  published                    Boolean                 @default(false)
   series                       Series                  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   chapters                     Chapter[]
   charactersFirstAppearingHere Character[]             @relation("FirstAppearsIn")

@@ -64,6 +64,9 @@ export async function POST(req: NextRequest) {
         synopsis: book.synopsis ?? '',
         coverPath: book.coverPath ?? null,
         order: book.order,
+        // Older v2 payloads predate the publish gate; treat them as
+        // published so existing exports import to their previous state.
+        published: typeof book.published === 'boolean' ? book.published : true,
       },
     })
     if (book._ref) bookRefMap[book._ref] = newBook.id

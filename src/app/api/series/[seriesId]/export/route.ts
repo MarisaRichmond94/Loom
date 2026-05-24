@@ -58,6 +58,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ser
         synopsis: book.synopsis,
         coverPath: book.coverPath,
         order: book.order,
+        published: book.published,
         chapters: book.chapters.map(chapter => ({
           _ref: chapter.id,
           title: chapter.title,

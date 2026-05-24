@@ -10,6 +10,7 @@ type Book = {
   synopsis: string
   coverPath: string | null
   order: number
+  published: boolean
 }
 
 type Series = {
@@ -109,7 +110,7 @@ export default function PreviewSeriesPage() {
                 ))}
               </div>
             )}
-            {series.books.length > 0 && (
+            {series.books.some(b => b.published) && (
               <button
                 onClick={() => startReading()}
                 disabled={working != null}
@@ -128,26 +129,48 @@ export default function PreviewSeriesPage() {
           <p className="text-sm text-ink-faint italic">No books yet.</p>
         ) : (
           <div className="flex flex-col gap-3">
-            {series.books.map((book, idx) => (
-              <a
-                key={book.id}
-                href={`/preview/book/${book.id}`}
-                className="flex gap-5 p-5 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
-              >
-                <div className="w-24 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center">
-                  {book.coverPath
-                    ? <img src={book.coverPath} alt="" className="w-full h-full object-cover" />
-                    : <LuBookOpen size={20} className="text-ink-faint" />}
+            {series.books.map((book, idx) => {
+              // Unpublished books still appear in the roadmap so readers see
+              // what's coming, but the cover is faded, no synopsis leaks, and
+              // the card isn't a link.
+              const card = (
+                <>
+                  <div className={`w-24 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center ${!book.published ? 'opacity-40' : ''}`}>
+                    {book.coverPath
+                      ? <img src={book.coverPath} alt="" className="w-full h-full object-cover" />
+                      : <LuBookOpen size={20} className="text-ink-faint" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs uppercase tracking-widest text-ink-faint">Book {idx + 1}</p>
+                      {!book.published && (
+                        <span className="text-[10px] uppercase tracking-widest text-ink-faint border border-accent/30 rounded px-1.5 py-0.5">Coming soon</span>
+                      )}
+                    </div>
+                    <p className={`font-semibold mt-1 ${book.published ? 'text-ink' : 'text-ink-muted'}`}>{book.title}</p>
+                    {book.published && book.synopsis && (
+                      <p className="text-sm text-ink-muted mt-2 line-clamp-3 leading-relaxed">{book.synopsis}</p>
+                    )}
+                  </div>
+                </>
+              )
+              return book.published ? (
+                <a
+                  key={book.id}
+                  href={`/preview/book/${book.id}`}
+                  className="flex gap-5 p-5 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
+                >
+                  {card}
+                </a>
+              ) : (
+                <div
+                  key={book.id}
+                  className="flex gap-5 p-5 rounded-lg bg-surface-raised border border-accent/10 cursor-default"
+                >
+                  {card}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs uppercase tracking-widest text-ink-faint">Book {idx + 1}</p>
-                  <p className="font-semibold text-ink mt-1">{book.title}</p>
-                  {book.synopsis && (
-                    <p className="text-sm text-ink-muted mt-2 line-clamp-3 leading-relaxed">{book.synopsis}</p>
-                  )}
-                </div>
-              </a>
-            ))}
+              )
+            })}
           </div>
         )}
       </main>

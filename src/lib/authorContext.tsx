@@ -3,7 +3,7 @@
 import { createContext, useContext } from 'react'
 
 type Chapter = { id: string; title: string; order: number; pov?: string | null }
-type Book = { id: string; title: string; order: number; chapters: Chapter[] }
+type Book = { id: string; title: string; order: number; published: boolean; chapters: Chapter[] }
 type Variable = { id: string; name: string; type: string; defaultValue: string }
 export type AuthorSeries = {
   id: string

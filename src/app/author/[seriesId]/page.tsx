@@ -148,6 +148,9 @@ export default function AuthorSeriesPage() {
                       <div className="flex items-baseline gap-3 mb-4">
                         <span className="text-xs text-ink-faint uppercase tracking-widest shrink-0">Book {idx + 1}</span>
                         <span className="font-semibold text-ink text-lg leading-tight">{book.title}</span>
+                        {!book.published && (
+                          <span className="text-[10px] uppercase tracking-widest text-ink-faint border border-accent/30 rounded px-1.5 py-0.5 shrink-0">Draft</span>
+                        )}
                       </div>
                       <div className="grid grid-cols-4 gap-3">
                         {[

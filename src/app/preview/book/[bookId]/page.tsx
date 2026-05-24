@@ -12,6 +12,7 @@ type Book = {
   coverPath: string | null
   order: number
   seriesId: string
+  published: boolean
   chapters: Chapter[]
 }
 type Series = {
@@ -55,7 +56,7 @@ export default function PreviewBookPage() {
   }, [bookId])
 
   async function startReading() {
-    if (!book || working) return
+    if (!book || working || !book.published) return
     setWorking(true)
     const cacheKey = `loom-session-${book.seriesId}`
     let sessionId = localStorage.getItem(cacheKey)
@@ -95,7 +96,7 @@ export default function PreviewBookPage() {
     <div className="min-h-screen bg-surface-base">
       <header className="border-b border-accent/10">
         <div className="max-w-3xl mx-auto px-8 py-12 flex flex-col md:flex-row gap-8 items-start">
-          <div className="w-44 md:w-56 shrink-0 rounded-lg overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center">
+          <div className={`w-44 md:w-56 shrink-0 rounded-lg overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center ${!book.published ? 'opacity-40' : ''}`}>
             {book.coverPath
               ? <img src={book.coverPath} alt="" className="w-full h-full object-cover" />
               : <LuBookOpen size={40} className="text-ink-faint" />}
@@ -109,9 +110,19 @@ export default function PreviewBookPage() {
                 <LuArrowLeft size={11} /> {series.title}
               </a>
             )}
-            <h1 className="mt-2 text-3xl md:text-4xl font-bold text-ink leading-tight">{book.title}</h1>
-            {book.synopsis && (
+            <div className="mt-2 flex items-baseline gap-3 flex-wrap">
+              <h1 className="text-3xl md:text-4xl font-bold text-ink leading-tight">{book.title}</h1>
+              {!book.published && (
+                <span className="text-[11px] uppercase tracking-widest text-ink-faint border border-accent/30 rounded px-2 py-0.5">Coming soon</span>
+              )}
+            </div>
+            {book.published && book.synopsis && (
               <p className="mt-4 text-base text-ink-muted leading-relaxed whitespace-pre-wrap">{book.synopsis}</p>
+            )}
+            {!book.published && (
+              <p className="mt-4 text-sm text-ink-faint italic leading-relaxed">
+                This book is still being written. Check back soon.
+              </p>
             )}
             {series && series.genres.length > 0 && (
               <div className="mt-5 flex flex-wrap items-center gap-2">
@@ -131,31 +142,39 @@ export default function PreviewBookPage() {
             )}
             <button
               onClick={startReading}
-              disabled={working || orderedChapters.length === 0}
+              disabled={working || !book.published || orderedChapters.length === 0}
               className="mt-6 px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
             >
-              {working ? 'Opening…' : orderedChapters.length === 0 ? 'No chapters yet' : 'Start reading'}
-              {!working && orderedChapters.length > 0 && <LuArrowRight size={14} />}
+              {!book.published
+                ? 'Coming soon'
+                : working
+                  ? 'Opening…'
+                  : orderedChapters.length === 0
+                    ? 'No chapters yet'
+                    : 'Start reading'}
+              {book.published && !working && orderedChapters.length > 0 && <LuArrowRight size={14} />}
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-8 py-10">
-        <h2 className="text-xs uppercase tracking-widest text-ink-faint mb-4">Chapters</h2>
-        {orderedChapters.length === 0 ? (
-          <p className="text-sm text-ink-faint italic">No chapters yet.</p>
-        ) : (
-          <ol className="flex flex-col gap-1">
-            {orderedChapters.map(ch => (
-              <li key={ch.id} className="px-4 py-3 rounded bg-surface-raised border border-accent/10 flex items-baseline gap-3">
-                <span className="text-xs text-ink-faint tabular-nums shrink-0 w-8">{ch.order}</span>
-                <span className="text-sm text-ink">{ch.title}</span>
-              </li>
-            ))}
-          </ol>
-        )}
-      </main>
+      {book.published && (
+        <main className="max-w-3xl mx-auto px-8 py-10">
+          <h2 className="text-xs uppercase tracking-widest text-ink-faint mb-4">Chapters</h2>
+          {orderedChapters.length === 0 ? (
+            <p className="text-sm text-ink-faint italic">No chapters yet.</p>
+          ) : (
+            <ol className="flex flex-col gap-1">
+              {orderedChapters.map(ch => (
+                <li key={ch.id} className="px-4 py-3 rounded bg-surface-raised border border-accent/10 flex items-baseline gap-3">
+                  <span className="text-xs text-ink-faint tabular-nums shrink-0 w-8">{ch.order}</span>
+                  <span className="text-sm text-ink">{ch.title}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </main>
+      )}
     </div>
   )
 }
