@@ -141,34 +141,47 @@ export default function HomePage() {
           ) : (
             <div className="flex flex-col gap-3">
               {series.map(s => (
-                <div key={s.id} className="p-5 rounded-lg bg-surface-raised border border-accent/10 flex items-center justify-between transition-transform duration-150 hover:scale-[1.01]">
-                  <Link href={`/author/${s.id}`} className="flex-1 min-w-0 mr-4">
-                    <div className="font-medium text-ink">{s.title}</div>
-                    {s.description && <div className="text-sm text-ink-muted mt-1">{s.description}</div>}
-                  </Link>
-                  <div className="flex gap-2 shrink-0">
-                    <a
-                      href={`/api/series/${s.id}/export`}
-                      download
-                      className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition flex items-center gap-1.5"
-                    >
-                      <LuDownload size={11} /> Export
-                    </a>
-                    <button
-                      onClick={async () => {
-                        const res = await fetch('/api/sessions', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ seriesId: s.id }),
-                        })
-                        const session = await res.json()
-                        router.push(`/read/${session.id}`)
-                      }}
-                      className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition flex items-center gap-1.5"
-                    >
-                      <LuPlay size={11} /> Read
-                    </button>
+                <div key={s.id} className="p-5 rounded-lg bg-surface-raised border border-accent/10 transition-transform duration-150 hover:scale-[1.01]">
+                  {/* Title + actions share a row up top so the buttons have a
+                      steady anchor; the description drops to a full-width
+                      paragraph below so it can breathe. Title + description
+                      are both links to the author page (same href). */}
+                  <div className="flex items-center justify-between gap-3">
+                    <Link href={`/author/${s.id}`} className="font-medium text-ink hover:opacity-80 flex-1 min-w-0 truncate">
+                      {s.title}
+                    </Link>
+                    <div className="flex gap-2 shrink-0">
+                      <a
+                        href={`/api/series/${s.id}/export`}
+                        download
+                        className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition flex items-center gap-1.5"
+                      >
+                        <LuDownload size={11} /> Export
+                      </a>
+                      <button
+                        onClick={async () => {
+                          const res = await fetch('/api/sessions', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ seriesId: s.id }),
+                          })
+                          const session = await res.json()
+                          router.push(`/read/${session.id}`)
+                        }}
+                        className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition flex items-center gap-1.5"
+                      >
+                        <LuPlay size={11} /> Read
+                      </button>
+                    </div>
                   </div>
+                  {s.description && (
+                    <Link
+                      href={`/author/${s.id}`}
+                      className="block text-sm text-ink-muted mt-2 hover:opacity-80"
+                    >
+                      {s.description}
+                    </Link>
+                  )}
                 </div>
               ))}
             </div>
