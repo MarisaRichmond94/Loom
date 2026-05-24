@@ -88,7 +88,7 @@ export default function PreviewSeriesPage() {
   return (
     <div className="min-h-screen bg-surface-base">
       <header className="border-b border-accent/10">
-        <div className="max-w-4xl mx-auto px-8 py-12">
+        <div className="max-w-4xl mx-auto px-8 pt-12 pb-8">
           {/* Row 1: title and Start reading on the same baseline. Description,
               genres, and keywords drop below at full width. */}
           <div className="flex items-center justify-between gap-6">
@@ -125,22 +125,22 @@ export default function PreviewSeriesPage() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-8 py-10">
+      <main className="max-w-4xl mx-auto px-8 pt-6 pb-10">
         <h2 className="text-xs uppercase tracking-widest text-ink-faint mb-4">Books in this series</h2>
         {series.books.length === 0 ? (
           <p className="text-sm text-ink-faint italic">No books yet.</p>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             {series.books.map((book, idx) => {
               // Unpublished books still appear in the roadmap so readers see
               // what's coming, but the cover is faded, no synopsis leaks, and
               // the card isn't a link.
               const card = (
                 <>
-                  <div className={`w-24 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center ${!book.published ? 'opacity-40' : ''}`}>
+                  <div className={`w-40 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center ${!book.published ? 'opacity-40' : ''}`}>
                     {book.coverPath
                       ? <img src={book.coverPath} alt="" className="w-full h-full object-cover" />
-                      : <LuBookOpen size={20} className="text-ink-faint" />}
+                      : <LuBookOpen size={28} className="text-ink-faint" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -149,10 +149,10 @@ export default function PreviewSeriesPage() {
                         <span className="text-[10px] uppercase tracking-widest text-ink-faint border border-accent/30 rounded px-1.5 py-0.5">Coming soon</span>
                       )}
                     </div>
-                    <p className={`font-semibold mt-1 ${book.published ? 'text-ink' : 'text-ink-muted'}`}>{book.title}</p>
+                    <p className={`font-semibold text-lg mt-1 leading-tight ${book.published ? 'text-ink' : 'text-ink-muted'}`}>{book.title}</p>
                     {book.published && book.synopsis && (
                       <>
-                        <p className="text-sm text-ink-muted mt-2 line-clamp-3 leading-relaxed">{book.synopsis}</p>
+                        <p className="text-sm text-ink-muted mt-2 line-clamp-5 leading-relaxed">{book.synopsis}</p>
                         {/* Visual cue inside the already-clickable card. The
                             parent <a> owns navigation; this is just to give
                             readers an obvious target if the card-as-link
@@ -172,7 +172,7 @@ export default function PreviewSeriesPage() {
                       // copied or interacted with.
                       <p
                         aria-hidden
-                        className="text-sm text-ink-muted mt-2 line-clamp-3 leading-relaxed blur-sm select-none pointer-events-none"
+                        className="text-sm text-ink-muted mt-2 line-clamp-5 leading-relaxed blur-sm select-none pointer-events-none"
                       >
                         Lorem ipsum dolor sit amet, consectetur adipiscing elit.
                         Sed do eiusmod tempor incididunt ut labore et dolore magna
