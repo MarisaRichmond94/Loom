@@ -112,7 +112,21 @@ export default function ReaderView({
   const [isAuthor, setIsAuthor] = useState(false)
   const [endingMessage, setEndingMessage] = useState<string | null>(null)
   const pendingScrollBlockRef = useRef<string | null>(null)
+  const prevHistoryLengthRef = useRef(choiceHistory.length)
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
+
+  // Belt-and-suspenders modal dismissal. The modal's onApply already calls
+  // setEndingMessage(null), but if anything in the React batch happens to
+  // delay or swallow that update, the rewound choiceHistory still lets us
+  // detect the rewind and force-close: choiceHistory only shrinks via the
+  // rewind PATCH in useBadEndingRewind, so a shorter history while the
+  // modal is open means the user just rewound.
+  useEffect(() => {
+    if (endingMessage != null && choiceHistory.length < prevHistoryLengthRef.current) {
+      setEndingMessage(null)
+    }
+    prevHistoryLengthRef.current = choiceHistory.length
+  }, [choiceHistory, endingMessage])
 
   useEffect(() => {
     setIsAuthor((localStorage.getItem('loom-author-name') ?? '').trim() !== '')
