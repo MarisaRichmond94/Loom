@@ -84,20 +84,11 @@ export default function PreviewSeriesPage() {
     )
   }
 
-  const heroCover = series.books.find(b => b.coverPath)?.coverPath ?? null
-
   return (
     <div className="min-h-screen bg-surface-base">
       <header className="border-b border-accent/10">
-        <div className="max-w-4xl mx-auto px-8 py-12 flex flex-col md:flex-row gap-8 items-start">
-          {/* Hero cover (first book with a cover; falls back to a placeholder
-              tile so the layout doesn't shift). */}
-          <div className="w-40 md:w-48 shrink-0 rounded-lg overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center">
-            {heroCover
-              ? <img src={heroCover} alt="" className="w-full h-full object-cover" />
-              : <LuBookOpen size={36} className="text-ink-faint" />}
-          </div>
-          <div className="flex-1 min-w-0">
+        <div className="max-w-4xl mx-auto px-8 py-12">
+          <div className="min-w-0">
             <h1 className="text-3xl md:text-4xl font-bold text-ink leading-tight uppercase tracking-wide">{series.title}</h1>
             {series.description && (
               <p className="mt-4 text-base text-ink-muted leading-relaxed whitespace-pre-wrap">{series.description}</p>
