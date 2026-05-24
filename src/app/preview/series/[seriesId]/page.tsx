@@ -88,8 +88,8 @@ export default function PreviewSeriesPage() {
   return (
     <div className="min-h-screen bg-surface-base">
       <header className="border-b border-accent/10">
-        <div className="max-w-4xl mx-auto px-8 py-12">
-          <div className="min-w-0">
+        <div className="max-w-4xl mx-auto px-8 py-12 flex items-start gap-6">
+          <div className="flex-1 min-w-0">
             <h1 className="text-3xl md:text-4xl font-bold text-ink leading-tight uppercase tracking-wide">{series.title}</h1>
             {series.description && (
               <p className="mt-4 text-base text-ink-muted leading-relaxed whitespace-pre-wrap">{series.description}</p>
@@ -110,16 +110,16 @@ export default function PreviewSeriesPage() {
                 ))}
               </div>
             )}
-            {series.books.some(b => b.published) && (
-              <button
-                onClick={() => startReading()}
-                disabled={working != null}
-                className="mt-6 px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
-              >
-                {working === 'series' ? 'Opening…' : 'Start reading'} <LuArrowRight size={14} />
-              </button>
-            )}
           </div>
+          {series.books.some(b => b.published) && (
+            <button
+              onClick={() => startReading()}
+              disabled={working != null}
+              className="shrink-0 px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
+            >
+              {working === 'series' ? 'Opening…' : 'Start reading'} <LuArrowRight size={14} />
+            </button>
+          )}
         </div>
       </header>
 
@@ -149,7 +149,16 @@ export default function PreviewSeriesPage() {
                     </div>
                     <p className={`font-semibold mt-1 ${book.published ? 'text-ink' : 'text-ink-muted'}`}>{book.title}</p>
                     {book.published && book.synopsis && (
-                      <p className="text-sm text-ink-muted mt-2 line-clamp-3 leading-relaxed">{book.synopsis}</p>
+                      <>
+                        <p className="text-sm text-ink-muted mt-2 line-clamp-3 leading-relaxed">{book.synopsis}</p>
+                        {/* Visual cue inside the already-clickable card. The
+                            parent <a> owns navigation; this is just to give
+                            readers an obvious target if the card-as-link
+                            affordance isn't obvious. */}
+                        <span className="inline-block text-xs text-accent font-medium mt-2 group-hover/card:underline">
+                          See more →
+                        </span>
+                      </>
                     )}
                     {!book.published && (
                       // Blurred lorem placeholder so the card keeps the same
@@ -174,7 +183,7 @@ export default function PreviewSeriesPage() {
                 <a
                   key={book.id}
                   href={`/preview/book/${book.id}`}
-                  className="flex gap-5 p-5 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
+                  className="group/card flex gap-5 p-5 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
                 >
                   {card}
                 </a>
