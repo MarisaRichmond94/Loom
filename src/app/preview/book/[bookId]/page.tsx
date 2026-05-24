@@ -60,6 +60,10 @@ export default function PreviewBookPage() {
   const [series, setSeries] = useState<Series | null>(null)
   const [characters, setCharacters] = useState<Character[]>([])
   const [soundtracks, setSoundtracks] = useState<Soundtrack[]>([])
+  // POV character names taken from every chapter's `pov` field across every
+  // book in the series — same scope as the author book page so the chips on
+  // both sides match. A set for O(1) membership lookup in the render loop.
+  const [povNames, setPovNames] = useState<Set<string>>(new Set())
   const [working, setWorking] = useState(false)
   // Sections default open per spec; readers can collapse them to focus on
   // any single section. State is per-section so the others stay where the
@@ -86,6 +90,19 @@ export default function PreviewBookPage() {
         try { const p = JSON.parse(v); return Array.isArray(p) ? p : [] } catch { return [] }
       }
       setSeries({ id: s.id, title: s.title, genres: parseList(s.genres), keywords: parseList(s.keywords) })
+
+      // Walk every chapter in every book to collect the names that appear
+      // as a POV. The series endpoint already includes books → chapters,
+      // so this is free off the same fetch.
+      type ChapterPov = { pov?: string | null }
+      type BookWithChapters = { chapters?: ChapterPov[] }
+      const povs = new Set<string>()
+      for (const b of (s.books ?? []) as BookWithChapters[]) {
+        for (const ch of b.chapters ?? []) {
+          if (ch.pov) povs.add(ch.pov)
+        }
+      }
+      setPovNames(povs)
 
       // Cast + soundtrack are only worth fetching for published books; for
       // drafts we hide every below-the-fold section anyway (no spoilers).
@@ -296,12 +313,13 @@ export default function PreviewBookPage() {
                 >
                   {characters.map(c => {
                     const url = characterAvatarUrl(c)
+                    const isPov = povNames.has(c.name)
                     return (
                       <div
                         key={c.id}
-                        className="flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border border-accent/10 h-[146px] w-full"
+                        className={`flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border h-[146px] w-full ${isPov ? 'border-accent' : 'border-accent/10'}`}
                       >
-                        <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-accent/20 bg-surface-overlay flex items-center justify-center shrink-0">
+                        <div className={`w-20 h-20 rounded-full overflow-hidden border-2 bg-surface-overlay flex items-center justify-center shrink-0 ${isPov ? 'border-accent' : 'border-accent/20'}`}>
                           {url
                             ? <img src={url} alt={c.name} className="w-full h-full object-cover" />
                             : <LuUser size={32} className="text-ink-faint" />}
