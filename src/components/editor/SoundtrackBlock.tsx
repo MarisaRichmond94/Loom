@@ -122,43 +122,38 @@ export default function SoundtrackBlock({ block, onUpdateBlock }: Props) {
 
   const label = pinLabel(block.pinStart, block.pinEnd)
 
+  // The album-art slot is shared by both layouts (audio-loaded and
+  // upload-prompt) so each can stack it next to its column.
+  const albumArtSlot = (
+    <button
+      type="button"
+      onClick={() => albumArtInputRef.current?.click()}
+      title={hasAlbumArt ? 'Replace album art' : 'Upload album art'}
+      className={`group/art relative shrink-0 w-[72px] h-[72px] rounded overflow-hidden flex items-center justify-center transition ${
+        hasAlbumArt
+          ? 'border border-accent/20 hover:border-accent/50'
+          : 'border border-dashed border-accent/30 hover:border-accent/60 bg-surface-muted'
+      }`}
+    >
+      {hasAlbumArt
+        ? <img src={`/music/${block.id}-art.jpg?t=${albumArtTs}`} alt="" className="w-full h-full object-cover" />
+        : <LuMusic size={20} className="text-accent" />}
+      {hasAlbumArt && (
+        <span
+          role="button"
+          tabIndex={-1}
+          onClick={e => { e.stopPropagation(); removeAlbumArt() }}
+          title="Remove album art"
+          className="absolute top-0 right-0 w-5 h-5 rounded-bl bg-black/60 text-white opacity-0 group-hover/art:opacity-100 transition flex items-center justify-center hover:bg-choice-kill/80 cursor-pointer"
+        >
+          <LuX size={11} />
+        </span>
+      )}
+    </button>
+  )
+
   return (
     <div className="flex flex-col gap-3">
-      {/* Title row */}
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => albumArtInputRef.current?.click()}
-          title={hasAlbumArt ? 'Replace album art' : 'Upload album art'}
-          className={`group/art relative shrink-0 w-9 h-9 rounded overflow-hidden flex items-center justify-center transition ${
-            hasAlbumArt
-              ? 'border border-accent/20 hover:border-accent/50'
-              : 'border border-dashed border-accent/30 hover:border-accent/60 bg-surface-muted'
-          }`}
-        >
-          {hasAlbumArt
-            ? <img src={`/music/${block.id}-art.jpg?t=${albumArtTs}`} alt="" className="w-full h-full object-cover" />
-            : <LuMusic size={14} className="text-accent" />}
-          {hasAlbumArt && (
-            <span
-              role="button"
-              tabIndex={-1}
-              onClick={e => { e.stopPropagation(); removeAlbumArt() }}
-              title="Remove album art"
-              className="absolute top-0 right-0 w-4 h-4 rounded-bl bg-black/60 text-white opacity-0 group-hover/art:opacity-100 transition flex items-center justify-center hover:bg-choice-kill/80 cursor-pointer"
-            >
-              <LuX size={9} />
-            </span>
-          )}
-        </button>
-        <input
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          onBlur={handleTitleBlur}
-          placeholder="Song title…"
-          className="flex-1 bg-transparent border-none outline-none text-sm text-ink placeholder:text-ink-faint"
-        />
-      </div>
       <input
         ref={albumArtInputRef}
         type="file"
@@ -167,18 +162,32 @@ export default function SoundtrackBlock({ block, onUpdateBlock }: Props) {
         onChange={handleAlbumArtChange}
       />
 
-      {/* Audio area */}
+      {/* Audio area — album art lives in a left column, title + player stack
+          in the right column so the art spans both rows (matches the book
+          page's track list). */}
       {audioSrc ? (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <audio controls src={audioSrc} className="flex-1 h-8 min-w-0" />
-            <button
-              onClick={handleRemove}
-              title="Remove audio"
-              className="shrink-0 text-ink-faint hover:text-choice-kill transition"
-            >
-              <LuX size={14} />
-            </button>
+        <>
+          <div className="flex items-start gap-3">
+            {albumArtSlot}
+            <div className="flex-1 min-w-0 flex flex-col gap-2">
+              <input
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                onBlur={handleTitleBlur}
+                placeholder="Song title…"
+                className="bg-transparent border-none outline-none text-sm text-ink placeholder:text-ink-faint"
+              />
+              <div className="flex items-center gap-2">
+                <audio controls src={audioSrc} className="flex-1 h-8 min-w-0" />
+                <button
+                  onClick={handleRemove}
+                  title="Remove audio"
+                  className="shrink-0 text-ink-faint hover:text-choice-kill transition"
+                >
+                  <LuX size={14} />
+                </button>
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-2 text-xs">
             <span className="text-ink-faint shrink-0">Pin:</span>
@@ -201,50 +210,60 @@ export default function SoundtrackBlock({ block, onUpdateBlock }: Props) {
               {label ?? 'Plays the full track'}
             </span>
           </div>
-        </div>
+        </>
       ) : (
-        <div className="flex flex-col gap-2">
-          {/* File upload */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading || downloading}
-            className="flex items-center justify-center gap-2 w-full py-3 rounded-lg border border-dashed border-accent/30 text-xs text-ink-faint hover:border-accent/60 hover:text-ink transition disabled:opacity-50"
-          >
-            <LuUpload size={12} />
-            {uploading ? 'Uploading…' : 'Upload audio file'}
-          </button>
-
-          {/* Divider */}
-          <div className="flex items-center gap-2 text-ink-faint text-xs">
-            <span className="flex-1 h-px bg-accent/10" />
-            <span>or</span>
-            <span className="flex-1 h-px bg-accent/10" />
-          </div>
-
-          {/* YouTube URL */}
-          <div className="flex gap-2">
+        <div className="flex items-start gap-3">
+          {albumArtSlot}
+          <div className="flex-1 min-w-0 flex flex-col gap-2">
             <input
-              value={youtubeUrl}
-              onChange={e => { setYoutubeUrl(e.target.value); setYtError(null) }}
-              onKeyDown={e => e.key === 'Enter' && handleYoutubeDownload()}
-              placeholder="Paste YouTube URL…"
-              disabled={downloading || uploading}
-              className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-surface-muted border border-accent/10 text-xs text-ink placeholder:text-ink-faint outline-none focus:border-accent/30 transition disabled:opacity-50"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              onBlur={handleTitleBlur}
+              placeholder="Song title…"
+              className="bg-transparent border-none outline-none text-sm text-ink placeholder:text-ink-faint"
             />
+            {/* File upload */}
             <button
-              onClick={handleYoutubeDownload}
-              disabled={!youtubeUrl.trim() || downloading || uploading}
-              title="Download audio from YouTube"
-              className="shrink-0 px-2.5 py-1.5 rounded-lg bg-surface-muted border border-accent/10 text-xs text-ink-faint hover:text-ink hover:border-accent/30 transition disabled:opacity-40 flex items-center gap-1.5"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading || downloading}
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-lg border border-dashed border-accent/30 text-xs text-ink-faint hover:border-accent/60 hover:text-ink transition disabled:opacity-50"
             >
-              <LuDownload size={12} />
-              {downloading ? 'Downloading…' : 'Download'}
+              <LuUpload size={12} />
+              {uploading ? 'Uploading…' : 'Upload audio file'}
             </button>
-          </div>
 
-          {ytError && (
-            <p className="text-xs text-choice-kill leading-snug">{ytError}</p>
-          )}
+            {/* Divider */}
+            <div className="flex items-center gap-2 text-ink-faint text-xs">
+              <span className="flex-1 h-px bg-accent/10" />
+              <span>or</span>
+              <span className="flex-1 h-px bg-accent/10" />
+            </div>
+
+            {/* YouTube URL */}
+            <div className="flex gap-2">
+              <input
+                value={youtubeUrl}
+                onChange={e => { setYoutubeUrl(e.target.value); setYtError(null) }}
+                onKeyDown={e => e.key === 'Enter' && handleYoutubeDownload()}
+                placeholder="Paste YouTube URL…"
+                disabled={downloading || uploading}
+                className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-surface-muted border border-accent/10 text-xs text-ink placeholder:text-ink-faint outline-none focus:border-accent/30 transition disabled:opacity-50"
+              />
+              <button
+                onClick={handleYoutubeDownload}
+                disabled={!youtubeUrl.trim() || downloading || uploading}
+                title="Download audio from YouTube"
+                className="shrink-0 px-2.5 py-1.5 rounded-lg bg-surface-muted border border-accent/10 text-xs text-ink-faint hover:text-ink hover:border-accent/30 transition disabled:opacity-40 flex items-center gap-1.5"
+              >
+                <LuDownload size={12} />
+                {downloading ? 'Downloading…' : 'Download'}
+              </button>
+            </div>
+
+            {ytError && (
+              <p className="text-xs text-choice-kill leading-snug">{ytError}</p>
+            )}
+          </div>
         </div>
       )}
 
