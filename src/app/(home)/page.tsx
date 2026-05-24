@@ -135,22 +135,28 @@ export default function ExplorePage() {
             )}
           </div>
           <div ref={genreMenuRef} className="relative shrink-0">
+            {/* Both trigger and dropdown share the same width so the
+                dropdown reads as a continuation of the field. w-44 is
+                tuned to the canonical genre list's longest entry
+                ("Contemporary") + the checkbox + padding chrome. */}
             <button
               type="button"
               onClick={() => setGenreMenuOpen(o => !o)}
               onKeyDown={e => { if (e.key === 'Escape') setGenreMenuOpen(false) }}
-              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm transition ${
+              className={`w-44 flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border text-sm transition ${
                 activeGenres.length > 0
                   ? 'bg-accent/10 border-accent/40 text-ink'
                   : 'bg-surface-raised border-accent/15 text-ink-muted hover:border-accent/40 hover:text-ink'
               }`}
             >
-              Genre(s)
-              {activeGenres.length > 0 && (
-                <span className="text-[10px] bg-accent text-white rounded-full px-1.5 py-0.5 leading-none">
-                  {activeGenres.length}
-                </span>
-              )}
+              <span className="flex items-center gap-2">
+                Genre(s)
+                {activeGenres.length > 0 && (
+                  <span className="text-[10px] bg-accent text-white rounded-full px-1.5 py-0.5 leading-none">
+                    {activeGenres.length}
+                  </span>
+                )}
+              </span>
               <LuChevronDown
                 size={14}
                 className={`transition-transform ${genreMenuOpen ? 'rotate-180' : ''}`}
@@ -159,7 +165,7 @@ export default function ExplorePage() {
             {genreMenuOpen && (
               <div
                 onKeyDown={e => { if (e.key === 'Escape') setGenreMenuOpen(false) }}
-                className="absolute top-full right-0 mt-2 w-64 z-20 bg-surface-raised border border-accent/20 rounded-lg shadow-xl overflow-hidden"
+                className="absolute top-full right-0 mt-2 w-44 z-20 bg-surface-raised border border-accent/20 rounded-lg shadow-xl overflow-hidden"
               >
                 {/* In-dropdown filter. Pulled from the canonical genre list
                     so the reader can find every supported tag, not just
