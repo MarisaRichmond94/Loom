@@ -198,7 +198,7 @@ export default function ChapterEditorPage() {
       </div>
 
       {/* Floating add-block button — bottom-right of viewport, always on top */}
-      <div ref={addMenuRef} className="fixed bottom-6 right-6 z-50">
+      <div ref={addMenuRef} className="fixed bottom-14 right-3 z-50">
         {addMenuOpen && (
           <div className="absolute right-0 bottom-full mb-2 bg-surface-raised border border-accent/20 rounded-lg shadow-xl overflow-hidden min-w-[180px]">
             {([
@@ -220,9 +220,9 @@ export default function ChapterEditorPage() {
         )}
         <button
           onClick={() => setAddMenuOpen(o => !o)}
-          className="bg-surface-raised border border-accent/20 hover:border-accent/40 text-ink-muted hover:text-ink transition w-12 h-12 flex items-center justify-center rounded-full shadow-lg"
+          className="bg-surface-raised border border-accent/20 hover:border-accent/40 text-ink-muted hover:text-ink transition w-9 h-9 flex items-center justify-center rounded-full shadow-lg"
         >
-          <LuPlus size={26} strokeWidth={2.5} />
+          <LuPlus size={14} strokeWidth={2.5} />
         </button>
       </div>
       <div className="pb-8">
