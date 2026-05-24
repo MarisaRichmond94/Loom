@@ -152,7 +152,7 @@ export default function PreviewBookPage() {
   return (
     <div className="min-h-screen bg-surface-base">
       <header className="border-b border-accent/10">
-        <div className="px-8 py-12 flex flex-col md:flex-row gap-8 items-start">
+        <div className="px-8 pt-12 pb-8 flex flex-col md:flex-row gap-8 items-start">
           <div className={`relative w-44 md:w-56 shrink-0 rounded-lg overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center ${!book.published ? 'opacity-40' : ''}`}>
             {book.coverPath
               ? <Image
@@ -238,7 +238,7 @@ export default function PreviewBookPage() {
       </header>
 
       {book.published && (
-        <main className="px-8 py-10 flex flex-col gap-8">
+        <main className="px-8 pt-6 pb-10 flex flex-col gap-8">
           {/* Chapters */}
           <section>
             <SectionHeader
