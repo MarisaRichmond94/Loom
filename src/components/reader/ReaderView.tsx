@@ -10,7 +10,7 @@ import { TextStyle } from '@tiptap/extension-text-style'
 import Color from '@tiptap/extension-color'
 import { Footnote } from '@/lib/extensions/footnote'
 import { CharacterMark } from '@/lib/extensions/character'
-import { resolveConditional, matchesCondition } from '@/lib/storyEngine'
+import { resolveConditionalOverride, matchesCondition } from '@/lib/storyEngine'
 import { pinLabel } from '@/lib/pinLabel'
 import type { ChapterLabel } from '@/lib/chapterLabels'
 import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
@@ -22,7 +22,7 @@ import AvatarButton from '@/components/AvatarButton'
 import Greeting from '@/components/Greeting'
 import { stripEmptyParagraphs, htmlToPlainText, inlineParagraphStyles, PASTE_FONT_FAMILY } from '@/lib/clipboardFormatting'
 
-type Override = { id: string; order: number; condition: string; content: string }
+type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
 type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null }
 type Block = {
   id: string; order: number; type: string
@@ -168,6 +168,44 @@ export default function ReaderView({
     return () => cancelAnimationFrame(id)
   }, [blocks, choiceHistory])
 
+  // Detect a Bad Ending triggered by a conditional fragment whose matched
+  // override carries an endingMessage. Walks blocks in story order and stops
+  // at the first unanswered, visible choice point so a conditional sitting
+  // AFTER a still-pending choice doesn't fire prematurely.
+  useEffect(() => {
+    if (endingMessage != null) return
+    for (const block of blocks) {
+      if (block.type === 'choice_point') {
+        const answered = choiceHistory.some(h => h.choicePointId === block.id)
+        if (answered) continue
+        if (block.condition) {
+          try {
+            if (!matchesCondition(JSON.parse(block.condition), storyState)) continue
+          } catch { return }
+        }
+        return  // unanswered visible choice gates everything past it
+      }
+      if (block.type === 'conditional_fragment') {
+        const matched = resolveConditionalOverride(
+          {
+            overrides: block.overrides.map(o => ({
+              id: o.id,
+              order: o.order,
+              condition: JSON.parse(o.condition),
+              content: o.content,
+              endingMessage: o.endingMessage ?? null,
+            })),
+          },
+          storyState,
+        )
+        if (matched?.endingMessage) {
+          setEndingMessage(matched.endingMessage)
+          return
+        }
+      }
+    }
+  }, [blocks, storyState, choiceHistory, endingMessage])
+
   useEffect(() => {
     if (choiceHistory.length <= prevChoiceCountRef.current) {
       prevChoiceCountRef.current = choiceHistory.length
@@ -248,18 +286,21 @@ export default function ReaderView({
       if (block.type === 'text') {
         html = renderTipTap(block.content, storyState)
       } else if (block.type === 'conditional_fragment') {
-        const resolved = resolveConditional(
+        const matched = resolveConditionalOverride(
           {
             overrides: block.overrides.map(o => ({
               id: o.id,
               order: o.order,
               condition: JSON.parse(o.condition),
               content: o.content,
+              endingMessage: o.endingMessage ?? null,
             })),
           },
           storyState,
         )
-        if (resolved) html = renderTipTap(resolved, storyState)
+        // Bad-ending overrides interrupt the chapter — stop copying here.
+        if (matched?.endingMessage) break
+        if (matched) html = renderTipTap(matched.content, storyState)
       } else if (block.type === 'choice_point') {
         const answered = choiceHistory.some(h => h.choicePointId === block.id)
         if (answered) continue
@@ -377,24 +418,27 @@ export default function ReaderView({
             if (pendingChoice) return null
 
             if (block.type === 'conditional_fragment') {
-              const resolved = resolveConditional(
+              const matched = resolveConditionalOverride(
                 {
                   overrides: block.overrides.map(o => ({
                     id: o.id,
                     order: o.order,
                     condition: JSON.parse(o.condition),
                     content: o.content,
+                    endingMessage: o.endingMessage ?? null,
                   })),
                 },
                 storyState
               )
-              if (!resolved) return null
+              // Bad-ending overrides render nothing inline; the BadEndingModal
+              // (fired by the detection useEffect above) is the ending content.
+              if (!matched || matched.endingMessage) return null
               return (
                 <div
                   key={block.id}
                   id={`block-${block.id}`}
                   className="prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6"
-                  dangerouslySetInnerHTML={{ __html: renderTipTap(resolved, storyState) }}
+                  dangerouslySetInnerHTML={{ __html: renderTipTap(matched.content, storyState) }}
                 />
               )
             }

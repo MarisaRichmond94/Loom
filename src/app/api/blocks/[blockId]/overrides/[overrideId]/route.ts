@@ -6,7 +6,7 @@ type Params = { params: Promise<{ overrideId: string }> }
 
 export async function PATCH(req: Request, { params }: Params) {
   const { overrideId } = await params
-  const { condition, content, order } = await req.json()
+  const { condition, content, order, endingMessage } = await req.json()
   try {
     const override = await prisma.conditionalOverride.update({
       where: { id: overrideId },
@@ -14,6 +14,7 @@ export async function PATCH(req: Request, { params }: Params) {
         ...(condition !== undefined && { condition }),
         ...(content !== undefined && { content }),
         ...(order !== undefined && { order }),
+        ...(endingMessage !== undefined && { endingMessage }),
       },
     })
     return NextResponse.json(override)

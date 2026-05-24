@@ -83,6 +83,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ser
               order: o.order,
               condition: o.condition,
               content: o.content,
+              endingMessage: o.endingMessage,
             })),
           })),
         })),

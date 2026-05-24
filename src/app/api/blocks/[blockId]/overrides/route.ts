@@ -5,7 +5,7 @@ type Params = { params: Promise<{ blockId: string }> }
 
 export async function POST(req: Request, { params }: Params) {
   const { blockId } = await params
-  const { condition = {}, content } = await req.json()
+  const { condition = {}, content, endingMessage } = await req.json()
   if (!content) return NextResponse.json({ error: 'content required' }, { status: 400 })
   const count = await prisma.conditionalOverride.count({
     where: { conditionalFragmentId: blockId },
@@ -16,6 +16,7 @@ export async function POST(req: Request, { params }: Params) {
       order: count + 1,
       condition: JSON.stringify(condition),
       content,
+      endingMessage: endingMessage ?? null,
     },
   })
   return NextResponse.json(override, { status: 201 })

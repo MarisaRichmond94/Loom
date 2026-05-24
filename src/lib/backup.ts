@@ -29,7 +29,7 @@ function buildBookPayload(
         pinStart: number | null
         pinEnd: number | null
         choices: { label: string; setsVariables: string; targetChapterId: string | null; endingMessage: string | null }[]
-        overrides: { order: number; condition: string; content: string }[]
+        overrides: { order: number; condition: string; content: string; endingMessage: string | null }[]
       }[]
     }[]
   },
@@ -87,6 +87,7 @@ function buildBookPayload(
             })),
             overrides: block.overrides.map(o => ({
               order: o.order, condition: o.condition, content: o.content,
+              endingMessage: o.endingMessage,
             })),
           })),
         })),

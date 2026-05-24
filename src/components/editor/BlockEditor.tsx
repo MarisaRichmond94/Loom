@@ -11,7 +11,7 @@ import ChoicePointBlock from './ChoicePointBlock'
 import ConditionalBlock from './ConditionalBlock'
 import SoundtrackBlock from './SoundtrackBlock'
 
-type Override = { id: string; order: number; condition: string; content: string }
+type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
 type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null }
 type Block = {
   id: string

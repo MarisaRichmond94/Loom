@@ -29,13 +29,19 @@ function isCompoundCondition(c: unknown): c is CompoundCondition {
   )
 }
 
+export type ConditionalOverrideEntry = {
+  id: string
+  order: number
+  condition: Condition
+  content: string
+  // When set, the matched override fires a Bad Ending modal instead of
+  // rendering content inline. The reader uses this to detect ending triggers
+  // from the alignment of several variables.
+  endingMessage?: string | null
+}
+
 export type ConditionalBlock = {
-  overrides: Array<{
-    id: string
-    order: number
-    condition: Condition
-    content: string
-  }>
+  overrides: ConditionalOverrideEntry[]
 }
 
 export type ChoiceRecord = {
@@ -53,9 +59,20 @@ export function matchesCondition(condition: Condition, storyState: StoryState): 
 }
 
 export function resolveConditional(block: ConditionalBlock, storyState: StoryState): string | null {
+  const matched = resolveConditionalOverride(block, storyState)
+  return matched?.content ?? null
+}
+
+// Returns the full matched override (or null) so callers that need fields
+// beyond the rendered content (e.g. endingMessage for Bad Ending triggers)
+// can use them without a second pass.
+export function resolveConditionalOverride(
+  block: ConditionalBlock,
+  storyState: StoryState,
+): ConditionalOverrideEntry | null {
   const sorted = [...block.overrides].sort((a, b) => a.order - b.order)
   for (const override of sorted) {
-    if (matchesCondition(override.condition, storyState)) return override.content
+    if (matchesCondition(override.condition, storyState)) return override
   }
   return null
 }

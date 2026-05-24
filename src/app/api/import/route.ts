@@ -95,11 +95,12 @@ export async function POST(req: NextRequest) {
         // Overrides
         if (block.overrides?.length) {
           await prisma.conditionalOverride.createMany({
-            data: block.overrides.map((o: { order: number; condition: string; content: string }) => ({
+            data: block.overrides.map((o: { order: number; condition: string; content: string; endingMessage?: string | null }) => ({
               conditionalFragmentId: newBlock.id,
               order: o.order,
               condition: o.condition,
               content: o.content,
+              endingMessage: o.endingMessage ?? null,
             })),
           })
         }

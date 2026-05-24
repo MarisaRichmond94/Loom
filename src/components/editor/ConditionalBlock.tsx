@@ -4,7 +4,7 @@ import { LuSplit, LuX } from 'react-icons/lu'
 import TextBlock from './TextBlock'
 import { ConditionRow } from './conditionUI'
 
-type Override = { id: string; order: number; condition: string; content: string }
+type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
 type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
 type Props = {
   overrides: Override[]
@@ -28,33 +28,60 @@ export default function ConditionalBlock({ overrides, variables, characters, onA
     <div>
       <div className="flex items-center gap-1.5 text-xs text-accent uppercase tracking-widest mb-3"><LuSplit size={12} /> Conditional</div>
 
-      {overrides.map(override => (
-        <div key={override.id} className="border border-accent/20 bg-surface-overlay rounded p-3 mb-2">
-          <div className="flex items-start gap-2 mb-2">
-            <div className="flex-1 min-w-0">
-              <ConditionRow
-                label="If:"
-                condition={override.condition || null}
-                variables={variables}
-                onChange={next => onUpdateOverride(override.id, { condition: next ?? '{}' })}
-              />
+      {overrides.map(override => {
+        const isEnding = override.endingMessage != null
+        return (
+          <div
+            key={override.id}
+            className={`border rounded p-3 mb-2 ${isEnding ? 'border-choice-kill/40 bg-choice-kill/5' : 'border-accent/20 bg-surface-overlay'}`}
+          >
+            <div className="flex items-start gap-2 mb-2">
+              <div className="flex-1 min-w-0">
+                <ConditionRow
+                  label="If:"
+                  condition={override.condition || null}
+                  variables={variables}
+                  onChange={next => onUpdateOverride(override.id, { condition: next ?? '{}' })}
+                />
+              </div>
+              <button
+                onClick={() => onDeleteOverride(override.id)}
+                className="text-ink-faint hover:text-choice-kill transition shrink-0 mt-1"
+                title="Delete this condition"
+              >
+                <LuX size={13} />
+              </button>
             </div>
-            <button
-              onClick={() => onDeleteOverride(override.id)}
-              className="text-ink-faint hover:text-choice-kill transition shrink-0 mt-1"
-              title="Delete this condition"
-            >
-              <LuX size={13} />
-            </button>
+
+            {isEnding ? (
+              <textarea
+                defaultValue={override.endingMessage ?? ''}
+                onBlur={e => onUpdateOverride(override.id, { endingMessage: e.target.value })}
+                placeholder="What happens (shown to the reader on a full-screen overlay)…"
+                rows={3}
+                className="w-full bg-surface-base border border-accent/20 rounded px-2 py-1.5 text-xs text-ink placeholder:text-ink-faint outline-none focus:border-accent/50 resize-none"
+              />
+            ) : (
+              <TextBlock
+                content={override.content}
+                onChange={content => onUpdateOverride(override.id, { content })}
+                characters={characters}
+                variables={variables}
+              />
+            )}
+
+            <label className="mt-2 flex items-center gap-2 text-xs text-ink-muted cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isEnding}
+                onChange={e => onUpdateOverride(override.id, { endingMessage: e.target.checked ? '' : null })}
+                className="accent-choice-kill"
+              />
+              <span>Bad ending</span>
+            </label>
           </div>
-          <TextBlock
-            content={override.content}
-            onChange={content => onUpdateOverride(override.id, { content })}
-            characters={characters}
-            variables={variables}
-          />
-        </div>
-      ))}
+        )
+      })}
 
       {variables.length === 0 ? (
         <p className="text-xs text-ink-faint text-center py-1.5">

@@ -91,6 +91,7 @@ export async function GET(_: Request, { params }: Params) {
               order: o.order,
               condition: o.condition,
               content: o.content,
+              endingMessage: o.endingMessage,
             })),
           })),
         })),

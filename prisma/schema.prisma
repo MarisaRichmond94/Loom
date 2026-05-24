@@ -107,6 +107,10 @@ model ConditionalOverride {
   order                 Int
   condition             String       @default("{}")
   content               String
+  // When set, this override fires a Bad Ending modal instead of rendering
+  // `content` inline. Lets the writer end a run from the culmination of
+  // several earlier choices aligning, rather than a single fatal choice.
+  endingMessage         String?
   conditionalFragment   ContentBlock @relation(fields: [conditionalFragmentId], references: [id], onDelete: Cascade)
 }
 
