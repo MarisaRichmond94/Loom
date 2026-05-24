@@ -181,7 +181,19 @@ export default function PreviewBookPage() {
               )}
             </div>
             {book.published && book.synopsis && (
-              <p className="mt-4 text-base text-ink-muted leading-relaxed whitespace-pre-wrap">{book.synopsis}</p>
+              // Cap the synopsis at roughly the cover's height so the chips
+              // and Start reading button below stay aligned with the cover
+              // bottom. The gradient fade-out at the bottom is the visual
+              // cue that the reader can scroll for more.
+              // Heights are tuned to (cover height) − (series link + title +
+              // margins): w-44 cover ≈ 264px tall on mobile, w-56 ≈ 336px on
+              // md, leaving ~180/248px for the synopsis.
+              <div className="relative mt-4">
+                <div className="overflow-y-auto pr-2 max-h-[180px] md:max-h-[248px]">
+                  <p className="text-base text-ink-muted leading-relaxed whitespace-pre-wrap">{book.synopsis}</p>
+                </div>
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-surface-base to-transparent" />
+              </div>
             )}
             {!book.published && (
               <p className="mt-4 text-sm text-ink-faint italic leading-relaxed">
