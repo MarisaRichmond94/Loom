@@ -7,8 +7,20 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const { title, description = '' } = await req.json()
+  const { title, description = '', standalone = false } = await req.json()
   if (!title?.trim()) return NextResponse.json({ error: 'title required' }, { status: 400 })
-  const series = await prisma.series.create({ data: { title: title.trim(), description } })
-  return NextResponse.json(series, { status: 201 })
+  const series = await prisma.series.create({
+    data: { title: title.trim(), description, standalone: !!standalone },
+  })
+  // Stand-alone: the data model is still a Series-with-one-Book — auto-create
+  // that book here so the author lands on a writeable page right away. The
+  // book inherits the series title; the author can rename either later.
+  let bookId: string | null = null
+  if (standalone) {
+    const book = await prisma.book.create({
+      data: { seriesId: series.id, title: title.trim(), order: 1 },
+    })
+    bookId = book.id
+  }
+  return NextResponse.json({ ...series, bookId }, { status: 201 })
 }

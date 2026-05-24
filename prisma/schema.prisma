@@ -18,6 +18,12 @@ model Series {
   // the public landing pages.
   genres      String          @default("[]")
   keywords    String          @default("[]")
+  // True when the author created this as a stand-alone book rather than
+  // a series. Persisted so the writer's list and reader's Explore can
+  // present it differently down the road (single-book card, route the
+  // author straight to the book editor instead of the series outline).
+  // The underlying data model stays a Series-with-one-Book either way.
+  standalone  Boolean         @default(false)
   createdAt   DateTime        @default(now())
   books       Book[]
   variables   StoryVariable[]

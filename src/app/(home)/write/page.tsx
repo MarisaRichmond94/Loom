@@ -14,6 +14,10 @@ export default function WritePage() {
   const router = useRouter()
   const [series, setSeries] = useState<Series[]>([])
   const [title, setTitle] = useState('')
+  // Stand-alone book vs. series. Backing the same data model (a Series
+  // with one Book), but routing the author straight to that book editor
+  // when stand-alone so they don't bounce through an outline view of one.
+  const [kind, setKind] = useState<'series' | 'standalone'>('series')
   const [creating, setCreating] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -51,13 +55,26 @@ export default function WritePage() {
     const res = await fetch('/api/series', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title, standalone: kind === 'standalone' }),
     })
     const created = await res.json()
     setCreating(false)
     setTitle('')
+    setKind('series')
     setShowForm(false)
-    router.push(`/author/${created.id}`)
+    // Stand-alone authors don't need to see the series outline; the API
+    // already created the single book for them, so land them on it.
+    if (kind === 'standalone' && created.bookId) {
+      router.push(`/author/${created.id}/book/${created.bookId}`)
+    } else {
+      router.push(`/author/${created.id}`)
+    }
+  }
+
+  function handleCancel() {
+    setTitle('')
+    setKind('series')
+    setShowForm(false)
   }
 
   return (
@@ -75,27 +92,66 @@ export default function WritePage() {
           onClick={() => setShowForm(s => !s)}
           className="px-4 py-2 rounded bg-accent text-white text-sm font-medium hover:opacity-90 transition"
         >
-          Add Series
+          + New
         </button>
       </div>
 
       {showForm && (
         <form onSubmit={handleCreate} className="mb-8 p-5 rounded-lg bg-surface-raised border border-accent/20">
-          <label className="block text-xs uppercase tracking-widest text-ink-faint mb-2">Series title</label>
+          <label className="block text-xs uppercase tracking-widest text-ink-faint mb-2">Type</label>
+          <div className="flex gap-2 mb-4">
+            {([
+              { id: 'series', label: 'Series' },
+              { id: 'standalone', label: 'Stand-alone book' },
+            ] as const).map(opt => {
+              const active = kind === opt.id
+              return (
+                <button
+                  type="button"
+                  key={opt.id}
+                  onClick={() => setKind(opt.id)}
+                  className={`px-3 py-1.5 rounded text-xs font-medium transition border ${
+                    active
+                      ? 'bg-accent text-white border-accent'
+                      : 'bg-surface-overlay text-ink-muted border-accent/20 hover:text-ink'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
+
+          <label className="block text-xs uppercase tracking-widest text-ink-faint mb-2">
+            {kind === 'standalone' ? 'Book title' : 'Series title'}
+          </label>
           <input
             autoFocus
             value={title}
             onChange={e => setTitle(e.target.value)}
-            placeholder="The Unnamed Series"
-            className="w-full bg-surface-overlay border border-accent/20 rounded px-3 py-2 text-ink placeholder:text-ink-faint text-sm outline-none focus:border-accent mb-3"
+            placeholder={kind === 'standalone' ? 'The Unnamed Book' : 'The Unnamed Series'}
+            className="w-full bg-surface-overlay border border-accent/20 rounded px-3 py-2 text-ink placeholder:text-ink-faint text-sm outline-none focus:border-accent mb-4"
           />
-          <button
-            type="submit"
-            disabled={creating}
-            className="px-4 py-2 bg-accent text-surface-base rounded text-sm font-medium disabled:opacity-50"
-          >
-            {creating ? 'Creating…' : 'Create Series'}
-          </button>
+
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={handleCancel}
+              disabled={creating}
+              className="text-sm text-ink-muted hover:text-ink transition disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={creating || !title.trim()}
+              className="px-4 py-2 bg-accent text-surface-base rounded text-sm font-medium disabled:opacity-50"
+            >
+              {creating
+                ? 'Creating…'
+                : kind === 'standalone' ? 'Create Book' : 'Create Series'}
+            </button>
+          </div>
         </form>
       )}
 
