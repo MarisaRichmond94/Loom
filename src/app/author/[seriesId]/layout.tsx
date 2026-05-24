@@ -11,6 +11,9 @@ import AvatarButton from '@/components/AvatarButton'
 import Greeting from '@/components/Greeting'
 import { AuthorProvider, type AuthorSeries } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
+import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
+import BookSkeleton from '@/components/editor/BookSkeleton'
+import SeriesPageSkeleton from '@/components/editor/SeriesPageSkeleton'
 
 type ChoiceQuestion = { id: string; prompt: string; chapterId: string; chapterTitle: string; bookTitle: string }
 
@@ -155,7 +158,9 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
             </div>
           </aside>
 
-          <main className="flex-1 overflow-y-auto" />
+          <main className={`flex-1 overflow-y-auto${lightMode ? ' light-body' : ''}`}>
+            {chapterId ? <ChapterSkeleton /> : bookId ? <BookSkeleton /> : <SeriesPageSkeleton />}
+          </main>
         </div>
       </div>
     )
