@@ -198,7 +198,7 @@ export default function ChapterEditorPage() {
       </div>
 
       {/* Floating add-block button — bottom-right of viewport, always on top */}
-      <div ref={addMenuRef} className="fixed bottom-14 right-3 z-50">
+      <div ref={addMenuRef} className="fixed bottom-6 right-3 z-50">
         {addMenuOpen && (
           <div className="absolute right-0 bottom-full mb-2 bg-surface-raised border border-accent/20 rounded-lg shadow-xl overflow-hidden min-w-[180px]">
             {([
