@@ -130,10 +130,10 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
       <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
         {/* Top nav — logo stays static, dynamic bits become pulsing placeholders. */}
         <nav className="sticky top-0 z-10 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
-          <div className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2">
             <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
             <span className="text-accent font-bold tracking-wider text-2xl leading-none">LOOM</span>
-          </div>
+          </Link>
           <span className="text-ink-faint self-center">›</span>
           <div className="h-4 w-40 bg-surface-muted rounded animate-pulse" />
           <div className="ml-auto flex items-center gap-2 animate-pulse">

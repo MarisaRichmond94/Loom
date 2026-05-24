@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { LuMoon, LuSun, LuArrowLeft, LuArrowRight, LuMusic, LuUser, LuSlidersHorizontal, LuCopy, LuCheck } from 'react-icons/lu'
 import { generateHTML } from '@tiptap/html'
@@ -328,10 +329,10 @@ export default function ReaderView({
   return (
     <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
       <nav className="bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center justify-between z-30">
-        <div className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2">
           <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
           <span className="text-accent font-bold tracking-wider text-2xl leading-none">LOOM</span>
-        </div>
+        </Link>
         <div className="flex items-center gap-2">
           <Greeting />
           <button
