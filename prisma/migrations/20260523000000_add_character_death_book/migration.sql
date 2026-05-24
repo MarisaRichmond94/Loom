@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Character" ADD COLUMN "deathBookId" TEXT REFERENCES "Book"("id") ON DELETE SET NULL ON UPDATE CASCADE;

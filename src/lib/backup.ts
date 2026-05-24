@@ -12,7 +12,8 @@ function buildBookPayload(
     title: string; description: string | null
     variables: unknown[]
     characters: {
-      id: string; name: string; age: number | null; firstBookId: string | null
+      id: string; name: string; age: number | null
+      firstBookId: string | null; deathBookId: string | null
       overrides: { bookId: string; age: number | null }[]
     }[]
   },
@@ -47,9 +48,10 @@ function buildBookPayload(
         name: c.name,
         age: c.age,
         // Single-book backup: only the exported book is a valid ref target. If
-        // the character first appears in this book, preserve the ref; otherwise
-        // leave it null so import doesn't dangle on a missing book.
+        // the character first appears in (or dies in) this book, preserve the
+        // ref; otherwise leave it null so import doesn't dangle on a missing book.
         firstBookRef: c.firstBookId === book.id ? book.id : null,
+        deathBookRef: c.deathBookId === book.id ? book.id : null,
         overrides: c.overrides
           .filter(o => o.bookId === book.id)
           .map(o => ({ bookRef: o.bookId, age: o.age })),

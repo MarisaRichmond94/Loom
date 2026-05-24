@@ -37,6 +37,7 @@ type Character = {
   hasAvatar: boolean
   hasBookAvatar?: boolean
   hasCanonicalAvatar?: boolean
+  deceased?: boolean
 }
 type BookChapter = { id: string; title: string; order: number }
 type Book = { id: string; title: string; order: number; chapters: BookChapter[] }
@@ -543,7 +544,9 @@ export default function ReaderView({
           </div>
           <div>
             <p className="text-sm font-semibold" style={{ color: lightMode ? '#1a1a2a' : '#e0d9c8' }}>{charCard.character.name}</p>
-            {charCard.character.age != null && <p className="text-xs mt-0.5" style={{ color: lightMode ? '#666' : '#aaa' }}>Age {charCard.character.age}</p>}
+            {charCard.character.deceased
+              ? <p className="text-xs mt-0.5 italic uppercase tracking-widest" style={{ color: lightMode ? '#888' : '#888' }}>Deceased</p>
+              : charCard.character.age != null && <p className="text-xs mt-0.5" style={{ color: lightMode ? '#666' : '#aaa' }}>Age {charCard.character.age}</p>}
           </div>
         </div>
       )}

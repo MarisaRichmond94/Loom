@@ -24,8 +24,13 @@ model Character {
   name        String
   age         Int?
   firstBookId String?
+  // The book in which this character dies. They appear normally in this book
+  // and every earlier book; in later books they're flagged "Deceased" but
+  // remain referenceable (so flashbacks / eulogies still resolve marks).
+  deathBookId String?
   series      Series                  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   firstBook   Book?                   @relation("FirstAppearsIn", fields: [firstBookId], references: [id], onDelete: SetNull)
+  deathBook   Book?                   @relation("DiesIn", fields: [deathBookId], references: [id], onDelete: SetNull)
   overrides   CharacterBookOverride[]
 }
 
@@ -50,6 +55,7 @@ model Book {
   series                       Series                  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   chapters                     Chapter[]
   charactersFirstAppearingHere Character[]             @relation("FirstAppearsIn")
+  charactersDyingHere          Character[]             @relation("DiesIn")
   characterOverrides           CharacterBookOverride[] @relation("CharacterOverrides")
 }
 

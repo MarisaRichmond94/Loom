@@ -160,20 +160,26 @@ export async function POST(req: NextRequest) {
     await prisma.choice.createMany({ data: choiceData })
   }
 
-  // 5. Character per-book metadata (v2+): firstBookId + CharacterBookOverride rows.
-  // Deferred until now because both depend on bookRefMap being complete.
+  // 5. Character per-book metadata (v2+): firstBookId + deathBookId +
+  // CharacterBookOverride rows. Deferred until now because all of these
+  // depend on bookRefMap being complete.
   type ImportedChar = {
     _ref: string
     firstBookRef?: string | null
+    deathBookRef?: string | null
     overrides?: { bookRef: string; age: number | null }[]
   }
   const overrideRows: { characterId: string; bookId: string; age: number | null }[] = []
   for (const c of (s.characters ?? []) as ImportedChar[]) {
     const firstBookId = c.firstBookRef ? (bookRefMap[c.firstBookRef] ?? null) : null
-    if (firstBookId) {
+    const deathBookId = c.deathBookRef ? (bookRefMap[c.deathBookRef] ?? null) : null
+    if (firstBookId || deathBookId) {
       await prisma.character.update({
         where: { id: c._ref },
-        data: { firstBookId },
+        data: {
+          ...(firstBookId ? { firstBookId } : {}),
+          ...(deathBookId ? { deathBookId } : {}),
+        },
       })
     }
     for (const o of c.overrides ?? []) {

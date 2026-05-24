@@ -18,10 +18,12 @@ type Character = {
   name: string
   age: number | null
   firstBookId: string | null
+  deathBookId: string | null
   hasAvatar: boolean
   hasBookAvatar: boolean
   hasCanonicalAvatar: boolean
   hasOverride: boolean
+  deceased: boolean
 }
 type Soundtrack = {
   id: string
@@ -66,6 +68,7 @@ export default function BookDetailPage() {
   const [charName, setCharName] = useState('')
   const [charAge, setCharAge] = useState('')
   const [charFirstBookId, setCharFirstBookId] = useState<string>('')
+  const [charDeathBookId, setCharDeathBookId] = useState<string>('')
   const [charImageSrc, setCharImageSrc] = useState<string | null>(null)
   const [charCrop, setCharCrop] = useState({ x: 0, y: 0 })
   const [charZoom, setCharZoom] = useState(1)
@@ -124,6 +127,7 @@ export default function BookDetailPage() {
     // New characters created from a book default to "first appears in" THIS book
     // so they don't leak back into earlier books in the series.
     setCharFirstBookId(bookId)
+    setCharDeathBookId('')
     setCharImageSrc(null)
     setCharModal('create')
   }
@@ -132,6 +136,7 @@ export default function BookDetailPage() {
     setCharName(c.name)
     setCharAge(c.age != null ? String(c.age) : '')
     setCharFirstBookId(c.firstBookId ?? '')
+    setCharDeathBookId(c.deathBookId ?? '')
     setCharImageSrc(null)
     setCharAvatarTs(Date.now())
     setCharModal(c)
@@ -151,15 +156,17 @@ export default function BookDetailPage() {
     try {
       const age = charAge.trim() !== '' ? Number(charAge) : null
       const firstBookId = charFirstBookId || null
+      const deathBookId = charDeathBookId || null
       let characterId: string
 
       if (charModal === 'create') {
-        // Create: name + age + firstBookId all canonical. Any uploaded photo
-        // also becomes the canonical avatar so future books inherit it.
+        // Create: name + age + firstBookId + deathBookId all canonical. Any
+        // uploaded photo also becomes the canonical avatar so future books
+        // inherit it.
         const res = await fetch(`/api/series/${seriesId}/characters`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: charName.trim(), age, firstBookId }),
+          body: JSON.stringify({ name: charName.trim(), age, firstBookId, deathBookId }),
         })
         if (!res.ok) return
         const created = await res.json() as { id: string }
@@ -177,16 +184,18 @@ export default function BookDetailPage() {
         const existing = charModal as Character
         characterId = existing.id
 
-        // Canonical patch (name + firstBookId)
+        // Canonical patch (name + firstBookId + deathBookId)
         const nameChanged = charName.trim() !== existing.name
         const firstBookChanged = (firstBookId ?? null) !== (existing.firstBookId ?? null)
-        if (nameChanged || firstBookChanged) {
+        const deathBookChanged = (deathBookId ?? null) !== (existing.deathBookId ?? null)
+        if (nameChanged || firstBookChanged || deathBookChanged) {
           await fetch(`/api/series/${seriesId}/characters/${characterId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               ...(nameChanged ? { name: charName.trim() } : {}),
               ...(firstBookChanged ? { firstBookId } : {}),
+              ...(deathBookChanged ? { deathBookId } : {}),
             }),
           })
         }
@@ -353,7 +362,9 @@ export default function BookDetailPage() {
                   </div>
                   <div className="text-center">
                     <p className="text-xs font-medium text-ink truncate w-full">{c.name}</p>
-                    {c.age != null && <p className="text-xs text-ink-faint">Age {c.age}</p>}
+                    {c.deceased
+                      ? <p className="text-[10px] uppercase tracking-widest text-ink-faint italic">Deceased</p>
+                      : c.age != null && <p className="text-xs text-ink-faint">Age {c.age}</p>}
                   </div>
                 </button>
               )})}
@@ -514,6 +525,22 @@ export default function BookDetailPage() {
                     <option key={b.id} value={b.id}>{b.title}</option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-xs text-ink-faint mb-1 uppercase tracking-widest">Dies in</label>
+                <select
+                  value={charDeathBookId}
+                  onChange={e => setCharDeathBookId(e.target.value)}
+                  className="w-full bg-surface-overlay border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+                >
+                  <option value="">— still alive —</option>
+                  {[...series.books].sort((a, b) => a.order - b.order).map(b => (
+                    <option key={b.id} value={b.id}>{b.title}</option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-ink-faint italic mt-1">
+                  Marks them &ldquo;Deceased&rdquo; in every later book. They still appear normally in the chosen book.
+                </p>
               </div>
               {charModal !== 'create' && (charModal as Character).hasOverride && (
                 <button

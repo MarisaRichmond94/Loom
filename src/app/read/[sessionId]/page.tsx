@@ -41,6 +41,7 @@ export default function ReaderPage() {
     hasAvatar: boolean
     hasBookAvatar?: boolean
     hasCanonicalAvatar?: boolean
+    deceased?: boolean
   }[]>([])
   const [currentBookId, setCurrentBookId] = useState<string | null>(null)
   const [seriesBooks, setSeriesBooks] = useState<SeriesBook[]>([])

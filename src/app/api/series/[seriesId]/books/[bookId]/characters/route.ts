@@ -24,10 +24,14 @@ export async function GET(_: Request, { params }: Params) {
 
   const resolved = characters.map(c =>
     resolveCharacter({
-      character: { id: c.id, name: c.name, age: c.age, firstBookId: c.firstBookId },
+      character: {
+        id: c.id, name: c.name, age: c.age,
+        firstBookId: c.firstBookId, deathBookId: c.deathBookId,
+      },
       override: overrideByCharacterId.get(c.id) ?? null,
       book,
       firstBookOrder: c.firstBookId ? orderByBookId.get(c.firstBookId) ?? null : null,
+      deathBookOrder: c.deathBookId ? orderByBookId.get(c.deathBookId) ?? null : null,
     }),
   ).filter(r => r.visible)
 

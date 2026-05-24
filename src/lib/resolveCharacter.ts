@@ -7,6 +7,7 @@ export type CanonicalCharacter = {
   name: string
   age: number | null
   firstBookId: string | null
+  deathBookId: string | null
 }
 
 export type CharacterOverrideRow = {
@@ -18,6 +19,7 @@ export type ResolvedCharacter = {
   name: string
   age: number | null
   firstBookId: string | null
+  deathBookId: string | null
   // True when either a book-specific avatar file or the canonical one exists.
   hasAvatar: boolean
   hasBookAvatar: boolean
@@ -28,6 +30,10 @@ export type ResolvedCharacter = {
   // False when the character's firstBookId is set and the current book sits
   // before it in series order — caller filters these out of the book grid.
   visible: boolean
+  // True only in books strictly *after* the death book — the death book
+  // itself shows the character normally (no spoiler tag), and earlier books
+  // are also unaffected.
+  deceased: boolean
 }
 
 // Path to the canonical and book-specific avatar files on disk.
@@ -52,21 +58,25 @@ export function resolveCharacter(opts: {
   override: CharacterOverrideRow | null
   book: { id: string; order: number }
   firstBookOrder: number | null
+  deathBookOrder: number | null
 }): ResolvedCharacter {
-  const { character, override, book, firstBookOrder } = opts
+  const { character, override, book, firstBookOrder, deathBookOrder } = opts
   const paths = characterAvatarPaths(character.id, book.id)
   const hasBookAvatar = existsSync(paths.bookSpecific)
   const hasCanonicalAvatar = existsSync(paths.canonical)
   const visible = firstBookOrder == null || book.order >= firstBookOrder
+  const deceased = deathBookOrder != null && book.order > deathBookOrder
   return {
     id: character.id,
     name: character.name,
     age: override?.age ?? character.age,
     firstBookId: character.firstBookId,
+    deathBookId: character.deathBookId,
     hasAvatar: hasBookAvatar || hasCanonicalAvatar,
     hasBookAvatar,
     hasCanonicalAvatar,
     hasOverride: override != null,
     visible,
+    deceased,
   }
 }

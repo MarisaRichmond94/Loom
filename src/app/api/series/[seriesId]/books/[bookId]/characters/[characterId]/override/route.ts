@@ -30,12 +30,21 @@ export async function POST(req: Request, { params }: Params) {
     const firstBook = await prisma.book.findUnique({ where: { id: character.firstBookId }, select: { order: true } })
     firstBookOrder = firstBook?.order ?? null
   }
+  let deathBookOrder: number | null = null
+  if (character.deathBookId) {
+    const deathBook = await prisma.book.findUnique({ where: { id: character.deathBookId }, select: { order: true } })
+    deathBookOrder = deathBook?.order ?? null
+  }
 
   return NextResponse.json(resolveCharacter({
-    character: { id: character.id, name: character.name, age: character.age, firstBookId: character.firstBookId },
+    character: {
+      id: character.id, name: character.name, age: character.age,
+      firstBookId: character.firstBookId, deathBookId: character.deathBookId,
+    },
     override,
     book: { id: book.id, order: book.order },
     firstBookOrder,
+    deathBookOrder,
   }))
 }
 
