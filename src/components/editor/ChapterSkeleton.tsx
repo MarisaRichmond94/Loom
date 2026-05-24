@@ -17,12 +17,18 @@ export default function ChapterSkeleton() {
         </div>
         {/* Date */}
         <div className="h-9 w-44 bg-surface-raised border border-accent/20 rounded-lg mb-2" />
-        {/* Block placeholders — varied widths to feel less mechanical. */}
+        {/* Block placeholders — varied widths to feel less mechanical.
+            Tall block list so the skeleton fills the full viewport height
+            on larger screens (it's clipped by the main scroll area on small). */}
         <div className="flex flex-col gap-3">
           {[
-            ['w-11/12', 'w-full', 'w-10/12', 'w-9/12'],
-            ['w-full', 'w-5/6', 'w-11/12', 'w-2/3'],
-            ['w-10/12', 'w-full', 'w-3/4'],
+            ['w-11/12', 'w-full', 'w-10/12', 'w-9/12', 'w-full', 'w-8/12'],
+            ['w-full', 'w-5/6', 'w-11/12', 'w-2/3', 'w-10/12', 'w-full', 'w-7/12'],
+            ['w-10/12', 'w-full', 'w-3/4', 'w-11/12', 'w-9/12'],
+            ['w-full', 'w-10/12', 'w-11/12', 'w-2/3', 'w-full', 'w-8/12', 'w-9/12'],
+            ['w-9/12', 'w-full', 'w-11/12', 'w-10/12', 'w-2/3'],
+            ['w-full', 'w-3/4', 'w-10/12', 'w-9/12', 'w-full', 'w-5/6'],
+            ['w-10/12', 'w-11/12', 'w-full', 'w-2/3', 'w-9/12', 'w-full', 'w-3/4'],
           ].map((widths, i) => (
             <div key={i} className="flex items-start">
               <div className="flex-1 min-w-0 bg-surface-raised border border-accent/10 border-l-4 border-l-accent/30 rounded-r-lg p-4">
