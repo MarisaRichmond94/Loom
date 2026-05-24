@@ -5,7 +5,15 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { LuPlay, LuDownload } from 'react-icons/lu'
 
-type Series = { id: string; title: string; description: string; createdAt: string }
+type SeriesStats = { bookCount: number; uniquePovs: number; choiceCount: number; wordCount: number }
+type Series = {
+  id: string
+  title: string
+  description: string
+  createdAt: string
+  standalone?: boolean
+  stats?: SeriesStats
+}
 
 // Author-facing series list. The shared (home) layout supplies the
 // LOOM logo, the Explore | Write tabs, the greeting, and the theme
@@ -200,6 +208,24 @@ export default function WritePage() {
                 >
                   {s.description}
                 </Link>
+              )}
+              {s.stats && (
+                <div className="grid grid-cols-4 gap-3 mt-4">
+                  {[
+                    { label: 'Book(s)',    value: s.stats.bookCount },
+                    { label: 'POV(s)',     value: s.stats.uniquePovs },
+                    { label: 'Word(s)',    value: s.stats.wordCount.toLocaleString() },
+                    { label: 'Choice(s)',  value: s.stats.choiceCount },
+                  ].map(({ label, value }) => (
+                    <div
+                      key={label}
+                      className="bg-surface-overlay border border-accent/10 rounded-lg px-3 py-3 flex flex-col items-center gap-1"
+                    >
+                      <span className="text-lg font-bold text-ink leading-none">{value}</span>
+                      <span className="text-[10px] text-ink-faint uppercase tracking-widest">{label}</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           ))}

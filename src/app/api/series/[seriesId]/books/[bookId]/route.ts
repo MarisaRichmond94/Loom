@@ -1,24 +1,9 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@/generated/prisma/client'
+import { extractText, countWords } from '@/lib/seriesStats'
 
 type Params = { params: Promise<{ bookId: string }> }
-
-function extractText(json: string | null | undefined): string {
-  if (!json) return ''
-  try {
-    const walk = (node: Record<string, unknown>): string => {
-      if (node.type === 'text') return (node.text as string) ?? ''
-      const children = (node.content as Record<string, unknown>[] | undefined) ?? []
-      return children.map(walk).join(' ')
-    }
-    return walk(JSON.parse(json))
-  } catch { return '' }
-}
-
-function countWords(text: string): number {
-  return text.trim().split(/\s+/).filter(Boolean).length
-}
 
 export async function GET(_: Request, { params }: Params) {
   const { bookId } = await params

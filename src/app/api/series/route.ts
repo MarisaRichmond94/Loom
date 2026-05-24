@@ -1,9 +1,33 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { computeSeriesStats } from '@/lib/seriesStats'
 
 export async function GET() {
-  const series = await prisma.series.findMany({ orderBy: { createdAt: 'desc' } })
-  return NextResponse.json(series)
+  // Eager-load every book → chapter → block (with choices + overrides) so we
+  // can compute series-level stats (books, POVs, words, choices) in one query
+  // for the Write list cards. The list is local and small, so the read amp
+  // is acceptable.
+  const seriesList = await prisma.series.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: {
+      books: {
+        include: {
+          chapters: {
+            include: {
+              blocks: {
+                include: { choices: true, overrides: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  return NextResponse.json(seriesList.map(s => {
+    const { books: _books, ...rest } = s
+    return { ...rest, stats: computeSeriesStats(s.books) }
+  }))
 }
 
 export async function POST(req: Request) {
