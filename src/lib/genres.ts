@@ -7,6 +7,7 @@ export const GENRES = [
   'Comedy',
   'Contemporary',
   'Crime',
+  'CYOA',
   'Drama',
   'Dystopian',
   'Fantasy',
