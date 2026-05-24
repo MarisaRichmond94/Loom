@@ -157,9 +157,11 @@ export default function PreviewSeriesPage() {
                             parent <a> owns navigation; this is just to give
                             readers an obvious target if the card-as-link
                             affordance isn't obvious. */}
-                        <span className="inline-block text-xs text-accent font-medium mt-2 group-hover/card:underline">
-                          See more →
-                        </span>
+                        <div className="mt-2 text-right">
+                          <span className="text-xs text-accent font-medium group-hover/card:underline">
+                            See more
+                          </span>
+                        </div>
                       </>
                     )}
                     {!book.published && (
