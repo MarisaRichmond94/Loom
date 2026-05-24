@@ -113,11 +113,17 @@ export default function PreviewBookPage() {
             {book.synopsis && (
               <p className="mt-4 text-base text-ink-muted leading-relaxed whitespace-pre-wrap">{book.synopsis}</p>
             )}
-            {series && (series.genres.length > 0 || series.keywords.length > 0) && (
-              <div className="mt-5 flex flex-wrap gap-1.5">
+            {series && series.genres.length > 0 && (
+              <div className="mt-5 flex flex-wrap items-center gap-2">
+                <span className="text-[10px] uppercase tracking-widest text-ink-faint shrink-0">Genres</span>
                 {series.genres.map(g => (
                   <span key={g} className="text-xs px-2.5 py-1 rounded-full bg-accent text-white">{g}</span>
                 ))}
+              </div>
+            )}
+            {series && series.keywords.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-[10px] uppercase tracking-widest text-ink-faint shrink-0">Keywords</span>
                 {series.keywords.map(k => (
                   <span key={k} className="text-xs px-2.5 py-1 rounded-full bg-accent/15 text-ink border border-accent/20">{k}</span>
                 ))}
