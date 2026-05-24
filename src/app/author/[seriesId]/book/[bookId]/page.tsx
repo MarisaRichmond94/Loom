@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { LuUser, LuCheck, LuPencil, LuPlus, LuMusic } from 'react-icons/lu'
+import { LuUser, LuCheck, LuPencil, LuPlus, LuMusic, LuX } from 'react-icons/lu'
 import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
 import { useAuthor } from '@/lib/authorContext'
@@ -34,6 +34,7 @@ type Soundtrack = {
   chapterId: string
   chapterTitle: string
   chapterOrder: number
+  hasAlbumArt: boolean
 }
 
 async function cropImageToBlob(imageSrc: string, pixelCrop: Area): Promise<Blob> {
@@ -79,6 +80,11 @@ export default function BookDetailPage() {
   const isInitialBookLoadRef = useRef(true)
   // Soundtracks aggregated across every chapter in this book.
   const [soundtracks, setSoundtracks] = useState<Soundtrack[]>([])
+  // Cache-buster keyed by song id so a fresh upload re-renders the thumbnail
+  // without flushing the whole list. Updated when album art changes.
+  const [albumArtTs, setAlbumArtTs] = useState<Record<string, number>>({})
+  const albumArtFileInputRef = useRef<HTMLInputElement>(null)
+  const albumArtTargetIdRef = useRef<string | null>(null)
 
   const loadBook = useCallback(async () => {
     const start = Date.now()
@@ -116,6 +122,33 @@ export default function BookDetailPage() {
     const res = await fetch(`/api/series/${seriesId}/books/${bookId}/soundtracks`)
     if (res.ok) setSoundtracks(await res.json())
   }, [seriesId, bookId])
+
+  function openAlbumArtPicker(soundtrackId: string) {
+    albumArtTargetIdRef.current = soundtrackId
+    albumArtFileInputRef.current?.click()
+  }
+
+  async function handleAlbumArtChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    const id = albumArtTargetIdRef.current
+    if (!file || !id) { e.target.value = ''; return }
+    const form = new FormData()
+    form.append('art', file)
+    const res = await fetch(`/api/blocks/${id}/album-art`, { method: 'POST', body: form })
+    if (res.ok) {
+      setSoundtracks(prev => prev.map(s => s.id === id ? { ...s, hasAlbumArt: true } : s))
+      setAlbumArtTs(prev => ({ ...prev, [id]: Date.now() }))
+    }
+    albumArtTargetIdRef.current = null
+    e.target.value = ''
+  }
+
+  async function removeAlbumArt(soundtrackId: string) {
+    const res = await fetch(`/api/blocks/${soundtrackId}/album-art`, { method: 'DELETE' })
+    if (res.ok) {
+      setSoundtracks(prev => prev.map(s => s.id === soundtrackId ? { ...s, hasAlbumArt: false } : s))
+    }
+  }
 
   useEffect(() => { loadSoundtracks() }, [loadSoundtracks])
   useEffect(() => { loadBook() }, [loadBook])
@@ -289,6 +322,7 @@ export default function BookDetailPage() {
             )}
           </div>
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
+          <input ref={albumArtFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAlbumArtChange} />
 
           {/* Title + Synopsis */}
           <div className="flex-1 flex flex-col gap-4">
@@ -387,11 +421,35 @@ export default function BookDetailPage() {
               {soundtracks.map((s, idx) => {
                 const label = pinLabel(s.pinStart, s.pinEnd)
                 const chapterDisplay = s.chapterTitle?.trim() || `Chapter ${s.chapterOrder}`
+                const artUrl = s.hasAlbumArt ? `/music/${s.id}-art.jpg?t=${albumArtTs[s.id] ?? 0}` : null
                 return (
                   <div key={s.id} className="px-4 py-3 rounded-lg bg-surface-raised border border-accent/10">
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-ink-faint shrink-0 w-6 text-right">{idx + 1}</span>
-                      <LuMusic size={14} className="text-accent shrink-0" />
+                      <button
+                        onClick={() => openAlbumArtPicker(s.id)}
+                        title={artUrl ? 'Replace album art' : 'Upload album art'}
+                        className={`group/art relative shrink-0 w-10 h-10 rounded overflow-hidden flex items-center justify-center transition ${
+                          artUrl
+                            ? 'border border-accent/10 hover:border-accent/40'
+                            : 'border border-dashed border-accent/30 hover:border-accent/60 bg-surface-overlay'
+                        }`}
+                      >
+                        {artUrl
+                          ? <img src={artUrl} alt="" className="w-full h-full object-cover" />
+                          : <LuMusic size={14} className="text-accent" />}
+                        {artUrl && (
+                          <span
+                            role="button"
+                            tabIndex={-1}
+                            onClick={e => { e.stopPropagation(); removeAlbumArt(s.id) }}
+                            title="Remove album art"
+                            className="absolute top-0 right-0 w-4 h-4 rounded-bl bg-black/60 text-white opacity-0 group-hover/art:opacity-100 transition flex items-center justify-center hover:bg-choice-kill/80 cursor-pointer"
+                          >
+                            <LuX size={10} />
+                          </span>
+                        )}
+                      </button>
                       <div className="shrink-0 min-w-0 max-w-[40%]">
                         <p className="text-sm text-ink truncate">{s.title?.trim() || '(untitled)'}</p>
                         <p className="text-xs text-ink-faint italic truncate">{chapterDisplay}</p>
@@ -399,7 +457,7 @@ export default function BookDetailPage() {
                       <audio controls src={s.audioPath} className="flex-1 h-8 min-w-0" />
                     </div>
                     {label && (
-                      <p className="text-xs text-ink-faint italic mt-2 pl-9">{label}</p>
+                      <p className="text-xs text-ink-faint italic mt-2 pl-[3.75rem]">{label}</p>
                     )}
                   </div>
                 )

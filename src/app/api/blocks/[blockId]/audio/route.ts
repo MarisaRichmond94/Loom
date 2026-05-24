@@ -29,6 +29,9 @@ export async function DELETE(_: Request, { params }: Params) {
   if (block?.content) {
     await unlink(path.join(process.cwd(), 'public', block.content)).catch(() => null)
   }
+  // Sidecar album art lives at /music/<blockId>-art.jpg — without the audio
+  // it's orphaned, so clear it too.
+  await unlink(path.join(process.cwd(), 'public', 'music', `${blockId}-art.jpg`)).catch(() => null)
   await prisma.contentBlock.update({ where: { id: blockId }, data: { content: null } })
   return NextResponse.json({ ok: true })
 }

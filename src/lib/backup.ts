@@ -178,6 +178,13 @@ export async function runBackup(): Promise<{ ok: boolean; message: string }> {
         for (const block of chapter.blocks) {
           if (block.content?.startsWith('/music/')) {
             await copyAsset(block.content, assetDir)
+            // Album art sidecar — same id, suffix-art.jpg. Audio file is the
+            // gating signal so we only attempt the copy for soundtrack blocks.
+            // copyAsset already silently skips missing files.
+            // block.id isn't on the chapter-block shape here; derive from the
+            // content path which is /music/<blockId>.<ext>.
+            const match = block.content.match(/^\/music\/([^/.]+)\./)
+            if (match) await copyAsset(`/music/${match[1]}-art.jpg`, assetDir)
           }
         }
       }
