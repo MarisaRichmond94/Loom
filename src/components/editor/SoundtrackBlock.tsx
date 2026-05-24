@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { LuMusic, LuUpload, LuX, LuDownload } from 'react-icons/lu'
 import { formatPinTime, parsePinTime, pinLabel } from '@/lib/pinLabel'
+import PinnedAudio from '@/components/PinnedAudio'
 
 type Props = {
   block: { id: string; prompt?: string | null; content?: string | null; pinStart?: number | null; pinEnd?: number | null; hasAlbumArt?: boolean }
@@ -178,7 +179,12 @@ export default function SoundtrackBlock({ block, onUpdateBlock }: Props) {
                 className="bg-transparent border-none outline-none text-sm text-ink placeholder:text-ink-faint"
               />
               <div className="flex items-center gap-2">
-                <audio controls src={audioSrc} className="flex-1 h-8 min-w-0" />
+                <PinnedAudio
+                  src={audioSrc}
+                  pinStart={block.pinStart}
+                  pinEnd={block.pinEnd}
+                  className="flex-1 min-w-0"
+                />
                 <button
                   onClick={handleRemove}
                   title="Remove audio"

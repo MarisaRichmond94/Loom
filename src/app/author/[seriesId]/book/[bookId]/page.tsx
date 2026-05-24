@@ -9,6 +9,7 @@ import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import BookSkeleton from '@/components/editor/BookSkeleton'
 import { pinLabel } from '@/lib/pinLabel'
+import PinnedAudio from '@/components/PinnedAudio'
 
 type Stats = { chapterCount: number; uniquePovs: number; choiceCount: number; wordCount: number }
 type Book = { id: string; title: string; synopsis: string; coverPath: string | null; stats: Stats }
@@ -454,7 +455,12 @@ export default function BookDetailPage() {
                         <p className="text-sm text-ink truncate">{s.title?.trim() || '(untitled)'}</p>
                         <p className="text-xs text-ink-faint italic truncate">{chapterDisplay}</p>
                       </div>
-                      <audio controls src={s.audioPath} className="flex-1 h-8 min-w-0" />
+                      <PinnedAudio
+                        src={s.audioPath}
+                        pinStart={s.pinStart}
+                        pinEnd={s.pinEnd}
+                        className="flex-1 min-w-0"
+                      />
                     </div>
                     {label && (
                       <p className="text-xs text-ink-faint italic mt-2 pl-[3.75rem]">{label}</p>

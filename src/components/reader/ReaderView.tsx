@@ -21,6 +21,7 @@ import BadEndingModal from './BadEndingModal'
 import InlineBadEnding from './InlineBadEnding'
 import AvatarButton from '@/components/AvatarButton'
 import Greeting from '@/components/Greeting'
+import PinnedAudio from '@/components/PinnedAudio'
 import { stripEmptyParagraphs, htmlToPlainText, inlineParagraphStyles, PASTE_FONT_FAMILY } from '@/lib/clipboardFormatting'
 
 type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
@@ -475,7 +476,12 @@ export default function ReaderView({
                       ? <img src={`/music/${block.id}-art.jpg`} alt="" className="shrink-0 w-10 h-10 rounded object-cover border border-accent/10" />
                       : <LuMusic size={14} className="text-accent shrink-0" />}
                     {block.prompt && <span className="text-xs text-ink-faint italic truncate">{block.prompt}</span>}
-                    <audio controls src={block.content} className="flex-1 h-8 min-w-0" />
+                    <PinnedAudio
+                      src={block.content}
+                      pinStart={block.pinStart}
+                      pinEnd={block.pinEnd}
+                      className="flex-1 min-w-0"
+                    />
                   </div>
                   {label && (
                     <p className={`text-xs text-ink-faint italic mt-2 ${block.hasAlbumArt ? 'pl-[3.25rem]' : 'pl-6'}`}>{label}</p>
