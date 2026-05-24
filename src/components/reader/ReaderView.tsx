@@ -20,6 +20,7 @@ import ChoiceConfigModal from './ChoiceConfigModal'
 import BadEndingModal from './BadEndingModal'
 import AvatarButton from '@/components/AvatarButton'
 import Greeting from '@/components/Greeting'
+import { stripEmptyParagraphs, htmlToPlainText, inlineParagraphStyles, PASTE_FONT_FAMILY } from '@/lib/clipboardFormatting'
 
 type Override = { id: string; order: number; condition: string; content: string }
 type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null }
@@ -70,71 +71,11 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-// Walks an HTML string and produces a plain-text equivalent that preserves
-// paragraph breaks. `innerText` on a detached element is inconsistent across
-// browsers — explicit walking gives reliable `\n\n` between block elements.
-// Font + size for the rich-text clipboard payload. Most destinations
-// (Google Docs, Word, Notion) respect a wrapping element's inline font
-// declarations, so each paragraph picks these up via inheritance.
-const PASTE_FONT_FAMILY = "'Charter', Georgia, serif"
-// Pages and Google Docs both read incoming pt-unit font sizes through
-// a px→pt conversion and then re-display the result (so `11pt` arrives
-// as 14.67pt = 11 × 4/3). Sending the size in px directly bypasses
-// that re-conversion: 14.6667px is the CSS-spec equivalent of 11pt
-// (1pt = 4/3 px) and lands at 11pt in both destinations.
-const PASTE_FONT_SIZE = '11px'
-const INDENT = '    ' // four nbsps ≈ a first-line indent
-
-// Zeroes paragraph margin on every <p> and prefixes each with non-breaking
-// spaces so destinations that strip text-indent CSS (Google Docs in
-// particular) still show novel-style first-line indents. margin:0 keeps
-// the destination from stacking its default Space-After on top of ours.
-function inlineParagraphStyles(html: string): string {
-  // Size goes here (not on the wrapper) because Google Docs reads
-  // wrapper font-size through a px→pt conversion (so `11pt` on the
-  // wrapper arrives as 14.67pt). Inline on <p> bypasses that path.
-  const style = `margin:0;font-size:${PASTE_FONT_SIZE}`
-  return html.replace(/<p(\s[^>]*)?>/gi, (_match, attrs: string | undefined) => {
-    const a = attrs ?? ''
-    let tag: string
-    if (/\bstyle\s*=/.test(a)) {
-      tag = `<p${a.replace(/style\s*=\s*"([^"]*)"/i, (_m, s: string) => `style="${s};${style}"`)}>`
-    } else {
-      tag = `<p${a} style="${style}">`
-    }
-    return `${tag}${INDENT}`
-  })
-}
-
-function htmlToPlainText(html: string): string {
-  if (typeof document === 'undefined' || !html) return ''
-  const div = document.createElement('div')
-  div.innerHTML = html
-  const BLOCK = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE'])
-  let out = ''
-  function walk(node: Node) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      out += node.textContent ?? ''
-      return
-    }
-    if (node.nodeType !== Node.ELEMENT_NODE) return
-    const el = node as Element
-    const tag = el.tagName
-    if (tag === 'BR') { out += '\n'; return }
-    if (tag === 'HR') { out += '\n\n---\n\n'; return }
-    el.childNodes.forEach(walk)
-    if (BLOCK.has(tag)) out += '\n\n'
-  }
-  div.childNodes.forEach(walk)
-  return out.replace(/\n{3,}/g, '\n\n').trim()
-}
-
 function renderTipTap(json: string | null | undefined, storyState?: StoryState): string {
   if (!json) return ''
   try {
     const html = generateHTML(JSON.parse(json), [StarterKit, TextAlign.configure({ types: ['paragraph', 'heading'] }), TextStyle, Color, Footnote, CharacterMark])
-    // Strip empty paragraphs (TipTap leaves trailing/leading <p></p> or <p><br></p> behind editing)
-    const stripped = html.replace(/<p[^>]*>(?:\s|<br\s*\/?>)*<\/p>/g, '')
+    const stripped = stripEmptyParagraphs(html)
     // Substitute {{varName}} with storyState value when the variable is known; leave literal otherwise.
     if (!storyState) return stripped
     return stripped.replace(VAR_PATTERN, (match, name) =>

@@ -59,6 +59,8 @@ import { Footnote } from '@/lib/extensions/footnote'
 import { CharacterMark } from '@/lib/extensions/character'
 import { VariableHighlight } from '@/lib/extensions/variableHighlight'
 import VariableSuggestionList from './VariableSuggestionList'
+import { buildCharterClipboard } from '@/lib/clipboardFormatting'
+import { DOMSerializer } from '@tiptap/pm/model'
 
 type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
 type Variable = { id: string; name: string; type: string }
@@ -162,6 +164,30 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
   useEffect(() => {
     if (editor) editor.view.dispatch(editor.state.tr)
   }, [editor, variables])
+
+  // Native Cmd+C / Ctrl+C out of any text block (normal or conditional override)
+  // produces the same Charter / 11px clipboard payload that the reader's
+  // "copy chapter" button produces — alignment, italics, bold, first-line
+  // indents, and tight paragraph spacing all survive into Pages/Docs/Word.
+  useEffect(() => {
+    if (!editor) return
+    const dom = editor.view.dom
+    function onCopy(event: ClipboardEvent) {
+      if (!editor) return
+      const { from, to, empty } = editor.state.selection
+      if (empty) return
+      const slice = editor.state.doc.slice(from, to)
+      const fragment = DOMSerializer.fromSchema(editor.schema).serializeFragment(slice.content)
+      const container = document.createElement('div')
+      container.appendChild(fragment)
+      const { html, text } = buildCharterClipboard(container.innerHTML)
+      event.preventDefault()
+      event.clipboardData?.setData('text/html', html)
+      event.clipboardData?.setData('text/plain', text)
+    }
+    dom.addEventListener('copy', onCopy)
+    return () => dom.removeEventListener('copy', onCopy)
+  }, [editor])
 
   // Detect `{{` trigger and track the query for the variable suggestion popover
   useEffect(() => {
