@@ -15,7 +15,12 @@ export async function GET() {
     include: {
       books: {
         orderBy: { order: 'asc' },
-        select: { id: true, coverPath: true, published: true },
+        // Book titles are included so the Explore search can match a series
+        // by any of its books' names ("Nobody's Hero" surfaces the parent
+        // series). Drafts are part of this list — we still want a draft
+        // title to surface its series so readers can land on its
+        // "Coming soon" tile.
+        select: { id: true, title: true, coverPath: true, published: true },
       },
     },
   })
@@ -39,6 +44,9 @@ export async function GET() {
         heroCoverPath: publishedBooks.find(b => b.coverPath)?.coverPath ?? null,
         publishedBookCount: publishedBooks.length,
         totalBookCount: s.books.length,
+        // All book titles in the series (published or draft) — used by the
+        // Explore search to surface a series via one of its book names.
+        bookTitles: s.books.map(b => b.title),
       }
     })
     // Hide series with nothing published so drafts don't leak into the
