@@ -102,13 +102,24 @@ button, a, select, [role="button"] {
   user-select: text;
 }
 
-/* Hide scrollbars across the app while preserving scroll behavior. */
-* {
+/* Hide scrollbars across the app while preserving scroll behavior.
+   Some Chromium/Safari builds still surface an overlay scrollbar on
+   hover unless the track and thumb pseudo-elements are also zeroed
+   out — handle all three. */
+*, html, body {
   scrollbar-width: none;            /* Firefox */
   -ms-overflow-style: none;         /* IE/old Edge */
 }
-*::-webkit-scrollbar {
-  display: none;                    /* Chromium/Safari */
+*::-webkit-scrollbar,
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-corner {
+  width: 0;
+  height: 0;
+  background: transparent;
+  display: none;
+  -webkit-appearance: none;
+          appearance: none;
 }
 
 /* Light mode — scoped to the main writing area only */
