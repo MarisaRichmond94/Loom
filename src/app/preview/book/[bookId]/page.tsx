@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { LuArrowRight, LuArrowLeft, LuBookOpen } from 'react-icons/lu'
+import { LuArrowRight, LuArrowLeft, LuBookOpen, LuChevronDown, LuUser, LuMusic } from 'react-icons/lu'
+import PinnedAudio from '@/components/PinnedAudio'
+import { pinLabel } from '@/lib/pinLabel'
 
 type Chapter = { id: string; title: string; order: number }
 type Book = {
@@ -22,6 +24,30 @@ type Series = {
   genres: string[]
   keywords: string[]
 }
+type Character = {
+  id: string
+  name: string
+  age: number | null
+  hasAvatar: boolean
+  hasBookAvatar?: boolean
+  hasCanonicalAvatar?: boolean
+  deceased?: boolean
+}
+type Soundtrack = {
+  id: string
+  title: string | null
+  audioPath: string
+  pinStart: number | null
+  pinEnd: number | null
+  chapterId: string
+  chapterTitle: string
+  chapterOrder: number
+  hasAlbumArt: boolean
+}
+
+// Approx row height (52px) × 4.5 ≈ 234. Slightly higher to let the half-row
+// peek and signal "scrollable for more."
+const CHAPTER_LIST_MAX_HEIGHT = 250
 
 // Public book landing page. Inherits genre + keyword tags from the parent
 // series (per the v1 decision to keep tags series-level). The Start Reading
@@ -32,13 +58,22 @@ export default function PreviewBookPage() {
   const router = useRouter()
   const [book, setBook] = useState<Book | null>(null)
   const [series, setSeries] = useState<Series | null>(null)
+  const [characters, setCharacters] = useState<Character[]>([])
+  const [soundtracks, setSoundtracks] = useState<Soundtrack[]>([])
   const [working, setWorking] = useState(false)
+  // Sections default open per spec; readers can collapse them to focus on
+  // any single section. State is per-section so the others stay where the
+  // reader left them.
+  const [chaptersOpen, setChaptersOpen] = useState(true)
+  const [charactersOpen, setCharactersOpen] = useState(true)
+  const [soundtrackOpen, setSoundtrackOpen] = useState(true)
 
   useEffect(() => {
     let cancelled = false
     async function load() {
       // Sequential book → series fetch (we need the bookData.seriesId to
-      // load the parent series for inherited tags).
+      // load the parent series for inherited tags, the cast, and the
+      // soundtrack list — all are series-scoped endpoints).
       const res = await fetch(`/api/books/${bookId}`)
       if (!res.ok || cancelled) return
       const bookData: Book = await res.json()
@@ -51,6 +86,18 @@ export default function PreviewBookPage() {
         try { const p = JSON.parse(v); return Array.isArray(p) ? p : [] } catch { return [] }
       }
       setSeries({ id: s.id, title: s.title, genres: parseList(s.genres), keywords: parseList(s.keywords) })
+
+      // Cast + soundtrack are only worth fetching for published books; for
+      // drafts we hide every below-the-fold section anyway (no spoilers).
+      if (bookData.published) {
+        const [charactersRes, soundtracksRes] = await Promise.all([
+          fetch(`/api/series/${bookData.seriesId}/books/${bookId}/characters`),
+          fetch(`/api/series/${bookData.seriesId}/books/${bookId}/soundtracks`),
+        ])
+        if (cancelled) return
+        if (charactersRes.ok) setCharacters(await charactersRes.json())
+        if (soundtracksRes.ok) setSoundtracks(await soundtracksRes.json())
+      }
     }
     load()
     return () => { cancelled = true }
@@ -92,6 +139,15 @@ export default function PreviewBookPage() {
   }
 
   const orderedChapters = [...book.chapters].sort((a, b) => a.order - b.order)
+
+  // Resolves the per-book or canonical avatar URL the same way the author
+  // book page does. The reader doesn't have a cache-busting timestamp to
+  // worry about — covers and avatars are stable across the public visit.
+  function characterAvatarUrl(c: Character): string | null {
+    if (c.hasBookAvatar) return `/characters/${c.id}-${bookId}.jpg`
+    if (c.hasCanonicalAvatar || c.hasAvatar) return `/characters/${c.id}.jpg`
+    return null
+  }
 
   return (
     <div className="min-h-screen bg-surface-base">
@@ -169,22 +225,149 @@ export default function PreviewBookPage() {
       </header>
 
       {book.published && (
-        <main className="max-w-3xl mx-auto px-8 py-10">
-          <h2 className="text-xs uppercase tracking-widest text-ink-faint mb-4">Chapters</h2>
-          {orderedChapters.length === 0 ? (
-            <p className="text-sm text-ink-faint italic">No chapters yet.</p>
-          ) : (
-            <ol className="flex flex-col gap-1">
-              {orderedChapters.map(ch => (
-                <li key={ch.id} className="px-4 py-3 rounded bg-surface-raised border border-accent/10 flex items-baseline gap-3">
-                  <span className="text-xs text-ink-faint tabular-nums shrink-0 w-8">{ch.order}</span>
-                  <span className="text-sm text-ink">{ch.title}</span>
-                </li>
-              ))}
-            </ol>
-          )}
+        <main className="max-w-3xl mx-auto px-8 py-10 flex flex-col gap-8">
+          {/* Chapters */}
+          <section>
+            <SectionHeader
+              label={`Chapters (${orderedChapters.length})`}
+              open={chaptersOpen}
+              onToggle={() => setChaptersOpen(o => !o)}
+            />
+            {chaptersOpen && (
+              orderedChapters.length === 0 ? (
+                <p className="text-sm text-ink-faint italic mt-3">No chapters yet.</p>
+              ) : (
+                // Cap at ~4.5 rows so very long books don't dominate the page.
+                // overflow-y-auto + a fixed max-height makes the half-row peek
+                // signal "more below" without needing an explicit scroll cue.
+                <div
+                  className="mt-3 overflow-y-auto pr-1"
+                  style={{ maxHeight: CHAPTER_LIST_MAX_HEIGHT }}
+                >
+                  <ol className="flex flex-col gap-1">
+                    {orderedChapters.map(ch => (
+                      <li
+                        key={ch.id}
+                        className="px-4 py-3 rounded bg-surface-raised border border-accent/10 text-sm text-ink"
+                      >
+                        {ch.title}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )
+            )}
+          </section>
+
+          {/* Characters — same per-book resolution as the author page so any
+              per-book overrides (age, avatar) follow the reader. */}
+          <section>
+            <SectionHeader
+              label={`Characters (${characters.length})`}
+              open={charactersOpen}
+              onToggle={() => setCharactersOpen(o => !o)}
+            />
+            {charactersOpen && (
+              characters.length === 0 ? (
+                <p className="text-sm text-ink-faint italic mt-3">No characters introduced yet.</p>
+              ) : (
+                <div
+                  style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))', gap: 8, alignContent: 'start' }}
+                  className="mt-3"
+                >
+                  {characters.map(c => {
+                    const url = characterAvatarUrl(c)
+                    return (
+                      <div
+                        key={c.id}
+                        className="flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border border-accent/10 h-[146px] w-full"
+                      >
+                        <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-accent/20 bg-surface-overlay flex items-center justify-center shrink-0">
+                          {url
+                            ? <img src={url} alt={c.name} className="w-full h-full object-cover" />
+                            : <LuUser size={32} className="text-ink-faint" />}
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs font-medium text-ink truncate w-full">{c.name}</p>
+                          {c.deceased
+                            ? <p className="text-[10px] uppercase tracking-widest text-ink-faint italic">Deceased</p>
+                            : c.age != null && <p className="text-xs text-ink-faint">Age {c.age}</p>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            )}
+          </section>
+
+          {/* Soundtrack — every chapter's soundtrack blocks, in story order.
+              Read-only: no album-art swap, no remove. PinnedAudio still
+              honors the writer's pinStart/pinEnd so readers can sample the
+              tagged snippet. */}
+          <section>
+            <SectionHeader
+              label="Soundtrack"
+              open={soundtrackOpen}
+              onToggle={() => setSoundtrackOpen(o => !o)}
+            />
+            {soundtrackOpen && (
+              soundtracks.length === 0 ? (
+                <p className="text-sm text-ink-faint italic mt-3">No songs yet.</p>
+              ) : (
+                <div className="mt-3 flex flex-col gap-2">
+                  {soundtracks.map((s, idx) => {
+                    const label = pinLabel(s.pinStart, s.pinEnd)
+                    const chapterDisplay = s.chapterTitle?.trim() || `Chapter ${s.chapterOrder}`
+                    const artUrl = s.hasAlbumArt ? `/music/${s.id}-art.jpg` : null
+                    return (
+                      <div key={s.id} className="px-4 py-3 rounded-lg bg-surface-raised border border-accent/10">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-ink-faint shrink-0 w-6 text-right">{idx + 1}</span>
+                          <div className="shrink-0 w-10 h-10 rounded overflow-hidden border border-accent/10 bg-surface-overlay flex items-center justify-center">
+                            {artUrl
+                              ? <img src={artUrl} alt="" className="w-full h-full object-cover" />
+                              : <LuMusic size={14} className="text-accent" />}
+                          </div>
+                          <div className="shrink-0 min-w-0 max-w-[40%]">
+                            <p className="text-sm text-ink truncate">{s.title?.trim() || '(untitled)'}</p>
+                            <p className="text-xs text-ink-faint italic truncate">{chapterDisplay}</p>
+                          </div>
+                          <PinnedAudio
+                            src={s.audioPath}
+                            pinStart={s.pinStart}
+                            pinEnd={s.pinEnd}
+                            className="flex-1 min-w-0"
+                          />
+                        </div>
+                        {label && (
+                          <p className={`text-xs text-ink-faint italic mt-2 ${artUrl ? 'pl-[3.75rem]' : 'pl-9'}`}>{label}</p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            )}
+          </section>
         </main>
       )}
     </div>
+  )
+}
+
+function SectionHeader({ label, open, onToggle }: { label: string; open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-ink hover:opacity-80 transition"
+    >
+      <LuChevronDown
+        size={14}
+        className={`transition-transform ${open ? '' : '-rotate-90'}`}
+      />
+      {label}
+    </button>
   )
 }
