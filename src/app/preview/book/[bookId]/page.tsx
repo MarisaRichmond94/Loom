@@ -152,92 +152,87 @@ export default function PreviewBookPage() {
   return (
     <div className="min-h-screen bg-surface-base">
       <header className="border-b border-accent/10">
-        <div className="px-8 py-12">
-          {/* Cover + title/synopsis up top in a two-column row. Genres,
-              keywords, and the Start Reading CTA drop to a full-width
-              row below so the chips can breathe and the button anchors
-              to the right edge. */}
-          <div className="flex flex-col md:flex-row gap-8 items-start">
-            <div className={`relative w-44 md:w-56 shrink-0 rounded-lg overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center ${!book.published ? 'opacity-40' : ''}`}>
-              {book.coverPath
-                ? <Image
-                    src={book.coverPath}
-                    alt=""
-                    fill
-                    sizes="(max-width: 768px) 176px, 224px"
-                    className="object-cover"
-                    priority
-                  />
-                : <LuBookOpen size={40} className="text-ink-faint" />}
-            </div>
-            <div className="flex-1 min-w-0">
-              {series && (
-                <a
-                  href={`/preview/series/${series.id}`}
-                  className="text-xs uppercase tracking-widest text-ink-faint hover:text-ink transition flex items-center gap-1.5"
-                >
-                  <LuArrowLeft size={11} /> {series.title}
-                </a>
-              )}
-              <div className="mt-2 flex items-baseline gap-3 flex-wrap">
+        <div className="px-8 py-12 flex flex-col md:flex-row gap-8 items-start">
+          <div className={`relative w-44 md:w-56 shrink-0 rounded-lg overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center ${!book.published ? 'opacity-40' : ''}`}>
+            {book.coverPath
+              ? <Image
+                  src={book.coverPath}
+                  alt=""
+                  fill
+                  sizes="(max-width: 768px) 176px, 224px"
+                  className="object-cover"
+                  priority
+                />
+              : <LuBookOpen size={40} className="text-ink-faint" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            {series && (
+              <a
+                href={`/preview/series/${series.id}`}
+                className="text-xs uppercase tracking-widest text-ink-faint hover:text-ink transition flex items-center gap-1.5"
+              >
+                <LuArrowLeft size={11} /> {series.title}
+              </a>
+            )}
+            {/* Title + Start reading share a baseline row (mirroring the
+                series landing) so the CTA is anchored to a steady spot
+                regardless of synopsis length. Coming-soon badge stays
+                next to the title. */}
+            <div className="mt-2 flex items-center justify-between gap-6">
+              <div className="flex items-baseline gap-3 flex-wrap min-w-0">
                 <h1 className="text-3xl md:text-4xl font-bold text-ink leading-tight">{book.title}</h1>
                 {!book.published && (
                   <span className="text-[11px] uppercase tracking-widest text-ink-faint border border-accent/30 rounded px-2 py-0.5">Coming soon</span>
                 )}
               </div>
-              {book.published && book.synopsis && (
-                // Cap the synopsis at roughly the cover's height so the row
-                // below stays aligned with the cover bottom. The gradient
-                // fade-out at the bottom is the visual cue that the reader
-                // can scroll for more.
-                <div className="relative mt-4">
-                  <div className="overflow-y-auto pr-2 max-h-[180px] md:max-h-[248px]">
-                    <p className="text-base text-ink-muted leading-relaxed whitespace-pre-wrap">{book.synopsis}</p>
-                  </div>
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-surface-base to-transparent" />
-                </div>
-              )}
-              {!book.published && (
-                <p className="mt-4 text-sm text-ink-faint italic leading-relaxed">
-                  This book is still being written. Check back soon.
-                </p>
-              )}
+              <button
+                onClick={startReading}
+                disabled={working || !book.published || orderedChapters.length === 0}
+                className="shrink-0 px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
+              >
+                {!book.published
+                  ? 'Coming soon'
+                  : working
+                    ? 'Opening…'
+                    : orderedChapters.length === 0
+                      ? 'No chapters yet'
+                      : 'Start reading'}
+                {book.published && !working && orderedChapters.length > 0 && <LuArrowRight size={14} />}
+              </button>
             </div>
-          </div>
-
-          <div className="mt-6 flex items-start justify-between gap-6">
-            <div className="flex-1 min-w-0 flex flex-col gap-2">
-              {series && series.genres.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[10px] uppercase tracking-widest text-ink-faint shrink-0">Genres</span>
-                  {series.genres.map(g => (
-                    <span key={g} className="text-xs px-2.5 py-1 rounded-full bg-accent text-white">{g}</span>
-                  ))}
+            {book.published && book.synopsis && (
+              // Cap the synopsis at roughly the cover's height so the chips
+              // below stay aligned with the cover bottom. The gradient
+              // fade-out at the bottom is the visual cue that the reader
+              // can scroll for more.
+              <div className="relative mt-4">
+                <div className="overflow-y-auto pr-2 max-h-[180px] md:max-h-[248px]">
+                  <p className="text-base text-ink-muted leading-relaxed whitespace-pre-wrap">{book.synopsis}</p>
                 </div>
-              )}
-              {series && series.keywords.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[10px] uppercase tracking-widest text-ink-faint shrink-0">Keywords</span>
-                  {series.keywords.map(k => (
-                    <span key={k} className="text-xs px-2.5 py-1 rounded-full bg-accent/15 text-ink border border-accent/20">{k}</span>
-                  ))}
-                </div>
-              )}
-            </div>
-            <button
-              onClick={startReading}
-              disabled={working || !book.published || orderedChapters.length === 0}
-              className="shrink-0 px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
-            >
-              {!book.published
-                ? 'Coming soon'
-                : working
-                  ? 'Opening…'
-                  : orderedChapters.length === 0
-                    ? 'No chapters yet'
-                    : 'Start reading'}
-              {book.published && !working && orderedChapters.length > 0 && <LuArrowRight size={14} />}
-            </button>
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-surface-base to-transparent" />
+              </div>
+            )}
+            {!book.published && (
+              <p className="mt-4 text-sm text-ink-faint italic leading-relaxed">
+                This book is still being written. Check back soon.
+              </p>
+            )}
+            {series && series.genres.length > 0 && (
+              <div className="mt-5 flex flex-wrap items-center gap-2">
+                <span className="text-[10px] uppercase tracking-widest text-ink-faint shrink-0">Genres</span>
+                {series.genres.map(g => (
+                  <span key={g} className="text-xs px-2.5 py-1 rounded-full bg-accent text-white">{g}</span>
+                ))}
+              </div>
+            )}
+            {series && series.keywords.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-[10px] uppercase tracking-widest text-ink-faint shrink-0">Keywords</span>
+                {series.keywords.map(k => (
+                  <span key={k} className="text-xs px-2.5 py-1 rounded-full bg-accent/15 text-ink border border-accent/20">{k}</span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </header>
