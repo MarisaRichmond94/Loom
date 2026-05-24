@@ -341,7 +341,7 @@ export default function ReaderView({
 
       <main ref={mainRef} className={`flex-1 overflow-y-auto px-8${lightMode ? ' light-body' : ''}`}>
         {/* Sticky action row */}
-        <div className="flex justify-end items-center gap-2 px-0 py-3">
+        <div className="flex justify-end items-center gap-2 pr-6 py-3">
           {isAuthor && (
             <button
               onClick={() => setShowConfig(true)}
@@ -371,7 +371,7 @@ export default function ReaderView({
             </p>
           )}
         </div>
-        <div className={`pb-8${isAuthor ? ' reader-selectable' : ''}`}>
+        <div className={`pb-8 pr-6${isAuthor ? ' reader-selectable' : ''}`}>
         {chapterDate && <p className="text-base text-ink-faint mb-2">{chapterDate}</p>}
         {(() => {
           let pendingChoice = false

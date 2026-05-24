@@ -170,8 +170,9 @@ export default function ChapterEditorPage() {
 
   return (
     <div className="px-8">
-      {/* Sticky action row */}
-      <div className="sticky top-0 z-10 flex justify-end items-center gap-2 py-3">
+      {/* Sticky action row — pr-6 matches the invisible hover-delete column
+          on block rows so the rightmost button aligns with the block card edge. */}
+      <div className="sticky top-0 z-10 flex justify-end items-center gap-2 py-3 pr-6">
         <button
           onClick={() => setShowChapterSettings(true)}
           title="Chapter settings"
