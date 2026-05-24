@@ -151,7 +151,7 @@ export default function PreviewBookPage() {
 
   if (!book) {
     return (
-      <div className="min-h-screen bg-surface-base flex items-center justify-center">
+      <div className="h-full flex items-center justify-center">
         <p className="text-ink-faint text-sm">Loading…</p>
       </div>
     )
@@ -169,7 +169,7 @@ export default function PreviewBookPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-base">
+    <div>
       <header className="border-b border-accent/10">
         <div className="px-8 pt-12 pb-8 flex flex-col md:flex-row gap-8 items-start">
           <div className={`relative w-44 md:w-56 shrink-0 rounded-lg overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center ${!book.published ? 'opacity-40' : ''}`}>

@@ -80,14 +80,14 @@ export default function PreviewSeriesPage() {
 
   if (!series) {
     return (
-      <div className="min-h-screen bg-surface-base flex items-center justify-center">
+      <div className="h-full flex items-center justify-center">
         <p className="text-ink-faint text-sm">Loading…</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-surface-base">
+    <div>
       <header className="border-b border-accent/10">
         <div className="max-w-4xl mx-auto px-8 pt-12 pb-8">
           {/* Row 1: title and Start reading on the same baseline. Description,
