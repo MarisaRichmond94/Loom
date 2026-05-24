@@ -30,10 +30,22 @@ export default function WritePage() {
   const [showForm, setShowForm] = useState(false)
   const [importing, setImporting] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
+  // Title input is focused via a ref when the form expands rather than via
+  // autoFocus — the form stays mounted (collapsed) so the close transition
+  // can play, and autoFocus would otherwise pull focus on first render.
+  const titleInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetch('/api/series').then(r => r.json()).then(setSeries)
   }, [])
+
+  useEffect(() => {
+    if (showForm) {
+      // requestAnimationFrame lets the open transition start before focus
+      // moves; without it the caret can flash at the collapsed position.
+      requestAnimationFrame(() => titleInputRef.current?.focus())
+    }
+  }, [showForm])
 
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -107,8 +119,16 @@ export default function WritePage() {
         </button>
       </div>
 
-      {showForm && (
-        <form onSubmit={handleCreate} className="mb-4 p-5 rounded-lg bg-surface-raised border border-accent/20">
+      {/* The form stays mounted whether or not it's open so the close
+          transition can play. max-h + opacity + mb collapse together so
+          there's no margin jump after the height settles. */}
+      <div
+        className={`transition-all duration-200 ease-out overflow-hidden ${
+          showForm ? 'max-h-[600px] opacity-100 mb-4' : 'max-h-0 opacity-0 mb-0'
+        }`}
+        aria-hidden={!showForm}
+      >
+        <form onSubmit={handleCreate} className="p-5 rounded-lg bg-surface-raised border border-accent/20">
           <label className="block text-xs uppercase tracking-widest text-ink-faint mb-2">Type</label>
           <div className="flex gap-2 mb-4">
             {([
@@ -137,7 +157,7 @@ export default function WritePage() {
             {kind === 'standalone' ? 'Book title' : 'Series title'}
           </label>
           <input
-            autoFocus
+            ref={titleInputRef}
             value={title}
             onChange={e => setTitle(e.target.value)}
             placeholder={kind === 'standalone' ? 'The Unnamed Book' : 'The Unnamed Series'}
@@ -164,7 +184,7 @@ export default function WritePage() {
             </button>
           </div>
         </form>
-      )}
+      </div>
 
       {series.length === 0 ? (
         <p className="text-ink-muted text-sm">No series yet. Create your first one above.</p>
