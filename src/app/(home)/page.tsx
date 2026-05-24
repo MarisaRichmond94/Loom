@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { LuBookOpen, LuSearch, LuX, LuChevronDown, LuCheck } from 'react-icons/lu'
+import { GENRES } from '@/lib/genres'
 
 type ExploreSeries = {
   id: string
@@ -27,7 +28,19 @@ export default function ExplorePage() {
   // no filter applied (every series passes the genre check).
   const [activeGenres, setActiveGenres] = useState<string[]>([])
   const [genreMenuOpen, setGenreMenuOpen] = useState(false)
+  const [genreFilterQuery, setGenreFilterQuery] = useState('')
   const genreMenuRef = useRef<HTMLDivElement>(null)
+  const genreFilterInputRef = useRef<HTMLInputElement>(null)
+
+  // Focus the search input as the dropdown opens; clear it on close so the
+  // next visit starts fresh.
+  useEffect(() => {
+    if (genreMenuOpen) {
+      requestAnimationFrame(() => genreFilterInputRef.current?.focus())
+    } else {
+      setGenreFilterQuery('')
+    }
+  }, [genreMenuOpen])
 
   // Close the genre dropdown when the user mousedowns anywhere outside it.
   // Escape also closes — handled on the dropdown's onKeyDown.
@@ -49,14 +62,14 @@ export default function ExplorePage() {
       .catch(() => setSeries([]))
   }, [])
 
-  // Genres that any series actually uses — derived from the data so the
-  // filter row doesn't show dead options that match nothing.
-  const availableGenres = useMemo(() => {
-    if (!series) return []
-    const all = new Set<string>()
-    for (const s of series) for (const g of s.genres) all.add(g)
-    return [...all].sort()
-  }, [series])
+  // Show every genre from the canonical list so the reader can find any
+  // tag the platform supports — not just the subset currently in use.
+  // The in-dropdown search whittles it down as they type.
+  const visibleGenresInMenu = useMemo(() => {
+    const q = genreFilterQuery.trim().toLowerCase()
+    if (!q) return [...GENRES]
+    return GENRES.filter(g => g.toLowerCase().includes(q))
+  }, [genreFilterQuery])
 
   // Search + genre filter. Series title, keywords, and book titles all
   // contribute to the text match; genre filter is OR across selections.
@@ -121,79 +134,98 @@ export default function ExplorePage() {
               </button>
             )}
           </div>
-          {availableGenres.length > 0 && (
-            <div ref={genreMenuRef} className="relative shrink-0">
-              <button
-                type="button"
-                onClick={() => setGenreMenuOpen(o => !o)}
+          <div ref={genreMenuRef} className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setGenreMenuOpen(o => !o)}
+              onKeyDown={e => { if (e.key === 'Escape') setGenreMenuOpen(false) }}
+              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm transition ${
+                activeGenres.length > 0
+                  ? 'bg-accent/10 border-accent/40 text-ink'
+                  : 'bg-surface-raised border-accent/15 text-ink-muted hover:border-accent/40 hover:text-ink'
+              }`}
+            >
+              Genre(s)
+              {activeGenres.length > 0 && (
+                <span className="text-[10px] bg-accent text-white rounded-full px-1.5 py-0.5 leading-none">
+                  {activeGenres.length}
+                </span>
+              )}
+              <LuChevronDown
+                size={14}
+                className={`transition-transform ${genreMenuOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {genreMenuOpen && (
+              <div
                 onKeyDown={e => { if (e.key === 'Escape') setGenreMenuOpen(false) }}
-                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm transition ${
-                  activeGenres.length > 0
-                    ? 'bg-accent/10 border-accent/40 text-ink'
-                    : 'bg-surface-raised border-accent/15 text-ink-muted hover:border-accent/40 hover:text-ink'
-                }`}
+                className="absolute top-full right-0 mt-2 w-64 z-20 bg-surface-raised border border-accent/20 rounded-lg shadow-xl overflow-hidden"
               >
-                Genre(s)
-                {activeGenres.length > 0 && (
-                  <span className="text-[10px] bg-accent text-white rounded-full px-1.5 py-0.5 leading-none">
-                    {activeGenres.length}
-                  </span>
-                )}
-                <LuChevronDown
-                  size={14}
-                  className={`transition-transform ${genreMenuOpen ? 'rotate-180' : ''}`}
-                />
-              </button>
-              {genreMenuOpen && (
-                <div
-                  onKeyDown={e => { if (e.key === 'Escape') setGenreMenuOpen(false) }}
-                  className="absolute top-full right-0 mt-2 w-56 z-20 bg-surface-raised border border-accent/20 rounded-lg shadow-xl overflow-hidden"
-                >
-                  <div className="relative">
-                    {/* ~40px per row × 4.5 = 180px, so the fifth option
-                        peeks as a "scroll for more" cue. Gradient fades
-                        to surface-raised — the dropdown's own bg. */}
-                    <div className="overflow-y-auto max-h-[180px] py-1">
-                      {availableGenres.map(g => {
-                        const on = activeGenres.includes(g)
-                        return (
-                          <button
-                            type="button"
-                            key={g}
-                            onClick={() => toggleGenre(g)}
-                            className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition ${
-                              on
-                                ? 'text-ink bg-accent/10'
-                                : 'text-ink-muted hover:bg-surface-overlay hover:text-ink'
-                            }`}
-                          >
-                            <span
-                              className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                                on ? 'bg-accent border-accent' : 'border-accent/30'
+                {/* In-dropdown filter. Pulled from the canonical genre list
+                    so the reader can find every supported tag, not just
+                    ones already in the catalog. */}
+                <div className="relative border-b border-accent/10">
+                  <LuSearch size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+                  <input
+                    ref={genreFilterInputRef}
+                    value={genreFilterQuery}
+                    onChange={e => setGenreFilterQuery(e.target.value)}
+                    placeholder="Filter genres…"
+                    className="w-full bg-transparent pl-8 pr-3 py-2 text-xs text-ink placeholder:text-ink-faint outline-none"
+                  />
+                </div>
+                <div className="relative">
+                  {visibleGenresInMenu.length === 0 ? (
+                    <p className="text-xs text-ink-faint italic px-3 py-3 text-center">No matches.</p>
+                  ) : (
+                    <>
+                      {/* ~40px per row × 4.5 = 180px, so the fifth option
+                          peeks as a "scroll for more" cue. Gradient fades
+                          to surface-raised — the dropdown's own bg. */}
+                      <div className="overflow-y-auto max-h-[180px] py-1">
+                        {visibleGenresInMenu.map(g => {
+                          const on = activeGenres.includes(g)
+                          return (
+                            <button
+                              type="button"
+                              key={g}
+                              onClick={() => toggleGenre(g)}
+                              className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition ${
+                                on
+                                  ? 'text-ink bg-accent/10'
+                                  : 'text-ink-muted hover:bg-surface-overlay hover:text-ink'
                               }`}
                             >
-                              {on && <LuCheck size={11} className="text-white" />}
-                            </span>
-                            {g}
-                          </button>
-                        )
-                      })}
-                    </div>
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-surface-raised to-transparent" />
-                  </div>
-                  {activeGenres.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setActiveGenres([])}
-                      className="w-full text-xs text-ink-muted hover:text-ink transition py-2 border-t border-accent/10"
-                    >
-                      Clear
-                    </button>
+                              <span
+                                className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                  on ? 'bg-accent border-accent' : 'border-accent/30'
+                                }`}
+                              >
+                                {on && <LuCheck size={11} className="text-white" />}
+                              </span>
+                              {g}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {visibleGenresInMenu.length > 4 && (
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-surface-raised to-transparent" />
+                      )}
+                    </>
                   )}
                 </div>
-              )}
-            </div>
-          )}
+                {activeGenres.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveGenres([])}
+                    className="w-full text-xs text-ink-muted hover:text-ink transition py-2 border-t border-accent/10"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
