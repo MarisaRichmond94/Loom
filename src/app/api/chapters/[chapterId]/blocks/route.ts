@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { existsSync } from 'fs'
+import path from 'path'
 import { prisma } from '@/lib/prisma'
 
 type Params = { params: Promise<{ chapterId: string }> }
@@ -13,7 +15,12 @@ export async function GET(_: Request, { params }: Params) {
       overrides: { orderBy: { order: 'asc' } },
     },
   })
-  return NextResponse.json(blocks)
+  // Tag soundtrack blocks with hasAlbumArt for the editor's thumbnail
+  // affordance — file existence is the source of truth for the sidecar.
+  const musicDir = path.join(process.cwd(), 'public', 'music')
+  return NextResponse.json(blocks.map(b => b.type === 'soundtrack'
+    ? { ...b, hasAlbumArt: existsSync(path.join(musicDir, `${b.id}-art.jpg`)) }
+    : b))
 }
 
 export async function POST(req: Request, { params }: Params) {

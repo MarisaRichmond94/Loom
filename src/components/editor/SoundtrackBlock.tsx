@@ -5,7 +5,7 @@ import { LuMusic, LuUpload, LuX, LuDownload } from 'react-icons/lu'
 import { formatPinTime, parsePinTime, pinLabel } from '@/lib/pinLabel'
 
 type Props = {
-  block: { id: string; prompt?: string | null; content?: string | null; pinStart?: number | null; pinEnd?: number | null }
+  block: { id: string; prompt?: string | null; content?: string | null; pinStart?: number | null; pinEnd?: number | null; hasAlbumArt?: boolean }
   onUpdateBlock: (data: { prompt?: string; content?: string | null; pinStart?: number | null; pinEnd?: number | null }) => void
 }
 
@@ -21,6 +21,11 @@ export default function SoundtrackBlock({ block, onUpdateBlock }: Props) {
   const [pinStartError, setPinStartError] = useState(false)
   const [pinEndError, setPinEndError] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Album art: optimistic local copy so an upload renders without waiting
+  // for a parent refetch. albumArtTs busts the browser cache on replace.
+  const [hasAlbumArt, setHasAlbumArt] = useState(block.hasAlbumArt ?? false)
+  const [albumArtTs, setAlbumArtTs] = useState(0)
+  const albumArtInputRef = useRef<HTMLInputElement>(null)
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -63,7 +68,27 @@ export default function SoundtrackBlock({ block, onUpdateBlock }: Props) {
   async function handleRemove() {
     await fetch(`/api/blocks/${block.id}/audio`, { method: 'DELETE' })
     setAudioSrc(null)
+    // The audio DELETE route also unlinks the album-art sidecar — reflect that.
+    setHasAlbumArt(false)
     onUpdateBlock({ content: null })
+  }
+
+  async function handleAlbumArtChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const form = new FormData()
+    form.append('art', file)
+    const res = await fetch(`/api/blocks/${block.id}/album-art`, { method: 'POST', body: form })
+    if (res.ok) {
+      setHasAlbumArt(true)
+      setAlbumArtTs(Date.now())
+    }
+    e.target.value = ''
+  }
+
+  async function removeAlbumArt() {
+    const res = await fetch(`/api/blocks/${block.id}/album-art`, { method: 'DELETE' })
+    if (res.ok) setHasAlbumArt(false)
   }
 
   function handleTitleBlur() {
@@ -101,7 +126,31 @@ export default function SoundtrackBlock({ block, onUpdateBlock }: Props) {
     <div className="flex flex-col gap-3">
       {/* Title row */}
       <div className="flex items-center gap-2">
-        <LuMusic size={14} className="text-accent shrink-0" />
+        <button
+          type="button"
+          onClick={() => albumArtInputRef.current?.click()}
+          title={hasAlbumArt ? 'Replace album art' : 'Upload album art'}
+          className={`group/art relative shrink-0 w-9 h-9 rounded overflow-hidden flex items-center justify-center transition ${
+            hasAlbumArt
+              ? 'border border-accent/20 hover:border-accent/50'
+              : 'border border-dashed border-accent/30 hover:border-accent/60 bg-surface-muted'
+          }`}
+        >
+          {hasAlbumArt
+            ? <img src={`/music/${block.id}-art.jpg?t=${albumArtTs}`} alt="" className="w-full h-full object-cover" />
+            : <LuMusic size={14} className="text-accent" />}
+          {hasAlbumArt && (
+            <span
+              role="button"
+              tabIndex={-1}
+              onClick={e => { e.stopPropagation(); removeAlbumArt() }}
+              title="Remove album art"
+              className="absolute top-0 right-0 w-4 h-4 rounded-bl bg-black/60 text-white opacity-0 group-hover/art:opacity-100 transition flex items-center justify-center hover:bg-choice-kill/80 cursor-pointer"
+            >
+              <LuX size={9} />
+            </span>
+          )}
+        </button>
         <input
           value={title}
           onChange={e => setTitle(e.target.value)}
@@ -110,6 +159,13 @@ export default function SoundtrackBlock({ block, onUpdateBlock }: Props) {
           className="flex-1 bg-transparent border-none outline-none text-sm text-ink placeholder:text-ink-faint"
         />
       </div>
+      <input
+        ref={albumArtInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleAlbumArtChange}
+      />
 
       {/* Audio area */}
       {audioSrc ? (

@@ -24,6 +24,7 @@ type Block = {
   condition?: string | null
   pinStart?: number | null
   pinEnd?: number | null
+  hasAlbumArt?: boolean
   choices: Choice[]
   overrides: Override[]
 }

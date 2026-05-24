@@ -31,6 +31,7 @@ type Block = {
   condition?: string | null
   pinStart?: number | null
   pinEnd?: number | null
+  hasAlbumArt?: boolean
   choices: Choice[]
   overrides: Override[]
 }
@@ -470,12 +471,14 @@ export default function ReaderView({
               return (
                 <div key={block.id} id={`block-${block.id}`} className="my-4 px-4 py-3 rounded-lg bg-surface-raised border border-accent/10">
                   <div className="flex items-center gap-3">
-                    <LuMusic size={14} className="text-accent shrink-0" />
+                    {block.hasAlbumArt
+                      ? <img src={`/music/${block.id}-art.jpg`} alt="" className="shrink-0 w-10 h-10 rounded object-cover border border-accent/10" />
+                      : <LuMusic size={14} className="text-accent shrink-0" />}
                     {block.prompt && <span className="text-xs text-ink-faint italic truncate">{block.prompt}</span>}
                     <audio controls src={block.content} className="flex-1 h-8 min-w-0" />
                   </div>
                   {label && (
-                    <p className="text-xs text-ink-faint italic mt-2 pl-6">{label}</p>
+                    <p className={`text-xs text-ink-faint italic mt-2 ${block.hasAlbumArt ? 'pl-[3.25rem]' : 'pl-6'}`}>{label}</p>
                   )}
                 </div>
               )

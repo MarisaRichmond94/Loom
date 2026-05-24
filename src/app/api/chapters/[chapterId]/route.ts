@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { existsSync } from 'fs'
+import path from 'path'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@/generated/prisma/client'
 
@@ -19,7 +21,14 @@ export async function GET(_: Request, { params }: Params) {
     },
   })
   if (!chapter) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json(chapter)
+  // Mark which soundtrack blocks have an uploaded album-art sidecar so the
+  // editor + reader can render the thumbnail. File existence is the source
+  // of truth; same pattern as character avatars.
+  const musicDir = path.join(process.cwd(), 'public', 'music')
+  const blocks = chapter.blocks.map(b => b.type === 'soundtrack'
+    ? { ...b, hasAlbumArt: existsSync(path.join(musicDir, `${b.id}-art.jpg`)) }
+    : b)
+  return NextResponse.json({ ...chapter, blocks })
 }
 
 export async function PATCH(req: Request, { params }: Params) {
