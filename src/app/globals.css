@@ -102,6 +102,15 @@ button, a, select, [role="button"] {
   user-select: text;
 }
 
+/* Hide scrollbars across the app while preserving scroll behavior. */
+* {
+  scrollbar-width: none;            /* Firefox */
+  -ms-overflow-style: none;         /* IE/old Edge */
+}
+*::-webkit-scrollbar {
+  display: none;                    /* Chromium/Safari */
+}
+
 /* Light mode — scoped to the main writing area only */
 .light-body {
   --color-surface-base: #f5f2eb;
