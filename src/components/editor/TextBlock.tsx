@@ -314,16 +314,19 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
   // scrolls, those coordinates go stale and the menu lingers detached from
   // the selection. Dismiss it on any scroll inside an ancestor (capture
   // catches scroll events from any scrolling parent, not just window).
+  //
+  // Only active while the menu is in its initial Footnote/Character state —
+  // once the user has committed to typing a footnote or picking a character,
+  // a stray scroll (which the input's own focus call can synthesize) must
+  // not wipe out their in-progress sub-menu.
   useEffect(() => {
-    if (!menuPos) return
+    if (!menuPos || showInput || showCharPicker) return
     function onScroll() {
       setMenuPos(null)
-      setShowInput(false)
-      setShowCharPicker(false)
     }
     window.addEventListener('scroll', onScroll, { capture: true, passive: true })
     return () => window.removeEventListener('scroll', onScroll, { capture: true })
-  }, [menuPos])
+  }, [menuPos, showInput, showCharPicker])
 
   useEffect(() => {
     if (showInput) inputRef.current?.focus()
