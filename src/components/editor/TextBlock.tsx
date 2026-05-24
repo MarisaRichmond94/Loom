@@ -309,6 +309,22 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
     return () => { editor.off('selectionUpdate', update) }
   }, [editor, showInput, showCharPicker])
 
+  // The selection popover is positioned in fixed viewport coordinates from
+  // editor.view.coordsAtPos at the moment selection happens. When the user
+  // scrolls, those coordinates go stale and the menu lingers detached from
+  // the selection. Dismiss it on any scroll inside an ancestor (capture
+  // catches scroll events from any scrolling parent, not just window).
+  useEffect(() => {
+    if (!menuPos) return
+    function onScroll() {
+      setMenuPos(null)
+      setShowInput(false)
+      setShowCharPicker(false)
+    }
+    window.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    return () => window.removeEventListener('scroll', onScroll, { capture: true })
+  }, [menuPos])
+
   useEffect(() => {
     if (showInput) inputRef.current?.focus()
   }, [showInput])
