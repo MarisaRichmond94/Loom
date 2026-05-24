@@ -60,10 +60,10 @@ export default function ExplorePage() {
               href={`/preview/series/${s.id}`}
               className="group flex gap-4 p-4 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
             >
-              <div className="relative w-24 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center">
+              <div className="relative w-40 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center">
                 {s.heroCoverPath
-                  ? <Image src={s.heroCoverPath} alt="" fill sizes="96px" className="object-cover" />
-                  : <LuBookOpen size={22} className="text-ink-faint" />}
+                  ? <Image src={s.heroCoverPath} alt="" fill sizes="160px" className="object-cover" />
+                  : <LuBookOpen size={32} className="text-ink-faint" />}
               </div>
               <div className="flex-1 min-w-0 flex flex-col">
                 <p className="font-semibold text-ink truncate group-hover:text-accent transition">{s.title}</p>
@@ -74,7 +74,15 @@ export default function ExplorePage() {
                   )}
                 </p>
                 {s.description && (
-                  <p className="text-xs text-ink-muted mt-2 line-clamp-4 leading-relaxed">{s.description}</p>
+                  // Scroll overflow so readers can sample the whole blurb
+                  // without leaving the card. Gradient fade at the bottom
+                  // hints "more below" the same way the book landing does.
+                  <div className="relative mt-2">
+                    <div className="overflow-y-auto pr-1 max-h-[140px]">
+                      <p className="text-xs text-ink-muted leading-relaxed">{s.description}</p>
+                    </div>
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-surface-raised to-transparent" />
+                  </div>
                 )}
                 {(s.genres.length > 0 || s.keywords.length > 0) && (
                   <div className="mt-auto pt-2 flex flex-col gap-1.5">
