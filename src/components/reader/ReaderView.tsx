@@ -63,11 +63,30 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+// Walks an HTML string and produces a plain-text equivalent that preserves
+// paragraph breaks. `innerText` on a detached element is inconsistent across
+// browsers — explicit walking gives reliable `\n\n` between block elements.
 function htmlToPlainText(html: string): string {
   if (typeof document === 'undefined' || !html) return ''
   const div = document.createElement('div')
   div.innerHTML = html
-  return (div.innerText || div.textContent || '').trim()
+  const BLOCK = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE'])
+  let out = ''
+  function walk(node: Node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      out += node.textContent ?? ''
+      return
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return
+    const el = node as Element
+    const tag = el.tagName
+    if (tag === 'BR') { out += '\n'; return }
+    if (tag === 'HR') { out += '\n\n---\n\n'; return }
+    el.childNodes.forEach(walk)
+    if (BLOCK.has(tag)) out += '\n\n'
+  }
+  div.childNodes.forEach(walk)
+  return out.replace(/\n{3,}/g, '\n\n').trim()
 }
 
 function renderTipTap(json: string | null | undefined, storyState?: StoryState): string {
@@ -235,14 +254,18 @@ export default function ReaderView({
     if (choice?.targetChapterId) onNavigate(choice.targetChapterId)
   }
 
-  // Build a plain-text version of the chapter's prose, stopping at the first
-  // unanswered choice point so the writer can't accidentally copy blurred
-  // ahead-content. Skips soundtracks and chapter metadata.
+  // Builds an HTML + plain-text copy of the chapter's prose for the clipboard.
+  // Writes both formats via ClipboardItem so apps that accept rich text
+  // (Google Docs, Word, Notion) keep paragraphs and italics, while plain-text
+  // destinations still get a readable fallback. Stops at the first visible,
+  // unanswered choice so blurred ahead-content can't leak.
   async function copyChapter() {
-    const parts: string[] = []
+    const htmlParts: string[] = []
+    const textParts: string[] = []
     for (const block of blocks) {
+      let html: string | null = null
       if (block.type === 'text') {
-        parts.push(htmlToPlainText(renderTipTap(block.content, storyState)))
+        html = renderTipTap(block.content, storyState)
       } else if (block.type === 'conditional_fragment') {
         const resolved = resolveConditional(
           {
@@ -255,10 +278,8 @@ export default function ReaderView({
           },
           storyState,
         )
-        if (resolved) parts.push(htmlToPlainText(renderTipTap(resolved, storyState)))
+        if (resolved) html = renderTipTap(resolved, storyState)
       } else if (block.type === 'choice_point') {
-        // Already-answered or condition-skipped choices fall through naturally —
-        // they don't render and don't block reading.
         const answered = choiceHistory.some(h => h.choicePointId === block.id)
         if (answered) continue
         if (block.condition) {
@@ -267,11 +288,26 @@ export default function ReaderView({
             if (!matchesCondition(parsed, storyState)) continue
           } catch { /* fall through and stop */ }
         }
-        break  // first unanswered, visible choice — stop here
+        break
+      }
+      if (html) {
+        htmlParts.push(html)
+        textParts.push(htmlToPlainText(html))
       }
     }
+    const htmlOut = htmlParts.join('\n')
+    const textOut = textParts.filter(Boolean).join('\n\n')
     try {
-      await navigator.clipboard.writeText(parts.filter(Boolean).join('\n\n'))
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': new Blob([htmlOut], { type: 'text/html' }),
+            'text/plain': new Blob([textOut], { type: 'text/plain' }),
+          }),
+        ])
+      } else {
+        await navigator.clipboard.writeText(textOut)
+      }
       setCopyState('copied')
       setTimeout(() => setCopyState('idle'), 1500)
     } catch { /* clipboard unavailable; silently ignore */ }
