@@ -78,7 +78,10 @@ const INDENT = '    ' // four nbsps ≈ a first-line indent
 // particular) still show novel-style first-line indents. margin:0 keeps
 // the destination from stacking its default Space-After on top of ours.
 function inlineParagraphStyles(html: string): string {
-  const style = 'margin:0'
+  // Size goes here (not on the wrapper) because Google Docs reads
+  // wrapper font-size through a px→pt conversion (so `11pt` on the
+  // wrapper arrives as 14.67pt). Inline on <p> bypasses that path.
+  const style = `margin:0;font-size:${PASTE_FONT_SIZE}`
   return html.replace(/<p(\s[^>]*)?>/gi, (_match, attrs: string | undefined) => {
     const a = attrs ?? ''
     let tag: string
@@ -325,7 +328,7 @@ export default function ReaderView({
     // Wrap in a font-styled container so the destination picks up Charter 11pt
     // via inheritance instead of falling back to its default body font.
     const inner = htmlParts.map(inlineParagraphStyles).join('')
-    const htmlOut = `<div style="font-family:${PASTE_FONT_FAMILY};font-size:${PASTE_FONT_SIZE}">${inner}</div>`
+    const htmlOut = `<div style="font-family:${PASTE_FONT_FAMILY}">${inner}</div>`
     const textOut = textParts.filter(Boolean).join('\n\n')
     try {
       if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
