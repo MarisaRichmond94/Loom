@@ -53,10 +53,7 @@ export default function ExplorePage() {
           </p>
         </div>
       ) : (
-        <div
-          className="grid gap-4"
-          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
-        >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {series.map(s => (
             <Link
               key={s.id}
@@ -79,11 +76,22 @@ export default function ExplorePage() {
                 {s.description && (
                   <p className="text-xs text-ink-muted mt-2 line-clamp-4 leading-relaxed">{s.description}</p>
                 )}
-                {s.genres.length > 0 && (
-                  <div className="mt-auto pt-2 flex flex-wrap gap-1">
-                    {s.genres.slice(0, 3).map(g => (
-                      <span key={g} className="text-[10px] px-2 py-0.5 rounded-full bg-accent text-white">{g}</span>
-                    ))}
+                {(s.genres.length > 0 || s.keywords.length > 0) && (
+                  <div className="mt-auto pt-2 flex flex-col gap-1.5">
+                    {s.genres.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {s.genres.map(g => (
+                          <span key={g} className="text-[10px] px-2 py-0.5 rounded-full bg-accent text-white">{g}</span>
+                        ))}
+                      </div>
+                    )}
+                    {s.keywords.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {s.keywords.map(k => (
+                          <span key={k} className="text-[10px] px-2 py-0.5 rounded-full bg-accent/15 text-ink border border-accent/20">{k}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
