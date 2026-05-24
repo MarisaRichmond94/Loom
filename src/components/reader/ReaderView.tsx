@@ -66,6 +66,22 @@ function escapeHtml(s: string): string {
 // Walks an HTML string and produces a plain-text equivalent that preserves
 // paragraph breaks. `innerText` on a detached element is inconsistent across
 // browsers — explicit walking gives reliable `\n\n` between block elements.
+// Inlines first-line indent and zeroes paragraph margin on every <p> so that
+// rich-text destinations (Google Docs, Word, Notion) preserve novel-style
+// indenting and don't double their default Space-After onto our prose.
+function inlineParagraphStyles(html: string): string {
+  const style = 'text-indent:2em;margin:0'
+  return html.replace(/<p(\s[^>]*)?>/gi, (_match, attrs: string | undefined) => {
+    const a = attrs ?? ''
+    if (/\bstyle\s*=/.test(a)) {
+      // Append our declarations to the existing style attribute (they sort
+      // later so they win for any overlapping property).
+      return `<p${a.replace(/style\s*=\s*"([^"]*)"/i, (_m, s: string) => `style="${s};${style}"`)}>`
+    }
+    return `<p${a} style="${style}">`
+  })
+}
+
 function htmlToPlainText(html: string): string {
   if (typeof document === 'undefined' || !html) return ''
   const div = document.createElement('div')
@@ -295,7 +311,9 @@ export default function ReaderView({
         textParts.push(htmlToPlainText(html))
       }
     }
-    const htmlOut = htmlParts.join('\n')
+    // Concatenate without inter-block whitespace; inline paragraph styles so
+    // pasted output keeps first-line indent and tight paragraph spacing.
+    const htmlOut = htmlParts.map(inlineParagraphStyles).join('')
     const textOut = textParts.filter(Boolean).join('\n\n')
     try {
       if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
