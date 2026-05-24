@@ -322,17 +322,8 @@ export default function BookDetailPage() {
     <>
       <div className="max-w-3xl mx-auto px-8 py-8">
         {/* Preview + Publish controls sit in their own row above the cover
-            so they don't crowd the title or get hidden behind the synopsis.
-            Preview comes first since it's the action authors reach for most. */}
+            so they don't crowd the title or get hidden behind the synopsis. */}
         <div className="flex items-center justify-end gap-2 mb-6">
-          <a
-            href={`/preview/book/${bookId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition flex items-center gap-1.5"
-          >
-            <LuEye size={12} /> Preview
-          </a>
           <button
             onClick={togglePublished}
             className={`px-3 py-1.5 rounded text-xs font-medium transition border flex items-center gap-1.5 ${
@@ -345,6 +336,14 @@ export default function BookDetailPage() {
             <span className={`inline-block w-1.5 h-1.5 rounded-full ${book.published ? 'bg-accent' : 'bg-ink-faint'}`} />
             {book.published ? 'Published' : 'Draft'}
           </button>
+          <a
+            href={`/preview/book/${bookId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition flex items-center gap-1.5"
+          >
+            <LuEye size={12} /> Preview
+          </a>
         </div>
         <div className="flex gap-8 mb-8 items-stretch">
           {/* Cover */}
