@@ -183,10 +183,10 @@ export default function VariablesPanel({ variables, onAdd, onUpdate, onDelete }:
           onClick={() => setEditOpen(false)}
         >
           <div
-            className="bg-surface-raised border border-accent/20 rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl"
+            className="bg-surface-raised border border-accent/20 rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl flex flex-col max-h-[50vh]"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center justify-between mb-5 shrink-0">
               <h2 className="text-sm font-semibold text-ink">Edit Context</h2>
               <button onClick={() => setEditOpen(false)} className="text-ink-faint hover:text-ink"><LuX size={16} /></button>
             </div>
@@ -194,7 +194,7 @@ export default function VariablesPanel({ variables, onAdd, onUpdate, onDelete }:
             {variables.length === 0 ? (
               <p className="text-xs text-ink-faint italic text-center py-4">No context variables yet.</p>
             ) : (
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4 overflow-y-auto min-h-0 -mr-3 pr-3">
                 {variables.map(v => {
                   const draft = drafts[v.id] ?? { name: v.name, type: v.type, defaultValue: parseDefault(v.defaultValue) }
                   return (
