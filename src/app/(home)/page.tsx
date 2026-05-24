@@ -42,7 +42,7 @@ export default function ExplorePage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-ink">Explore</h1>
         <p className="text-sm text-ink-muted mt-1">
-          Choose-your-own-adventure stories from this Loom.
+          Find your next great read.
         </p>
       </div>
 
