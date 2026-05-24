@@ -535,14 +535,15 @@ export default function ReaderView({
         </footer>
       )}
 
-      {/* Floating copy-chapter button — author-only, bottom-right of viewport */}
+      {/* Floating copy-chapter button — author-only, hugs the viewport edge
+          above the footer so it never overlaps the last lines of prose. */}
       {isAuthor && (
         <button
           onClick={copyChapter}
           title={copyState === 'copied' ? 'Copied!' : 'Copy chapter text'}
-          className="fixed bottom-6 right-6 z-50 bg-surface-raised border border-accent/20 hover:border-accent/40 text-ink-muted hover:text-ink transition w-12 h-12 flex items-center justify-center rounded-full shadow-lg"
+          className="fixed bottom-14 right-3 z-50 bg-surface-raised border border-accent/20 hover:border-accent/40 text-ink-muted hover:text-ink transition w-9 h-9 flex items-center justify-center rounded-full shadow-lg"
         >
-          {copyState === 'copied' ? <LuCheck size={20} className="text-accent" /> : <LuCopy size={18} />}
+          {copyState === 'copied' ? <LuCheck size={14} className="text-accent" /> : <LuCopy size={14} />}
         </button>
       )}
     </div>
