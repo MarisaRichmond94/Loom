@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { LuMoon, LuSun, LuArrowLeft, LuArrowRight, LuMusic, LuUser, LuSlidersHorizontal } from 'react-icons/lu'
+import { LuMoon, LuSun, LuArrowLeft, LuArrowRight, LuMusic, LuUser, LuSlidersHorizontal, LuCopy, LuCheck } from 'react-icons/lu'
 import { generateHTML } from '@tiptap/html'
 import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
@@ -63,6 +63,13 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+function htmlToPlainText(html: string): string {
+  if (typeof document === 'undefined' || !html) return ''
+  const div = document.createElement('div')
+  div.innerHTML = html
+  return (div.innerText || div.textContent || '').trim()
+}
+
 function renderTipTap(json: string | null | undefined, storyState?: StoryState): string {
   if (!json) return ''
   try {
@@ -104,6 +111,7 @@ export default function ReaderView({
   const [isAuthor, setIsAuthor] = useState(false)
   const [endingMessage, setEndingMessage] = useState<string | null>(null)
   const pendingScrollBlockRef = useRef<string | null>(null)
+  const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
 
   useEffect(() => {
     setIsAuthor((localStorage.getItem('loom-author-name') ?? '').trim() !== '')
@@ -225,6 +233,48 @@ export default function ReaderView({
       return
     }
     if (choice?.targetChapterId) onNavigate(choice.targetChapterId)
+  }
+
+  // Build a plain-text version of the chapter's prose, stopping at the first
+  // unanswered choice point so the writer can't accidentally copy blurred
+  // ahead-content. Skips soundtracks and chapter metadata.
+  async function copyChapter() {
+    const parts: string[] = []
+    for (const block of blocks) {
+      if (block.type === 'text') {
+        parts.push(htmlToPlainText(renderTipTap(block.content, storyState)))
+      } else if (block.type === 'conditional_fragment') {
+        const resolved = resolveConditional(
+          {
+            overrides: block.overrides.map(o => ({
+              id: o.id,
+              order: o.order,
+              condition: JSON.parse(o.condition),
+              content: o.content,
+            })),
+          },
+          storyState,
+        )
+        if (resolved) parts.push(htmlToPlainText(renderTipTap(resolved, storyState)))
+      } else if (block.type === 'choice_point') {
+        // Already-answered or condition-skipped choices fall through naturally —
+        // they don't render and don't block reading.
+        const answered = choiceHistory.some(h => h.choicePointId === block.id)
+        if (answered) continue
+        if (block.condition) {
+          try {
+            const parsed = JSON.parse(block.condition)
+            if (!matchesCondition(parsed, storyState)) continue
+          } catch { /* fall through and stop */ }
+        }
+        break  // first unanswered, visible choice — stop here
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(parts.filter(Boolean).join('\n\n'))
+      setCopyState('copied')
+      setTimeout(() => setCopyState('idle'), 1500)
+    } catch { /* clipboard unavailable; silently ignore */ }
   }
 
   return (
@@ -485,6 +535,16 @@ export default function ReaderView({
         </footer>
       )}
 
+      {/* Floating copy-chapter button — author-only, bottom-right of viewport */}
+      {isAuthor && (
+        <button
+          onClick={copyChapter}
+          title={copyState === 'copied' ? 'Copied!' : 'Copy chapter text'}
+          className="fixed bottom-6 right-6 z-50 bg-surface-raised border border-accent/20 hover:border-accent/40 text-ink-muted hover:text-ink transition w-12 h-12 flex items-center justify-center rounded-full shadow-lg"
+        >
+          {copyState === 'copied' ? <LuCheck size={20} className="text-accent" /> : <LuCopy size={18} />}
+        </button>
+      )}
     </div>
   )
 }
