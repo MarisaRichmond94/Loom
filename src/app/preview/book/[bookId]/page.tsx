@@ -148,20 +148,22 @@ export default function PreviewBookPage() {
                 ))}
               </div>
             )}
-            <button
-              onClick={startReading}
-              disabled={working || !book.published || orderedChapters.length === 0}
-              className="mt-6 px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
-            >
-              {!book.published
-                ? 'Coming soon'
-                : working
-                  ? 'Opening…'
-                  : orderedChapters.length === 0
-                    ? 'No chapters yet'
-                    : 'Start reading'}
-              {book.published && !working && orderedChapters.length > 0 && <LuArrowRight size={14} />}
-            </button>
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={startReading}
+                disabled={working || !book.published || orderedChapters.length === 0}
+                className="px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
+              >
+                {!book.published
+                  ? 'Coming soon'
+                  : working
+                    ? 'Opening…'
+                    : orderedChapters.length === 0
+                      ? 'No chapters yet'
+                      : 'Start reading'}
+                {book.published && !working && orderedChapters.length > 0 && <LuArrowRight size={14} />}
+              </button>
+            </div>
           </div>
         </div>
       </header>
