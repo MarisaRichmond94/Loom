@@ -2,16 +2,27 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { LuUser, LuCheck, LuPencil, LuPlus } from 'react-icons/lu'
+import { LuUser, LuCheck, LuPencil, LuPlus, LuMusic } from 'react-icons/lu'
 import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import BookSkeleton from '@/components/editor/BookSkeleton'
+import { pinLabel } from '@/lib/pinLabel'
 
 type Stats = { chapterCount: number; uniquePovs: number; choiceCount: number; wordCount: number }
 type Book = { id: string; title: string; synopsis: string; coverPath: string | null; stats: Stats }
 type Character = { id: string; name: string; age: number | null; hasAvatar: boolean }
+type Soundtrack = {
+  id: string
+  title: string | null
+  audioPath: string
+  pinStart: number | null
+  pinEnd: number | null
+  chapterId: string
+  chapterTitle: string
+  chapterOrder: number
+}
 
 async function cropImageToBlob(imageSrc: string, pixelCrop: Area): Promise<Blob> {
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -52,6 +63,8 @@ export default function BookDetailPage() {
   const [charAvatarTs, setCharAvatarTs] = useState(0)
   const charFileInputRef = useRef<HTMLInputElement>(null)
   const isInitialBookLoadRef = useRef(true)
+  // Soundtracks aggregated across every chapter in this book.
+  const [soundtracks, setSoundtracks] = useState<Soundtrack[]>([])
 
   const loadBook = useCallback(async () => {
     const start = Date.now()
@@ -75,6 +88,12 @@ export default function BookDetailPage() {
     if (res.ok) setCharacters(await res.json())
   }, [seriesId])
 
+  const loadSoundtracks = useCallback(async () => {
+    const res = await fetch(`/api/series/${seriesId}/books/${bookId}/soundtracks`)
+    if (res.ok) setSoundtracks(await res.json())
+  }, [seriesId, bookId])
+
+  useEffect(() => { loadSoundtracks() }, [loadSoundtracks])
   useEffect(() => { loadBook() }, [loadBook])
   useEffect(() => { loadCharacters() }, [loadCharacters])
 
@@ -271,6 +290,41 @@ export default function BookDetailPage() {
             </div>
               )
           })()}
+        </div>
+
+        {/* Soundtrack — every chapter's soundtrack blocks, in story order */}
+        <div className="mb-8">
+          <h2 className="text-sm font-semibold uppercase tracking-widest text-ink mb-2">Soundtrack</h2>
+          {soundtracks.length === 0 ? (
+            <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-accent/20" style={{ height: 120 }}>
+              <p className="text-sm text-ink-faint italic text-center px-8">
+                No soundtracks yet. Add a soundtrack block in any chapter to see it here.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {soundtracks.map((s, idx) => {
+                const label = pinLabel(s.pinStart, s.pinEnd)
+                const chapterDisplay = s.chapterTitle?.trim() || `Chapter ${s.chapterOrder}`
+                return (
+                  <div key={s.id} className="px-4 py-3 rounded-lg bg-surface-raised border border-accent/10">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-ink-faint shrink-0 w-6 text-right">{idx + 1}</span>
+                      <LuMusic size={14} className="text-accent shrink-0" />
+                      <div className="shrink-0 min-w-0 max-w-[40%]">
+                        <p className="text-sm text-ink truncate">{s.title?.trim() || '(untitled)'}</p>
+                        <p className="text-xs text-ink-faint italic truncate">{chapterDisplay}</p>
+                      </div>
+                      <audio controls src={s.audioPath} className="flex-1 h-8 min-w-0" />
+                    </div>
+                    {label && (
+                      <p className="text-xs text-ink-faint italic mt-2 pl-9">{label}</p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Delete */}
