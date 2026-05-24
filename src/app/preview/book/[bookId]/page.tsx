@@ -251,22 +251,28 @@ export default function PreviewBookPage() {
                 <p className="text-sm text-ink-faint italic mt-3">No chapters yet.</p>
               ) : (
                 // Cap at ~4.5 rows so very long books don't dominate the page.
-                // overflow-y-auto + a fixed max-height makes the half-row peek
-                // signal "more below" without needing an explicit scroll cue.
-                <div
-                  className="mt-3 overflow-y-auto pr-1"
-                  style={{ maxHeight: CHAPTER_LIST_MAX_HEIGHT }}
-                >
-                  <ol className="flex flex-col gap-1">
-                    {orderedChapters.map(ch => (
-                      <li
-                        key={ch.id}
-                        className="px-4 py-3 rounded bg-surface-raised border border-accent/10 text-sm text-ink"
-                      >
-                        {ch.title}
-                      </li>
-                    ))}
-                  </ol>
+                // The gradient fade + half-row peek combine to signal "more
+                // below"; the half-row alone wasn't reading clearly enough
+                // for less-intuitive readers.
+                <div className="relative mt-3">
+                  <div
+                    className="overflow-y-auto pr-1"
+                    style={{ maxHeight: CHAPTER_LIST_MAX_HEIGHT }}
+                  >
+                    <ol className="flex flex-col gap-1">
+                      {orderedChapters.map(ch => (
+                        <li
+                          key={ch.id}
+                          className="px-4 py-3 rounded bg-surface-raised border border-accent/10 text-sm text-ink"
+                        >
+                          {ch.title}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                  {orderedChapters.length > 5 && (
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-surface-base to-transparent" />
+                  )}
                 </div>
               )
             )}
