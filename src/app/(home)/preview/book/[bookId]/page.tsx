@@ -47,9 +47,10 @@ type Soundtrack = {
   hasAlbumArt: boolean
 }
 
-// Approx row height (52px) × 4.5 ≈ 234. Slightly higher to let the half-row
-// peek and signal "scrollable for more."
-const CHAPTER_LIST_MAX_HEIGHT = 250
+// Approx row height (52px) × 4.5 = 234, plus 4 × 8 (gap-2) = 32. Bumped a
+// touch above 266 so the half-row peek lands clearly and signals "scrollable
+// for more."
+const CHAPTER_LIST_MAX_HEIGHT = 270
 
 // Public book landing page. Inherits genre + keyword tags from the parent
 // series (per the v1 decision to keep tags series-level). The Start Reading
@@ -122,7 +123,10 @@ export default function PreviewBookPage() {
     return () => { cancelled = true }
   }, [bookId])
 
-  async function startReading() {
+  // chapterId is optional; when omitted the reader lands on the book's first
+  // chapter (the Start Reading flow). When clicking a row in the Chapters
+  // list, the row's chapter is passed in to deep-link.
+  async function startReading(chapterId?: string) {
     if (!book || working || !book.published) return
     setWorking(true)
     const cacheKey = `loom-session-${book.seriesId}`
@@ -142,9 +146,10 @@ export default function PreviewBookPage() {
       sessionId = session.id
       localStorage.setItem(cacheKey, sessionId!)
     }
-    const firstChapter = [...book.chapters].sort((a, b) => a.order - b.order)[0]?.id
-    const url = firstChapter
-      ? `/read/${sessionId}?startChapterId=${firstChapter}`
+    const targetChapter =
+      chapterId ?? [...book.chapters].sort((a, b) => a.order - b.order)[0]?.id
+    const url = targetChapter
+      ? `/read/${sessionId}?startChapterId=${targetChapter}`
       : `/read/${sessionId}`
     router.push(url)
   }
@@ -205,7 +210,7 @@ export default function PreviewBookPage() {
                 )}
               </div>
               <button
-                onClick={startReading}
+                onClick={() => startReading()}
                 disabled={working || !book.published || orderedChapters.length === 0}
                 className="shrink-0 px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
               >
@@ -278,13 +283,17 @@ export default function PreviewBookPage() {
                     className="overflow-y-auto pr-1"
                     style={{ maxHeight: CHAPTER_LIST_MAX_HEIGHT }}
                   >
-                    <ol className="flex flex-col gap-1">
+                    <ol className="flex flex-col gap-2">
                       {orderedChapters.map(ch => (
-                        <li
-                          key={ch.id}
-                          className="px-4 py-3 rounded bg-surface-raised border border-accent/10 text-sm text-ink"
-                        >
-                          {ch.title}
+                        <li key={ch.id}>
+                          <button
+                            type="button"
+                            onClick={() => startReading(ch.id)}
+                            disabled={working}
+                            className="w-full text-left px-4 py-3 rounded bg-surface-raised border border-accent/10 text-sm text-ink hover:border-accent/40 hover:bg-surface-overlay transition disabled:opacity-50"
+                          >
+                            {ch.title}
+                          </button>
                         </li>
                       ))}
                     </ol>
