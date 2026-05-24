@@ -107,8 +107,45 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
 
   if (!series) {
     return (
-      <div className="min-h-screen bg-surface-base flex items-center justify-center text-ink-faint text-sm">
-        Loading…
+      <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
+        {/* Top nav — logo stays static, dynamic bits become pulsing placeholders. */}
+        <nav className="sticky top-0 z-10 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
+          <div className="flex items-center gap-2">
+            <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
+            <span className="text-accent font-bold tracking-wider text-2xl leading-none">LOOM</span>
+          </div>
+          <span className="text-ink-faint self-center">›</span>
+          <div className="h-4 w-40 bg-surface-muted rounded animate-pulse" />
+          <div className="ml-auto flex items-center gap-2 animate-pulse">
+            <div className="h-4 w-28 bg-surface-muted rounded" />
+            <div className="w-9 h-5 rounded-full bg-surface-muted" />
+            <div className="w-8 h-8 rounded-full bg-surface-muted" />
+          </div>
+        </nav>
+
+        <div className="flex flex-1 overflow-hidden">
+          {/* Sidebar — outline / choices / variables panels mocked. */}
+          <aside className="w-56 bg-surface-raised border-r border-accent/10 flex flex-col overflow-hidden animate-pulse">
+            <div className="flex flex-col gap-2 p-4 max-h-[50%]">
+              <div className="h-3 w-20 bg-surface-muted rounded mb-1" />
+              {[0, 1, 2, 3, 4].map(i => (
+                <div key={i} className="h-4 bg-surface-muted rounded" style={{ width: `${70 + (i * 5) % 25}%` }} />
+              ))}
+              <div className="h-7 w-full bg-accent/30 rounded mt-2" />
+            </div>
+            <div className="flex flex-col gap-2 p-4 pt-3 border-t border-accent/10 max-h-[25%]">
+              <div className="h-3 w-20 bg-surface-muted rounded mb-1" />
+              {[0, 1].map(i => <div key={i} className="h-3 w-full bg-surface-muted rounded" />)}
+            </div>
+            <div className="flex flex-col gap-2 p-4 pt-3 border-t border-accent/10 max-h-[25%]">
+              <div className="h-3 w-20 bg-surface-muted rounded mb-1" />
+              {[0, 1, 2].map(i => <div key={i} className="h-3 w-full bg-surface-muted rounded" />)}
+              <div className="h-7 w-full bg-accent/30 rounded mt-2" />
+            </div>
+          </aside>
+
+          <main className="flex-1 overflow-y-auto" />
+        </div>
       </div>
     )
   }
