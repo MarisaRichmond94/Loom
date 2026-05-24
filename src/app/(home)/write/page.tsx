@@ -108,7 +108,7 @@ export default function WritePage() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleCreate} className="mb-2 p-5 rounded-lg bg-surface-raised border border-accent/20">
+        <form onSubmit={handleCreate} className="mb-4 p-5 rounded-lg bg-surface-raised border border-accent/20">
           <label className="block text-xs uppercase tracking-widest text-ink-faint mb-2">Type</label>
           <div className="flex gap-2 mb-4">
             {([
