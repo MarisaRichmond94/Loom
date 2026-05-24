@@ -171,7 +171,7 @@ export default function ChapterEditorPage() {
   return (
     <div className="px-8">
       {/* Sticky action row */}
-      <div className="sticky top-0 z-10 flex justify-end items-center gap-2 py-3 pr-3">
+      <div className="sticky top-0 z-10 flex justify-end items-center gap-2 py-3">
         <button
           onClick={() => setShowChapterSettings(true)}
           title="Chapter settings"

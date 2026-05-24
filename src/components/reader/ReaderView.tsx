@@ -371,7 +371,7 @@ export default function ReaderView({
             </p>
           )}
         </div>
-        <div className={`px-8 pb-8${isAuthor ? ' reader-selectable' : ''}`}>
+        <div className={`pb-8${isAuthor ? ' reader-selectable' : ''}`}>
         {chapterDate && <p className="text-base text-ink-faint mb-2">{chapterDate}</p>}
         {(() => {
           let pendingChoice = false
