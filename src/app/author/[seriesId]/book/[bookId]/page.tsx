@@ -12,7 +12,17 @@ import { pinLabel } from '@/lib/pinLabel'
 
 type Stats = { chapterCount: number; uniquePovs: number; choiceCount: number; wordCount: number }
 type Book = { id: string; title: string; synopsis: string; coverPath: string | null; stats: Stats }
-type Character = { id: string; name: string; age: number | null; hasAvatar: boolean }
+// Resolved-for-this-book shape returned by /api/series/[seriesId]/books/[bookId]/characters
+type Character = {
+  id: string
+  name: string
+  age: number | null
+  firstBookId: string | null
+  hasAvatar: boolean
+  hasBookAvatar: boolean
+  hasCanonicalAvatar: boolean
+  hasOverride: boolean
+}
 type Soundtrack = {
   id: string
   title: string | null
@@ -50,11 +60,12 @@ export default function BookDetailPage() {
   const [synopsis, setSynopsis] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  // Characters
+  // Characters — list is resolved for THIS book (firstBookId filter + override merge)
   const [characters, setCharacters] = useState<Character[]>([])
   const [charModal, setCharModal] = useState<'create' | Character | null>(null)
   const [charName, setCharName] = useState('')
   const [charAge, setCharAge] = useState('')
+  const [charFirstBookId, setCharFirstBookId] = useState<string>('')
   const [charImageSrc, setCharImageSrc] = useState<string | null>(null)
   const [charCrop, setCharCrop] = useState({ x: 0, y: 0 })
   const [charZoom, setCharZoom] = useState(1)
@@ -84,9 +95,19 @@ export default function BookDetailPage() {
   }, [seriesId, bookId])
 
   const loadCharacters = useCallback(async () => {
-    const res = await fetch(`/api/series/${seriesId}/characters`)
+    // Book-scoped: resolves overrides + filters by firstBookId.
+    const res = await fetch(`/api/series/${seriesId}/books/${bookId}/characters`)
     if (res.ok) setCharacters(await res.json())
-  }, [seriesId])
+  }, [seriesId, bookId])
+
+  // Returns the avatar URL for a character resolved in this book context.
+  // Prefers the per-book file, falls back to the canonical, else null.
+  function avatarUrlFor(c: Character | null, ts: number): string | null {
+    if (!c) return null
+    if (c.hasBookAvatar) return `/characters/${c.id}-${bookId}.jpg?t=${ts}`
+    if (c.hasCanonicalAvatar) return `/characters/${c.id}.jpg?t=${ts}`
+    return null
+  }
 
   const loadSoundtracks = useCallback(async () => {
     const res = await fetch(`/api/series/${seriesId}/books/${bookId}/soundtracks`)
@@ -100,6 +121,9 @@ export default function BookDetailPage() {
   function openCreateModal() {
     setCharName('')
     setCharAge('')
+    // New characters created from a book default to "first appears in" THIS book
+    // so they don't leak back into earlier books in the series.
+    setCharFirstBookId(bookId)
     setCharImageSrc(null)
     setCharModal('create')
   }
@@ -107,6 +131,7 @@ export default function BookDetailPage() {
   function openEditModal(c: Character) {
     setCharName(c.name)
     setCharAge(c.age != null ? String(c.age) : '')
+    setCharFirstBookId(c.firstBookId ?? '')
     setCharImageSrc(null)
     setCharAvatarTs(Date.now())
     setCharModal(c)
@@ -125,32 +150,64 @@ export default function BookDetailPage() {
     setSavingChar(true)
     try {
       const age = charAge.trim() !== '' ? Number(charAge) : null
-      let saved: Character
+      const firstBookId = charFirstBookId || null
+      let characterId: string
+
       if (charModal === 'create') {
+        // Create: name + age + firstBookId all canonical. Any uploaded photo
+        // also becomes the canonical avatar so future books inherit it.
         const res = await fetch(`/api/series/${seriesId}/characters`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: charName.trim(), age }),
+          body: JSON.stringify({ name: charName.trim(), age, firstBookId }),
         })
         if (!res.ok) return
-        saved = await res.json()
+        const created = await res.json() as { id: string }
+        characterId = created.id
+
+        if (charImageSrc && charCroppedArea) {
+          const blob = await cropImageToBlob(charImageSrc, charCroppedArea)
+          const form = new FormData()
+          form.append('avatar', blob, 'avatar.jpg')
+          await fetch(`/api/series/${seriesId}/characters/${characterId}/avatar`, { method: 'POST', body: form })
+        }
       } else {
-        const res = await fetch(`/api/series/${seriesId}/characters/${(charModal as Character).id}`, {
-          method: 'PATCH',
+        // Edit on a book page: name + firstBookId are canonical, age and avatar
+        // get applied as a per-book override so other books are unaffected.
+        const existing = charModal as Character
+        characterId = existing.id
+
+        // Canonical patch (name + firstBookId)
+        const nameChanged = charName.trim() !== existing.name
+        const firstBookChanged = (firstBookId ?? null) !== (existing.firstBookId ?? null)
+        if (nameChanged || firstBookChanged) {
+          await fetch(`/api/series/${seriesId}/characters/${characterId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...(nameChanged ? { name: charName.trim() } : {}),
+              ...(firstBookChanged ? { firstBookId } : {}),
+            }),
+          })
+        }
+
+        // Book-specific override (age)
+        await fetch(`/api/series/${seriesId}/books/${bookId}/characters/${characterId}/override`, {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: charName.trim(), age }),
+          body: JSON.stringify({ age }),
         })
-        if (!res.ok) return
-        saved = await res.json()
-      }
-      if (charImageSrc && charCroppedArea) {
-        const blob = await cropImageToBlob(charImageSrc, charCroppedArea)
-        const form = new FormData()
-        form.append('avatar', blob, 'avatar.jpg')
-        await fetch(`/api/series/${seriesId}/characters/${saved.id}/avatar`, { method: 'POST', body: form })
-        saved = { ...saved, hasAvatar: true }
+
+        // Book-specific avatar upload
+        if (charImageSrc && charCroppedArea) {
+          const blob = await cropImageToBlob(charImageSrc, charCroppedArea)
+          const form = new FormData()
+          form.append('avatar', blob, 'avatar.jpg')
+          await fetch(`/api/series/${seriesId}/books/${bookId}/characters/${characterId}/avatar`, { method: 'POST', body: form })
+        }
       }
       await loadCharacters()
+      setCharAvatarTs(Date.now())
       closeCharModal()
     } finally {
       setSavingChar(false)
@@ -160,6 +217,17 @@ export default function BookDetailPage() {
   async function deleteCharacter(id: string) {
     await fetch(`/api/series/${seriesId}/characters/${id}`, { method: 'DELETE' })
     await loadCharacters()
+    closeCharModal()
+  }
+
+  // Wipes the per-book override row + per-book avatar for the character open
+  // in the modal; the book grid then snaps back to the canonical character.
+  async function resetOverridesForBook(characterId: string) {
+    await fetch(`/api/series/${seriesId}/books/${bookId}/characters/${characterId}/override`, {
+      method: 'DELETE',
+    })
+    await loadCharacters()
+    setCharAvatarTs(Date.now())
     closeCharModal()
   }
 
@@ -276,10 +344,12 @@ export default function BookDetailPage() {
                   className={`flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border transition h-[146px] w-full ${isPov ? 'border-accent hover:border-accent/70' : 'border-accent/10 hover:border-accent/30'}`}
                 >
                   <div className={`w-20 h-20 rounded-full overflow-hidden border-2 bg-surface-overlay flex items-center justify-center shrink-0 ${isPov ? 'border-accent' : 'border-accent/20'}`}>
-                    {c.hasAvatar
-                      ? <img src={`/characters/${c.id}.jpg?t=${charAvatarTs}`} alt={c.name} className="w-full h-full object-cover" />
-                      : <LuUser size={32} className="text-ink-faint" />
-                    }
+                    {(() => {
+                      const url = avatarUrlFor(c, charAvatarTs)
+                      return url
+                        ? <img src={url} alt={c.name} className="w-full h-full object-cover" />
+                        : <LuUser size={32} className="text-ink-faint" />
+                    })()}
                   </div>
                   <div className="text-center">
                     <p className="text-xs font-medium text-ink truncate w-full">{c.name}</p>
@@ -374,10 +444,13 @@ export default function BookDetailPage() {
                   onClick={() => charFileInputRef.current?.click()}
                   className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-accent/20 bg-surface-overlay flex items-center justify-center cursor-pointer group"
                 >
-                  {charModal !== 'create' && (charModal as Character).hasAvatar
-                    ? <img src={`/characters/${(charModal as Character).id}.jpg?t=${charAvatarTs}`} alt="" className="w-full h-full object-cover" />
-                    : <LuUser size={32} className="text-ink-faint" />
-                  }
+                  {(() => {
+                    if (charModal === 'create') return <LuUser size={32} className="text-ink-faint" />
+                    const url = avatarUrlFor(charModal as Character, charAvatarTs)
+                    return url
+                      ? <img src={url} alt="" className="w-full h-full object-cover" />
+                      : <LuUser size={32} className="text-ink-faint" />
+                  })()}
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
                     <LuPencil size={16} className="text-white" />
                   </div>
@@ -412,7 +485,12 @@ export default function BookDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-ink-faint mb-1 uppercase tracking-widest">Age <span className="normal-case">(optional)</span></label>
+                <label className="block text-xs text-ink-faint mb-1 uppercase tracking-widest">
+                  Age <span className="normal-case">(optional)</span>
+                  {charModal !== 'create' && (charModal as Character).hasOverride && (
+                    <span className="ml-2 normal-case text-ink-muted italic">overridden in this book</span>
+                  )}
+                </label>
                 <input
                   type="text"
                   value={charAge}
@@ -424,6 +502,28 @@ export default function BookDetailPage() {
                   <p className="text-xs text-choice-kill mt-1">Age must be a number</p>
                 )}
               </div>
+              <div>
+                <label className="block text-xs text-ink-faint mb-1 uppercase tracking-widest">Appears starting in</label>
+                <select
+                  value={charFirstBookId}
+                  onChange={e => setCharFirstBookId(e.target.value)}
+                  className="w-full bg-surface-overlay border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+                >
+                  <option value="">— every book —</option>
+                  {[...series.books].sort((a, b) => a.order - b.order).map(b => (
+                    <option key={b.id} value={b.id}>{b.title}</option>
+                  ))}
+                </select>
+              </div>
+              {charModal !== 'create' && (charModal as Character).hasOverride && (
+                <button
+                  type="button"
+                  onClick={() => resetOverridesForBook((charModal as Character).id)}
+                  className="self-start text-xs text-ink-muted hover:text-ink underline underline-offset-2 transition"
+                >
+                  Reset overrides for this book
+                </button>
+              )}
             </div>
 
             <div className="flex items-center justify-between">

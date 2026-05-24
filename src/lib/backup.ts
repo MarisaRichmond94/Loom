@@ -11,10 +11,13 @@ function buildBookPayload(
   series: {
     title: string; description: string | null
     variables: unknown[]
-    characters: { id: string; name: string; age: number | null }[]
+    characters: {
+      id: string; name: string; age: number | null; firstBookId: string | null
+      overrides: { bookId: string; age: number | null }[]
+    }[]
   },
   book: {
-    title: string; synopsis: string | null; coverPath: string | null; order: number
+    id: string; title: string; synopsis: string | null; coverPath: string | null; order: number
     chapters: {
       id: string; title: string; order: number; pov: string | null; date: string | null
       condition: string | null; numbered: boolean
@@ -43,8 +46,16 @@ function buildBookPayload(
         _ref: c.id,
         name: c.name,
         age: c.age,
+        // Single-book backup: only the exported book is a valid ref target. If
+        // the character first appears in this book, preserve the ref; otherwise
+        // leave it null so import doesn't dangle on a missing book.
+        firstBookRef: c.firstBookId === book.id ? book.id : null,
+        overrides: c.overrides
+          .filter(o => o.bookId === book.id)
+          .map(o => ({ bookRef: o.bookId, age: o.age })),
       })),
       books: [{
+        _ref: book.id,
         title: book.title,
         synopsis: book.synopsis,
         coverPath: book.coverPath,
@@ -112,7 +123,7 @@ export async function runBackup(): Promise<{ ok: boolean; message: string }> {
   const allSeries = await prisma.series.findMany({
     include: {
       variables: true,
-      characters: true,
+      characters: { include: { overrides: true } },
       books: {
         orderBy: { order: 'asc' },
         include: {
@@ -157,6 +168,8 @@ export async function runBackup(): Promise<{ ok: boolean; message: string }> {
       if (book.coverPath) await copyAsset(book.coverPath, assetDir)
       for (const character of series.characters) {
         await copyAsset(`/characters/${character.id}.jpg`, assetDir)
+        // Per-book override avatar for the book being backed up (if present).
+        await copyAsset(`/characters/${character.id}-${book.id}.jpg`, assetDir)
       }
       for (const chapter of book.chapters) {
         for (const block of chapter.blocks) {

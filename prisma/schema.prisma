@@ -19,22 +19,38 @@ model Series {
 }
 
 model Character {
-  id       String  @id @default(cuid())
-  seriesId String
-  name     String
-  age      Int?
-  series   Series  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  id          String                  @id @default(cuid())
+  seriesId    String
+  name        String
+  age         Int?
+  firstBookId String?
+  series      Series                  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  firstBook   Book?                   @relation("FirstAppearsIn", fields: [firstBookId], references: [id], onDelete: SetNull)
+  overrides   CharacterBookOverride[]
+}
+
+model CharacterBookOverride {
+  id          String    @id @default(cuid())
+  characterId String
+  bookId      String
+  age         Int?
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  book        Book      @relation("CharacterOverrides", fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, bookId])
 }
 
 model Book {
-  id        String    @id @default(cuid())
-  seriesId  String
-  title     String
-  synopsis  String    @default("")
-  coverPath String?
-  order     Int
-  series    Series    @relation(fields: [seriesId], references: [id], onDelete: Cascade)
-  chapters  Chapter[]
+  id                           String                  @id @default(cuid())
+  seriesId                     String
+  title                        String
+  synopsis                     String                  @default("")
+  coverPath                    String?
+  order                        Int
+  series                       Series                  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  chapters                     Chapter[]
+  charactersFirstAppearingHere Character[]             @relation("FirstAppearsIn")
+  characterOverrides           CharacterBookOverride[] @relation("CharacterOverrides")
 }
 
 model Chapter {

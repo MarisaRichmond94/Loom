@@ -8,7 +8,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ser
     where: { id: seriesId },
     include: {
       variables: true,
-      characters: true,
+      characters: { include: { overrides: true } },
       books: {
         orderBy: { order: 'asc' },
         include: {
@@ -46,8 +46,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ser
         _ref: c.id,
         name: c.name,
         age: c.age,
+        firstBookRef: c.firstBookId,
+        overrides: c.overrides.map(o => ({ bookRef: o.bookId, age: o.age })),
       })),
       books: series.books.map(book => ({
+        _ref: book.id,
         title: book.title,
         synopsis: book.synopsis,
         coverPath: book.coverPath,

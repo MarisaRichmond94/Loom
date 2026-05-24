@@ -8,7 +8,12 @@ export async function GET(_: Request, { params }: Params) {
 
   const series = await prisma.series.findUnique({
     where: { id: seriesId },
-    select: { title: true, description: true, variables: true, characters: true },
+    select: {
+      title: true,
+      description: true,
+      variables: true,
+      characters: { include: { overrides: true } },
+    },
   })
   if (!series) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -46,8 +51,14 @@ export async function GET(_: Request, { params }: Params) {
         _ref: c.id,
         name: c.name,
         age: c.age,
+        // Single-book export: only this book is a valid ref target.
+        firstBookRef: c.firstBookId === book.id ? book.id : null,
+        overrides: c.overrides
+          .filter(o => o.bookId === book.id)
+          .map(o => ({ bookRef: o.bookId, age: o.age })),
       })),
       books: [{
+        _ref: book.id,
         title: book.title,
         synopsis: book.synopsis,
         coverPath: book.coverPath,

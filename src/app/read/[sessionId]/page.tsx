@@ -34,7 +34,15 @@ export default function ReaderPage() {
   const [chapterDate, setChapterDate] = useState<string | null>(null)
   const [currentChapterId, setCurrentChapterId] = useState<string | null>(null)
   const [noContent, setNoContent] = useState(false)
-  const [characters, setCharacters] = useState<{ id: string; name: string; age: number | null; hasAvatar: boolean }[]>([])
+  const [characters, setCharacters] = useState<{
+    id: string
+    name: string
+    age: number | null
+    hasAvatar: boolean
+    hasBookAvatar?: boolean
+    hasCanonicalAvatar?: boolean
+  }[]>([])
+  const [currentBookId, setCurrentBookId] = useState<string | null>(null)
   const [seriesBooks, setSeriesBooks] = useState<SeriesBook[]>([])
   const [variables, setVariables] = useState<Variable[]>([])
 
@@ -47,6 +55,7 @@ export default function ReaderPage() {
     setChapterPov(chapter.pov ?? null)
     setChapterDate(chapter.date ?? null)
     setCurrentChapterId(chapterId)
+    setCurrentBookId(chapter.bookId ?? null)
   }, [])
 
   const loadSession = useCallback(async () => {
@@ -63,7 +72,8 @@ export default function ReaderPage() {
     setSeriesTitle(series.title)
     setSeriesBooks(series.books ?? [])
     setVariables(series.variables ?? [])
-    fetch(`/api/series/${series.id}/characters`).then(r => r.ok ? r.json() : []).then(setCharacters)
+    // Characters are refetched per-book in a separate effect below so the hover
+    // card reflects book-specific overrides as the reader moves between books.
 
     if (session.currentBlockId) {
       const blockRes = await fetch(`/api/blocks/${session.currentBlockId}`)
@@ -87,6 +97,16 @@ export default function ReaderPage() {
 
   useEffect(() => { loadSession() }, [loadSession])
   useEffect(() => { if (currentChapterId) loadChapter(currentChapterId) }, [currentChapterId, loadChapter])
+
+  // Refetch characters when the reader crosses into a different book so the hover
+  // card reflects per-book overrides (age, avatar) and respects firstBookId visibility.
+  useEffect(() => {
+    if (!seriesId || !currentBookId) return
+    fetch(`/api/series/${seriesId}/books/${currentBookId}/characters`)
+      .then(r => r.ok ? r.json() : [])
+      .then(setCharacters)
+      .catch(() => { /* ignore */ })
+  }, [seriesId, currentBookId])
 
   function handleSessionUpdate(state: StoryState, history: HistoryEntry[]) {
     setStoryState(state)
@@ -165,6 +185,7 @@ export default function ReaderPage() {
       chapterDate={chapterDate}
       returnTo={dynamicReturnTo}
       characters={characters}
+      currentBookId={currentBookId}
       books={seriesBooks}
       chapterLabels={chapterLabels}
       currentChapterId={currentChapterId ?? undefined}

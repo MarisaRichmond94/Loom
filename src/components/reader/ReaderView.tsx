@@ -32,7 +32,12 @@ type Block = {
   choices: Choice[]
   overrides: Override[]
 }
-type Character = { id: string; name: string; age: number | null; hasAvatar: boolean }
+type Character = {
+  id: string; name: string; age: number | null
+  hasAvatar: boolean
+  hasBookAvatar?: boolean
+  hasCanonicalAvatar?: boolean
+}
 type BookChapter = { id: string; title: string; order: number }
 type Book = { id: string; title: string; order: number; chapters: BookChapter[] }
 type Variable = { id: string; name: string; type: string; defaultValue: string }
@@ -49,6 +54,7 @@ type Props = {
   chapterDate?: string | null
   returnTo?: string
   characters?: Character[]
+  currentBookId?: string | null
   books?: Book[]
   variables?: Variable[]
   chapterLabels?: Record<string, ChapterLabel>
@@ -139,7 +145,7 @@ function renderTipTap(json: string | null | undefined, storyState?: StoryState):
 }
 
 export default function ReaderView({
-  sessionId, seriesId, blocks, storyState, choiceHistory, chapterLabel, chapterPov, chapterDate, returnTo, characters = [], books = [], variables = [], chapterLabels = {}, currentChapterId, onSessionUpdate, onNavigate
+  sessionId, seriesId, blocks, storyState, choiceHistory, chapterLabel, chapterPov, chapterDate, returnTo, characters = [], currentBookId, books = [], variables = [], chapterLabels = {}, currentChapterId, onSessionUpdate, onNavigate
 }: Props) {
   // Only visible chapters participate in prev/next navigation.
   const allChapters = books
@@ -523,7 +529,15 @@ export default function ReaderView({
             style={{ width: 64, height: 64, border: lightMode ? '2px solid #d4d0c8' : '2px solid rgba(136,136,255,0.3)', background: lightMode ? '#ede9e0' : '#12121e' }}
           >
             {charCard.character.hasAvatar
-              ? <img src={`/characters/${charCard.character.id}.jpg`} alt={charCard.character.name} className="w-full h-full object-cover" />
+              ? <img
+                  src={
+                    charCard.character.hasBookAvatar && currentBookId
+                      ? `/characters/${charCard.character.id}-${currentBookId}.jpg`
+                      : `/characters/${charCard.character.id}.jpg`
+                  }
+                  alt={charCard.character.name}
+                  className="w-full h-full object-cover"
+                />
               : <LuUser size={28} style={{ color: lightMode ? '#888' : '#666' }} />
             }
           </div>

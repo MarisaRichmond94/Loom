@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
 
   // 2b. Characters (v2+). Preserve original IDs so character marks in block content
   // still resolve and avatar files (named <charId>.jpg) line up after asset restore.
+  // firstBookId + overrides are deferred to a second pass once books exist.
   if (s.characters?.length) {
     await prisma.character.createMany({
       data: s.characters.map((c: { _ref: string; name: string; age: number | null }) => ({
@@ -45,8 +46,9 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // 3. Books + chapters — collect ref→newId map for choices
+  // 3. Books + chapters — collect ref→newId maps for choices and character refs
   const chapterRefMap: Record<string, string> = {}
+  const bookRefMap: Record<string, string> = {}
 
   for (const book of s.books ?? []) {
     const newBook = await prisma.book.create({
@@ -58,6 +60,7 @@ export async function POST(req: NextRequest) {
         order: book.order,
       },
     })
+    if (book._ref) bookRefMap[book._ref] = newBook.id
 
     for (const chapter of book.chapters ?? []) {
       const newChapter = await prisma.chapter.create({
@@ -155,6 +158,33 @@ export async function POST(req: NextRequest) {
 
   if (choiceData.length) {
     await prisma.choice.createMany({ data: choiceData })
+  }
+
+  // 5. Character per-book metadata (v2+): firstBookId + CharacterBookOverride rows.
+  // Deferred until now because both depend on bookRefMap being complete.
+  type ImportedChar = {
+    _ref: string
+    firstBookRef?: string | null
+    overrides?: { bookRef: string; age: number | null }[]
+  }
+  const overrideRows: { characterId: string; bookId: string; age: number | null }[] = []
+  for (const c of (s.characters ?? []) as ImportedChar[]) {
+    const firstBookId = c.firstBookRef ? (bookRefMap[c.firstBookRef] ?? null) : null
+    if (firstBookId) {
+      await prisma.character.update({
+        where: { id: c._ref },
+        data: { firstBookId },
+      })
+    }
+    for (const o of c.overrides ?? []) {
+      const bookId = bookRefMap[o.bookRef]
+      // Skip overrides for books not in the import (single-book export edge case).
+      if (!bookId) continue
+      overrideRows.push({ characterId: c._ref, bookId, age: o.age ?? null })
+    }
+  }
+  if (overrideRows.length) {
+    await prisma.characterBookOverride.createMany({ data: overrideRows })
   }
 
   return NextResponse.json({ seriesId: series.id })
