@@ -87,7 +87,10 @@ export default function WritePage() {
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-10">
-      <div className="flex items-center justify-end gap-2 mb-3">
+      {/* pr-5 nudges the toolbar buttons in by p-5 — the same inset the
+          cards below use for their internal padding — so the right
+          edges of all the action buttons line up visually. */}
+      <div className="flex items-center justify-end gap-2 mb-3 pr-5">
         <input ref={importRef} type="file" accept=".json,.loom.json" onChange={handleImport} className="hidden" />
         <button
           onClick={() => importRef.current?.click()}
@@ -105,7 +108,7 @@ export default function WritePage() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleCreate} className="mb-8 p-5 rounded-lg bg-surface-raised border border-accent/20">
+        <form onSubmit={handleCreate} className="mb-2 p-5 rounded-lg bg-surface-raised border border-accent/20">
           <label className="block text-xs uppercase tracking-widest text-ink-faint mb-2">Type</label>
           <div className="flex gap-2 mb-4">
             {([
