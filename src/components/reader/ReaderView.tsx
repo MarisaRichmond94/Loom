@@ -70,7 +70,12 @@ function escapeHtml(s: string): string {
 // (Google Docs, Word, Notion) respect a wrapping element's inline font
 // declarations, so each paragraph picks these up via inheritance.
 const PASTE_FONT_FAMILY = "'Charter', Georgia, serif"
-const PASTE_FONT_SIZE = '11pt'
+// Pages and Google Docs both read incoming pt-unit font sizes through
+// a px→pt conversion and then re-display the result (so `11pt` arrives
+// as 14.67pt = 11 × 4/3). Sending the size in px directly bypasses
+// that re-conversion: 14.6667px is the CSS-spec equivalent of 11pt
+// (1pt = 4/3 px) and lands at 11pt in both destinations.
+const PASTE_FONT_SIZE = '14.6667px'
 const INDENT = '    ' // four nbsps ≈ a first-line indent
 
 // Zeroes paragraph margin on every <p> and prefixes each with non-breaking
