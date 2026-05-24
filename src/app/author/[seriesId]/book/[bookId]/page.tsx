@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { LuUser, LuCheck, LuPencil, LuPlus, LuMusic, LuX } from 'react-icons/lu'
+import { LuUser, LuCheck, LuPencil, LuPlus, LuMusic, LuX, LuEye } from 'react-icons/lu'
 import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
 import { useAuthor } from '@/lib/authorContext'
@@ -309,7 +309,15 @@ export default function BookDetailPage() {
 
   return (
     <>
-      <div className="max-w-3xl mx-auto px-8 py-8">
+      <div className="max-w-3xl mx-auto px-8 py-8 relative">
+        <a
+          href={`/preview/book/${bookId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute top-8 right-8 px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition flex items-center gap-1.5 z-10"
+        >
+          <LuEye size={12} /> Preview
+        </a>
         <div className="flex gap-8 mb-8 items-stretch">
           {/* Cover */}
           <div

@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Series" ADD COLUMN "genres" TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE "Series" ADD COLUMN "keywords" TEXT NOT NULL DEFAULT '[]';

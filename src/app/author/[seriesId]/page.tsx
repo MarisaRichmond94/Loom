@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { LuDownload } from 'react-icons/lu'
+import { LuDownload, LuEye } from 'react-icons/lu'
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
+import SeriesTagsEditor from '@/components/editor/SeriesTagsEditor'
 
 type BookStats = { chapterCount: number; wordCount: number; uniquePovs: number; choiceCount: number; coverPath: string | null }
 
@@ -15,6 +16,7 @@ export default function AuthorSeriesPage() {
   const [bookStats, setBookStats] = useState<Record<string, BookStats>>({})
   const [statsLoaded, setStatsLoaded] = useState(false)
   const [titleDraft, setTitleDraft] = useState(series.title)
+  const [descriptionDraft, setDescriptionDraft] = useState(series.description ?? '')
   const [authorName, setAuthorName] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null)
 
@@ -40,6 +42,7 @@ export default function AuthorSeriesPage() {
 
   useEffect(() => { loadStats() }, [loadStats])
   useEffect(() => { setTitleDraft(series.title) }, [series.title])
+  useEffect(() => { setDescriptionDraft(series.description ?? '') }, [series.description])
   useEffect(() => { setAuthorName(localStorage.getItem('loom-author-name') ?? '') }, [])
 
   async function handleTitleBlur() {
@@ -53,6 +56,25 @@ export default function AuthorSeriesPage() {
     loadSeries()
   }
 
+  async function handleDescriptionBlur() {
+    if (descriptionDraft === (series.description ?? '')) return
+    await fetch(`/api/series/${seriesId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: descriptionDraft }),
+    })
+    loadSeries()
+  }
+
+  async function handleTagsChange(next: { genres?: string[]; keywords?: string[] }) {
+    await fetch(`/api/series/${seriesId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(next),
+    })
+    loadSeries()
+  }
+
   async function handleDeleteBook(bookId: string) {
     await fetch(`/api/series/${seriesId}/books/${bookId}`, { method: 'DELETE' })
     setDeleteTarget(null)
@@ -61,7 +83,15 @@ export default function AuthorSeriesPage() {
 
   return (
     <>
-      <div className="max-w-3xl mx-auto px-8 py-8">
+      <div className="max-w-3xl mx-auto px-8 py-8 relative">
+        <a
+          href={`/preview/series/${seriesId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute top-8 right-8 px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition flex items-center gap-1.5"
+        >
+          <LuEye size={12} /> Preview
+        </a>
         <div className="flex flex-col items-center mb-8">
           <input
             value={titleDraft}
@@ -72,6 +102,25 @@ export default function AuthorSeriesPage() {
           {authorName && (
             <p className="text-sm text-ink-faint mt-1">by {authorName}</p>
           )}
+        </div>
+
+        <div className="mb-8 flex flex-col gap-6">
+          <div>
+            <label className="text-xs uppercase tracking-widest text-ink-faint">Description</label>
+            <textarea
+              value={descriptionDraft}
+              onChange={e => setDescriptionDraft(e.target.value)}
+              onBlur={handleDescriptionBlur}
+              placeholder="A short pitch readers will see on the series landing page…"
+              rows={3}
+              className="w-full mt-2 bg-surface-overlay border border-accent/15 rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent/50 resize-y"
+            />
+          </div>
+          <SeriesTagsEditor
+            genres={series.genres ?? []}
+            keywords={series.keywords ?? []}
+            onChange={handleTagsChange}
+          />
         </div>
         {series.books.length === 0 ? (
           <p className="text-ink-faint text-sm text-center mt-16">No books yet. Add one from the outline.</p>

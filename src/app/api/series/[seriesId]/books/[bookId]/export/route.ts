@@ -11,6 +11,8 @@ export async function GET(_: Request, { params }: Params) {
     select: {
       title: true,
       description: true,
+      genres: true,
+      keywords: true,
       variables: true,
       characters: { include: { overrides: true } },
     },
@@ -42,6 +44,8 @@ export async function GET(_: Request, { params }: Params) {
     series: {
       title: series.title,
       description: series.description,
+      genres: series.genres ?? '[]',
+      keywords: series.keywords ?? '[]',
       variables: series.variables.map(v => ({
         name: v.name,
         type: v.type,

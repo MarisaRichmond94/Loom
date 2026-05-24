@@ -28,11 +28,20 @@ export async function GET(_: Request, { params }: Params) {
 
 export async function PATCH(req: Request, { params }: Params) {
   const { seriesId } = await params
-  const { title, description } = await req.json()
+  const { title, description, genres, keywords } = await req.json()
   try {
     const series = await prisma.series.update({
       where: { id: seriesId },
-      data: { ...(title !== undefined && { title }), ...(description !== undefined && { description }) },
+      data: {
+        ...(title !== undefined && { title }),
+        ...(description !== undefined && { description }),
+        // genres/keywords come in as arrays from the client and are stored as
+        // JSON strings (SQLite has no native list type). Defensive: only
+        // serialize when the value is actually an array, otherwise pass
+        // through (lets callers send a pre-serialized string if they want).
+        ...(genres !== undefined && { genres: Array.isArray(genres) ? JSON.stringify(genres) : genres }),
+        ...(keywords !== undefined && { keywords: Array.isArray(keywords) ? JSON.stringify(keywords) : keywords }),
+      },
     })
     return NextResponse.json(series)
   } catch (e) {

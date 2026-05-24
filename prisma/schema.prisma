@@ -11,6 +11,13 @@ model Series {
   id          String          @id @default(cuid())
   title       String
   description String          @default("")
+  // JSON-encoded arrays. SQLite has no native list type; this matches the
+  // pattern used for setsVariables. Empty array ("[]") means "untagged".
+  // Genres come from a fixed list in src/lib/genres.ts; keywords are
+  // free-form text tags. Both are series-level — books inherit them on
+  // the public landing pages.
+  genres      String          @default("[]")
+  keywords    String          @default("[]")
   createdAt   DateTime        @default(now())
   books       Book[]
   variables   StoryVariable[]

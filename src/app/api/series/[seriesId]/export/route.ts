@@ -37,6 +37,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ser
     series: {
       title: series.title,
       description: series.description,
+      genres: series.genres ?? '[]',
+      keywords: series.keywords ?? '[]',
       variables: series.variables.map(v => ({
         name: v.name,
         type: v.type,

@@ -10,6 +10,7 @@ function sanitize(name: string): string {
 function buildBookPayload(
   series: {
     title: string; description: string | null
+    genres: string; keywords: string
     variables: unknown[]
     characters: {
       id: string; name: string; age: number | null
@@ -40,6 +41,10 @@ function buildBookPayload(
     series: {
       title: series.title,
       description: series.description,
+      // Pass-through JSON strings — the import side re-stores them verbatim.
+      // Empty defaults ("[]") are preserved for older payloads.
+      genres: series.genres ?? '[]',
+      keywords: series.keywords ?? '[]',
       variables: (series.variables as { name: string; type: string; defaultValue: string }[]).map(v => ({
         name: v.name, type: v.type, defaultValue: v.defaultValue,
       })),

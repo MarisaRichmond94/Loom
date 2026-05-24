@@ -17,7 +17,13 @@ export async function POST(req: NextRequest) {
 
   // 1. Create series
   const series = await prisma.series.create({
-    data: { title: s.title, description: s.description ?? '' },
+    data: {
+      title: s.title,
+      description: s.description ?? '',
+      // Older v2 payloads predate genres/keywords; default to empty arrays.
+      genres: typeof s.genres === 'string' ? s.genres : '[]',
+      keywords: typeof s.keywords === 'string' ? s.keywords : '[]',
+    },
   })
 
   // 2. Variables

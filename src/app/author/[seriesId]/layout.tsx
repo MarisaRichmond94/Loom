@@ -50,7 +50,13 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
       await ensureMinDuration(start)
       isInitialSeriesLoadRef.current = false
     }
-    setSeries(data)
+    // genres + keywords are stored as JSON strings on the server (SQLite has
+    // no list type); parse once here so consumers work with plain arrays.
+    const parseList = (s: unknown): string[] => {
+      if (typeof s !== 'string') return []
+      try { const v = JSON.parse(s); return Array.isArray(v) ? v : [] } catch { return [] }
+    }
+    setSeries({ ...data, genres: parseList(data.genres), keywords: parseList(data.keywords) })
   }, [seriesId])
 
   const loadChoices = useCallback(async () => {
