@@ -12,6 +12,7 @@ export default function AuthorSeriesPage() {
   const router = useRouter()
   const { series, loadSeries } = useAuthor()
   const [bookStats, setBookStats] = useState<Record<string, BookStats>>({})
+  const [statsLoaded, setStatsLoaded] = useState(false)
   const [titleDraft, setTitleDraft] = useState(series.title)
   const [authorName, setAuthorName] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null)
@@ -27,6 +28,7 @@ export default function AuthorSeriesPage() {
       if (stats[i]?.stats) statsMap[b.id] = { ...stats[i].stats, coverPath: stats[i].coverPath ?? null }
     })
     setBookStats(statsMap)
+    setStatsLoaded(true)
   }, [seriesId, series.books])
 
   useEffect(() => { loadStats() }, [loadStats])
@@ -77,7 +79,9 @@ export default function AuthorSeriesPage() {
                   className="flex gap-5 p-5 rounded-lg bg-accent/25 border border-accent/20 hover:border-accent/40 hover:scale-[1.01] transition-all duration-150 cursor-pointer"
                 >
                   <div className="w-28 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 flex items-center justify-center" style={{ minHeight: '9rem' }}>
-                    {stats?.coverPath ? (
+                    {!statsLoaded ? (
+                      <div className="w-full h-full bg-surface-muted animate-pulse" />
+                    ) : stats?.coverPath ? (
                       <img src={stats.coverPath} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <span className="text-xs text-ink-faint text-center px-1">No cover</span>
@@ -97,7 +101,11 @@ export default function AuthorSeriesPage() {
                           { label: 'Choice(s)', value: stats?.choiceCount ?? '—' },
                         ].map(({ label, value }) => (
                           <div key={label} className="bg-surface-overlay border border-accent/10 rounded-lg px-3 py-4 flex flex-col items-center gap-1">
-                            <span className="text-xl font-bold text-ink">{value}</span>
+                            {statsLoaded ? (
+                              <span className="text-xl font-bold text-ink">{value}</span>
+                            ) : (
+                              <div className="h-7 w-10 bg-surface-muted rounded animate-pulse" />
+                            )}
                             <span className="text-xs text-ink-faint uppercase tracking-widest">{label}</span>
                           </div>
                         ))}
