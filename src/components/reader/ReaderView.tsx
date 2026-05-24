@@ -66,19 +66,28 @@ function escapeHtml(s: string): string {
 // Walks an HTML string and produces a plain-text equivalent that preserves
 // paragraph breaks. `innerText` on a detached element is inconsistent across
 // browsers — explicit walking gives reliable `\n\n` between block elements.
-// Inlines first-line indent and zeroes paragraph margin on every <p> so that
-// rich-text destinations (Google Docs, Word, Notion) preserve novel-style
-// indenting and don't double their default Space-After onto our prose.
+// Font + size for the rich-text clipboard payload. Most destinations
+// (Google Docs, Word, Notion) respect a wrapping element's inline font
+// declarations, so each paragraph picks these up via inheritance.
+const PASTE_FONT_FAMILY = "'Charter', Georgia, serif"
+const PASTE_FONT_SIZE = '11pt'
+const INDENT = '    ' // four nbsps ≈ a first-line indent
+
+// Zeroes paragraph margin on every <p> and prefixes each with non-breaking
+// spaces so destinations that strip text-indent CSS (Google Docs in
+// particular) still show novel-style first-line indents. margin:0 keeps
+// the destination from stacking its default Space-After on top of ours.
 function inlineParagraphStyles(html: string): string {
-  const style = 'text-indent:2em;margin:0'
+  const style = 'margin:0'
   return html.replace(/<p(\s[^>]*)?>/gi, (_match, attrs: string | undefined) => {
     const a = attrs ?? ''
+    let tag: string
     if (/\bstyle\s*=/.test(a)) {
-      // Append our declarations to the existing style attribute (they sort
-      // later so they win for any overlapping property).
-      return `<p${a.replace(/style\s*=\s*"([^"]*)"/i, (_m, s: string) => `style="${s};${style}"`)}>`
+      tag = `<p${a.replace(/style\s*=\s*"([^"]*)"/i, (_m, s: string) => `style="${s};${style}"`)}>`
+    } else {
+      tag = `<p${a} style="${style}">`
     }
-    return `<p${a} style="${style}">`
+    return `${tag}${INDENT}`
   })
 }
 
@@ -313,7 +322,10 @@ export default function ReaderView({
     }
     // Concatenate without inter-block whitespace; inline paragraph styles so
     // pasted output keeps first-line indent and tight paragraph spacing.
-    const htmlOut = htmlParts.map(inlineParagraphStyles).join('')
+    // Wrap in a font-styled container so the destination picks up Charter 11pt
+    // via inheritance instead of falling back to its default body font.
+    const inner = htmlParts.map(inlineParagraphStyles).join('')
+    const htmlOut = `<div style="font-family:${PASTE_FONT_FAMILY};font-size:${PASTE_FONT_SIZE}">${inner}</div>`
     const textOut = textParts.filter(Boolean).join('\n\n')
     try {
       if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
