@@ -151,6 +151,22 @@ export default function PreviewSeriesPage() {
                     {book.published && book.synopsis && (
                       <p className="text-sm text-ink-muted mt-2 line-clamp-3 leading-relaxed">{book.synopsis}</p>
                     )}
+                    {!book.published && (
+                      // Blurred lorem placeholder so the card keeps the same
+                      // height as a published one and the reader can sense
+                      // there's "more to come" without spoilers leaking.
+                      // select-none + pointer-events-none keeps it from being
+                      // copied or interacted with.
+                      <p
+                        aria-hidden
+                        className="text-sm text-ink-muted mt-2 line-clamp-3 leading-relaxed blur-sm select-none pointer-events-none"
+                      >
+                        Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+                        Sed do eiusmod tempor incididunt ut labore et dolore magna
+                        aliqua. Ut enim ad minim veniam, quis nostrud exercitation
+                        ullamco laboris nisi ut aliquip ex ea commodo consequat.
+                      </p>
+                    )}
                   </div>
                 </>
               )
