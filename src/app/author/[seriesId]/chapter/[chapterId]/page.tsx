@@ -6,6 +6,7 @@ import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuSettings, Lu
 import BlockEditor from '@/components/editor/BlockEditor'
 import { ConditionRow } from '@/components/editor/conditionUI'
 import { useAuthor } from '@/lib/authorContext'
+import { ensureMinDuration } from '@/lib/minLoadDuration'
 
 type Block = {
   id: string; order: number; type: string
@@ -71,13 +72,18 @@ export default function ChapterEditorPage() {
     loadSeries()
   }
 
+  const isInitialChapterLoadRef = useRef(true)
   const loadChapter = useCallback(async () => {
+    const start = Date.now()
     const res = await fetch(`/api/chapters/${chapterId}`)
-    if (res.ok) {
-      const data = await res.json()
-      setChapter(data)
-      setTitleDraft(data.title)
+    if (!res.ok) return
+    const data = await res.json()
+    if (isInitialChapterLoadRef.current) {
+      await ensureMinDuration(start)
+      isInitialChapterLoadRef.current = false
     }
+    setChapter(data)
+    setTitleDraft(data.title)
   }, [chapterId])
 
   const reloadBlocks = useCallback(async () => {

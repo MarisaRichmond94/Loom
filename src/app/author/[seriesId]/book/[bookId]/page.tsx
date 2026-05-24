@@ -6,6 +6,7 @@ import { LuUser, LuCheck, LuPencil, LuPlus } from 'react-icons/lu'
 import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
 import { useAuthor } from '@/lib/authorContext'
+import { ensureMinDuration } from '@/lib/minLoadDuration'
 
 type Stats = { chapterCount: number; uniquePovs: number; choiceCount: number; wordCount: number }
 type Book = { id: string; title: string; synopsis: string; coverPath: string | null; stats: Stats }
@@ -49,18 +50,23 @@ export default function BookDetailPage() {
   const [savingChar, setSavingChar] = useState(false)
   const [charAvatarTs, setCharAvatarTs] = useState(0)
   const charFileInputRef = useRef<HTMLInputElement>(null)
+  const isInitialBookLoadRef = useRef(true)
 
   const loadBook = useCallback(async () => {
+    const start = Date.now()
     const res = await fetch(`/api/series/${seriesId}/books/${bookId}`)
-    if (res.ok) {
-      const data = await res.json()
-      setBook({
-        ...data,
-        coverPath: data.coverPath ? `${data.coverPath}?t=${Date.now()}` : null,
-      })
-      setTitle(data.title)
-      setSynopsis(data.synopsis ?? '')
+    if (!res.ok) return
+    const data = await res.json()
+    if (isInitialBookLoadRef.current) {
+      await ensureMinDuration(start)
+      isInitialBookLoadRef.current = false
     }
+    setBook({
+      ...data,
+      coverPath: data.coverPath ? `${data.coverPath}?t=${Date.now()}` : null,
+    })
+    setTitle(data.title)
+    setSynopsis(data.synopsis ?? '')
   }, [seriesId, bookId])
 
   const loadCharacters = useCallback(async () => {

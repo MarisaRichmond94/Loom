@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode, useCallback, useEffect, useState } from 'react'
+import { ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { LuMoon, LuSun } from 'react-icons/lu'
@@ -10,6 +10,7 @@ import ChoicesPanel from '@/components/sidebar/ChoicesPanel'
 import AvatarButton from '@/components/AvatarButton'
 import Greeting from '@/components/Greeting'
 import { AuthorProvider, type AuthorSeries } from '@/lib/authorContext'
+import { ensureMinDuration } from '@/lib/minLoadDuration'
 
 type ChoiceQuestion = { id: string; prompt: string; chapterId: string; chapterTitle: string; bookTitle: string }
 
@@ -34,9 +35,19 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
     })
   }
 
+  const isInitialSeriesLoadRef = useRef(true)
   const loadSeries = useCallback(async () => {
+    const start = Date.now()
     const res = await fetch(`/api/series/${seriesId}`)
-    if (res.ok) setSeries(await res.json())
+    if (!res.ok) return
+    const data = await res.json()
+    // Pad only the first load so the chrome skeleton doesn't flash; later
+    // re-fetches (rename, add chapter, etc.) shouldn't delay the writer.
+    if (isInitialSeriesLoadRef.current) {
+      await ensureMinDuration(start)
+      isInitialSeriesLoadRef.current = false
+    }
+    setSeries(data)
   }, [seriesId])
 
   const loadChoices = useCallback(async () => {

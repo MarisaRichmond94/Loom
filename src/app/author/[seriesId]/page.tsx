@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { LuDownload } from 'react-icons/lu'
 import { useAuthor } from '@/lib/authorContext'
+import { ensureMinDuration } from '@/lib/minLoadDuration'
 
 type BookStats = { chapterCount: number; wordCount: number; uniquePovs: number; choiceCount: number; coverPath: string | null }
 
@@ -17,7 +18,9 @@ export default function AuthorSeriesPage() {
   const [authorName, setAuthorName] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null)
 
+  const isInitialStatsLoadRef = useRef(true)
   const loadStats = useCallback(async () => {
+    const start = Date.now()
     const stats = await Promise.all(
       series.books.map(b =>
         fetch(`/api/series/${seriesId}/books/${b.id}`).then(r => r.ok ? r.json() : null),
@@ -27,6 +30,10 @@ export default function AuthorSeriesPage() {
     series.books.forEach((b, i) => {
       if (stats[i]?.stats) statsMap[b.id] = { ...stats[i].stats, coverPath: stats[i].coverPath ?? null }
     })
+    if (isInitialStatsLoadRef.current) {
+      await ensureMinDuration(start)
+      isInitialStatsLoadRef.current = false
+    }
     setBookStats(statsMap)
     setStatsLoaded(true)
   }, [seriesId, series.books])
