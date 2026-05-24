@@ -162,7 +162,7 @@ export default function PreviewSeriesPage() {
                     <p className={`font-semibold text-lg mt-1 leading-tight ${book.published ? 'text-ink' : 'text-ink-muted'}`}>{book.title}</p>
                     {book.published && book.synopsis && (
                       <>
-                        <p className="text-sm text-ink-muted mt-2 line-clamp-5 leading-relaxed">{book.synopsis}</p>
+                        <p className="text-sm text-ink-muted mt-2 line-clamp-8 leading-relaxed">{book.synopsis}</p>
                         {/* Visual cue inside the already-clickable card. The
                             parent <a> owns navigation; this is just to give
                             readers an obvious target if the card-as-link
@@ -179,15 +179,23 @@ export default function PreviewSeriesPage() {
                       // height as a published one and the reader can sense
                       // there's "more to come" without spoilers leaking.
                       // select-none + pointer-events-none keeps it from being
-                      // copied or interacted with.
+                      // copied or interacted with. Body is long enough to
+                      // saturate the line-clamp so the card fills the cover's
+                      // vertical space instead of leaving a dead band below.
                       <p
                         aria-hidden
-                        className="text-sm text-ink-muted mt-2 line-clamp-5 leading-relaxed blur-sm select-none pointer-events-none"
+                        className="text-sm text-ink-muted mt-2 line-clamp-8 leading-relaxed blur-sm select-none pointer-events-none"
                       >
                         Lorem ipsum dolor sit amet, consectetur adipiscing elit.
                         Sed do eiusmod tempor incididunt ut labore et dolore magna
                         aliqua. Ut enim ad minim veniam, quis nostrud exercitation
                         ullamco laboris nisi ut aliquip ex ea commodo consequat.
+                        Duis aute irure dolor in reprehenderit in voluptate velit
+                        esse cillum dolore eu fugiat nulla pariatur. Excepteur sint
+                        occaecat cupidatat non proident, sunt in culpa qui officia
+                        deserunt mollit anim id est laborum. Curabitur pretium
+                        tincidunt lacus, nulla gravida orci a odio. Nullam varius,
+                        turpis et commodo pharetra, est eros bibendum elit.
                       </p>
                     )}
                   </div>
