@@ -75,7 +75,7 @@ const PASTE_FONT_FAMILY = "'Charter', Georgia, serif"
 // as 14.67pt = 11 × 4/3). Sending the size in px directly bypasses
 // that re-conversion: 14.6667px is the CSS-spec equivalent of 11pt
 // (1pt = 4/3 px) and lands at 11pt in both destinations.
-const PASTE_FONT_SIZE = '14.6667px'
+const PASTE_FONT_SIZE = '11px'
 const INDENT = '    ' // four nbsps ≈ a first-line indent
 
 // Zeroes paragraph margin on every <p> and prefixes each with non-breaking
