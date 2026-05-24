@@ -22,16 +22,21 @@ export async function GET(_: Request, { params }: Params) {
   const orderByBookId = new Map(firstBookRows.map(b => [b.id, b.order]))
   const overrideByCharacterId = new Map(overrides.map(o => [o.characterId, o]))
 
+  // Returns visible characters with `hidden` flagged but not filtered: the
+  // author's grid wants to see hidden ones (with a marker) so they can edit
+  // and un-hide; the reader's landing filters them client-side.
   const resolved = characters.map(c =>
     resolveCharacter({
       character: {
         id: c.id, name: c.name, age: c.age,
         firstBookId: c.firstBookId, deathBookId: c.deathBookId,
+        lastBookId: c.lastBookId, starred: c.starred,
       },
       override: overrideByCharacterId.get(c.id) ?? null,
       book,
       firstBookOrder: c.firstBookId ? orderByBookId.get(c.firstBookId) ?? null : null,
       deathBookOrder: c.deathBookId ? orderByBookId.get(c.deathBookId) ?? null : null,
+      lastBookOrder: c.lastBookId ? orderByBookId.get(c.lastBookId) ?? null : null,
     }),
   ).filter(r => r.visible)
 

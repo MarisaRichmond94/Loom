@@ -58,6 +58,8 @@ export async function GET(_: Request, { params }: Params) {
         // Single-book export: only this book is a valid ref target.
         firstBookRef: c.firstBookId === book.id ? book.id : null,
         deathBookRef: c.deathBookId === book.id ? book.id : null,
+        lastBookRef: c.lastBookId === book.id ? book.id : null,
+        starred: c.starred,
         overrides: c.overrides
           .filter(o => o.bookId === book.id)
           .map(o => ({ bookRef: o.bookId, age: o.age })),

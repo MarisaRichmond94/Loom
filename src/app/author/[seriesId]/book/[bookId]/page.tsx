@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { LuUser, LuCheck, LuPencil, LuPlus, LuMusic, LuX, LuEye } from 'react-icons/lu'
+import { LuUser, LuCheck, LuPencil, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff } from 'react-icons/lu'
 import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
 import { useAuthor } from '@/lib/authorContext'
@@ -20,11 +20,14 @@ type Character = {
   age: number | null
   firstBookId: string | null
   deathBookId: string | null
+  lastBookId: string | null
+  starred: boolean
   hasAvatar: boolean
   hasBookAvatar: boolean
   hasCanonicalAvatar: boolean
   hasOverride: boolean
   deceased: boolean
+  hidden: boolean
 }
 type Soundtrack = {
   id: string
@@ -71,6 +74,8 @@ export default function BookDetailPage() {
   const [charAge, setCharAge] = useState('')
   const [charFirstBookId, setCharFirstBookId] = useState<string>('')
   const [charDeathBookId, setCharDeathBookId] = useState<string>('')
+  const [charLastBookId, setCharLastBookId] = useState<string>('')
+  const [charStarred, setCharStarred] = useState(false)
   const [charImageSrc, setCharImageSrc] = useState<string | null>(null)
   const [charCrop, setCharCrop] = useState({ x: 0, y: 0 })
   const [charZoom, setCharZoom] = useState(1)
@@ -162,6 +167,8 @@ export default function BookDetailPage() {
     // so they don't leak back into earlier books in the series.
     setCharFirstBookId(bookId)
     setCharDeathBookId('')
+    setCharLastBookId('')
+    setCharStarred(false)
     setCharImageSrc(null)
     setCharModal('create')
   }
@@ -171,6 +178,8 @@ export default function BookDetailPage() {
     setCharAge(c.age != null ? String(c.age) : '')
     setCharFirstBookId(c.firstBookId ?? '')
     setCharDeathBookId(c.deathBookId ?? '')
+    setCharLastBookId(c.lastBookId ?? '')
+    setCharStarred(c.starred)
     setCharImageSrc(null)
     setCharAvatarTs(Date.now())
     setCharModal(c)
@@ -191,16 +200,17 @@ export default function BookDetailPage() {
       const age = charAge.trim() !== '' ? Number(charAge) : null
       const firstBookId = charFirstBookId || null
       const deathBookId = charDeathBookId || null
+      const lastBookId = charLastBookId || null
       let characterId: string
 
       if (charModal === 'create') {
-        // Create: name + age + firstBookId + deathBookId all canonical. Any
-        // uploaded photo also becomes the canonical avatar so future books
-        // inherit it.
+        // Create: name + age + firstBookId + deathBookId + lastBookId +
+        // starred all canonical. Any uploaded photo also becomes the
+        // canonical avatar so future books inherit it.
         const res = await fetch(`/api/series/${seriesId}/characters`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: charName.trim(), age, firstBookId, deathBookId }),
+          body: JSON.stringify({ name: charName.trim(), age, firstBookId, deathBookId, lastBookId, starred: charStarred }),
         })
         if (!res.ok) return
         const created = await res.json() as { id: string }
@@ -218,11 +228,13 @@ export default function BookDetailPage() {
         const existing = charModal as Character
         characterId = existing.id
 
-        // Canonical patch (name + firstBookId + deathBookId)
+        // Canonical patch (name + firstBookId + deathBookId + lastBookId + starred)
         const nameChanged = charName.trim() !== existing.name
         const firstBookChanged = (firstBookId ?? null) !== (existing.firstBookId ?? null)
         const deathBookChanged = (deathBookId ?? null) !== (existing.deathBookId ?? null)
-        if (nameChanged || firstBookChanged || deathBookChanged) {
+        const lastBookChanged = (lastBookId ?? null) !== (existing.lastBookId ?? null)
+        const starredChanged = charStarred !== existing.starred
+        if (nameChanged || firstBookChanged || deathBookChanged || lastBookChanged || starredChanged) {
           await fetch(`/api/series/${seriesId}/characters/${characterId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -230,6 +242,8 @@ export default function BookDetailPage() {
               ...(nameChanged ? { name: charName.trim() } : {}),
               ...(firstBookChanged ? { firstBookId } : {}),
               ...(deathBookChanged ? { deathBookId } : {}),
+              ...(lastBookChanged ? { lastBookId } : {}),
+              ...(starredChanged ? { starred: charStarred } : {}),
             }),
           })
         }
@@ -420,8 +434,20 @@ export default function BookDetailPage() {
                 <button
                   key={c.id}
                   onClick={() => openEditModal(c)}
-                  className={`flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border transition h-[146px] w-full ${isPov ? 'border-accent hover:border-accent/70' : 'border-accent/10 hover:border-accent/30'}`}
+                  className={`relative flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border transition h-[146px] w-full ${c.hidden ? 'opacity-60 ' : ''}${isPov ? 'border-accent hover:border-accent/70' : 'border-accent/10 hover:border-accent/30'}`}
                 >
+                  {c.starred && (
+                    <LuStar
+                      size={12}
+                      className="absolute top-1.5 right-1.5 fill-accent text-accent"
+                    />
+                  )}
+                  {c.hidden && (
+                    <LuEyeOff
+                      size={12}
+                      className="absolute top-1.5 left-1.5 text-ink-faint"
+                    />
+                  )}
                   <div className={`w-20 h-20 rounded-full overflow-hidden border-2 bg-surface-overlay flex items-center justify-center shrink-0 ${isPov ? 'border-accent' : 'border-accent/20'}`}>
                     {(() => {
                       const url = avatarUrlFor(c, charAvatarTs)
@@ -432,9 +458,11 @@ export default function BookDetailPage() {
                   </div>
                   <div className="text-center">
                     <p className="text-xs font-medium text-ink truncate w-full">{c.name}</p>
-                    {c.deceased
-                      ? <p className="text-[10px] uppercase tracking-widest text-ink-faint italic">Deceased</p>
-                      : c.age != null && <p className="text-xs text-ink-faint">Age {c.age}</p>}
+                    {c.hidden
+                      ? <p className="text-[10px] uppercase tracking-widest text-ink-faint italic">Hidden</p>
+                      : c.deceased
+                        ? <p className="text-[10px] uppercase tracking-widest text-ink-faint italic">Deceased</p>
+                        : c.age != null && <p className="text-xs text-ink-faint">Age {c.age}</p>}
                   </div>
                 </button>
               )})}
@@ -641,6 +669,32 @@ export default function BookDetailPage() {
                   Marks them &ldquo;Deceased&rdquo; in every later book. They still appear normally in the chosen book.
                 </p>
               </div>
+              <div>
+                <label className="block text-xs text-ink-faint mb-1 uppercase tracking-widest">Last appears in</label>
+                <select
+                  value={charLastBookId}
+                  onChange={e => setCharLastBookId(e.target.value)}
+                  className="w-full bg-surface-overlay border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+                >
+                  <option value="">— appears in every book —</option>
+                  {[...series.books].sort((a, b) => a.order - b.order).map(b => (
+                    <option key={b.id} value={b.id}>{b.title}</option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-ink-faint italic mt-1">
+                  Hidden from readers in every later book. You still see them
+                  here so you can un-hide them.
+                </p>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-ink-muted cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={charStarred}
+                  onChange={e => setCharStarred(e.target.checked)}
+                  className="accent-accent"
+                />
+                <span>Primary character (starred)</span>
+              </label>
               {charModal !== 'create' && (charModal as Character).hasOverride && (
                 <button
                   type="button"

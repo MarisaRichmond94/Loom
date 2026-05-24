@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { LuArrowRight, LuArrowLeft, LuBookOpen, LuChevronDown, LuUser, LuMusic } from 'react-icons/lu'
+import { LuArrowRight, LuArrowLeft, LuBookOpen, LuChevronDown, LuUser, LuMusic, LuStar } from 'react-icons/lu'
 import PinnedAudio from '@/components/PinnedAudio'
 import { pinLabel } from '@/lib/pinLabel'
 
@@ -32,6 +32,8 @@ type Character = {
   hasBookAvatar?: boolean
   hasCanonicalAvatar?: boolean
   deceased?: boolean
+  hidden?: boolean
+  starred?: boolean
 }
 type Soundtrack = {
   id: string
@@ -296,47 +298,60 @@ export default function PreviewBookPage() {
           </section>
 
           {/* Characters — same per-book resolution as the author page so any
-              per-book overrides (age, avatar) follow the reader. */}
-          <section>
-            <SectionHeader
-              label={`Characters (${characters.length})`}
-              open={charactersOpen}
-              onToggle={() => setCharactersOpen(o => !o)}
-            />
-            {charactersOpen && (
-              characters.length === 0 ? (
-                <p className="text-sm text-ink-faint italic mt-3">No characters introduced yet.</p>
-              ) : (
-                <div
-                  style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))', gap: 8, alignContent: 'start' }}
-                  className="mt-3"
-                >
-                  {characters.map(c => {
-                    const url = characterAvatarUrl(c)
-                    const isPov = povNames.has(c.name)
-                    return (
-                      <div
-                        key={c.id}
-                        className={`flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border h-[146px] w-full ${isPov ? 'border-accent' : 'border-accent/10'}`}
-                      >
-                        <div className={`w-20 h-20 rounded-full overflow-hidden border-2 bg-surface-overlay flex items-center justify-center shrink-0 ${isPov ? 'border-accent' : 'border-accent/20'}`}>
-                          {url
-                            ? <img src={url} alt={c.name} className="w-full h-full object-cover" />
-                            : <LuUser size={32} className="text-ink-faint" />}
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs font-medium text-ink truncate w-full">{c.name}</p>
-                          {c.deceased
-                            ? <p className="text-[10px] uppercase tracking-widest text-ink-faint italic">Deceased</p>
-                            : c.age != null && <p className="text-xs text-ink-faint">Age {c.age}</p>}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            )}
-          </section>
+              per-book overrides (age, avatar) follow the reader. Hidden
+              characters are filtered out of this view entirely; the author
+              still sees them on their grid with an indicator. */}
+          {(() => {
+            const visibleCharacters = characters.filter(c => !c.hidden)
+            return (
+              <section>
+                <SectionHeader
+                  label={`Characters (${visibleCharacters.length})`}
+                  open={charactersOpen}
+                  onToggle={() => setCharactersOpen(o => !o)}
+                />
+                {charactersOpen && (
+                  visibleCharacters.length === 0 ? (
+                    <p className="text-sm text-ink-faint italic mt-3">No characters introduced yet.</p>
+                  ) : (
+                    <div
+                      style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))', gap: 8, alignContent: 'start' }}
+                      className="mt-3"
+                    >
+                      {visibleCharacters.map(c => {
+                        const url = characterAvatarUrl(c)
+                        const isPov = povNames.has(c.name)
+                        return (
+                          <div
+                            key={c.id}
+                            className={`relative flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border h-[146px] w-full ${isPov ? 'border-accent' : 'border-accent/10'}`}
+                          >
+                            {c.starred && (
+                              <LuStar
+                                size={12}
+                                className="absolute top-1.5 right-1.5 fill-accent text-accent"
+                              />
+                            )}
+                            <div className={`w-20 h-20 rounded-full overflow-hidden border-2 bg-surface-overlay flex items-center justify-center shrink-0 ${isPov ? 'border-accent' : 'border-accent/20'}`}>
+                              {url
+                                ? <img src={url} alt={c.name} className="w-full h-full object-cover" />
+                                : <LuUser size={32} className="text-ink-faint" />}
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs font-medium text-ink truncate w-full">{c.name}</p>
+                              {c.deceased
+                                ? <p className="text-[10px] uppercase tracking-widest text-ink-faint italic">Deceased</p>
+                                : c.age != null && <p className="text-xs text-ink-faint">Age {c.age}</p>}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                )}
+              </section>
+            )
+          })()}
 
           {/* Soundtrack — every chapter's soundtrack blocks, in story order.
               Read-only: no album-art swap, no remove. PinnedAudio still

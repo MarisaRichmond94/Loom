@@ -35,9 +35,19 @@ model Character {
   // and every earlier book; in later books they're flagged "Deceased" but
   // remain referenceable (so flashbacks / eulogies still resolve marks).
   deathBookId String?
+  // The last book the character appears in. In every book past lastBookId
+  // they're hidden from the reader's cast list. Unlike deathBookId this
+  // doesn't imply death — useful for side characters who fade from the
+  // story. The author still sees them in their own book grids with a
+  // "Hidden in this book" indicator.
+  lastBookId  String?
+  // Primary character marker. Surfaced as a small star on the author and
+  // reader cast grids. Not gated per book — once primary, always primary.
+  starred     Boolean                 @default(false)
   series      Series                  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   firstBook   Book?                   @relation("FirstAppearsIn", fields: [firstBookId], references: [id], onDelete: SetNull)
   deathBook   Book?                   @relation("DiesIn", fields: [deathBookId], references: [id], onDelete: SetNull)
+  lastBook    Book?                   @relation("LastAppearsIn", fields: [lastBookId], references: [id], onDelete: SetNull)
   overrides   CharacterBookOverride[]
 }
 
@@ -68,6 +78,7 @@ model Book {
   chapters                     Chapter[]
   charactersFirstAppearingHere Character[]             @relation("FirstAppearsIn")
   charactersDyingHere          Character[]             @relation("DiesIn")
+  charactersLastAppearingHere  Character[]             @relation("LastAppearsIn")
   characterOverrides           CharacterBookOverride[] @relation("CharacterOverrides")
 }
 

@@ -15,6 +15,7 @@ function buildBookPayload(
     characters: {
       id: string; name: string; age: number | null
       firstBookId: string | null; deathBookId: string | null
+      lastBookId: string | null; starred: boolean
       overrides: { bookId: string; age: number | null }[]
     }[]
   },
@@ -58,6 +59,8 @@ function buildBookPayload(
         // ref; otherwise leave it null so import doesn't dangle on a missing book.
         firstBookRef: c.firstBookId === book.id ? book.id : null,
         deathBookRef: c.deathBookId === book.id ? book.id : null,
+        lastBookRef: c.lastBookId === book.id ? book.id : null,
+        starred: c.starred,
         overrides: c.overrides
           .filter(o => o.bookId === book.id)
           .map(o => ({ bookRef: o.bookId, age: o.age })),

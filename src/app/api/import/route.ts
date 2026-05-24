@@ -177,18 +177,24 @@ export async function POST(req: NextRequest) {
     _ref: string
     firstBookRef?: string | null
     deathBookRef?: string | null
+    lastBookRef?: string | null
+    starred?: boolean
     overrides?: { bookRef: string; age: number | null }[]
   }
   const overrideRows: { characterId: string; bookId: string; age: number | null }[] = []
   for (const c of (s.characters ?? []) as ImportedChar[]) {
     const firstBookId = c.firstBookRef ? (bookRefMap[c.firstBookRef] ?? null) : null
     const deathBookId = c.deathBookRef ? (bookRefMap[c.deathBookRef] ?? null) : null
-    if (firstBookId || deathBookId) {
+    const lastBookId = c.lastBookRef ? (bookRefMap[c.lastBookRef] ?? null) : null
+    const starred = typeof c.starred === 'boolean' ? c.starred : false
+    if (firstBookId || deathBookId || lastBookId || starred) {
       await prisma.character.update({
         where: { id: c._ref },
         data: {
           ...(firstBookId ? { firstBookId } : {}),
           ...(deathBookId ? { deathBookId } : {}),
+          ...(lastBookId ? { lastBookId } : {}),
+          ...(starred ? { starred: true } : {}),
         },
       })
     }

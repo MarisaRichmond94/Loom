@@ -8,6 +8,8 @@ export type CanonicalCharacter = {
   age: number | null
   firstBookId: string | null
   deathBookId: string | null
+  lastBookId: string | null
+  starred: boolean
 }
 
 export type CharacterOverrideRow = {
@@ -20,6 +22,8 @@ export type ResolvedCharacter = {
   age: number | null
   firstBookId: string | null
   deathBookId: string | null
+  lastBookId: string | null
+  starred: boolean
   // True when either a book-specific avatar file or the canonical one exists.
   hasAvatar: boolean
   hasBookAvatar: boolean
@@ -34,6 +38,9 @@ export type ResolvedCharacter = {
   // itself shows the character normally (no spoiler tag), and earlier books
   // are also unaffected.
   deceased: boolean
+  // True only in books strictly *after* the lastBook — the author sees these
+  // in their own grid with an indicator; the reader filters them out.
+  hidden: boolean
 }
 
 // Path to the canonical and book-specific avatar files on disk.
@@ -59,24 +66,29 @@ export function resolveCharacter(opts: {
   book: { id: string; order: number }
   firstBookOrder: number | null
   deathBookOrder: number | null
+  lastBookOrder: number | null
 }): ResolvedCharacter {
-  const { character, override, book, firstBookOrder, deathBookOrder } = opts
+  const { character, override, book, firstBookOrder, deathBookOrder, lastBookOrder } = opts
   const paths = characterAvatarPaths(character.id, book.id)
   const hasBookAvatar = existsSync(paths.bookSpecific)
   const hasCanonicalAvatar = existsSync(paths.canonical)
   const visible = firstBookOrder == null || book.order >= firstBookOrder
   const deceased = deathBookOrder != null && book.order > deathBookOrder
+  const hidden = lastBookOrder != null && book.order > lastBookOrder
   return {
     id: character.id,
     name: character.name,
     age: override?.age ?? character.age,
     firstBookId: character.firstBookId,
     deathBookId: character.deathBookId,
+    lastBookId: character.lastBookId,
+    starred: character.starred,
     hasAvatar: hasBookAvatar || hasCanonicalAvatar,
     hasBookAvatar,
     hasCanonicalAvatar,
     hasOverride: override != null,
     visible,
     deceased,
+    hidden,
   }
 }

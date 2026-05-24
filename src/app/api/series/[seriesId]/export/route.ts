@@ -50,6 +50,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ser
         age: c.age,
         firstBookRef: c.firstBookId,
         deathBookRef: c.deathBookId,
+        lastBookRef: c.lastBookId,
+        starred: c.starred,
         overrides: c.overrides.map(o => ({ bookRef: o.bookId, age: o.age })),
       })),
       books: series.books.map(book => ({
