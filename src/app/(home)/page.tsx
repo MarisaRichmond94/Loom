@@ -13,6 +13,7 @@ type ExploreSeries = {
   keywords: string[]
   heroCoverPath: string | null
   publishedBookCount: number
+  totalBookCount: number
 }
 
 // Reader-facing landing. Lists every series with at least one published
@@ -70,7 +71,9 @@ export default function ExplorePage() {
               <div className="flex-1 min-w-0 flex flex-col">
                 <p className="font-semibold text-ink truncate group-hover:text-accent transition">{s.title}</p>
                 <p className="text-[11px] uppercase tracking-widest text-ink-faint mt-0.5">
-                  {s.publishedBookCount} book{s.publishedBookCount === 1 ? '' : 's'}
+                  {s.totalBookCount > s.publishedBookCount
+                    ? `${s.publishedBookCount} of ${s.totalBookCount} books`
+                    : `${s.publishedBookCount} book${s.publishedBookCount === 1 ? '' : 's'}`}
                 </p>
                 {s.description && (
                   <p className="text-xs text-ink-muted mt-2 line-clamp-4 leading-relaxed">{s.description}</p>
