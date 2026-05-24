@@ -109,7 +109,7 @@ export default function PreviewSeriesPage() {
           )}
           {series.genres.length > 0 && (
             <div className="mt-5 flex flex-wrap items-center gap-2">
-              <span className="text-[10px] uppercase tracking-widest text-ink-faint shrink-0">Genres</span>
+              <span className="text-[10px] uppercase tracking-widest text-ink-faint shrink-0">Genre(s)</span>
               {series.genres.map(g => (
                 <span key={g} className="text-xs px-2.5 py-1 rounded-full bg-accent text-white">{g}</span>
               ))}
@@ -117,7 +117,7 @@ export default function PreviewSeriesPage() {
           )}
           {series.keywords.length > 0 && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="text-[10px] uppercase tracking-widest text-ink-faint shrink-0">Keywords</span>
+              <span className="text-[10px] uppercase tracking-widest text-ink-faint shrink-0">Keyword(s)</span>
               {series.keywords.map(k => (
                 <span key={k} className="text-xs px-2.5 py-1 rounded-full bg-accent/15 text-ink border border-accent/20">{k}</span>
               ))}
