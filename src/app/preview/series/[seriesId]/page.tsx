@@ -88,37 +88,39 @@ export default function PreviewSeriesPage() {
   return (
     <div className="min-h-screen bg-surface-base">
       <header className="border-b border-accent/10">
-        <div className="max-w-4xl mx-auto px-8 py-12 flex items-start gap-6">
-          <div className="flex-1 min-w-0">
-            <h1 className="text-3xl md:text-4xl font-bold text-ink leading-tight uppercase tracking-wide">{series.title}</h1>
-            {series.description && (
-              <p className="mt-4 text-base text-ink-muted leading-relaxed whitespace-pre-wrap">{series.description}</p>
-            )}
-            {series.genres.length > 0 && (
-              <div className="mt-5 flex flex-wrap items-center gap-2">
-                <span className="text-[10px] uppercase tracking-widest text-ink-faint shrink-0">Genres</span>
-                {series.genres.map(g => (
-                  <span key={g} className="text-xs px-2.5 py-1 rounded-full bg-accent text-white">{g}</span>
-                ))}
-              </div>
-            )}
-            {series.keywords.length > 0 && (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="text-[10px] uppercase tracking-widest text-ink-faint shrink-0">Keywords</span>
-                {series.keywords.map(k => (
-                  <span key={k} className="text-xs px-2.5 py-1 rounded-full bg-accent/15 text-ink border border-accent/20">{k}</span>
-                ))}
-              </div>
+        <div className="max-w-4xl mx-auto px-8 py-12">
+          {/* Row 1: title and Start reading on the same baseline. Description,
+              genres, and keywords drop below at full width. */}
+          <div className="flex items-center justify-between gap-6">
+            <h1 className="text-3xl md:text-4xl font-bold text-ink leading-tight uppercase tracking-wide min-w-0">{series.title}</h1>
+            {series.books.some(b => b.published) && (
+              <button
+                onClick={() => startReading()}
+                disabled={working != null}
+                className="shrink-0 px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
+              >
+                {working === 'series' ? 'Opening…' : 'Start reading'} <LuArrowRight size={14} />
+              </button>
             )}
           </div>
-          {series.books.some(b => b.published) && (
-            <button
-              onClick={() => startReading()}
-              disabled={working != null}
-              className="shrink-0 px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
-            >
-              {working === 'series' ? 'Opening…' : 'Start reading'} <LuArrowRight size={14} />
-            </button>
+          {series.description && (
+            <p className="mt-4 text-base text-ink-muted leading-relaxed whitespace-pre-wrap">{series.description}</p>
+          )}
+          {series.genres.length > 0 && (
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              <span className="text-[10px] uppercase tracking-widest text-ink-faint shrink-0">Genres</span>
+              {series.genres.map(g => (
+                <span key={g} className="text-xs px-2.5 py-1 rounded-full bg-accent text-white">{g}</span>
+              ))}
+            </div>
+          )}
+          {series.keywords.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-[10px] uppercase tracking-widest text-ink-faint shrink-0">Keywords</span>
+              {series.keywords.map(k => (
+                <span key={k} className="text-xs px-2.5 py-1 rounded-full bg-accent/15 text-ink border border-accent/20">{k}</span>
+              ))}
+            </div>
           )}
         </div>
       </header>
