@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { LuArrowRight, LuBookOpen } from 'react-icons/lu'
 
 type Book = {
@@ -137,9 +138,18 @@ export default function PreviewSeriesPage() {
               // the card isn't a link.
               const card = (
                 <>
-                  <div className={`w-40 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center ${!book.published ? 'opacity-40' : ''}`}>
+                  <div className={`relative w-40 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center ${!book.published ? 'opacity-40' : ''}`}>
                     {book.coverPath
-                      ? <img src={book.coverPath} alt="" className="w-full h-full object-cover" />
+                      ? <Image
+                          src={book.coverPath}
+                          alt=""
+                          fill
+                          // sizes hint lets Next.js serve a properly downsampled
+                          // WebP/AVIF instead of forcing the browser to scale
+                          // the original 5–15MB PNG to a 160-px box.
+                          sizes="160px"
+                          className="object-cover"
+                        />
                       : <LuBookOpen size={28} className="text-ink-faint" />}
                   </div>
                   <div className="flex-1 min-w-0">

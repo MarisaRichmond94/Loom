@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { LuArrowRight, LuArrowLeft, LuBookOpen } from 'react-icons/lu'
 
 type Chapter = { id: string; title: string; order: number }
@@ -96,9 +97,16 @@ export default function PreviewBookPage() {
     <div className="min-h-screen bg-surface-base">
       <header className="border-b border-accent/10">
         <div className="max-w-3xl mx-auto px-8 py-12 flex flex-col md:flex-row gap-8 items-start">
-          <div className={`w-44 md:w-56 shrink-0 rounded-lg overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center ${!book.published ? 'opacity-40' : ''}`}>
+          <div className={`relative w-44 md:w-56 shrink-0 rounded-lg overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center ${!book.published ? 'opacity-40' : ''}`}>
             {book.coverPath
-              ? <img src={book.coverPath} alt="" className="w-full h-full object-cover" />
+              ? <Image
+                  src={book.coverPath}
+                  alt=""
+                  fill
+                  sizes="(max-width: 768px) 176px, 224px"
+                  className="object-cover"
+                  priority
+                />
               : <LuBookOpen size={40} className="text-ink-faint" />}
           </div>
           <div className="flex-1 min-w-0">
