@@ -50,19 +50,22 @@ export default function PreviewSeriesPage() {
         genres: parseList(data.genres),
         keywords: parseList(data.keywords),
       })
+      // Per-series author override (set by the demo seed) wins; falls
+      // back to the global profile so real series stay attributed to
+      // the writer. Honors pseudonym so readers never see the real name.
+      const override = (data.authorOverrideName ?? '').trim()
+      if (override) {
+        setAuthorName(override)
+      } else {
+        const profileRes = await fetch('/api/settings/profile')
+        if (profileRes.ok) {
+          const p: { authorName?: string; pseudonymEnabled?: boolean; pseudonym?: string } = await profileRes.json()
+          const real = (p.authorName ?? '').trim()
+          const pen = (p.pseudonym ?? '').trim()
+          setAuthorName(p.pseudonymEnabled && pen ? pen : real)
+        }
+      }
     })
-    // Fetch the global profile so the byline is consistent across all
-    // visitors, not just the one who wrote the series. Honor the pseudonym
-    // when it's been enabled — readers never see the author's real name.
-    fetch('/api/settings/profile')
-      .then(r => r.ok ? r.json() : null)
-      .then((p: { authorName?: string; pseudonymEnabled?: boolean; pseudonym?: string } | null) => {
-        if (!p) return
-        const real = (p.authorName ?? '').trim()
-        const pen = (p.pseudonym ?? '').trim()
-        setAuthorName(p.pseudonymEnabled && pen ? pen : real)
-      })
-      .catch(() => { /* non-fatal — byline just won't render */ })
   }, [seriesId])
 
   async function startReading() {
@@ -252,6 +255,7 @@ export default function PreviewSeriesPage() {
       </main>
       {authorModalOpen && (
         <AuthorModal
+          authorName={authorName}
           excludeSeriesId={seriesId}
           onClose={() => setAuthorModalOpen(false)}
         />

@@ -59,6 +59,18 @@ const DESC_CLOSERS = [
   'and a single lantern was lit in a window the streets had long forgotten.',
 ]
 
+// Small pool of made-up authors so seeded series feel like they belong
+// to other writers. Smaller than the series count on purpose: some
+// authors end up with multiple books, mirroring a real catalog where a
+// handful of writers anchor multiple series.
+const FAKE_AUTHORS = [
+  'Adelaide Frost', 'Marcus Vale', 'Ren Okafor', 'Sara Kim',
+  'Tobias Mendoza', 'Liana Cross', 'Wyatt Holloway', 'Aria Bennett',
+  'Noor Patel', 'Cole Whitfield', 'Iris Calloway', 'Daniel Ríos',
+  'Olivia Hart', 'Ezra Marin', 'Maeve Donnelly', 'Kai Thompson',
+  'Rosa Vega', 'Quinn Ashby', 'Theo Brennan', 'Yara Hassan',
+]
+
 function pick<T>(list: readonly T[]): T {
   return list[Math.floor(Math.random() * list.length)]
 }
@@ -109,6 +121,11 @@ export async function POST(req: Request) {
         genres: JSON.stringify(genres),
         keywords: JSON.stringify(keywords),
         demo: true,
+        // Pick a fake author per series so the writer browsing Explore
+        // sees "by Someone Else" instead of their own pseudonym on every
+        // mock card. Some authors get multiple series, mirroring a real
+        // catalog.
+        authorOverrideName: pick(FAKE_AUTHORS),
         books: {
           create: Array.from({ length: totalBooks }, (_, idx) => ({
             title: `Book ${idx + 1}`,

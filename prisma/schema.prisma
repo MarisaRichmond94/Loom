@@ -28,6 +28,11 @@ model Series {
   // DELETE to clean up everything generated for "see how Explore feels
   // with N series" testing. Real series stay at the default false.
   demo        Boolean         @default(false)
+  // Override the global profile name on a per-series basis. Used by the
+  // demo seed to attribute fake series to fake authors so the writer can
+  // browse Explore "as a reader" without seeing their own pseudonym
+  // every card. Null on real series — those fall back to the profile.
+  authorOverrideName String?
   createdAt   DateTime        @default(now())
   books       Book[]
   variables   StoryVariable[]

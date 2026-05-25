@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { readProfileSettings } from '@/lib/profileSettings'
 
 // Reader-facing series feed. Returns one row per series that has at least
 // one published book, enriched with what the Explore grid actually needs:
@@ -29,6 +30,15 @@ export async function GET() {
     try { const v = JSON.parse(s); return Array.isArray(v) ? v : [] } catch { return [] }
   }
 
+  // Resolve the writer's display name once so we can attribute every real
+  // series to them without hitting the profile file per row. Demo series
+  // ship their own author override and don't need this fallback.
+  const profile = await readProfileSettings()
+  const globalDisplayName =
+    profile.pseudonymEnabled && profile.pseudonym.trim()
+      ? profile.pseudonym.trim()
+      : profile.authorName.trim()
+
   const explorable = allSeries
     .map(s => {
       const publishedBooks = s.books.filter(b => b.published)
@@ -47,6 +57,10 @@ export async function GET() {
         // All book titles in the series (published or draft) — used by the
         // Explore search to surface a series via one of its book names.
         bookTitles: s.books.map(b => b.title),
+        // Resolved per-card byline: per-series override (set by the demo
+        // seed) beats the global profile. Empty string when nothing's set,
+        // so the client can skip rendering the byline.
+        authorName: s.authorOverrideName?.trim() || globalDisplayName,
       }
     })
     // Hide series with nothing published so drafts don't leak into the

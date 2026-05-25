@@ -30,16 +30,22 @@ type OtherSeries = {
   heroCoverPath: string | null
   publishedBookCount: number
   totalBookCount: number
+  authorName: string
 }
 
 type Props = {
+  // The name displayed in the byline that opened the modal — required so
+  // we can detect when it's NOT the real author (demo / future
+  // multi-author rows) and render a minimal stub instead of the full
+  // profile.
+  authorName: string
   // Series to exclude from "More from <name>" so the modal opened from a
   // series landing doesn't list the very series you're already on.
   excludeSeriesId?: string
   onClose: () => void
 }
 
-export default function AuthorModal({ excludeSeriesId, onClose }: Props) {
+export default function AuthorModal({ authorName, excludeSeriesId, onClose }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [otherSeries, setOtherSeries] = useState<OtherSeries[]>([])
   const [following, setFollowing] = useState<string[]>([])
@@ -76,31 +82,41 @@ export default function AuthorModal({ excludeSeriesId, onClose }: Props) {
     )
   }
 
-  const displayName =
+  // The "real author" is the one matching the global profile's display
+  // name. Anything else (demo seed's fake authors, future multi-author
+  // rows) gets a minimal stub: name + Follow + a "More from" list of
+  // other series attributed to the same name.
+  const realDisplayName =
     profile.pseudonymEnabled && profile.pseudonym.trim()
       ? profile.pseudonym.trim()
       : profile.authorName.trim()
-  const followed = following.includes(displayName)
+  const isRealAuthor = authorName === realDisplayName && !!realDisplayName
+  const followed = following.includes(authorName)
 
-  // Avatar resolution mirrors the Settings preview:
-  //   pseudonym mode + uploaded → use the uploaded pseudonym photo
-  //   pseudonym mode + no upload → blur the main avatar
-  //   no pseudonym → show the main avatar as-is
-  // No avatar at all → fallback icon.
+  // Avatar resolution mirrors the Settings preview, but only for the real
+  // author. Demo authors fall back to a placeholder icon.
   let avatarSrc: string | null = null
   let avatarBlurred = false
-  if (profile.pseudonymEnabled) {
-    if (profile.hasPseudonymAvatar) avatarSrc = '/pseudonym-avatar.jpg'
-    else if (profile.hasAvatar) { avatarSrc = '/avatar.jpg'; avatarBlurred = true }
-  } else if (profile.hasAvatar) {
-    avatarSrc = '/avatar.jpg'
+  if (isRealAuthor) {
+    if (profile.pseudonymEnabled) {
+      if (profile.hasPseudonymAvatar) avatarSrc = '/pseudonym-avatar.jpg'
+      else if (profile.hasAvatar) { avatarSrc = '/avatar.jpg'; avatarBlurred = true }
+    } else if (profile.hasAvatar) {
+      avatarSrc = '/avatar.jpg'
+    }
   }
 
   function onFollow() {
-    setFollowing(toggleFollowedAuthor(displayName))
+    setFollowing(toggleFollowedAuthor(authorName))
   }
 
-  const visibleOthers = otherSeries.filter(s => s.id !== excludeSeriesId)
+  // "More from <name>" matches by author. Real author = anything not
+  // overridden (so the Explore endpoint resolved to the same name).
+  // Demo author = exact match on the override name. Either way,
+  // exclude the series the reader came from.
+  const visibleOthers = otherSeries
+    .filter(s => s.id !== excludeSeriesId)
+    .filter(s => s.authorName === authorName)
 
   return (
     <div
@@ -117,17 +133,17 @@ export default function AuthorModal({ excludeSeriesId, onClose }: Props) {
             {avatarSrc
               ? <img
                   src={avatarSrc}
-                  alt={displayName}
+                  alt={authorName}
                   className={`w-full h-full object-cover ${avatarBlurred ? 'blur-md scale-110' : ''}`}
                 />
               : <LuUser size={32} className="text-ink-faint" />}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-lg font-semibold text-ink truncate">{displayName || 'Unnamed author'}</p>
+            <p className="text-lg font-semibold text-ink truncate">{authorName || 'Unnamed author'}</p>
             <button
               type="button"
               onClick={onFollow}
-              disabled={!displayName}
+              disabled={!authorName}
               className={`mt-2 px-3 py-1.5 rounded text-xs font-medium border transition disabled:opacity-50 ${
                 followed
                   ? 'bg-accent/10 border-accent/40 text-ink hover:bg-accent/15'
@@ -149,7 +165,7 @@ export default function AuthorModal({ excludeSeriesId, onClose }: Props) {
 
         {/* Scroll area: bio + other series */}
         <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-6">
-          {profile.bio ? (
+          {isRealAuthor && profile.bio ? (
             <p className="text-sm text-ink-muted leading-relaxed whitespace-pre-wrap">{profile.bio}</p>
           ) : (
             <p className="text-sm text-ink-faint italic">No bio yet.</p>
@@ -158,7 +174,7 @@ export default function AuthorModal({ excludeSeriesId, onClose }: Props) {
           {visibleOthers.length > 0 && (
             <section>
               <h3 className="text-xs uppercase tracking-widest text-ink-faint mb-3">
-                More from {displayName || 'this author'}
+                More from {authorName || 'this author'}
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {visibleOthers.map(s => (
