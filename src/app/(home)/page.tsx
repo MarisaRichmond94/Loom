@@ -244,14 +244,14 @@ export default function ExplorePage() {
       ) : filtered.length === 0 ? (
         <div className="flex-1 rounded-xl border-2 border-dashed border-accent/20 px-8 py-10 flex items-center justify-center">
           <div className="flex flex-col items-center text-center">
-            <LuSearchX size={36} className="text-ink-faint mb-3" />
+            <LuSearchX size={108} className="text-ink-faint mb-3" />
             <p className="text-base text-ink">
               {filtersActive
                 ? 'No books or series match the applied search parameters'
                 : 'No series to show'}
             </p>
             {filtersActive && (
-              <p className="text-sm text-ink-muted mt-2">Try adjusting your filter(s)</p>
+              <p className="text-sm text-ink-muted mt-2">Try adjusting or relaxing your filter(s)</p>
             )}
           </div>
         </div>
