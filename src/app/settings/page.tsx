@@ -55,6 +55,16 @@ export default function SettingsPage() {
   const [croppedArea, setCroppedArea] = useState<Area | null>(null)
   const [saving, setSaving] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
+  // Bio + pseudonym. Same source as authorName — the server-side profile.
+  // Pseudonym avatar is a file (public/pseudonym-avatar.jpg); we track its
+  // existence (+ a cache-buster ts) here so the UI can swap between the
+  // uploaded photo and a blurred-main fallback without a reload.
+  const [bio, setBio] = useState('')
+  const [pseudonymEnabled, setPseudonymEnabled] = useState(false)
+  const [pseudonym, setPseudonym] = useState('')
+  const [hasPseudonymAvatar, setHasPseudonymAvatar] = useState(false)
+  const [pseudonymAvatarTs, setPseudonymAvatarTs] = useState(0)
+  const pseudonymAvatarInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     // Prefer the server-side profile (so this matches what public preview
@@ -62,11 +72,14 @@ export default function SettingsPage() {
     // server hasn't been populated yet.
     fetch('/api/settings/profile')
       .then(r => r.ok ? r.json() : { authorName: '' })
-      .then((p: { authorName?: string }) => {
+      .then((p: { authorName?: string; bio?: string; pseudonymEnabled?: boolean; pseudonym?: string }) => {
         const server = (p.authorName ?? '').trim()
         const local = (localStorage.getItem('loom-author-name') ?? '').trim()
         const initial = server || local
         setAuthorName(initial)
+        setBio(p.bio ?? '')
+        setPseudonymEnabled(!!p.pseudonymEnabled)
+        setPseudonym(p.pseudonym ?? '')
         // Keep localStorage in sync so the author's own greeting/UI sees the
         // same value without a round trip.
         if (initial) localStorage.setItem('loom-author-name', initial)
@@ -75,6 +88,9 @@ export default function SettingsPage() {
     fetch('/api/settings/backup').then(r => r.json()).then(setBackup)
     fetch('/avatar.jpg', { method: 'HEAD' })
       .then(r => { if (r.ok) { setHasAvatar(true); setAvatarTs(Date.now()) } })
+      .catch(() => {})
+    fetch('/pseudonym-avatar.jpg', { method: 'HEAD' })
+      .then(r => { if (r.ok) { setHasPseudonymAvatar(true); setPseudonymAvatarTs(Date.now()) } })
       .catch(() => {})
   }, [])
 
@@ -132,6 +148,34 @@ export default function SettingsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ authorName: trimmed }),
     }).catch(() => { /* non-fatal — local copy still saved */ })
+  }
+
+  async function patchProfile(patch: Partial<{
+    bio: string; pseudonymEnabled: boolean; pseudonym: string
+  }>) {
+    await fetch('/api/settings/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    }).catch(() => { /* non-fatal */ })
+  }
+
+  async function handlePseudonymAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const form = new FormData()
+    form.append('avatar', file)
+    const res = await fetch('/api/pseudonym-avatar', { method: 'POST', body: form })
+    if (res.ok) {
+      setHasPseudonymAvatar(true)
+      setPseudonymAvatarTs(Date.now())
+    }
+    e.target.value = ''
+  }
+
+  async function removePseudonymAvatar() {
+    const res = await fetch('/api/pseudonym-avatar', { method: 'DELETE' })
+    if (res.ok) setHasPseudonymAvatar(false)
   }
 
   async function patchBackup(patch: Partial<BackupSettings>) {
@@ -226,6 +270,107 @@ export default function SettingsPage() {
                   className="w-full bg-surface-base border border-accent/20 rounded-lg px-4 py-2.5 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent"
                 />
                 <p className="text-xs text-ink-faint mt-1.5">Used in exported files to identify the author.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-ink-faint mb-2">Bio</label>
+                <textarea
+                  value={bio}
+                  onChange={e => setBio(e.target.value)}
+                  onBlur={() => patchProfile({ bio })}
+                  placeholder="A few sentences about you — appears on your public author bio."
+                  rows={4}
+                  className="w-full bg-surface-base border border-accent/20 rounded-lg px-4 py-2.5 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent resize-y"
+                />
+              </div>
+
+              <div className="border-t border-accent/10 pt-5">
+                <label className="flex items-center gap-2 text-sm text-ink cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={pseudonymEnabled}
+                    onChange={e => {
+                      setPseudonymEnabled(e.target.checked)
+                      patchProfile({ pseudonymEnabled: e.target.checked })
+                    }}
+                    className="accent-accent"
+                  />
+                  <span>Show me under a pseudonym</span>
+                </label>
+                <p className="text-xs text-ink-faint mt-1.5 pl-6">
+                  When on, your public bio uses the pseudonym below and either
+                  blurs your photo or shows the alternate one you upload.
+                </p>
+
+                {pseudonymEnabled && (
+                  <div className="mt-4 flex flex-col gap-4 pl-6">
+                    <div className="flex items-center gap-6">
+                      <input
+                        ref={pseudonymAvatarInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handlePseudonymAvatarChange}
+                      />
+                      <div
+                        className="w-20 h-20 rounded-full overflow-hidden border-2 border-accent/30 bg-surface-base shrink-0 flex items-center justify-center"
+                      >
+                        {hasPseudonymAvatar ? (
+                          <img
+                            src={`/pseudonym-avatar.jpg?t=${pseudonymAvatarTs}`}
+                            alt="Pseudonym avatar"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : hasAvatar ? (
+                          // Blur the main avatar as the default pseudonym look.
+                          <img
+                            src={`/avatar.jpg?t=${avatarTs}`}
+                            alt=""
+                            className="w-full h-full object-cover blur-md scale-110"
+                          />
+                        ) : (
+                          <LuUser size={28} className="text-ink-faint" />
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => pseudonymAvatarInputRef.current?.click()}
+                            className="px-3 py-1.5 rounded text-xs bg-surface-base border border-accent/20 text-ink-muted hover:text-ink transition"
+                          >
+                            {hasPseudonymAvatar ? 'Replace photo' : 'Upload alternate photo'}
+                          </button>
+                          {hasPseudonymAvatar && (
+                            <button
+                              type="button"
+                              onClick={removePseudonymAvatar}
+                              className="px-3 py-1.5 rounded text-xs text-ink-muted hover:text-ink transition"
+                            >
+                              Use blurred photo instead
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-xs text-ink-faint">
+                          {hasPseudonymAvatar
+                            ? 'Readers see this photo on your public bio.'
+                            : 'Readers see your profile photo blurred. Upload an alternate to use a different image.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs uppercase tracking-widest text-ink-faint mb-2">Pseudonym</label>
+                      <input
+                        value={pseudonym}
+                        onChange={e => setPseudonym(e.target.value)}
+                        onBlur={() => patchProfile({ pseudonym })}
+                        placeholder="The name readers see"
+                        className="w-full bg-surface-base border border-accent/20 rounded-lg px-4 py-2.5 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </section>

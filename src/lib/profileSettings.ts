@@ -7,12 +7,22 @@ import path from 'path'
 
 export type ProfileSettings = {
   authorName: string
+  bio: string
+  // When true, the public bio uses `pseudonym` as the display name and
+  // either blurs the author's photo or shows a separately uploaded one
+  // (see /api/pseudonym-avatar; file existence at /pseudonym-avatar.jpg
+  // is the source of truth — no field is needed on this row).
+  pseudonymEnabled: boolean
+  pseudonym: string
 }
 
 const SETTINGS_PATH = path.join(process.cwd(), 'data', 'profile.json')
 
 const DEFAULTS: ProfileSettings = {
   authorName: '',
+  bio: '',
+  pseudonymEnabled: false,
+  pseudonym: '',
 }
 
 export async function readProfileSettings(): Promise<ProfileSettings> {
