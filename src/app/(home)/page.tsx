@@ -59,6 +59,12 @@ export default function ExplorePage() {
   // Tracking the name lets the modal stub a minimal view for demo
   // authors who don't have a real profile.
   const [authorModalName, setAuthorModalName] = useState<string | null>(null)
+  // The catalog area scrolls instead of the whole page so the filter
+  // bar stays accessible. atBottom drives the fade-out gradient — true
+  // when there's nothing more to scroll to (or no overflow at all),
+  // false while content sits below the visible area.
+  const catalogScrollRef = useRef<HTMLDivElement>(null)
+  const [catalogAtBottom, setCatalogAtBottom] = useState(true)
 
   // Focus the search input as the dropdown opens; clear it on close so the
   // next visit starts fresh.
@@ -128,6 +134,16 @@ export default function ExplorePage() {
     setStarred(toggleStarredSeries(seriesId))
   }
 
+  // Update atBottom based on the scroll container's current position.
+  // A small tolerance handles sub-pixel rounding so the gradient
+  // disappears cleanly at the actual bottom.
+  function checkCatalogScroll() {
+    const el = catalogScrollRef.current
+    if (!el) { setCatalogAtBottom(true); return }
+    const tolerance = 4
+    setCatalogAtBottom(el.scrollTop + el.clientHeight >= el.scrollHeight - tolerance)
+  }
+
   // Show every genre from the canonical list so the reader can find any
   // tag the platform supports — not just the subset currently in use.
   // The in-dropdown search whittles it down as they type.
@@ -160,6 +176,16 @@ export default function ExplorePage() {
     )
   }
 
+  // Re-evaluate the bottom-gradient state whenever the filtered set or
+  // continue-reading set changes (which is when the scroll height shifts).
+  // Also on window resize — what fit before may now overflow or vice versa.
+  useEffect(() => {
+    checkCatalogScroll()
+    const onResize = () => checkCatalogScroll()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [filtered.length, resumeEntries.length])
+
   if (series == null) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -171,48 +197,23 @@ export default function ExplorePage() {
   const filtersActive = query.trim() !== '' || activeGenres.length > 0
 
   return (
-    <div className="min-h-full px-8 py-10 flex flex-col">
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-ink">Explore</h1>
-        <p className="text-sm text-ink-muted mt-1">
-          Find your next great read
-        </p>
+    <div className="h-full px-8 py-10 flex flex-col">
+      <div className="shrink-0 mb-4 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-ink">Explore</h1>
+          <p className="text-sm text-ink-muted mt-1">
+            Find your next great read
+          </p>
+        </div>
+        {series.length > 0 && (
+          <p className="shrink-0 text-xs uppercase tracking-widest text-ink-faint mt-2">
+            {filtered.length} result(s)
+          </p>
+        )}
       </div>
 
-      {resumeEntries.length > 0 && (
-        <section className="mb-6">
-          <h2 className="text-xs uppercase tracking-widest text-ink-faint mb-3">Continue reading</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {resumeEntries.map(r => (
-              <Link
-                key={r.sessionId}
-                href={`/read/${r.sessionId}`}
-                className="group flex items-stretch gap-3 p-3 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
-              >
-                <div className="relative w-14 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center">
-                  {r.seriesHeroCoverPath
-                    ? <Image src={r.seriesHeroCoverPath} alt="" fill sizes="56px" className="object-cover" />
-                    : <LuBookOpen size={16} className="text-ink-faint" />}
-                </div>
-                <div className="flex-1 min-w-0 flex flex-col justify-center">
-                  <p className="text-sm font-semibold text-ink truncate group-hover:text-accent transition">{r.seriesTitle}</p>
-                  {(r.currentBookTitle || r.currentChapterTitle) && (
-                    <p className="text-xs text-ink-muted truncate mt-0.5">
-                      {r.currentBookTitle ?? ''}{r.currentBookTitle && r.currentChapterTitle ? ' · ' : ''}{r.currentChapterTitle ?? ''}
-                    </p>
-                  )}
-                </div>
-                <div className="self-center shrink-0 text-accent">
-                  <LuArrowRight size={16} />
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
       {series.length > 0 && (
-        <div className="mb-4 flex items-center gap-3">
+        <div className="shrink-0 mb-4 flex items-center gap-3">
           <div className="relative flex-1">
             <LuSearch size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
             <input
@@ -333,6 +334,48 @@ export default function ExplorePage() {
         </div>
       )}
 
+      {/* Scrollable catalog area. Continue Reading + the grid live in a
+          single contained scroll region so the filter bar above stays
+          fixed; a gradient at the bottom fades the last row when more
+          cards sit below the visible area. */}
+      <div className="relative flex-1 min-h-0">
+        <div
+          ref={catalogScrollRef}
+          onScroll={checkCatalogScroll}
+          className="absolute inset-0 overflow-y-auto flex flex-col pr-1"
+        >
+          {resumeEntries.length > 0 && (
+            <section className="mb-6">
+              <h2 className="text-xs uppercase tracking-widest text-ink-faint mb-3">Continue reading</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {resumeEntries.map(r => (
+                  <Link
+                    key={r.sessionId}
+                    href={`/read/${r.sessionId}`}
+                    className="group flex items-stretch gap-3 p-3 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
+                  >
+                    <div className="relative w-14 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center">
+                      {r.seriesHeroCoverPath
+                        ? <Image src={r.seriesHeroCoverPath} alt="" fill sizes="56px" className="object-cover" />
+                        : <LuBookOpen size={16} className="text-ink-faint" />}
+                    </div>
+                    <div className="flex-1 min-w-0 flex flex-col justify-center">
+                      <p className="text-sm font-semibold text-ink truncate group-hover:text-accent transition">{r.seriesTitle}</p>
+                      {(r.currentBookTitle || r.currentChapterTitle) && (
+                        <p className="text-xs text-ink-muted truncate mt-0.5">
+                          {r.currentBookTitle ?? ''}{r.currentBookTitle && r.currentChapterTitle ? ' · ' : ''}{r.currentChapterTitle ?? ''}
+                        </p>
+                      )}
+                    </div>
+                    <div className="self-center shrink-0 text-accent">
+                      <LuArrowRight size={16} />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
       {series.length === 0 ? (
         <div className="flex-1 rounded-xl border-2 border-dashed border-accent/20 px-8 py-10 flex items-center justify-center">
           <p className="text-sm text-ink-faint italic text-center">
@@ -403,15 +446,7 @@ export default function ExplorePage() {
                   )}
                 </p>
                 {s.description && (
-                  // Scroll overflow so readers can sample the whole blurb
-                  // without leaving the card. Gradient fade at the bottom
-                  // hints "more below" the same way the book landing does.
-                  <div className="relative mt-2">
-                    <div className="overflow-y-auto pr-1 max-h-[140px]">
-                      <p className="text-xs text-ink-muted leading-relaxed">{s.description}</p>
-                    </div>
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-surface-raised to-transparent" />
-                  </div>
+                  <CardDescription text={s.description} />
                 )}
                 {(s.genres.length > 0 || s.keywords.length > 0) && (
                   <div className="mt-auto pt-2 flex flex-col gap-1.5">
@@ -436,12 +471,43 @@ export default function ExplorePage() {
           )})}
         </div>
       )}
+        </div>
+        {!catalogAtBottom && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-surface-base to-transparent" />
+        )}
+      </div>
 
       {authorModalName && (
         <AuthorModal
           authorName={authorModalName}
           onClose={() => setAuthorModalName(null)}
         />
+      )}
+    </div>
+  )
+}
+
+// Scrollable description block for each catalog card. Measures whether
+// the content actually overflows the max height; only paints the fade
+// gradient when there's something more to scroll to so short blurbs
+// don't get a pointless fade on their last line.
+function CardDescription({ text }: { text: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [overflowing, setOverflowing] = useState(false)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    setOverflowing(el.scrollHeight > el.clientHeight + 1)
+  }, [text])
+
+  return (
+    <div className="relative mt-2">
+      <div ref={ref} className="overflow-y-auto pr-1 max-h-[140px]">
+        <p className="text-xs text-ink-muted leading-relaxed">{text}</p>
+      </div>
+      {overflowing && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-surface-raised to-transparent" />
       )}
     </div>
   )
