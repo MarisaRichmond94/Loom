@@ -120,7 +120,7 @@ export default function ExplorePage() {
             <input
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Search by title, keyword, or book name…"
+              placeholder="Search by book/series title or keyword…"
               className="w-full bg-surface-raised border border-accent/15 rounded-lg pl-9 pr-9 py-2.5 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
             />
             {query && (
