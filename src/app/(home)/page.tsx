@@ -198,9 +198,9 @@ export default function ExplorePage() {
 
   return (
     <div className="h-full px-8 py-10 flex flex-col">
-      <div className="shrink-0 mb-4">
+      <div className="shrink-0 mb-4 flex items-baseline gap-3 flex-wrap">
         <h1 className="text-2xl font-bold text-ink">Explore</h1>
-        <p className="text-sm text-ink-muted mt-1">
+        <p className="text-sm text-ink-muted">
           Find your next great read
         </p>
       </div>
