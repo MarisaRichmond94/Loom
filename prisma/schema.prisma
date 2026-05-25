@@ -24,6 +24,10 @@ model Series {
   // author straight to the book editor instead of the series outline).
   // The underlying data model stays a Series-with-one-Book either way.
   standalone  Boolean         @default(false)
+  // Demo data flag — set by /api/seed/demo and used by the matching
+  // DELETE to clean up everything generated for "see how Explore feels
+  // with N series" testing. Real series stay at the default false.
+  demo        Boolean         @default(false)
   createdAt   DateTime        @default(now())
   books       Book[]
   variables   StoryVariable[]

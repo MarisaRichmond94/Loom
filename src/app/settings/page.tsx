@@ -65,6 +65,12 @@ export default function SettingsPage() {
   const [hasPseudonymAvatar, setHasPseudonymAvatar] = useState(false)
   const [pseudonymAvatarTs, setPseudonymAvatarTs] = useState(0)
   const pseudonymAvatarInputRef = useRef<HTMLInputElement>(null)
+  // Demo data — lets the author populate Explore with N mock series to
+  // see how the page feels with a real catalog. Mock series are flagged
+  // demo=true; the Clear button deletes only those.
+  const [demoCount, setDemoCount] = useState(25)
+  const [demoBusy, setDemoBusy] = useState<'generating' | 'clearing' | null>(null)
+  const [demoStatus, setDemoStatus] = useState<string | null>(null)
 
   useEffect(() => {
     // Prefer the server-side profile (so this matches what public preview
@@ -176,6 +182,38 @@ export default function SettingsPage() {
   async function removePseudonymAvatar() {
     const res = await fetch('/api/pseudonym-avatar', { method: 'DELETE' })
     if (res.ok) setHasPseudonymAvatar(false)
+  }
+
+  async function generateDemoData() {
+    if (demoBusy) return
+    setDemoBusy('generating')
+    setDemoStatus(null)
+    const res = await fetch('/api/seed/demo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ count: demoCount }),
+    })
+    if (res.ok) {
+      const { created } = await res.json() as { created: number }
+      setDemoStatus(`Created ${created} demo series.`)
+    } else {
+      setDemoStatus('Generation failed.')
+    }
+    setDemoBusy(null)
+  }
+
+  async function clearDemoData() {
+    if (demoBusy) return
+    setDemoBusy('clearing')
+    setDemoStatus(null)
+    const res = await fetch('/api/seed/demo', { method: 'DELETE' })
+    if (res.ok) {
+      const { deleted } = await res.json() as { deleted: number }
+      setDemoStatus(`Cleared ${deleted} demo series.`)
+    } else {
+      setDemoStatus('Clear failed.')
+    }
+    setDemoBusy(null)
   }
 
   async function patchBackup(patch: Partial<BackupSettings>) {
@@ -370,6 +408,53 @@ export default function SettingsPage() {
                       />
                     </div>
                   </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* Demo data — author-facing tool for browsing Explore with a
+              populated catalog without hand-crafting fake series. */}
+          <section className="mb-8">
+            <h2 className="text-xs uppercase tracking-widest text-ink-faint mb-4">Demo Data</h2>
+            <div className="bg-surface-raised border border-accent/10 rounded-xl p-6 flex flex-col gap-4">
+              <p className="text-xs text-ink-faint leading-relaxed">
+                Generate fake series to see how Explore reads with a real
+                catalog. Each one comes with a title, blurb, 1–3 books, and
+                a sprinkle of genres + keywords. Cards are flagged internally
+                and only the Clear button below deletes them — your real
+                series are untouched.
+              </p>
+              <div className="flex items-end gap-3 flex-wrap">
+                <div>
+                  <label className="block text-xs uppercase tracking-widest text-ink-faint mb-2">How many?</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={demoCount}
+                    onChange={e => setDemoCount(Math.max(1, Math.min(500, parseInt(e.target.value || '0', 10) || 0)))}
+                    className="w-24 bg-surface-base border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={generateDemoData}
+                  disabled={demoBusy != null || demoCount <= 0}
+                  className="px-4 py-2 rounded bg-accent text-white text-sm font-medium hover:opacity-90 transition disabled:opacity-50"
+                >
+                  {demoBusy === 'generating' ? 'Generating…' : 'Generate'}
+                </button>
+                <button
+                  type="button"
+                  onClick={clearDemoData}
+                  disabled={demoBusy != null}
+                  className="px-4 py-2 rounded bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink text-sm font-medium transition disabled:opacity-50"
+                >
+                  {demoBusy === 'clearing' ? 'Clearing…' : 'Clear demo data'}
+                </button>
+                {demoStatus && (
+                  <span className="text-xs text-ink-muted italic">{demoStatus}</span>
                 )}
               </div>
             </div>
