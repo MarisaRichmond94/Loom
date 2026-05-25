@@ -106,7 +106,7 @@ export default function ExplorePage() {
 
   return (
     <div className="px-8 py-10">
-      <div className="mb-6">
+      <div className="mb-4">
         <h1 className="text-2xl font-bold text-ink">Explore</h1>
         <p className="text-sm text-ink-muted mt-1">
           Find your next great read
@@ -114,7 +114,7 @@ export default function ExplorePage() {
       </div>
 
       {series.length > 0 && (
-        <div className="mb-6 flex items-center gap-3">
+        <div className="mb-4 flex items-center gap-3">
           <div className="relative flex-1">
             <LuSearch size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
             <input

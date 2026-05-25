@@ -13,7 +13,6 @@ export const GENRES = [
   'Fantasy',
   'Historical',
   'Horror',
-  'LGBTQ+',
   'Mystery',
   'Paranormal',
   'Romance',
