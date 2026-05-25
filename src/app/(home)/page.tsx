@@ -398,7 +398,7 @@ export default function ExplorePage() {
                 {authorByline && (
                   <p className="text-xs text-ink-muted truncate">by {authorByline}</p>
                 )}
-                <p className="text-[11px] uppercase tracking-widest text-ink-faint mt-0.5">
+                <p className={`text-[11px] uppercase tracking-widest text-ink-faint ${authorByline ? 'mt-2' : 'mt-0.5'}`}>
                   {s.totalBookCount} book(s)
                   {s.publishedBookCount < s.totalBookCount && (
                     <> ({s.publishedBookCount} published)</>
