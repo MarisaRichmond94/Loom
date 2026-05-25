@@ -52,6 +52,10 @@ export default function ExplorePage() {
   // so renders react to toggles immediately.
   const [starred, setStarred] = useState<string[]>([])
   const [resumeEntries, setResumeEntries] = useState<ResumeEntry[]>([])
+  // Server profile drives the byline on every card. Pseudonym takes
+  // precedence when it's enabled so a reader never sees the author's
+  // real name.
+  const [authorByline, setAuthorByline] = useState('')
 
   // Focus the search input as the dropdown opens; clear it on close so the
   // next visit starts fresh.
@@ -87,6 +91,20 @@ export default function ExplorePage() {
   // localStorage so we keep initial state empty and fill in client-side.
   useEffect(() => {
     setStarred(getStarredSeries())
+  }, [])
+
+  // Author byline — same source as the preview pages so a reader sees a
+  // consistent display name everywhere.
+  useEffect(() => {
+    fetch('/api/settings/profile')
+      .then(r => r.ok ? r.json() : null)
+      .then((p: { authorName?: string; pseudonymEnabled?: boolean; pseudonym?: string } | null) => {
+        if (!p) return
+        const real = (p.authorName ?? '').trim()
+        const pen = (p.pseudonym ?? '').trim()
+        setAuthorByline(p.pseudonymEnabled && pen ? pen : real)
+      })
+      .catch(() => { /* non-fatal */ })
   }, [])
 
   // Load Continue Reading entries. Walks every cached session id in
@@ -377,6 +395,9 @@ export default function ExplorePage() {
               </div>
               <div className="flex-1 min-w-0 flex flex-col">
                 <p className="font-semibold text-ink truncate pr-8 group-hover:text-accent transition">{s.title}</p>
+                {authorByline && (
+                  <p className="text-xs text-ink-muted truncate">by {authorByline}</p>
+                )}
                 <p className="text-[11px] uppercase tracking-widest text-ink-faint mt-0.5">
                   {s.totalBookCount} book(s)
                   {s.publishedBookCount < s.totalBookCount && (

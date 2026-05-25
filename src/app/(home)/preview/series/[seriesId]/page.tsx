@@ -50,10 +50,16 @@ export default function PreviewSeriesPage() {
       })
     })
     // Fetch the global profile so the byline is consistent across all
-    // visitors, not just the one who wrote the series.
+    // visitors, not just the one who wrote the series. Honor the pseudonym
+    // when it's been enabled — readers never see the author's real name.
     fetch('/api/settings/profile')
-      .then(r => r.ok ? r.json() : { authorName: '' })
-      .then((p: { authorName?: string }) => setAuthorName((p.authorName ?? '').trim()))
+      .then(r => r.ok ? r.json() : null)
+      .then((p: { authorName?: string; pseudonymEnabled?: boolean; pseudonym?: string } | null) => {
+        if (!p) return
+        const real = (p.authorName ?? '').trim()
+        const pen = (p.pseudonym ?? '').trim()
+        setAuthorName(p.pseudonymEnabled && pen ? pen : real)
+      })
       .catch(() => { /* non-fatal — byline just won't render */ })
   }, [seriesId])
 

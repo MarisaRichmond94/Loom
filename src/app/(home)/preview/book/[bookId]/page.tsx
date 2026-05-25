@@ -109,11 +109,16 @@ export default function PreviewBookPage() {
       setPovNames(povs)
 
       // Author byline pulls from the global profile so the same name shows
-      // for every visitor, not just the device that wrote the book.
+      // for every visitor, not just the device that wrote the book. Honor
+      // the pseudonym when it's enabled — readers never see the real name.
       const profileRes = await fetch('/api/settings/profile').catch(() => null)
       if (!cancelled && profileRes?.ok) {
-        const profile: { authorName?: string } = await profileRes.json()
-        setAuthorName((profile.authorName ?? '').trim())
+        const profile: {
+          authorName?: string; pseudonymEnabled?: boolean; pseudonym?: string
+        } = await profileRes.json()
+        const real = (profile.authorName ?? '').trim()
+        const pen = (profile.pseudonym ?? '').trim()
+        setAuthorName(profile.pseudonymEnabled && pen ? pen : real)
       }
 
       // Cast + soundtrack are only worth fetching for published books; for
