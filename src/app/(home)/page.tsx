@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { LuBookOpen, LuSearch, LuX, LuChevronDown, LuCheck } from 'react-icons/lu'
+import { LuBookOpen, LuSearch, LuSearchX, LuX, LuChevronDown, LuCheck } from 'react-icons/lu'
 import { GENRES } from '@/lib/genres'
 
 type ExploreSeries = {
@@ -243,7 +243,8 @@ export default function ExplorePage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex-1 rounded-xl border-2 border-dashed border-accent/20 px-8 py-10 flex items-center justify-center">
-          <div className="text-center">
+          <div className="flex flex-col items-center text-center">
+            <LuSearchX size={36} className="text-ink-faint mb-3" />
             <p className="text-base text-ink">
               {filtersActive
                 ? 'No books or series match the applied search parameters'
