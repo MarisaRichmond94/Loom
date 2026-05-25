@@ -198,19 +198,18 @@ export default function ExplorePage() {
 
   return (
     <div className="h-full px-8 py-10 flex flex-col">
-      <div className="shrink-0 mb-4 flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-ink">Explore</h1>
-          <p className="text-sm text-ink-muted mt-1">
-            Find your next great read
-          </p>
-        </div>
-        {series.length > 0 && (
-          <p className="shrink-0 text-xs uppercase tracking-widest text-ink-faint mt-2">
-            {filtered.length} result(s)
-          </p>
-        )}
+      <div className="shrink-0 mb-4">
+        <h1 className="text-2xl font-bold text-ink">Explore</h1>
+        <p className="text-sm text-ink-muted mt-1">
+          Find your next great read
+        </p>
       </div>
+
+      {series.length > 0 && (
+        <p className="shrink-0 mb-4 text-right text-xs uppercase tracking-widest text-ink-faint">
+          {filtered.length} result(s)
+        </p>
+      )}
 
       {series.length > 0 && (
         <div className="shrink-0 mb-4 flex items-center gap-3">
@@ -487,26 +486,35 @@ export default function ExplorePage() {
   )
 }
 
-// Scrollable description block for each catalog card. Measures whether
-// the content actually overflows the max height; only paints the fade
-// gradient when there's something more to scroll to so short blurbs
-// don't get a pointless fade on their last line.
+// Scrollable description block for each catalog card. Paints a fade-out
+// gradient only when the content overflows AND the reader isn't already
+// at the bottom — same behavior as the catalog-level gradient so the
+// affordance reads consistently everywhere.
 function CardDescription({ text }: { text: string }) {
   const ref = useRef<HTMLDivElement>(null)
-  const [overflowing, setOverflowing] = useState(false)
+  // atBottom starts true so short blurbs never paint the gradient. The
+  // mount effect below corrects this if the content actually overflows.
+  const [atBottom, setAtBottom] = useState(true)
 
-  useEffect(() => {
+  function check() {
     const el = ref.current
-    if (!el) return
-    setOverflowing(el.scrollHeight > el.clientHeight + 1)
-  }, [text])
+    if (!el) { setAtBottom(true); return }
+    const tolerance = 4
+    setAtBottom(el.scrollTop + el.clientHeight >= el.scrollHeight - tolerance)
+  }
+
+  useEffect(check, [text])
 
   return (
     <div className="relative mt-2">
-      <div ref={ref} className="overflow-y-auto pr-1 max-h-[140px]">
+      <div
+        ref={ref}
+        onScroll={check}
+        className="overflow-y-auto pr-1 max-h-[140px]"
+      >
         <p className="text-xs text-ink-muted leading-relaxed">{text}</p>
       </div>
-      {overflowing && (
+      {!atBottom && (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-surface-raised to-transparent" />
       )}
     </div>
