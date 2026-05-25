@@ -167,6 +167,10 @@ model ReaderSession {
   id             String   @id @default(cuid())
   seriesId       String
   createdAt      DateTime @default(now())
+  // Auto-touched on every choice, rewind, or session PATCH so the
+  // reader-side Continue Reading row can sort by "most recently
+  // opened" without us tracking activity by hand.
+  updatedAt      DateTime @updatedAt
   currentBlockId String?
   storyState     String   @default("{}")
   choiceHistory  String   @default("[]")

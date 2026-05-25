@@ -143,8 +143,9 @@ export default function AuthorModal({ authorName, excludeSeriesId, onClose }: Pr
             <button
               type="button"
               onClick={onFollow}
-              disabled={!authorName}
-              className={`mt-2 px-3 py-1.5 rounded text-xs font-medium border transition disabled:opacity-50 ${
+              disabled={!authorName || isRealAuthor}
+              title={isRealAuthor ? "You can't follow yourself" : undefined}
+              className={`mt-2 px-3 py-1.5 rounded text-xs font-medium border transition disabled:opacity-50 disabled:cursor-not-allowed ${
                 followed
                   ? 'bg-accent/10 border-accent/40 text-ink hover:bg-accent/15'
                   : 'bg-accent text-white border-accent hover:opacity-90'

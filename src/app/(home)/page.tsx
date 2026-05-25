@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { LuBookOpen, LuSearch, LuSearchX, LuX, LuChevronDown, LuCheck, LuStar, LuArrowRight } from 'react-icons/lu'
+import { LuBookOpen, LuSearch, LuSearchX, LuX, LuChevronDown, LuCheck, LuStar } from 'react-icons/lu'
 import { GENRES } from '@/lib/genres'
 import {
   getStarredSeries,
@@ -30,11 +30,16 @@ type ResumeEntry = {
   sessionId: string
   seriesId: string
   seriesTitle: string
-  seriesHeroCoverPath: string | null
+  authorName: string
+  currentBookId: string | null
+  currentBookTitle: string | null
+  currentBookCoverPath: string | null
+  currentBookChapterCount: number
   currentChapterId: string | null
   currentChapterTitle: string | null
-  currentBookTitle: string | null
+  currentChapterOrder: number | null
   hasProgress: boolean
+  updatedAt: string
 }
 
 // Reader-facing landing. Lists every series with at least one published
@@ -124,7 +129,12 @@ export default function ExplorePage() {
         for (const c of cached) {
           if (!returnedIds.has(c.seriesId)) forgetReaderSession(c.seriesId)
         }
-        setResumeEntries(rows.filter(r => r.hasProgress))
+        // Most-recently-opened first so the card the reader most likely
+        // wants to resume is the leftmost in the horizontal strip.
+        const sorted = rows
+          .filter(r => r.hasProgress)
+          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        setResumeEntries(sorted)
       })
       .catch(() => { if (!cancelled) setResumeEntries([]) })
     return () => { cancelled = true }
@@ -198,6 +208,62 @@ export default function ExplorePage() {
 
   return (
     <div className="h-full px-8 py-10 flex flex-col">
+      {resumeEntries.length > 0 && (
+        <section className="shrink-0 mb-8">
+          <h2 className="text-2xl font-bold text-ink mb-4">Continue Reading</h2>
+          {/* Horizontal strip — newest first. -mx-8 px-8 lets the row scroll
+              edge-to-edge while the cards still respect the page's gutter. */}
+          <div className="-mx-8 px-8 overflow-x-auto pb-2">
+            <div className="flex gap-4">
+              {resumeEntries.map(r => {
+                const progressPct = r.currentBookChapterCount > 0 && r.currentChapterOrder != null
+                  ? Math.round((r.currentChapterOrder / r.currentBookChapterCount) * 100)
+                  : null
+                const seriesIsBook = !r.currentBookTitle || r.currentBookTitle === r.seriesTitle
+                return (
+                  <Link
+                    key={r.sessionId}
+                    href={`/read/${r.sessionId}`}
+                    className="group shrink-0 w-[28rem] flex items-stretch gap-4 p-4 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
+                  >
+                    <div className="relative w-24 h-24 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 flex items-center justify-center">
+                      {r.currentBookCoverPath
+                        ? <Image src={r.currentBookCoverPath} alt="" fill sizes="96px" className="object-cover" />
+                        : <LuBookOpen size={24} className="text-ink-faint" />}
+                    </div>
+                    <div className="flex-1 min-w-0 flex flex-col gap-1">
+                      <p className="text-base font-bold text-ink truncate group-hover:text-accent transition">
+                        {r.currentBookTitle ?? r.seriesTitle}
+                        {!seriesIsBook && (
+                          <span className="font-normal text-ink-faint ml-2">({r.seriesTitle})</span>
+                        )}
+                      </p>
+                      {r.authorName && (
+                        <p className="text-xs text-ink-muted truncate">by: {r.authorName}</p>
+                      )}
+                      {r.currentChapterTitle && (
+                        <p className="text-xs text-ink-muted truncate">{r.currentChapterTitle}</p>
+                      )}
+                      {progressPct != null && (
+                        <div className="mt-auto flex items-center gap-2">
+                          <div className="flex-1 h-1.5 rounded-full bg-surface-overlay overflow-hidden">
+                            <div
+                              className="h-full bg-accent"
+                              style={{ width: `${progressPct}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-ink-faint tabular-nums shrink-0">{progressPct}%</span>
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
       <div className='flex flex-row justify-between items-end'>
         <div className="flex flex-col shrink-0 mb-4">
           <h1 className="text-2xl font-bold text-ink">Explore</h1>
@@ -345,38 +411,6 @@ export default function ExplorePage() {
           onScroll={checkCatalogScroll}
           className="absolute inset-0 overflow-y-auto flex flex-col pr-1"
         >
-          {resumeEntries.length > 0 && (
-            <section className="mb-6">
-              <h2 className="text-xs uppercase tracking-widest text-ink-faint mb-3">Continue reading</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {resumeEntries.map(r => (
-                  <Link
-                    key={r.sessionId}
-                    href={`/read/${r.sessionId}`}
-                    className="group flex items-stretch gap-3 p-3 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
-                  >
-                    <div className="relative w-14 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center">
-                      {r.seriesHeroCoverPath
-                        ? <Image src={r.seriesHeroCoverPath} alt="" fill sizes="56px" className="object-cover" />
-                        : <LuBookOpen size={16} className="text-ink-faint" />}
-                    </div>
-                    <div className="flex-1 min-w-0 flex flex-col justify-center">
-                      <p className="text-sm font-semibold text-ink truncate group-hover:text-accent transition">{r.seriesTitle}</p>
-                      {(r.currentBookTitle || r.currentChapterTitle) && (
-                        <p className="text-xs text-ink-muted truncate mt-0.5">
-                          {r.currentBookTitle ?? ''}{r.currentBookTitle && r.currentChapterTitle ? ' · ' : ''}{r.currentChapterTitle ?? ''}
-                        </p>
-                      )}
-                    </div>
-                    <div className="self-center shrink-0 text-accent">
-                      <LuArrowRight size={16} />
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </section>
-          )}
-
       {series.length === 0 ? (
         <div className="flex-1 rounded-xl border-2 border-dashed border-accent/20 px-8 py-10 flex items-center justify-center">
           <p className="text-sm text-ink-faint italic text-center">
