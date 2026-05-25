@@ -375,31 +375,6 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* Appearance */}
-          <section className="mb-8">
-            <h2 className="text-xs uppercase tracking-widest text-ink-faint mb-4">Appearance</h2>
-            <div className="bg-surface-raised border border-accent/10 rounded-xl p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium text-ink mb-1">Light Mode</div>
-                  <div className="text-xs text-ink-faint">Toggle between light and dark theme.</div>
-                </div>
-                <button
-                  role="switch"
-                  aria-checked={lightMode}
-                  onClick={toggleLightMode}
-                  className="flex items-center gap-1.5 text-ink-faint hover:text-ink transition"
-                >
-                  <LuMoon size={13} />
-                  <span className={`relative inline-flex w-9 h-5 rounded-full transition-colors duration-200 ${lightMode ? 'bg-accent' : 'bg-surface-muted'}`}>
-                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${lightMode ? 'left-4' : 'left-0.5'}`} />
-                  </span>
-                  <LuSun size={13} />
-                </button>
-              </div>
-            </div>
-          </section>
-
           {/* Backups */}
           <section>
             <h2 className="text-xs uppercase tracking-widest text-ink-faint mb-4">Backups</h2>
