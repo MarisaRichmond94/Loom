@@ -105,7 +105,7 @@ export default function ExplorePage() {
   const filtersActive = query.trim() !== '' || activeGenres.length > 0
 
   return (
-    <div className="px-8 py-10">
+    <div className="min-h-full px-8 py-10 flex flex-col">
       <div className="mb-4">
         <h1 className="text-2xl font-bold text-ink">Explore</h1>
         <p className="text-sm text-ink-muted mt-1">
@@ -236,16 +236,23 @@ export default function ExplorePage() {
       )}
 
       {series.length === 0 ? (
-        <div className="rounded-xl border-2 border-dashed border-accent/20 px-8 py-16 text-center">
-          <p className="text-sm text-ink-faint italic">
+        <div className="flex-1 rounded-xl border-2 border-dashed border-accent/20 px-8 py-10 flex items-center justify-center">
+          <p className="text-sm text-ink-faint italic text-center">
             Nothing to read yet. Publish a book from the Write view to see it here.
           </p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border-2 border-dashed border-accent/20 px-8 py-16 text-center">
-          <p className="text-sm text-ink-faint italic">
-            {filtersActive ? 'No series match your filters.' : 'No series to show.'}
-          </p>
+        <div className="flex-1 rounded-xl border-2 border-dashed border-accent/20 px-8 py-10 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-base text-ink">
+              {filtersActive
+                ? 'No books or series match the applied search parameters'
+                : 'No series to show'}
+            </p>
+            {filtersActive && (
+              <p className="text-sm text-ink-muted mt-2">Try adjusting your filter(s)</p>
+            )}
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
