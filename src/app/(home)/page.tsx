@@ -198,18 +198,20 @@ export default function ExplorePage() {
 
   return (
     <div className="h-full px-8 py-10 flex flex-col">
-      <div className="shrink-0 mb-4">
-        <h1 className="text-2xl font-bold text-ink">Explore</h1>
-        <p className="text-sm text-ink-muted mt-1">
-          Find your next great read
-        </p>
-      </div>
+      <div className='flex flex-row justify-between items-end'>
+        <div className="flex flex-col shrink-0 mb-4">
+          <h1 className="text-2xl font-bold text-ink">Explore</h1>
+          <p className="text-sm text-ink-muted mt-1">
+            Find your next great read
+          </p>
+        </div>
 
-      {series.length > 0 && (
-        <p className="shrink-0 mb-4 text-right text-xs uppercase tracking-widest text-ink-faint">
-          {filtered.length} result(s)
-        </p>
-      )}
+        {series.length > 0 && (
+          <p className="shrink-0 mb-4 text-right text-xs uppercase tracking-widest text-ink-faint">
+            {filtered.length} result(s)
+          </p>
+        )}
+      </div>
 
       {series.length > 0 && (
         <div className="shrink-0 mb-4 flex items-center gap-3">
