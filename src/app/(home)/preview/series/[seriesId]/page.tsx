@@ -32,6 +32,7 @@ export default function PreviewSeriesPage() {
   const { seriesId } = useParams() as { seriesId: string }
   const router = useRouter()
   const [series, setSeries] = useState<Series | null>(null)
+  const [authorName, setAuthorName] = useState('')
   const [working, setWorking] = useState<string | null>(null)
 
   useEffect(() => {
@@ -48,6 +49,12 @@ export default function PreviewSeriesPage() {
         keywords: parseList(data.keywords),
       })
     })
+    // Fetch the global profile so the byline is consistent across all
+    // visitors, not just the one who wrote the series.
+    fetch('/api/settings/profile')
+      .then(r => r.ok ? r.json() : { authorName: '' })
+      .then((p: { authorName?: string }) => setAuthorName((p.authorName ?? '').trim()))
+      .catch(() => { /* non-fatal — byline just won't render */ })
   }, [seriesId])
 
   async function startReading() {
@@ -93,7 +100,12 @@ export default function PreviewSeriesPage() {
           {/* Row 1: title and Start reading on the same baseline. Description,
               genres, and keywords drop below at full width. */}
           <div className="flex items-center justify-between gap-6">
-            <h1 className="text-3xl md:text-4xl font-bold text-ink leading-tight uppercase tracking-wide min-w-0">{series.title}</h1>
+            <div className="min-w-0">
+              <h1 className="text-3xl md:text-4xl font-bold text-ink leading-tight uppercase tracking-wide">{series.title}</h1>
+              {authorName && (
+                <p className="text-sm text-ink-muted mt-1">by {authorName}</p>
+              )}
+            </div>
             {series.books.some(b => b.published) && (
               <button
                 onClick={() => startReading()}

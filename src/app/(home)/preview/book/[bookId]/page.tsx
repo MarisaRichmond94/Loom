@@ -61,6 +61,7 @@ export default function PreviewBookPage() {
   const router = useRouter()
   const [book, setBook] = useState<Book | null>(null)
   const [series, setSeries] = useState<Series | null>(null)
+  const [authorName, setAuthorName] = useState('')
   const [characters, setCharacters] = useState<Character[]>([])
   const [soundtracks, setSoundtracks] = useState<Soundtrack[]>([])
   // POV character names taken from every chapter's `pov` field across every
@@ -106,6 +107,14 @@ export default function PreviewBookPage() {
         }
       }
       setPovNames(povs)
+
+      // Author byline pulls from the global profile so the same name shows
+      // for every visitor, not just the device that wrote the book.
+      const profileRes = await fetch('/api/settings/profile').catch(() => null)
+      if (!cancelled && profileRes?.ok) {
+        const profile: { authorName?: string } = await profileRes.json()
+        setAuthorName((profile.authorName ?? '').trim())
+      }
 
       // Cast + soundtrack are only worth fetching for published books; for
       // drafts we hide every below-the-fold section anyway (no spoilers).
@@ -203,10 +212,15 @@ export default function PreviewBookPage() {
                 regardless of synopsis length. Coming-soon badge stays
                 next to the title. */}
             <div className="mt-2 flex items-center justify-between gap-6">
-              <div className="flex items-baseline gap-3 flex-wrap min-w-0">
-                <h1 className="text-3xl md:text-4xl font-bold text-ink leading-tight">{book.title}</h1>
-                {!book.published && (
-                  <span className="text-[11px] uppercase tracking-widest text-ink-faint border border-accent/30 rounded px-2 py-0.5">Coming soon</span>
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-3 flex-wrap">
+                  <h1 className="text-3xl md:text-4xl font-bold text-ink leading-tight">{book.title}</h1>
+                  {!book.published && (
+                    <span className="text-[11px] uppercase tracking-widest text-ink-faint border border-accent/30 rounded px-2 py-0.5">Coming soon</span>
+                  )}
+                </div>
+                {authorName && (
+                  <p className="text-sm text-ink-muted mt-1">by {authorName}</p>
                 )}
               </div>
               <button

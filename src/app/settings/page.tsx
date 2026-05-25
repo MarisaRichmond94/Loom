@@ -57,7 +57,21 @@ export default function SettingsPage() {
   const avatarInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setAuthorName(localStorage.getItem('loom-author-name') ?? '')
+    // Prefer the server-side profile (so this matches what public preview
+    // pages display), falling back to the legacy localStorage value if the
+    // server hasn't been populated yet.
+    fetch('/api/settings/profile')
+      .then(r => r.ok ? r.json() : { authorName: '' })
+      .then((p: { authorName?: string }) => {
+        const server = (p.authorName ?? '').trim()
+        const local = (localStorage.getItem('loom-author-name') ?? '').trim()
+        const initial = server || local
+        setAuthorName(initial)
+        // Keep localStorage in sync so the author's own greeting/UI sees the
+        // same value without a round trip.
+        if (initial) localStorage.setItem('loom-author-name', initial)
+      })
+      .catch(() => setAuthorName(localStorage.getItem('loom-author-name') ?? ''))
     fetch('/api/settings/backup').then(r => r.json()).then(setBackup)
     fetch('/avatar.jpg', { method: 'HEAD' })
       .then(r => { if (r.ok) { setHasAvatar(true); setAvatarTs(Date.now()) } })
@@ -108,8 +122,16 @@ export default function SettingsPage() {
     })
   }
 
-  function handleAuthorNameBlur() {
-    localStorage.setItem('loom-author-name', authorName.trim())
+  async function handleAuthorNameBlur() {
+    const trimmed = authorName.trim()
+    localStorage.setItem('loom-author-name', trimmed)
+    // Mirror to the server so public preview pages can render a byline
+    // even when the visitor's browser has no localStorage value.
+    await fetch('/api/settings/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ authorName: trimmed }),
+    }).catch(() => { /* non-fatal — local copy still saved */ })
   }
 
   async function patchBackup(patch: Partial<BackupSettings>) {
