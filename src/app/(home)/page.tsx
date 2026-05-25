@@ -3,8 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { LuBookOpen, LuSearch, LuSearchX, LuX, LuChevronDown, LuCheck } from 'react-icons/lu'
+import { LuBookOpen, LuSearch, LuSearchX, LuX, LuChevronDown, LuCheck, LuStar, LuArrowRight } from 'react-icons/lu'
 import { GENRES } from '@/lib/genres'
+import {
+  getStarredSeries,
+  toggleStarredSeries,
+  getActiveReaderSessions,
+  forgetReaderSession,
+} from '@/lib/readerProgress'
 
 type ExploreSeries = {
   id: string
@@ -16,6 +22,17 @@ type ExploreSeries = {
   publishedBookCount: number
   totalBookCount: number
   bookTitles: string[]
+}
+
+type ResumeEntry = {
+  sessionId: string
+  seriesId: string
+  seriesTitle: string
+  seriesHeroCoverPath: string | null
+  currentChapterId: string | null
+  currentChapterTitle: string | null
+  currentBookTitle: string | null
+  hasProgress: boolean
 }
 
 // Reader-facing landing. Lists every series with at least one published
@@ -31,6 +48,10 @@ export default function ExplorePage() {
   const [genreFilterQuery, setGenreFilterQuery] = useState('')
   const genreMenuRef = useRef<HTMLDivElement>(null)
   const genreFilterInputRef = useRef<HTMLInputElement>(null)
+  // Reader-side state lives in localStorage; mirror it in component state
+  // so renders react to toggles immediately.
+  const [starred, setStarred] = useState<string[]>([])
+  const [resumeEntries, setResumeEntries] = useState<ResumeEntry[]>([])
 
   // Focus the search input as the dropdown opens; clear it on close so the
   // next visit starts fresh.
@@ -61,6 +82,44 @@ export default function ExplorePage() {
       .then(setSeries)
       .catch(() => setSeries([]))
   }, [])
+
+  // Hydrate the starred list from localStorage after mount. SSR can't see
+  // localStorage so we keep initial state empty and fill in client-side.
+  useEffect(() => {
+    setStarred(getStarredSeries())
+  }, [])
+
+  // Load Continue Reading entries. Walks every cached session id in
+  // localStorage, asks the server for the resume context in one batch,
+  // prunes any that 404'd, and filters to sessions that actually have
+  // progress so a "just-started, never-touched" session doesn't appear.
+  useEffect(() => {
+    const cached = getActiveReaderSessions()
+    if (cached.length === 0) { setResumeEntries([]); return }
+    let cancelled = false
+    fetch('/api/sessions/resume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionIds: cached.map(c => c.sessionId) }),
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then((rows: ResumeEntry[]) => {
+        if (cancelled) return
+        const returnedIds = new Set(rows.map(r => r.seriesId))
+        // Drop localStorage entries the server didn't return — usually
+        // means the session was deleted.
+        for (const c of cached) {
+          if (!returnedIds.has(c.seriesId)) forgetReaderSession(c.seriesId)
+        }
+        setResumeEntries(rows.filter(r => r.hasProgress))
+      })
+      .catch(() => { if (!cancelled) setResumeEntries([]) })
+    return () => { cancelled = true }
+  }, [])
+
+  function toggleStar(seriesId: string) {
+    setStarred(toggleStarredSeries(seriesId))
+  }
 
   // Show every genre from the canonical list so the reader can find any
   // tag the platform supports — not just the subset currently in use.
@@ -112,6 +171,38 @@ export default function ExplorePage() {
           Find your next great read
         </p>
       </div>
+
+      {resumeEntries.length > 0 && (
+        <section className="mb-6">
+          <h2 className="text-xs uppercase tracking-widest text-ink-faint mb-3">Continue reading</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {resumeEntries.map(r => (
+              <Link
+                key={r.sessionId}
+                href={`/read/${r.sessionId}`}
+                className="group flex items-stretch gap-3 p-3 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
+              >
+                <div className="relative w-14 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center">
+                  {r.seriesHeroCoverPath
+                    ? <Image src={r.seriesHeroCoverPath} alt="" fill sizes="56px" className="object-cover" />
+                    : <LuBookOpen size={16} className="text-ink-faint" />}
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                  <p className="text-sm font-semibold text-ink truncate group-hover:text-accent transition">{r.seriesTitle}</p>
+                  {(r.currentBookTitle || r.currentChapterTitle) && (
+                    <p className="text-xs text-ink-muted truncate mt-0.5">
+                      {r.currentBookTitle ?? ''}{r.currentBookTitle && r.currentChapterTitle ? ' · ' : ''}{r.currentChapterTitle ?? ''}
+                    </p>
+                  )}
+                </div>
+                <div className="self-center shrink-0 text-accent">
+                  <LuArrowRight size={16} />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {series.length > 0 && (
         <div className="mb-4 flex items-center gap-3">
@@ -257,19 +348,35 @@ export default function ExplorePage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filtered.map(s => (
+          {filtered.map(s => {
+            const isStarred = starred.includes(s.id)
+            return (
             <Link
               key={s.id}
               href={`/preview/series/${s.id}`}
-              className="group flex gap-4 p-4 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
+              className="group relative flex gap-4 p-4 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
             >
+              {/* Star toggle — preventDefault keeps the outer link from
+                  navigating; the click is purely a localStorage flip. */}
+              <button
+                type="button"
+                onClick={e => { e.preventDefault(); e.stopPropagation(); toggleStar(s.id) }}
+                title={isStarred ? 'Unstar this series' : 'Star this series'}
+                className={`absolute top-3 right-3 p-1 rounded transition ${
+                  isStarred
+                    ? 'text-accent'
+                    : 'text-ink-faint opacity-0 group-hover:opacity-100 hover:text-ink'
+                }`}
+              >
+                <LuStar size={16} className={isStarred ? 'fill-accent' : ''} />
+              </button>
               <div className="relative w-40 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center">
                 {s.heroCoverPath
                   ? <Image src={s.heroCoverPath} alt="" fill sizes="160px" className="object-cover" />
                   : <LuBookOpen size={32} className="text-ink-faint" />}
               </div>
               <div className="flex-1 min-w-0 flex flex-col">
-                <p className="font-semibold text-ink truncate group-hover:text-accent transition">{s.title}</p>
+                <p className="font-semibold text-ink truncate pr-8 group-hover:text-accent transition">{s.title}</p>
                 <p className="text-[11px] uppercase tracking-widest text-ink-faint mt-0.5">
                   {s.totalBookCount} book(s)
                   {s.publishedBookCount < s.totalBookCount && (
@@ -307,7 +414,7 @@ export default function ExplorePage() {
                 )}
               </div>
             </Link>
-          ))}
+          )})}
         </div>
       )}
     </div>
