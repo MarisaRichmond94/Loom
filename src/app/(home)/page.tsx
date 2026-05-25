@@ -11,6 +11,7 @@ import {
   getActiveReaderSessions,
   forgetReaderSession,
 } from '@/lib/readerProgress'
+import AuthorModal from '@/components/AuthorModal'
 
 type ExploreSeries = {
   id: string
@@ -56,6 +57,7 @@ export default function ExplorePage() {
   // precedence when it's enabled so a reader never sees the author's
   // real name.
   const [authorByline, setAuthorByline] = useState('')
+  const [authorModalOpen, setAuthorModalOpen] = useState(false)
 
   // Focus the search input as the dropdown opens; clear it on close so the
   // next visit starts fresh.
@@ -396,7 +398,16 @@ export default function ExplorePage() {
               <div className="flex-1 min-w-0 flex flex-col">
                 <p className="font-semibold text-ink truncate pr-8 group-hover:text-accent transition">{s.title}</p>
                 {authorByline && (
-                  <p className="text-xs text-ink-muted truncate">by {authorByline}</p>
+                  <p className="text-xs text-ink-muted truncate">
+                    by{' '}
+                    <button
+                      type="button"
+                      onClick={e => { e.preventDefault(); e.stopPropagation(); setAuthorModalOpen(true) }}
+                      className="hover:text-ink hover:underline transition"
+                    >
+                      {authorByline}
+                    </button>
+                  </p>
                 )}
                 <p className={`text-[11px] uppercase tracking-widest text-ink-faint ${authorByline ? 'mt-2' : 'mt-0.5'}`}>
                   {s.totalBookCount} book(s)
@@ -437,6 +448,10 @@ export default function ExplorePage() {
             </Link>
           )})}
         </div>
+      )}
+
+      {authorModalOpen && (
+        <AuthorModal onClose={() => setAuthorModalOpen(false)} />
       )}
     </div>
   )

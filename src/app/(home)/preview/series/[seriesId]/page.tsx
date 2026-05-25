@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { LuArrowRight, LuBookOpen } from 'react-icons/lu'
+import AuthorModal from '@/components/AuthorModal'
 
 type Book = {
   id: string
@@ -33,6 +34,7 @@ export default function PreviewSeriesPage() {
   const router = useRouter()
   const [series, setSeries] = useState<Series | null>(null)
   const [authorName, setAuthorName] = useState('')
+  const [authorModalOpen, setAuthorModalOpen] = useState(false)
   const [working, setWorking] = useState<string | null>(null)
 
   useEffect(() => {
@@ -109,7 +111,16 @@ export default function PreviewSeriesPage() {
             <div className="min-w-0">
               <h1 className="text-3xl md:text-4xl font-bold text-ink leading-tight uppercase tracking-wide">{series.title}</h1>
               {authorName && (
-                <p className="text-sm text-ink-muted mt-1">by {authorName}</p>
+                <p className="text-sm text-ink-muted mt-1">
+                  by{' '}
+                  <button
+                    type="button"
+                    onClick={() => setAuthorModalOpen(true)}
+                    className="hover:text-ink hover:underline transition"
+                  >
+                    {authorName}
+                  </button>
+                </p>
               )}
             </div>
             {series.books.some(b => b.published) && (
@@ -239,6 +250,12 @@ export default function PreviewSeriesPage() {
           </div>
         )}
       </main>
+      {authorModalOpen && (
+        <AuthorModal
+          excludeSeriesId={seriesId}
+          onClose={() => setAuthorModalOpen(false)}
+        />
+      )}
     </div>
   )
 }

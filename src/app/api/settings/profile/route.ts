@@ -1,9 +1,18 @@
 import { NextResponse } from 'next/server'
+import { existsSync } from 'fs'
+import path from 'path'
 import { readProfileSettings, writeProfileSettings } from '@/lib/profileSettings'
 
 export async function GET() {
   const settings = await readProfileSettings()
-  return NextResponse.json(settings)
+  // Avatar existence flags so the client can render the right photo
+  // (real / pseudonym / blurred main) without firing extra HEAD requests.
+  const publicDir = path.join(process.cwd(), 'public')
+  return NextResponse.json({
+    ...settings,
+    hasAvatar: existsSync(path.join(publicDir, 'avatar.jpg')),
+    hasPseudonymAvatar: existsSync(path.join(publicDir, 'pseudonym-avatar.jpg')),
+  })
 }
 
 export async function PATCH(req: Request) {

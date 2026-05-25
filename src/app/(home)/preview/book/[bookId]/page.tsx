@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { LuArrowRight, LuArrowLeft, LuBookOpen, LuChevronDown, LuUser, LuMusic, LuStar } from 'react-icons/lu'
 import PinnedAudio from '@/components/PinnedAudio'
 import { pinLabel } from '@/lib/pinLabel'
+import AuthorModal from '@/components/AuthorModal'
 
 type Chapter = { id: string; title: string; order: number }
 type Book = {
@@ -62,6 +63,7 @@ export default function PreviewBookPage() {
   const [book, setBook] = useState<Book | null>(null)
   const [series, setSeries] = useState<Series | null>(null)
   const [authorName, setAuthorName] = useState('')
+  const [authorModalOpen, setAuthorModalOpen] = useState(false)
   const [characters, setCharacters] = useState<Character[]>([])
   const [soundtracks, setSoundtracks] = useState<Soundtrack[]>([])
   // POV character names taken from every chapter's `pov` field across every
@@ -225,7 +227,16 @@ export default function PreviewBookPage() {
                   )}
                 </div>
                 {authorName && (
-                  <p className="text-sm text-ink-muted mt-1">by {authorName}</p>
+                  <p className="text-sm text-ink-muted mt-1">
+                    by{' '}
+                    <button
+                      type="button"
+                      onClick={() => setAuthorModalOpen(true)}
+                      className="hover:text-ink hover:underline transition"
+                    >
+                      {authorName}
+                    </button>
+                  </p>
                 )}
               </div>
               <button
@@ -431,6 +442,12 @@ export default function PreviewBookPage() {
             )}
           </section>
         </main>
+      )}
+      {authorModalOpen && (
+        <AuthorModal
+          excludeSeriesId={book.seriesId}
+          onClose={() => setAuthorModalOpen(false)}
+        />
       )}
     </div>
   )

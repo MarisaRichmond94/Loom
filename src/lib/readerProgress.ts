@@ -3,6 +3,7 @@
 // across tabs via the `storage` event when needed (see useStarredSeries).
 
 const STARRED_SERIES_KEY = 'loom-starred-series'
+const FOLLOWED_AUTHORS_KEY = 'loom-followed-authors'
 const SESSION_KEY_PREFIX = 'loom-session-'
 
 function readJSONArray(key: string): string[] {
@@ -34,6 +35,31 @@ export function toggleStarredSeries(id: string): string[] {
   const current = getStarredSeries()
   const next = current.includes(id) ? current.filter(x => x !== id) : [...current, id]
   setStarredSeries(next)
+  return next
+}
+
+// ----- Followed authors -----
+// Keyed by display name (pseudonym when active, real name otherwise) since
+// Loom doesn't have author IDs yet. When multi-author lands this will swap
+// to stable identifiers without changing the call sites.
+
+export function getFollowedAuthors(): string[] {
+  return readJSONArray(FOLLOWED_AUTHORS_KEY)
+}
+
+export function setFollowedAuthors(names: string[]): void {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(FOLLOWED_AUTHORS_KEY, JSON.stringify(names))
+}
+
+export function isAuthorFollowed(name: string): boolean {
+  return getFollowedAuthors().includes(name)
+}
+
+export function toggleFollowedAuthor(name: string): string[] {
+  const current = getFollowedAuthors()
+  const next = current.includes(name) ? current.filter(x => x !== name) : [...current, name]
+  setFollowedAuthors(next)
   return next
 }
 
