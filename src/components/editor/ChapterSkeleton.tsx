@@ -4,7 +4,7 @@ export default function ChapterSkeleton() {
   return (
     <div className="px-8 animate-pulse">
       {/* Mirrors the real action row so the layout doesn't jump on load. */}
-      <div className="sticky top-0 z-10 flex justify-end items-center gap-2 py-3 pr-6">
+      <div className="sticky top-0 z-20 flex justify-end items-center gap-2 py-3 pr-6">
         <div className="w-5 h-5 rounded bg-surface-muted" />
         <div className="h-7 w-16 rounded bg-surface-muted" />
         <div className="h-7 w-20 rounded bg-accent/30" />

@@ -411,7 +411,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
       {editor && (
         <div
           onMouseDown={e => e.preventDefault()}
-          className={`flex items-center flex-wrap gap-0.5 mb-2 px-1.5 py-1 bg-surface-raised rounded border border-accent/10 transition-opacity ${focused ? 'opacity-100' : 'opacity-40'}`}
+          className="sticky top-0 z-10 flex items-center flex-wrap gap-0.5 mb-2 px-1.5 py-1 bg-surface-raised rounded border border-accent/10 shadow-sm"
         >
           <ToolBtn active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="Bold">
             <LuBold size={13} />

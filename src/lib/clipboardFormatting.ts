@@ -36,9 +36,14 @@ export function inlineParagraphStyles(html: string): string {
 }
 
 // TipTap leaves trailing/leading <p></p> or <p><br></p> behind editing.
-// Drop those so the rich-text destination doesn't render blank lines.
+// Drop those, but leave mid-content empty paragraphs alone — those are the
+// writer's deliberate blank lines, and they survive to render as a visible
+// gap (see the `p:empty` rule on the reader prose container).
 export function stripEmptyParagraphs(html: string): string {
-  return html.replace(/<p[^>]*>(?:\s|<br\s*\/?>)*<\/p>/g, '')
+  const EMPTY = '<p[^>]*>(?:\\s|<br\\s*\\/?>)*<\\/p>'
+  return html
+    .replace(new RegExp(`^(?:\\s*${EMPTY})+\\s*`), '')
+    .replace(new RegExp(`\\s*(?:${EMPTY}\\s*)+$`), '')
 }
 
 export function htmlToPlainText(html: string): string {
