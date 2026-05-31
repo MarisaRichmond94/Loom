@@ -2,13 +2,13 @@
 
 import { LuSplit, LuX } from 'react-icons/lu'
 import TextBlock from './TextBlock'
-import { ConditionRow } from './conditionUI'
+import { ConditionRow, parseCondition } from './conditionUI'
 
 type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
 type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
 type Props = {
   overrides: Override[]
-  variables: { id: string; name: string; type: string }[]
+  variables: { id: string; name: string; type: string; defaultValue?: string }[]
   characters?: Character[]
   onAddOverride: (condition: Record<string, unknown>, content: string) => void
   onUpdateOverride: (overrideId: string, data: Partial<Override>) => void
@@ -19,8 +19,23 @@ const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
 
 export default function ConditionalBlock({ overrides, variables, characters, onAddOverride, onUpdateOverride, onDeleteOverride }: Props) {
   function handleAddOverride() {
-    // Start with an empty condition (renders as "always"); the writer attaches
-    // variables via the + menu on the ConditionRow when they're ready.
+    // Common pattern: writer adds a boolean condition (X = true) and then
+    // immediately wants its mirror (X = false). When the previous override
+    // is exactly one boolean clause, prefill the new override with the same
+    // variable flipped — saves a re-pick. Anything more complex falls back
+    // to the empty "always" default so we don't guess wrong.
+    const last = overrides[overrides.length - 1]
+    if (last) {
+      const parsed = parseCondition(last.condition || null)
+      if (parsed.clauses.length === 1) {
+        const only = parsed.clauses[0]
+        const v = variables.find(x => x.name === only.var)
+        if (v?.type === 'boolean' && typeof only.value === 'boolean') {
+          onAddOverride({ [only.var]: !only.value }, EMPTY)
+          return
+        }
+      }
+    }
     onAddOverride({}, EMPTY)
   }
 

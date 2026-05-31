@@ -3,9 +3,28 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { LuX } from 'react-icons/lu'
 
-export type ConditionVariable = { id: string; name: string; type: string }
+export type ConditionVariable = { id: string; name: string; type: string; defaultValue?: string }
 
 export const TYPE_DEFAULT_VALUE: Record<string, unknown> = { string: '', number: 0, boolean: false }
+
+// Resolve the "canon-first" starting value when attaching a variable to a
+// condition: the variable's own defaultValue (parsed from its JSON-string
+// column) when it's the right type, falling back to the type's zero value.
+// Writers tend to write the canon branch first, so this matches the
+// boolean-flip default on the next override below.
+export function resolveAttachDefault(v: ConditionVariable): unknown {
+  if (v.defaultValue) {
+    try {
+      const parsed = JSON.parse(v.defaultValue)
+      if (
+        (v.type === 'boolean' && typeof parsed === 'boolean') ||
+        (v.type === 'number' && typeof parsed === 'number') ||
+        (v.type === 'string' && typeof parsed === 'string')
+      ) return parsed
+    } catch { /* fall through to zero value */ }
+  }
+  return TYPE_DEFAULT_VALUE[v.type] ?? ''
+}
 
 const baseCls = 'bg-black/20 border border-black/20 rounded pl-2 py-1 text-xs text-ink outline-none focus:border-accent/50 w-full'
 
@@ -116,7 +135,9 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
   labelExtra?: ReactNode
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [menuQuery, setMenuQuery] = useState('')
   const menuRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     function onDown(e: MouseEvent) {
@@ -125,6 +146,16 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [])
+
+  // Reset the filter every time the menu reopens and autofocus the input so
+  // the writer can start typing immediately — same pattern as the genre
+  // filter dropdown on Explore.
+  useEffect(() => {
+    if (menuOpen) {
+      setMenuQuery('')
+      requestAnimationFrame(() => searchInputRef.current?.focus())
+    }
+  }, [menuOpen])
 
   const { op, clauses } = parseCondition(condition)
   const valueByName: Record<string, unknown> = {}
@@ -151,7 +182,7 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
   }
 
   function attach(v: ConditionVariable) {
-    save(op, [...clauses, { var: v.name, value: TYPE_DEFAULT_VALUE[v.type] ?? '' }])
+    save(op, [...clauses, { var: v.name, value: resolveAttachDefault(v) }])
     setMenuOpen(false)
   }
 
@@ -197,22 +228,43 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
           >
             +
           </button>
-          {menuOpen && (
-            <div className="absolute left-0 bottom-full mb-1 bg-surface-raised border border-accent/20 rounded-lg shadow-xl z-10 overflow-hidden min-w-[200px]">
-              <div className="overflow-y-auto" style={{ maxHeight: '126px' }}>
-                {unattachedVars.map(v => (
-                  <button
-                    key={v.id}
-                    onClick={() => attach(v)}
-                    className="flex items-center justify-between w-full px-4 py-2 text-sm text-ink-muted hover:text-ink hover:bg-surface-overlay transition text-left gap-4"
-                  >
-                    <span>{v.name}</span>
-                    <span className="text-ink-faint text-xs">{v.type}</span>
-                  </button>
-                ))}
+          {menuOpen && (() => {
+            const q = menuQuery.trim().toLowerCase()
+            const filtered = q ? unattachedVars.filter(v => v.name.toLowerCase().includes(q)) : unattachedVars
+            return (
+              <div className="absolute left-0 bottom-full mb-1 bg-surface-raised border border-accent/20 rounded-lg shadow-xl z-10 overflow-hidden min-w-[220px]">
+                <div className="px-2 py-1.5 border-b border-accent/10">
+                  <input
+                    ref={searchInputRef}
+                    value={menuQuery}
+                    onChange={e => setMenuQuery(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && filtered.length > 0) {
+                        e.preventDefault()
+                        attach(filtered[0])
+                      }
+                    }}
+                    placeholder="Search variables…"
+                    className="w-full bg-black/20 border border-black/20 rounded px-2 py-1 text-xs text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
+                  />
+                </div>
+                <div className="overflow-y-auto" style={{ maxHeight: '126px' }}>
+                  {filtered.length === 0 ? (
+                    <p className="px-4 py-2 text-xs text-ink-faint italic">No matches</p>
+                  ) : filtered.map(v => (
+                    <button
+                      key={v.id}
+                      onClick={() => attach(v)}
+                      className="flex items-center justify-between w-full px-4 py-2 text-sm text-ink-muted hover:text-ink hover:bg-surface-overlay transition text-left gap-4"
+                    >
+                      <span>{v.name}</span>
+                      <span className="text-ink-faint text-xs">{v.type}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
         </div>
       )}
     </div>

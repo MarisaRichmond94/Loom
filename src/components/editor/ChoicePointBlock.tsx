@@ -5,7 +5,7 @@ import { LuCheck, LuX } from 'react-icons/lu'
 import { ConditionRow, ValueSetter, TYPE_DEFAULT_VALUE } from './conditionUI'
 
 type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null }
-type Variable = { id: string; name: string; type: string }
+type Variable = { id: string; name: string; type: string; defaultValue?: string }
 
 type Props = {
   prompt: string | null

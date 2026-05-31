@@ -28,7 +28,7 @@ type Block = {
   choices: Choice[]
   overrides: Override[]
 }
-type Variable = { id: string; name: string; type: string }
+type Variable = { id: string; name: string; type: string; defaultValue?: string }
 type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
 
 type Props = {
