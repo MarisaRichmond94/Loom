@@ -1,15 +1,17 @@
 // Used both by the chapter editor while its own data is loading and by the
-// author layout while the series fetch hasn't returned yet.
+// author layout while the series fetch hasn't returned yet. Mirrors the
+// real page's flex-column layout (and sticky footer) so the layout
+// doesn't jump when the data lands.
 export default function ChapterSkeleton() {
   return (
-    <div className="px-8 animate-pulse">
+    <div className="px-8 min-h-full flex flex-col animate-pulse">
       {/* Mirrors the real action row so the layout doesn't jump on load. */}
-      <div className="sticky top-0 z-20 flex justify-end items-center gap-2 py-3 pr-6">
+      <div className="flex justify-end items-center gap-2 py-3 pr-6">
         <div className="w-5 h-5 rounded bg-surface-muted" />
         <div className="h-7 w-16 rounded bg-surface-muted" />
         <div className="h-7 w-20 rounded bg-accent/30" />
       </div>
-      <div className="pb-8">
+      <div className="pb-8 flex-1">
         {/* Title + POV — centered */}
         <div className="flex flex-col items-center mb-8">
           <div className="h-9 w-72 bg-surface-muted rounded mb-3" />
@@ -44,6 +46,21 @@ export default function ChapterSkeleton() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Footer placeholder — three slots match the prev / scroll / next
+          layout the real page renders. Forces the dark theme via the same
+          CSS-variable overrides so the bar stays dark in light mode. */}
+      <div
+        style={{
+          '--color-surface-raised': '#12121e',
+          '--color-surface-muted': '#1e1e3a',
+        } as React.CSSProperties}
+        className="sticky bottom-0 z-20 -mx-8 px-8 py-4 bg-surface-raised border-t border-accent/10 flex items-center justify-between gap-4"
+      >
+        <div className="h-4 w-24 bg-surface-muted rounded" />
+        <div className="h-4 w-32 bg-surface-muted rounded" />
+        <div className="h-4 w-24 bg-surface-muted rounded" />
       </div>
     </div>
   )

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuSettings, LuCircleHelp, LuX } from 'react-icons/lu'
+import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp } from 'react-icons/lu'
 import BlockEditor from '@/components/editor/BlockEditor'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import { ConditionRow } from '@/components/editor/conditionUI'
@@ -136,6 +136,38 @@ export default function ChapterEditorPage() {
     router.push(`/author/${seriesId}/book/${book.id}`)
   }
 
+  // Mirrors the API's bumpTitle: "Chapter 14" → "Chapter 15", "14" → "15",
+  // anything else stays a sensible-but-unique sibling title. Used for the
+  // footer's "Create Next Chapter" so the new chapter inherits the writer's
+  // existing numbering convention.
+  function bumpChapterTitle(title: string): string {
+    const bare = /^(\d+)$/.exec(title)
+    if (bare) return String(Number(bare[1]) + 1)
+    const named = /^(Chapter )(\d+)$/i.exec(title)
+    if (named) return `${named[1]}${Number(named[2]) + 1}`
+    return `${title} (cont.)`
+  }
+
+  async function createNextChapter() {
+    const book = series.books.find(b => b.chapters.some(c => c.id === chapterId))
+    if (!book || !chapter) return
+    const res = await fetch(`/api/series/${seriesId}/books/${book.id}/chapters`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: bumpChapterTitle(chapter.title) }),
+    })
+    if (!res.ok) return
+    const created = await res.json()
+    await loadSeries()
+    router.push(`/author/${seriesId}/chapter/${created.id}`)
+  }
+
+  function scrollToTop() {
+    // The author layout's <main> is the scroll container; scrollTo it
+    // directly so the chapter page glides back to the top.
+    document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   async function addChoiceBlock() {
     await addBlock('choice_point')
   }
@@ -173,11 +205,23 @@ export default function ChapterEditorPage() {
 
   if (!chapter) return <ChapterSkeleton />
 
+  // Prev/next within the same book — chapters are already ordered by `order`
+  // by the layout's series fetch, so a simple findIndex walk is enough.
+  const currentBook = series.books.find(b => b.chapters.some(c => c.id === chapterId))
+  const bookChapters = currentBook?.chapters ?? []
+  const currentIdx = bookChapters.findIndex(c => c.id === chapterId)
+  const prevChapter = currentIdx > 0 ? bookChapters[currentIdx - 1] : null
+  const nextChapter = currentIdx >= 0 && currentIdx < bookChapters.length - 1 ? bookChapters[currentIdx + 1] : null
+
   return (
-    <div className="px-8">
+    // flex column that fills the layout's <main> scroll container so the
+    // sticky footer always lands at the viewport bottom — even when the
+    // chapter content is shorter than the viewport (e.g. a freshly-created
+    // chapter). pb-8 / mt-auto pair pushes the footer to the bottom edge.
+    <div className="px-8 min-h-full flex flex-col">
       {/* Sticky action row — pr-6 matches the invisible hover-delete column
           on block rows so the rightmost button aligns with the block card edge. */}
-      <div className="sticky top-0 z-20 flex justify-end items-center gap-2 py-3 pr-6">
+      <div className="flex justify-end items-center gap-2 py-3 pr-6">
         <button
           onClick={() => setShowChapterSettings(true)}
           title="Chapter settings"
@@ -203,8 +247,9 @@ export default function ChapterEditorPage() {
         </button>
       </div>
 
-      {/* Floating add-block button — bottom-right of viewport, always on top */}
-      <div ref={addMenuRef} className="fixed bottom-6 right-3 z-50">
+      {/* Floating add-block button — bottom-right of viewport, lifted above
+          the chapter-nav footer (which sits sticky at the bottom). */}
+      <div ref={addMenuRef} className="fixed bottom-16 right-3 z-50">
         {addMenuOpen && (
           <div className="absolute right-0 bottom-full mb-2 bg-surface-raised border border-accent/20 rounded-lg shadow-xl overflow-hidden min-w-[180px]">
             {([
@@ -231,7 +276,7 @@ export default function ChapterEditorPage() {
           <LuPlus size={14} strokeWidth={2.5} />
         </button>
       </div>
-      <div className="pb-8">
+      <div className="pb-8 flex-1">
         {/* Title + POV — centered */}
         <div className="flex flex-col items-center mb-8">
           <input
@@ -267,6 +312,58 @@ export default function ChapterEditorPage() {
           onActiveBlockChange={setActiveBlockId}
         />
       </div>
+
+      {/* Bottom chapter nav. Mirrors the reader's prev/next footer so the
+          writer has a fast hop between chapters at the end of a session.
+          - sticky bottom-0 pins it to the bottom of <main>'s scroll area
+            (the layout's only scroll container).
+          - -mx-8 px-8 stretches the top border edge-to-edge while keeping
+            the button column lined up with the rest of the page.
+          - The inline style overrides surface/ink CSS variables back to
+            the dark theme so the footer stays dark in light mode too —
+            matches the reader, which gets that for free by living
+            outside the light-body wrapper. */}
+      <footer
+        style={{
+          '--color-surface-raised': '#12121e',
+          '--color-ink': '#e0d9c8',
+          '--color-ink-muted': '#aaa',
+          '--color-ink-faint': '#666',
+        } as React.CSSProperties}
+        className="sticky bottom-0 z-20 -mx-8 px-4 py-4 bg-surface-raised border-t border-accent/10 flex items-center justify-between gap-4"
+      >
+        {prevChapter ? (
+          <button
+            onClick={() => router.push(`/author/${seriesId}/chapter/${prevChapter.id}`)}
+            className="shrink-0 flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition"
+          >
+            <LuArrowLeft size={13} /> {prevChapter.title}
+          </button>
+        ) : <div />}
+
+        <button
+          onClick={scrollToTop}
+          className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition"
+        >
+          <LuArrowUp size={13} /> Scroll To The Top
+        </button>
+
+        {nextChapter ? (
+          <button
+            onClick={() => router.push(`/author/${seriesId}/chapter/${nextChapter.id}`)}
+            className="shrink-0 flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition"
+          >
+            {nextChapter.title} <LuArrowRight size={13} />
+          </button>
+        ) : (
+          <button
+            onClick={createNextChapter}
+            className="shrink-0 flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition"
+          >
+            Create Next Chapter <LuPlus size={13} />
+          </button>
+        )}
+      </footer>
 
       {showChapterSettings && (
         <div

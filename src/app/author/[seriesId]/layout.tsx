@@ -129,7 +129,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
     return (
       <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
         {/* Top nav — logo stays static, dynamic bits become pulsing placeholders. */}
-        <nav className="sticky top-0 z-30 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
+        <nav className="bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
           <Link href="/" className="flex items-center gap-2">
             <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
             <span className="text-accent font-bold tracking-wider text-2xl leading-none">LOOM</span>
@@ -184,7 +184,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
   return (
     <AuthorProvider value={{ series, loadSeries, loadChoices, lightMode, registerAddChoice }}>
       <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
-        <nav className="sticky top-0 z-30 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
+        <nav className="bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
           <Link href="/" className="flex items-center gap-2">
             <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
             <span className="text-accent font-bold tracking-wider text-2xl leading-none">LOOM</span>
