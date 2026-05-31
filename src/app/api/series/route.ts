@@ -8,6 +8,10 @@ export async function GET() {
   // for the Write list cards. The list is local and small, so the read amp
   // is acceptable.
   const seriesList = await prisma.series.findMany({
+    // Demo seed rows are reader-side only (Explore, AuthorModal, Continue
+    // Reading). The Write list represents the author's own work, so hide
+    // them here. Real series have demo:false by default.
+    where: { demo: false },
     orderBy: { createdAt: 'desc' },
     include: {
       books: {
