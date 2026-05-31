@@ -24,14 +24,32 @@ export async function POST(req: Request) {
     },
   })
 
-  // Resolve currentBlockId → chapter → book in one extra query, including
-  // the book's chapter count (for the progress denominator) and cover.
-  const blockIds = sessions
-    .map(s => s.currentBlockId)
-    .filter((id): id is string => !!id)
-  const blocks = blockIds.length > 0
+  // Per-session "where are they reading" anchor:
+  //   1. Prefer currentBlockId if the session has one.
+  //   2. Otherwise use the most recent answered choice's choicePointId —
+  //      that block sits in the chapter the reader last interacted with.
+  // Either way we end up at a real block → chapter → book triplet, which
+  // is what the card renders against.
+  const lastChoicePointBySession = new Map<string, string>()
+  const anchorBlockIds = new Set<string>()
+  for (const s of sessions) {
+    if (s.currentBlockId) {
+      anchorBlockIds.add(s.currentBlockId)
+      continue
+    }
+    try {
+      const history = JSON.parse(s.choiceHistory) as { choicePointId?: string }[]
+      const last = history[history.length - 1]
+      if (last?.choicePointId) {
+        lastChoicePointBySession.set(s.id, last.choicePointId)
+        anchorBlockIds.add(last.choicePointId)
+      }
+    } catch { /* malformed history — fall through; card just won't be rich */ }
+  }
+
+  const blocks = anchorBlockIds.size > 0
     ? await prisma.contentBlock.findMany({
-        where: { id: { in: blockIds } },
+        where: { id: { in: [...anchorBlockIds] } },
         include: {
           chapter: {
             select: {
@@ -63,7 +81,11 @@ export async function POST(req: Request) {
       : profile.authorName.trim()
 
   return NextResponse.json(sessions.map(s => {
-    const block = s.currentBlockId ? blockById.get(s.currentBlockId) ?? null : null
+    let block = s.currentBlockId ? blockById.get(s.currentBlockId) ?? null : null
+    if (!block) {
+      const fallbackId = lastChoicePointBySession.get(s.id)
+      if (fallbackId) block = blockById.get(fallbackId) ?? null
+    }
     let historyLength = 0
     try { historyLength = (JSON.parse(s.choiceHistory) as unknown[]).length } catch { /* default 0 */ }
     return {
@@ -76,6 +98,7 @@ export async function POST(req: Request) {
       // user is actively reading, not the series' first book.
       currentBookId: block?.chapter.book.id ?? null,
       currentBookTitle: block?.chapter.book.title ?? null,
+      currentBookOrder: block?.chapter.book.order ?? null,
       currentBookCoverPath: block?.chapter.book.coverPath ?? null,
       currentBookChapterCount: block?.chapter.book._count.chapters ?? 0,
       currentChapterId: block?.chapter.id ?? null,
