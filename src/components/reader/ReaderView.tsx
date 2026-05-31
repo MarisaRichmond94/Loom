@@ -594,7 +594,7 @@ export default function ReaderView({
       )}
 
       {(prevChapter || nextChapter) && (
-        <footer className="shrink-0 bg-surface-raised border-t border-accent/10 px-4 py-3 flex items-center gap-4 z-20">
+        <footer className="shrink-0 bg-surface-raised border-t border-accent/10 px-4 py-4 flex items-center gap-4 z-20">
           {prevChapter ? (
             <button
               onClick={() => onNavigate(prevChapter.id)}
@@ -633,7 +633,7 @@ export default function ReaderView({
         <button
           onClick={copyChapter}
           title={copyState === 'copied' ? 'Copied!' : 'Copy chapter text'}
-          className="fixed bottom-14 right-3 z-50 bg-surface-raised border border-accent/20 hover:border-accent/40 text-ink-muted hover:text-ink transition w-9 h-9 flex items-center justify-center rounded-full shadow-lg"
+          className="fixed bottom-16 right-3 z-50 bg-surface-raised border border-accent/20 hover:border-accent/40 text-ink-muted hover:text-ink transition w-9 h-9 flex items-center justify-center rounded-full shadow-lg"
         >
           {copyState === 'copied' ? <LuCheck size={14} className="text-accent" /> : <LuCopy size={14} />}
         </button>
