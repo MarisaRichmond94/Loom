@@ -24,6 +24,7 @@ type ExploreSeries = {
   totalBookCount: number
   bookTitles: string[]
   authorName: string
+  inProgressBook: { id: string; title: string; order: number } | null
 }
 
 type ResumeEntry = {
@@ -33,6 +34,7 @@ type ResumeEntry = {
   authorName: string
   currentBookId: string | null
   currentBookTitle: string | null
+  currentBookOrder: number | null
   currentBookCoverPath: string | null
   currentBookChapterCount: number
   currentChapterId: string | null
@@ -209,8 +211,13 @@ export default function ExplorePage() {
   return (
     <div className="h-full px-8 py-10 flex flex-col">
       {resumeEntries.length > 0 && (
-        <section className="shrink-0 mb-8">
-          <h2 className="text-2xl font-bold text-ink mb-4">Continue Reading</h2>
+        <section className="shrink-0 mb-4">
+          <div className="flex flex-col mb-4">
+            <h2 className="text-2xl font-bold text-ink">Continue Reading</h2>
+            <p className="text-sm text-ink-muted mt-1">
+              Pick up where you left off...
+            </p>
+          </div>
           {/* Horizontal strip — newest first. -mx-8 px-8 lets the row scroll
               edge-to-edge while the cards still respect the page's gutter. */}
           <div className="-mx-8 px-8 overflow-x-auto pb-2">
@@ -226,18 +233,21 @@ export default function ExplorePage() {
                     href={`/read/${r.sessionId}`}
                     className="group shrink-0 w-[28rem] flex items-stretch gap-4 p-4 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
                   >
-                    <div className="relative w-24 h-24 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 flex items-center justify-center">
+                    <div className="relative w-20 aspect-[2/3] shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 flex items-center justify-center">
                       {r.currentBookCoverPath
-                        ? <Image src={r.currentBookCoverPath} alt="" fill sizes="96px" className="object-cover" />
+                        ? <Image src={r.currentBookCoverPath} alt="" fill sizes="80px" className="object-cover" />
                         : <LuBookOpen size={24} className="text-ink-faint" />}
                     </div>
                     <div className="flex-1 min-w-0 flex flex-col gap-1">
                       <p className="text-base font-bold text-ink truncate group-hover:text-accent transition">
                         {r.currentBookTitle ?? r.seriesTitle}
-                        {!seriesIsBook && (
-                          <span className="font-normal text-ink-faint ml-2">({r.seriesTitle})</span>
+                        {!seriesIsBook && r.currentBookOrder != null && (
+                          <span className="font-normal text-ink-faint ml-2">(Book {r.currentBookOrder})</span>
                         )}
                       </p>
+                      {!seriesIsBook && (
+                        <p className="text-xs text-ink-faint truncate">{r.seriesTitle}</p>
+                      )}
                       {r.authorName && (
                         <p className="text-xs text-ink-muted truncate">by: {r.authorName}</p>
                       )}
@@ -268,7 +278,7 @@ export default function ExplorePage() {
         <div className="flex flex-col shrink-0 mb-4">
           <h1 className="text-2xl font-bold text-ink">Explore</h1>
           <p className="text-sm text-ink-muted mt-1">
-            Find your next great read
+            Find your next great read...
           </p>
         </div>
 
@@ -480,6 +490,12 @@ export default function ExplorePage() {
                     <> ({s.publishedBookCount} published)</>
                   )}
                 </p>
+                {s.inProgressBook && (
+                  <p className="mt-1 text-[10px] uppercase tracking-widest text-accent inline-flex items-center gap-1.5 self-start border border-accent/40 bg-accent/10 rounded px-2 py-0.5">
+                    <span>In progress</span>
+                    <span className="text-accent/70 normal-case tracking-normal">Book {s.inProgressBook.order}: {s.inProgressBook.title}</span>
+                  </p>
+                )}
                 {s.description && (
                   <CardDescription text={s.description} />
                 )}

@@ -10,7 +10,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } 
 import { CSS } from '@dnd-kit/utilities'
 
 type Chapter = { id: string; title: string; order: number }
-type Book = { id: string; title: string; order: number; chapters: Chapter[] }
+type Book = { id: string; title: string; order: number; inProgress?: boolean; chapters: Chapter[] }
 
 type Props = {
   seriesId: string
@@ -27,10 +27,13 @@ function setTitle(title: string, order: number): string {
   return title
 }
 
-function SortableChapter({ chapter, seriesId, isActive, openMenu, onOpenMenu, onInsert, onCloseMenu }: {
+function SortableChapter({ chapter, seriesId, isActive, scrollOnDefault, openMenu, onOpenMenu, onInsert, onCloseMenu }: {
   chapter: Chapter
   seriesId: string
   isActive: boolean
+  // Set on the "latest chapter of the default-open book" when nothing else
+  // is active — scrolls into view so the writer lands where they left off.
+  scrollOnDefault: boolean
   openMenu: string | null
   onOpenMenu: (id: string) => void
   onInsert: (position: 'before' | 'after') => void
@@ -39,8 +42,8 @@ function SortableChapter({ chapter, seriesId, isActive, openMenu, onOpenMenu, on
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: chapter.id })
   const linkRef = useRef<HTMLAnchorElement>(null)
   useEffect(() => {
-    if (isActive) linkRef.current?.scrollIntoView({ block: 'start' })
-  }, [isActive])
+    if (isActive || scrollOnDefault) linkRef.current?.scrollIntoView({ block: 'start' })
+  }, [isActive, scrollOnDefault])
   return (
     <div
       ref={setNodeRef}
@@ -98,7 +101,10 @@ function SortableChapter({ chapter, seriesId, isActive, openMenu, onOpenMenu, on
 export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, onInsertChapter }: Props) {
   const params = useParams()
   const router = useRouter()
-  const [selectedBook, setSelectedBook] = useState<string | null>(() => books[0]?.id ?? null)
+  // Default-open: the in-progress book (writer's currently-active work),
+  // falling back to book 1 when nothing is flagged.
+  const defaultBookId = books.find(b => b.inProgress)?.id ?? books[0]?.id ?? null
+  const [selectedBook, setSelectedBook] = useState<string | null>(() => defaultBookId)
   const [addingBook, setAddingBook] = useState(false)
   const [addingChapter, setAddingChapter] = useState<string | null>(null)
   const [inputVal, setInputVal] = useState('')
@@ -119,7 +125,9 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
       setSelectedBook(activeBook.id)
       return
     }
-    setSelectedBook(prev => prev && books.some(b => b.id === prev) ? prev : (books[0]?.id ?? null))
+    // No book/chapter context in the URL — prefer the in-progress book.
+    const fallback = books.find(b => b.inProgress)?.id ?? books[0]?.id ?? null
+    setSelectedBook(prev => prev && books.some(b => b.id === prev) ? prev : fallback)
   }, [books, params.chapterId, params.bookId])
 
   // Sync localChapters when chapters are added/deleted (structural change only, not reorder)
@@ -206,6 +214,16 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
     </form>
   )
 
+  // When the writer lands on a series page with no specific book/chapter
+  // in the URL, scroll the in-progress book's last chapter into view. The
+  // last chapter (= highest order) is "where they left off" for the most
+  // common workflow of appending new chapters.
+  const inProgressBook = books.find(b => b.inProgress)
+  const scrollDefaultChapterId =
+    !params.bookId && !params.chapterId && inProgressBook
+      ? (localChapters[inProgressBook.id] ?? inProgressBook.chapters).at(-1)?.id ?? null
+      : null
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="text-xs uppercase tracking-widest text-ink-faint mb-2 shrink-0">Outline</div>
@@ -239,6 +257,7 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
                             chapter={chapter}
                             seriesId={seriesId}
                             isActive={params.chapterId === chapter.id}
+                            scrollOnDefault={scrollDefaultChapterId === chapter.id}
                             openMenu={openMenu}
                             onOpenMenu={setOpenMenu}
                             onCloseMenu={() => setOpenMenu(null)}

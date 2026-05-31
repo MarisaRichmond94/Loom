@@ -21,7 +21,7 @@ export async function GET() {
         // series). Drafts are part of this list — we still want a draft
         // title to surface its series so readers can land on its
         // "Coming soon" tile.
-        select: { id: true, title: true, coverPath: true, published: true },
+        select: { id: true, title: true, coverPath: true, published: true, inProgress: true, order: true },
       },
     },
   })
@@ -42,6 +42,10 @@ export async function GET() {
   const explorable = allSeries
     .map(s => {
       const publishedBooks = s.books.filter(b => b.published)
+      // Followers see "Currently writing: <Title>" when the author has a
+      // book marked in-progress — works whether that book is a draft
+      // (typical) or a republish pass on an already-published book.
+      const inProgressBook = s.books.find(b => b.inProgress) ?? null
       return {
         id: s.id,
         title: s.title,
@@ -61,6 +65,9 @@ export async function GET() {
         // seed) beats the global profile. Empty string when nothing's set,
         // so the client can skip rendering the byline.
         authorName: s.authorOverrideName?.trim() || globalDisplayName,
+        inProgressBook: inProgressBook
+          ? { id: inProgressBook.id, title: inProgressBook.title, order: inProgressBook.order }
+          : null,
       }
     })
     // Hide series with nothing published so drafts don't leak into the

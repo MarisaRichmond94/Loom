@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { Prisma } from '@/generated/prisma/client'
 import { extractText, countWords } from '@/lib/seriesStats'
 
-type Params = { params: Promise<{ bookId: string }> }
+type Params = { params: Promise<{ seriesId: string; bookId: string }> }
 
 export async function GET(_: Request, { params }: Params) {
   const { bookId } = await params
@@ -46,19 +46,41 @@ export async function GET(_: Request, { params }: Params) {
 }
 
 export async function PATCH(req: Request, { params }: Params) {
-  const { bookId } = await params
-  const { title, order, synopsis, coverPath, published } = await req.json()
+  const { seriesId, bookId } = await params
+  const { title, order, synopsis, coverPath, published, inProgress } = await req.json()
   try {
-    const book = await prisma.book.update({
-      where: { id: bookId },
-      data: {
-        ...(title !== undefined && { title }),
-        ...(order !== undefined && { order }),
-        ...(synopsis !== undefined && { synopsis }),
-        ...(coverPath !== undefined && { coverPath }),
-        ...(published !== undefined && { published }),
-      },
-    })
+    // When marking a book as in-progress, atomically clear the flag on
+    // every other book in the same series so there's never more than one
+    // active. Toggling off is a plain single-row update.
+    const book = inProgress === true
+      ? await prisma.$transaction(async tx => {
+          await tx.book.updateMany({
+            where: { seriesId, NOT: { id: bookId } },
+            data: { inProgress: false },
+          })
+          return tx.book.update({
+            where: { id: bookId },
+            data: {
+              inProgress: true,
+              ...(title !== undefined && { title }),
+              ...(order !== undefined && { order }),
+              ...(synopsis !== undefined && { synopsis }),
+              ...(coverPath !== undefined && { coverPath }),
+              ...(published !== undefined && { published }),
+            },
+          })
+        })
+      : await prisma.book.update({
+          where: { id: bookId },
+          data: {
+            ...(title !== undefined && { title }),
+            ...(order !== undefined && { order }),
+            ...(synopsis !== undefined && { synopsis }),
+            ...(coverPath !== undefined && { coverPath }),
+            ...(published !== undefined && { published }),
+            ...(inProgress === false && { inProgress: false }),
+          },
+        })
     return NextResponse.json(book)
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {

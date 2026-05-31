@@ -89,6 +89,12 @@ model Book {
   // of a link; the book landing disables its Start Reading CTA. New books
   // start as drafts; the migration backfills existing books to published.
   published                    Boolean                 @default(false)
+  // "I'm currently writing this book." When set, the writer's series
+  // outline defaults to opening this book and scrolling its last chapter
+  // into view, instead of always opening book 1. Only one book per series
+  // should be in progress at a time — enforced in the PATCH endpoint by
+  // clearing the flag on every other book in the same series.
+  inProgress                   Boolean                 @default(false)
   series                       Series                  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   chapters                     Chapter[]
   charactersFirstAppearingHere Character[]             @relation("FirstAppearsIn")

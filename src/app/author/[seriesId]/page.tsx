@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { LuDownload, LuEye } from 'react-icons/lu'
+import { LuDownload, LuEye, LuPencilLine } from 'react-icons/lu'
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import SeriesTagsEditor from '@/components/editor/SeriesTagsEditor'
@@ -81,6 +81,15 @@ export default function AuthorSeriesPage() {
     loadSeries()
   }
 
+  async function toggleInProgress(bookId: string, next: boolean) {
+    await fetch(`/api/series/${seriesId}/books/${bookId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inProgress: next }),
+    })
+    loadSeries()
+  }
+
   return (
     <>
       <div className="max-w-3xl mx-auto px-8 py-8 relative">
@@ -145,10 +154,15 @@ export default function AuthorSeriesPage() {
                   </div>
                   <div className="flex-1 min-w-0 flex flex-col justify-between">
                     <div>
-                      <div className="flex items-baseline gap-3 mb-4">
+                      <div className="flex items-center gap-3 mb-4">
                         <span className="text-xs text-ink-faint uppercase tracking-widest shrink-0">Book {idx + 1}</span>
                         <span className="font-semibold text-ink text-lg leading-tight">{book.title}</span>
-                        {!book.published && (
+                        {/* In progress wins over Draft — the writer is actively
+                            working on this one; that's the more informative
+                            signal of the two. */}
+                        {book.inProgress ? (
+                          <span className="text-[10px] uppercase tracking-widest text-accent border border-accent/50 bg-accent/10 rounded px-1.5 py-0.5 shrink-0">In progress</span>
+                        ) : !book.published && (
                           <span className="text-[10px] uppercase tracking-widest text-ink-faint border border-accent/30 rounded px-1.5 py-0.5 shrink-0">Draft</span>
                         )}
                       </div>
@@ -171,6 +185,17 @@ export default function AuthorSeriesPage() {
                       </div>
                     </div>
                     <div className="flex justify-end gap-2 mt-3" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={() => toggleInProgress(book.id, !book.inProgress)}
+                        title={book.inProgress ? 'Click to unset' : 'Default this book in the outline and scroll its latest chapter into view'}
+                        className={`px-3 py-1.5 rounded text-xs transition flex items-center gap-1.5 border ${
+                          book.inProgress
+                            ? 'bg-accent text-white border-accent hover:opacity-90'
+                            : 'bg-surface-overlay border-accent/20 text-ink-muted hover:text-ink'
+                        }`}
+                      >
+                        <LuPencilLine size={11} /> {book.inProgress ? 'In progress' : 'Mark as in progress'}
+                      </button>
                       <a
                         href={`/api/series/${seriesId}/books/${book.id}/export`}
                         download
