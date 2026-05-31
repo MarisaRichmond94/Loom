@@ -18,7 +18,7 @@ export default function ChapterSkeleton() {
           <div className="h-7 w-48 bg-surface-raised border border-accent/20 rounded-lg" />
         </div>
         {/* Date */}
-        <div className="h-9 w-44 bg-surface-raised border border-accent/20 rounded-lg mb-2" />
+        <div className="h-9 w-50 bg-surface-raised border border-accent/20 rounded-lg mb-2" />
         {/* Block placeholders — varied widths to feel less mechanical.
             Tall block list so the skeleton fills the full viewport height
             on larger screens (it's clipped by the main scroll area on small). */}
