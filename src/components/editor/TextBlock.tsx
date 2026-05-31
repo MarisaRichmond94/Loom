@@ -257,11 +257,19 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
     const docSize = editor.state.doc.content.size
     // If cursor is already in front of an existing `}}`, don't add a duplicate closer
     const lookAhead = editor.state.doc.textBetween(cursorPos, Math.min(cursorPos + 2, docSize), '', '')
-    const insertion = lookAhead === '}}' ? `{{${v.name}` : `{{${v.name}}}`
-    editor.chain().focus()
+    const addedCloser = lookAhead !== '}}'
+    const insertion = addedCloser ? `{{${v.name}}}` : `{{${v.name}`
+    const chain = editor.chain().focus()
       .deleteRange({ from: varSuggest.from, to: cursorPos })
       .insertContent(insertion)
-      .run()
+    // Park the cursor *inside* the braces so the writer can keep typing —
+    // typical next step is a ternary suffix like ` ? a : b`. With no
+    // closer added, the cursor already lands at that spot.
+    if (addedCloser) {
+      const insertEnd = varSuggest.from + insertion.length
+      chain.setTextSelection(insertEnd - 2)
+    }
+    chain.run()
     setVarSuggest(null)
   }
 

@@ -12,6 +12,7 @@ import Color from '@tiptap/extension-color'
 import { Footnote } from '@/lib/extensions/footnote'
 import { CharacterMark } from '@/lib/extensions/character'
 import { resolveConditionalOverride, matchesCondition } from '@/lib/storyEngine'
+import { substituteVarTemplates } from '@/lib/templateVars'
 import { pinLabel } from '@/lib/pinLabel'
 import type { ChapterLabel } from '@/lib/chapterLabels'
 import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
@@ -69,8 +70,6 @@ type Props = {
   onNavigate: (chapterId: string) => void
 }
 
-const VAR_PATTERN = /\{\{([a-zA-Z_$][a-zA-Z0-9_$]*)\}\}/g
-
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
@@ -80,11 +79,8 @@ function renderTipTap(json: string | null | undefined, storyState?: StoryState):
   try {
     const html = generateHTML(JSON.parse(json), [StarterKit, TextAlign.configure({ types: ['paragraph', 'heading'] }), TextStyle, Color, Footnote, CharacterMark])
     const stripped = stripEmptyParagraphs(html)
-    // Substitute {{varName}} with storyState value when the variable is known; leave literal otherwise.
     if (!storyState) return stripped
-    return stripped.replace(VAR_PATTERN, (match, name) =>
-      name in storyState ? escapeHtml(String(storyState[name])) : match
-    )
+    return substituteVarTemplates(stripped, storyState, escapeHtml)
   } catch {
     return ''
   }
