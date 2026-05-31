@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { LuArrowRight, LuArrowLeft, LuBookOpen, LuChevronDown, LuUser, LuMusic, LuStar } from 'react-icons/lu'
@@ -77,6 +77,21 @@ export default function PreviewBookPage() {
   const [chaptersOpen, setChaptersOpen] = useState(true)
   const [charactersOpen, setCharactersOpen] = useState(true)
   const [soundtrackOpen, setSoundtrackOpen] = useState(true)
+  // Track whether the synopsis is scrolled to its bottom so we can hide the
+  // gradient fade once there's nothing more to reveal. `atBottom` is true
+  // when the content isn't overflowing either — no fade needed in that case.
+  const synopsisScrollRef = useRef<HTMLDivElement | null>(null)
+  const [synopsisAtBottom, setSynopsisAtBottom] = useState(true)
+  function updateSynopsisScroll() {
+    const el = synopsisScrollRef.current
+    if (!el) return
+    setSynopsisAtBottom(el.scrollTop + el.clientHeight >= el.scrollHeight - 1)
+  }
+  useEffect(() => {
+    // After the synopsis renders, recompute — the initial measurement
+    // depends on the rendered text height.
+    updateSynopsisScroll()
+  }, [book?.synopsis])
 
   useEffect(() => {
     let cancelled = false
@@ -128,17 +143,16 @@ export default function PreviewBookPage() {
         }
       }
 
-      // Cast + soundtrack are only worth fetching for published books; for
-      // drafts we hide every below-the-fold section anyway (no spoilers).
-      if (bookData.published) {
-        const [charactersRes, soundtracksRes] = await Promise.all([
-          fetch(`/api/series/${bookData.seriesId}/books/${bookId}/characters`),
-          fetch(`/api/series/${bookData.seriesId}/books/${bookId}/soundtracks`),
-        ])
-        if (cancelled) return
-        if (charactersRes.ok) setCharacters(await charactersRes.json())
-        if (soundtracksRes.ok) setSoundtracks(await soundtracksRes.json())
-      }
+      // Cast + soundtrack are non-spoiler context, so fetch them for drafts
+      // too. The Chapters section stays gated on `published` below — chapter
+      // titles can give away the plot.
+      const [charactersRes, soundtracksRes] = await Promise.all([
+        fetch(`/api/series/${bookData.seriesId}/books/${bookId}/characters`),
+        fetch(`/api/series/${bookData.seriesId}/books/${bookId}/soundtracks`),
+      ])
+      if (cancelled) return
+      if (charactersRes.ok) setCharacters(await charactersRes.json())
+      if (soundtracksRes.ok) setSoundtracks(await soundtracksRes.json())
     }
     load()
     return () => { cancelled = true }
@@ -225,7 +239,7 @@ export default function PreviewBookPage() {
                 next to the title. */}
             <div className="mt-2 flex items-center justify-between gap-6">
               <div className="min-w-0">
-                <div className="flex items-baseline gap-3 flex-wrap">
+                <div className="flex items-center gap-3 flex-wrap">
                   <h1 className="text-3xl md:text-4xl font-bold text-ink leading-tight">{book.title}</h1>
                   {!book.published && (
                     <span className="text-[11px] uppercase tracking-widest text-ink-faint border border-accent/30 rounded px-2 py-0.5">Coming soon</span>
@@ -249,29 +263,31 @@ export default function PreviewBookPage() {
                 disabled={working || !book.published || orderedChapters.length === 0}
                 className="shrink-0 px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
               >
-                {!book.published
-                  ? 'Coming soon'
-                  : working
-                    ? 'Opening…'
-                    : orderedChapters.length === 0
-                      ? 'No chapters yet'
-                      : 'Start reading'}
+                {working
+                  ? 'Opening…'
+                  : book.published && orderedChapters.length === 0
+                    ? 'No chapters yet'
+                    : 'Start reading'}
                 {book.published && !working && orderedChapters.length > 0 && <LuArrowRight size={14} />}
               </button>
             </div>
-            {book.published && book.synopsis && (
-              // Cap the synopsis at roughly the cover's height so the chips
-              // below stay aligned with the cover bottom. The gradient
-              // fade-out at the bottom is the visual cue that the reader
-              // can scroll for more.
+            {book.synopsis ? (
+              // Cap the synopsis so it ends at the cover's bottom edge.
+              // Cover heights (w-44 / w-56 × 2:3) are 264px / 336px;
+              // subtract the breadcrumb + title row + author byline above
+              // (~110px) and the chip rows below need to start at cover
+              // bottom. The gradient fade-out signals "scroll for more".
               <div className="relative mt-4">
-                <div className="overflow-y-auto pr-2 max-h-[180px] md:max-h-[248px]">
+                <div
+                  ref={synopsisScrollRef}
+                  onScroll={updateSynopsisScroll}
+                  className="overflow-y-auto pr-2 max-h-[150px] md:max-h-[224px]"
+                >
                   <p className="text-base text-ink-muted leading-relaxed whitespace-pre-wrap">{book.synopsis}</p>
                 </div>
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-surface-base to-transparent" />
+                <div className={`pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-surface-base to-transparent transition-opacity ${synopsisAtBottom ? 'opacity-0' : 'opacity-100'}`} />
               </div>
-            )}
-            {!book.published && (
+            ) : !book.published && (
               <p className="mt-4 text-sm text-ink-faint italic leading-relaxed">
                 This book is still being written. Check back soon.
               </p>
@@ -296,9 +312,10 @@ export default function PreviewBookPage() {
         </div>
       </header>
 
-      {book.published && (
-        <main className="px-8 pt-6 pb-10 flex flex-col gap-8">
-          {/* Chapters */}
+      <main className="px-8 pt-6 pb-10 flex flex-col gap-8">
+        {/* Chapters — kept gated on `published`; chapter titles can be
+            spoilers, unlike the cast and soundtrack sections. */}
+        {book.published && (
           <section>
             <SectionHeader
               label={`Chapters (${orderedChapters.length})`}
@@ -340,11 +357,12 @@ export default function PreviewBookPage() {
               )
             )}
           </section>
+        )}
 
-          {/* Characters — same per-book resolution as the author page so any
-              per-book overrides (age, avatar) follow the reader. Hidden
-              characters are filtered out of this view entirely; the author
-              still sees them on their grid with an indicator. */}
+        {/* Characters — same per-book resolution as the author page so any
+            per-book overrides (age, avatar) follow the reader. Hidden
+            characters are filtered out of this view entirely; the author
+            still sees them on their grid with an indicator. */}
           {(() => {
             const visibleCharacters = characters.filter(c => !c.hidden)
             return (
@@ -445,9 +463,8 @@ export default function PreviewBookPage() {
                 </div>
               )
             )}
-          </section>
-        </main>
-      )}
+        </section>
+      </main>
       {authorModalOpen && (
         <AuthorModal
           authorName={authorName}
