@@ -83,6 +83,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ser
               setsVariables: c.setsVariables,
               targetChapterRef: c.targetChapterId,
               endingMessage: c.endingMessage,
+              isBadEnding: c.isBadEnding,
             })),
             overrides: block.overrides.map(o => ({
               order: o.order,

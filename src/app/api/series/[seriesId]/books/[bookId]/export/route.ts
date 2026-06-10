@@ -93,6 +93,7 @@ export async function GET(_: Request, { params }: Params) {
               setsVariables: c.setsVariables,
               targetChapterRef: c.targetChapterId,
               endingMessage: c.endingMessage,
+              isBadEnding: c.isBadEnding,
             })),
             overrides: block.overrides.map(o => ({
               order: o.order,

@@ -71,6 +71,7 @@ type Props = {
   autoFocus?: boolean
   characters?: Character[]
   variables?: Variable[]
+  placeholder?: string
 }
 
 const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
@@ -107,7 +108,7 @@ function ToolBtn({ active, onClick, title, children }: {
   )
 }
 
-export default function TextBlock({ content, onChange, autoFocus, characters = [], variables = [] }: Props) {
+export default function TextBlock({ content, onChange, autoFocus, characters = [], variables = [], placeholder = 'Write your prose here…' }: Props) {
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
   // footnote state
   const [showInput, setShowInput] = useState(false)
@@ -134,7 +135,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
     immediatelyRender: false,
     extensions: [
       StarterKit,
-      Placeholder.configure({ placeholder: 'Write your prose here…' }),
+      Placeholder.configure({ placeholder }),
       Footnote,
       CharacterMark,
       VariableHighlight.configure({

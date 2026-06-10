@@ -44,10 +44,35 @@ export type ConditionalBlock = {
   overrides: ConditionalOverrideEntry[]
 }
 
+// What a choice can write to a variable when chosen. Two shapes:
+//   - Primitive value: "set this variable to N" (the legacy on-disk form).
+//   - { op, value } object: "add to / subtract from / set to N" — used
+//     by counter-style variables (e.g. jaredLieCount += 1) so a choice
+//     can accumulate rather than overwrite. Op '=' is identical to the
+//     primitive form; '+=' / '-=' only make sense for number variables.
+export type ChoiceSetOp = '=' | '+=' | '-='
+export type ChoiceSetValue =
+  | boolean | number | string
+  | { op: ChoiceSetOp; value: number }
+
 export type ChoiceRecord = {
   id: string
-  setsVariables: Record<string, boolean | number | string>
+  setsVariables: Record<string, ChoiceSetValue>
   targetChapterId: string | null
+}
+
+// Resolve one variable's new value given the choice's instruction and the
+// current state. Primitive instructions overwrite; object instructions
+// fold the op against the variable's current numeric value (defaulting
+// to 0 when the variable hasn't been set yet — matches how counter
+// initialization usually feels to the reader).
+function applyVarOp(current: StoryState[string] | undefined, instruction: ChoiceSetValue): boolean | number | string {
+  if (typeof instruction !== 'object' || instruction === null) return instruction
+  const base = typeof current === 'number' ? current : Number(current ?? 0)
+  const n = Number.isFinite(base) ? base : 0
+  if (instruction.op === '+=') return n + instruction.value
+  if (instruction.op === '-=') return n - instruction.value
+  return instruction.value
 }
 
 export function matchesCondition(condition: Condition, storyState: StoryState): boolean {
@@ -84,8 +109,12 @@ export function applyChoice(
   choice: ChoiceRecord,
 ): { newState: StoryState; newHistory: HistoryEntry[] } {
   const stateSnapshot = { ...currentState }
+  const newState: StoryState = { ...currentState }
+  for (const [name, instruction] of Object.entries(choice.setsVariables)) {
+    newState[name] = applyVarOp(currentState[name], instruction)
+  }
   return {
-    newState: { ...currentState, ...choice.setsVariables },
+    newState,
     newHistory: [...currentHistory, { choicePointId, choiceId: choice.id, stateSnapshot }],
   }
 }

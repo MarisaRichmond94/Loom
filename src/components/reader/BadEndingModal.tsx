@@ -3,11 +3,13 @@
 import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
 import type { ChapterLabel } from '@/lib/chapterLabels'
 import { useBadEndingRewind } from './useBadEndingRewind'
+import { tryRenderRichContent } from '@/lib/renderRichContent'
 
 type Variable = { id: string; name: string; type: string; defaultValue: string }
 
 type Props = {
   message: string
+  storyState?: StoryState
   sessionId: string
   seriesId: string
   choiceHistory: HistoryEntry[]
@@ -18,8 +20,12 @@ type Props = {
 }
 
 export default function BadEndingModal({
-  message, sessionId, seriesId, choiceHistory, variables, chapterLabels, firstChapterId, onApply,
+  message, storyState, sessionId, seriesId, choiceHistory, variables, chapterLabels, firstChapterId, onApply,
 }: Props) {
+  // New bad-ending messages are TipTap JSON; legacy ones are plain text.
+  // tryRenderRichContent returns null for plain text, letting us fall
+  // back to the original whitespace-preserving paragraph rendering.
+  const rich = tryRenderRichContent(message, storyState)
   const { visibleCps, working, goTo, startOver } = useBadEndingRewind({
     sessionId, seriesId, choiceHistory, variables, chapterLabels, firstChapterId, onApply,
   })
@@ -27,7 +33,14 @@ export default function BadEndingModal({
   return (
     <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] p-8">
       <div className="bg-surface-raised border border-choice-kill/40 rounded-xl p-8 max-w-xl w-full shadow-2xl flex flex-col max-h-[80vh]">
-        <p className="text-base text-ink leading-relaxed mb-6 whitespace-pre-wrap text-center">{message}</p>
+        {rich ? (
+          <div
+            className="prose prose-invert max-w-none text-ink leading-relaxed mb-6 [&_p]:text-justify [&_p:empty]:min-h-[1em]"
+            dangerouslySetInnerHTML={{ __html: rich }}
+          />
+        ) : (
+          <p className="text-base text-ink leading-relaxed mb-6 whitespace-pre-wrap text-center">{message}</p>
+        )}
         <div className="text-xs uppercase tracking-widest text-ink-faint mb-2">Go back to</div>
         <div className="flex-1 overflow-y-auto -mx-2 px-2">
           {visibleCps.length === 0 ? (

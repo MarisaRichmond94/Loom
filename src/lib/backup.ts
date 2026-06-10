@@ -31,7 +31,7 @@ function buildBookPayload(
         condition: string | null
         pinStart: number | null
         pinEnd: number | null
-        choices: { label: string; setsVariables: string; targetChapterId: string | null; endingMessage: string | null }[]
+        choices: { label: string; setsVariables: string; targetChapterId: string | null; endingMessage: string | null; isBadEnding: boolean }[]
         overrides: { order: number; condition: string; content: string; endingMessage: string | null }[]
       }[]
     }[]
@@ -94,6 +94,7 @@ function buildBookPayload(
               setsVariables: c.setsVariables,
               targetChapterRef: c.targetChapterId,
               endingMessage: c.endingMessage,
+              isBadEnding: c.isBadEnding,
             })),
             overrides: block.overrides.map(o => ({
               order: o.order, condition: o.condition, content: o.content,

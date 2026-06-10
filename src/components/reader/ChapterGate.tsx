@@ -6,9 +6,13 @@ type Props = {
   onChoose: (choiceId: string) => void
 }
 
+// Same slot-by-index, render-custom-label rule as InlineChoice. The
+// big ✓/✕ icons the chapter-gate used to show got dropped — they implied
+// a yes/no binary that doesn't fit "A phone" / "A laptop". The label
+// text itself carries the weight now.
 export default function ChapterGate({ prompt, choices, onChoose }: Props) {
-  const yesChoice = choices.find(c => c.label === 'Yes')
-  const noChoice  = choices.find(c => c.label === 'No')
+  const primary = choices[0] ?? null
+  const secondary = choices[1] ?? null
 
   return (
     <div className="fixed inset-0 bg-surface-base/95 flex flex-col items-center justify-center z-50">
@@ -18,22 +22,20 @@ export default function ChapterGate({ prompt, choices, onChoose }: Props) {
       )}
       <p className="text-ink-muted text-sm mb-10 italic">Your choice shapes what comes next.</p>
       <div className="flex gap-6">
-        {yesChoice && (
+        {primary && (
           <button
-            onClick={() => onChoose(yesChoice.id)}
-            className="flex flex-col items-center gap-3 px-10 py-6 rounded-lg border min-w-[160px] transition hover:opacity-80 bg-choice-spare-bg border-choice-spare-border text-choice-spare"
+            onClick={() => onChoose(primary.id)}
+            className="px-10 py-6 rounded-lg border min-w-[160px] transition hover:opacity-80 bg-choice-spare-bg border-choice-spare-border text-choice-spare text-base font-medium"
           >
-            <span className="text-3xl">✓</span>
-            <span className="text-sm font-medium">Yes</span>
+            {primary.label.trim() || 'Choice 1'}
           </button>
         )}
-        {noChoice && (
+        {secondary && (
           <button
-            onClick={() => onChoose(noChoice.id)}
-            className="flex flex-col items-center gap-3 px-10 py-6 rounded-lg border min-w-[160px] transition hover:opacity-80 bg-choice-kill-bg border-choice-kill-border text-choice-kill"
+            onClick={() => onChoose(secondary.id)}
+            className="px-10 py-6 rounded-lg border min-w-[160px] transition hover:opacity-80 bg-choice-kill-bg border-choice-kill-border text-choice-kill text-base font-medium"
           >
-            <span className="text-3xl">✕</span>
-            <span className="text-sm font-medium">No</span>
+            {secondary.label.trim() || 'Choice 2'}
           </button>
         )}
       </div>

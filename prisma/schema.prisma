@@ -140,7 +140,14 @@ model Choice {
   label           String
   setsVariables   String       @default("{}")
   targetChapterId String?
+  // Per-choice prose shown to the reader after they pick this option.
+  // When `isBadEnding` is true, the text drives a Bad Ending modal and
+  // truncates the rest of the chapter (the historical behavior of this
+  // field). When false, the text renders inline at the choice-point's
+  // position so writers can give each branch a one-paragraph
+  // consequence without spinning up a one-off boolean variable.
   endingMessage   String?
+  isBadEnding     Boolean      @default(false)
   choicePoint     ContentBlock @relation(fields: [choicePointId], references: [id], onDelete: Cascade)
   targetChapter   Chapter?     @relation("TargetChapter", fields: [targetChapterId], references: [id])
 }

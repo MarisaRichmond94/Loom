@@ -307,6 +307,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                     condition={block.condition ?? null}
                     choices={block.choices}
                     variables={variables}
+                    characters={characters}
                     onUpdateBlock={data => updateBlock(block.id, data)}
                     onUpdateChoice={updateChoice}
                     onCreateVariable={onCreateVariable}

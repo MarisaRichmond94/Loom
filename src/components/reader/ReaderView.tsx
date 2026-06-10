@@ -13,6 +13,7 @@ import { Footnote } from '@/lib/extensions/footnote'
 import { CharacterMark } from '@/lib/extensions/character'
 import { resolveConditionalOverride, matchesCondition } from '@/lib/storyEngine'
 import { substituteVarTemplates } from '@/lib/templateVars'
+import { tryRenderRichContent } from '@/lib/renderRichContent'
 import { pinLabel } from '@/lib/pinLabel'
 import type { ChapterLabel } from '@/lib/chapterLabels'
 import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
@@ -27,7 +28,7 @@ import PinnedAudio from '@/components/PinnedAudio'
 import { stripEmptyParagraphs, htmlToPlainText, inlineParagraphStyles, PASTE_FONT_FAMILY } from '@/lib/clipboardFormatting'
 
 type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
-type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null }
+type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null; isBadEnding?: boolean }
 type Block = {
   id: string; order: number; type: string
   content?: string | null; prompt?: string | null; displayType?: string | null; baseContent?: string | null
@@ -242,7 +243,10 @@ export default function ReaderView({
     onSessionUpdate(updated.storyState, updated.choiceHistory)
 
     const choice = choicePointBlock.choices.find(c => c.id === choiceId)
-    if (choice?.endingMessage) {
+    // The modal fires only when the writer explicitly marked the choice
+    // as a bad ending. A non-bad-ending choice with branch text just
+    // renders inline; nav to the target chapter still happens.
+    if (choice?.isBadEnding && choice?.endingMessage) {
       setEndingMessage(choice.endingMessage)
       return
     }
@@ -435,7 +439,31 @@ export default function ReaderView({
             if (block.type === 'choice_point') {
               const answered = choiceHistory.find(h => h.choicePointId === block.id)
 
-              if (answered) return null
+              if (answered) {
+                // After answering, if the chosen branch carries inline
+                // text (non-bad-ending), render it as styled prose at
+                // the choice's position. Bad endings flow through the
+                // full-screen modal in handleChoose above and aren't
+                // repeated inline. Branch text is TipTap JSON in new
+                // data; tryRenderRichContent falls back to wrapping
+                // legacy plain text in a paragraph.
+                const chosen = block.choices.find(c => c.id === answered.choiceId)
+                if (chosen?.endingMessage && !chosen?.isBadEnding) {
+                  const rich = tryRenderRichContent(chosen.endingMessage, storyState)
+                  return (
+                    <div
+                      key={block.id}
+                      id={`block-${block.id}`}
+                      className="prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_p:empty]:min-h-[1em] [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6"
+                    >
+                      {rich
+                        ? <div dangerouslySetInnerHTML={{ __html: rich }} />
+                        : <p style={{ whiteSpace: 'pre-wrap' }}>{chosen.endingMessage}</p>}
+                    </div>
+                  )
+                }
+                return null
+              }
 
               if (block.condition) {
                 const parsed = JSON.parse(block.condition)
@@ -586,6 +614,7 @@ export default function ReaderView({
       {endingMessage != null && (
         <BadEndingModal
           message={endingMessage}
+          storyState={storyState}
           sessionId={sessionId}
           seriesId={seriesId}
           choiceHistory={choiceHistory}
