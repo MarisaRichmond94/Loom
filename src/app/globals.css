@@ -138,6 +138,9 @@ button, a, select, [role="button"] {
 .light-body {
   --color-choice-kill-bg: #cc8888;
   --color-choice-kill-border: #bb6666;
+  /* Darker red for label text on the kill panel; the default `#cc8888`
+     matches the bg color in light mode and disappears against it. */
+  --color-choice-kill: #5a1a1a;
   --color-choice-spare-bg: #a3c377;
   --color-choice-spare-border: #8aaa5e;
   --color-choice-spare: #1a5a1a;
