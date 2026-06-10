@@ -298,7 +298,7 @@ export default function ChapterEditorPage() {
           value={chapter.date ?? ''}
           onChange={e => handleMetaChange('date', e.target.value)}
           onFocus={e => e.target.setSelectionRange(0, 0)}
-          className="bg-surface-raised border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent w-50 mb-2"
+          className="bg-surface-raised border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent w-60 mb-2"
         />
 
         <BlockEditor
