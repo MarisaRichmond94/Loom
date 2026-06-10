@@ -250,6 +250,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
             </div>
             <div className="flex flex-col min-h-0 max-h-[25%] p-4 pt-3 border-t border-accent/10">
               <VariablesPanel
+                seriesId={seriesId}
                 variables={series.variables}
                 onAdd={addVariable}
                 onUpdate={updateVariable}

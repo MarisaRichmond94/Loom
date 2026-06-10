@@ -101,6 +101,9 @@ model Book {
   charactersDyingHere          Character[]             @relation("DiesIn")
   charactersLastAppearingHere  Character[]             @relation("LastAppearsIn")
   characterOverrides           CharacterBookOverride[] @relation("CharacterOverrides")
+  // Inverse of StoryVariable.originBook — set when this book is the
+  // origin for a variable.
+  originatingVariables         StoryVariable[]
 }
 
 model Chapter {
@@ -171,7 +174,16 @@ model StoryVariable {
   name         String
   type         String
   defaultValue String @default("null")
+  // Book this variable "originated from" — used for the Context modal's
+  // Origin column so the writer can see where a variable was first
+  // needed. Stamped on the book the writer was on when they created it
+  // (new flow), backfilled for existing rows from the earliest book in
+  // series order that references the variable. Stays null when nothing
+  // references the variable yet. SetNull on book delete so a deleted
+  // book doesn't cascade through to the variable.
+  originBookId String?
   series       Series @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  originBook   Book?  @relation(fields: [originBookId], references: [id], onDelete: SetNull)
 
   @@unique([seriesId, name])
 }

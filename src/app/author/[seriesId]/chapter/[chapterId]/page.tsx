@@ -120,10 +120,13 @@ export default function ChapterEditorPage() {
 
   async function createVariable(name: string, type: string) {
     const defaultValue: unknown = type === 'boolean' ? false : type === 'number' ? 0 : ''
+    // Stamp the variable's origin with the book this chapter belongs to,
+    // so the Context modal's Origin column shows where it came from.
+    const originBookId = series.books.find(b => b.chapters.some(c => c.id === chapterId))?.id ?? null
     await fetch(`/api/series/${seriesId}/variables`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, type, defaultValue }),
+      body: JSON.stringify({ name, type, defaultValue, originBookId }),
     })
     loadSeries()
   }

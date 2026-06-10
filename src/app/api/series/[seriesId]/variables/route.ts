@@ -14,7 +14,7 @@ export async function GET(_: Request, { params }: Params) {
 
 export async function POST(req: Request, { params }: Params) {
   const { seriesId } = await params
-  const { name, type, defaultValue = null } = await req.json()
+  const { name, type, defaultValue = null, originBookId = null } = await req.json()
   if (!name?.trim() || !['boolean', 'number', 'string'].includes(type)) {
     return NextResponse.json({ error: 'name and valid type required' }, { status: 400 })
   }
@@ -24,6 +24,11 @@ export async function POST(req: Request, { params }: Params) {
       name: name.trim(),
       type,
       defaultValue: JSON.stringify(defaultValue),
+      // Optional. The chapter editor passes its current book so the
+      // Context modal can show where this variable came from; other
+      // callers (e.g. sidebar Add Context outside a chapter page)
+      // leave it null and the Origin column shows "—".
+      ...(originBookId && { originBookId }),
     },
   })
   return NextResponse.json(variable, { status: 201 })
