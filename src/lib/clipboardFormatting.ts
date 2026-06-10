@@ -1,6 +1,7 @@
 // Shared clipboard formatting for both the reader's "copy chapter" button
 // and the editor's native Cmd+C out of any text block. Both flows produce
-// the same Charter / 11px output with first-line indents preserved.
+// the same Charter / 11pt output with novel-style first-line indents and
+// a justified default — matches the writer's Pages template.
 
 // Font + size for the rich-text clipboard payload. Most destinations
 // (Google Docs, Word, Notion) respect a wrapping element's inline font
@@ -12,26 +13,35 @@ export const PASTE_FONT_FAMILY = "'Charter', Georgia, serif"
 // that re-conversion: 14.6667px is the CSS-spec equivalent of 11pt
 // (1pt = 4/3 px) and lands at 11pt in both destinations.
 export const PASTE_FONT_SIZE = '11px'
-const INDENT = '    ' // four nbsps ≈ a first-line indent
 
-// Zeroes paragraph margin on every <p> and prefixes each with non-breaking
-// spaces so destinations that strip text-indent CSS (Google Docs in
-// particular) still show novel-style first-line indents. margin:0 keeps
-// the destination from stacking its default Space-After on top of ours.
+// Per-paragraph style: zero margin (so the destination doesn't stack its
+// default Space-After on top of ours), a real first-line indent, and a
+// justified default. We deliberately omit `line-height` — Pages ignores
+// it on paste, and including it changes spacing in destinations that DO
+// honor it. Line spacing is left to the destination's paragraph style,
+// which lets a Pages doc set to single-line spacing match Loom output.
+//
+// Note: Google Docs strips text-indent during paste, so the indent
+// shows up only in destinations that respect the CSS attribute
+// (Pages, Word, Notion).
 export function inlineParagraphStyles(html: string): string {
-  // Size goes here (not on the wrapper) because Google Docs reads
+  // Size goes on the <p> (not the wrapper) because Google Docs reads
   // wrapper font-size through a px→pt conversion (so `11pt` on the
   // wrapper arrives as 14.67pt). Inline on <p> bypasses that path.
-  const style = `margin:0;font-size:${PASTE_FONT_SIZE}`
+  const base = `margin:0;font-size:${PASTE_FONT_SIZE};text-indent:0.25in`
   return html.replace(/<p(\s[^>]*)?>/gi, (_match, attrs: string | undefined) => {
     const a = attrs ?? ''
-    let tag: string
-    if (/\bstyle\s*=/.test(a)) {
-      tag = `<p${a.replace(/style\s*=\s*"([^"]*)"/i, (_m, s: string) => `style="${s};${style}"`)}>`
-    } else {
-      tag = `<p${a} style="${style}">`
+    const styleMatch = /style\s*=\s*"([^"]*)"/i.exec(a)
+    const existing = styleMatch?.[1] ?? ''
+    // Default to justify unless the writer set an explicit text-align
+    // (center / left / right via the toolbar) — those land in the doc
+    // as inline `text-align:` styles, and we don't want to override.
+    const hasAlign = /text-align\s*:/i.test(existing)
+    const style = hasAlign ? base : `${base};text-align:justify`
+    if (styleMatch) {
+      return `<p${a.replace(/style\s*=\s*"([^"]*)"/i, (_m, s: string) => `style="${s};${style}"`)}>`
     }
-    return `${tag}${INDENT}`
+    return `<p${a} style="${style}">`
   })
 }
 
