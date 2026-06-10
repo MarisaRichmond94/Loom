@@ -4,13 +4,17 @@ import { useRef, useState } from 'react'
 import { LuMusic, LuUpload, LuX, LuDownload } from 'react-icons/lu'
 import { formatPinTime, parsePinTime, pinLabel } from '@/lib/pinLabel'
 import PinnedAudio from '@/components/PinnedAudio'
+import { ConditionRow } from './conditionUI'
+
+type Variable = { id: string; name: string; type: string; defaultValue?: string }
 
 type Props = {
-  block: { id: string; prompt?: string | null; content?: string | null; pinStart?: number | null; pinEnd?: number | null; hasAlbumArt?: boolean }
-  onUpdateBlock: (data: { prompt?: string; content?: string | null; pinStart?: number | null; pinEnd?: number | null }) => void
+  block: { id: string; prompt?: string | null; content?: string | null; pinStart?: number | null; pinEnd?: number | null; hasAlbumArt?: boolean; condition?: string | null }
+  variables: Variable[]
+  onUpdateBlock: (data: { prompt?: string; content?: string | null; pinStart?: number | null; pinEnd?: number | null; condition?: string | null }) => void
 }
 
-export default function SoundtrackBlock({ block, onUpdateBlock }: Props) {
+export default function SoundtrackBlock({ block, variables, onUpdateBlock }: Props) {
   const [title, setTitle] = useState(block.prompt ?? '')
   const [audioSrc, setAudioSrc] = useState(block.content ?? null)
   const [uploading, setUploading] = useState(false)
@@ -161,6 +165,17 @@ export default function SoundtrackBlock({ block, onUpdateBlock }: Props) {
         accept="image/*"
         className="hidden"
         onChange={handleAlbumArtChange}
+      />
+
+      {/* Optional visibility gate. Defaults to "always" (empty condition);
+          attach variables via the + menu to make this song only play in
+          some branches. Same AND/OR + searchable picker the choice block
+          and conditional fragment use. */}
+      <ConditionRow
+        label="Plays if:"
+        condition={block.condition ?? null}
+        variables={variables}
+        onChange={next => onUpdateBlock({ condition: next })}
       />
 
       {/* Audio area — album art lives in a left column, title + player stack

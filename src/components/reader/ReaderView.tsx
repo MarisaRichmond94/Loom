@@ -465,6 +465,14 @@ export default function ReaderView({
             }
 
             if (block.type === 'soundtrack' && block.content) {
+              // Optional conditioning — same shape choice blocks use.
+              // No condition → always plays.
+              if (block.condition) {
+                try {
+                  const parsed = JSON.parse(block.condition)
+                  if (!matchesCondition(parsed, storyState)) return null
+                } catch { /* malformed condition: ignore and play */ }
+              }
               const label = pinLabel(block.pinStart, block.pinEnd)
               return (
                 <div key={block.id} id={`block-${block.id}`} className="my-4 px-4 py-3 rounded-lg bg-surface-raised border border-accent/10">

@@ -327,6 +327,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                 {block.type === 'soundtrack' && (
                   <SoundtrackBlock
                     block={block}
+                    variables={variables}
                     onUpdateBlock={data => updateBlock(block.id, data)}
                   />
                 )}
