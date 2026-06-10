@@ -583,7 +583,12 @@ export default function BookDetailPage() {
         </div>
       </div>
 
-      {/* Character create/edit modal */}
+      {/* Character create/edit modal. Three-band layout so tall content
+          (cropper + all the per-book selectors) doesn't push the action
+          row off-screen on shorter viewports:
+            - Header band: title + close + avatar + name (always visible)
+            - Middle band: scrollable fields
+            - Footer band: Delete / Cancel / Save (always reachable) */}
       {charModal !== null && (
         <div
           className="fixed inset-0 bg-black/60 flex items-start justify-center z-50"
@@ -591,64 +596,66 @@ export default function BookDetailPage() {
           onClick={closeCharModal}
         >
           <div
-            className="bg-surface-raised border border-accent/20 rounded-xl p-8 max-w-md w-full mx-8 shadow-2xl relative"
+            className="bg-surface-raised border border-accent/20 rounded-xl max-w-md w-full mx-8 shadow-2xl relative flex flex-col max-h-[calc(100vh-12vh-60px)]"
             onClick={e => e.stopPropagation()}
           >
-            <button onClick={closeCharModal} className="absolute top-4 right-4 text-ink-faint hover:text-ink text-lg leading-none">✕</button>
-            <h2 className="text-base font-bold text-ink mb-6 pr-6">
-              {charModal === 'create' ? 'New Character' : `Edit "${(charModal as Character).name}"`}
-            </h2>
+            <button onClick={closeCharModal} className="absolute top-4 right-4 text-ink-faint hover:text-ink text-lg leading-none z-10">✕</button>
 
-            {/* Avatar */}
-            <div className="flex flex-col items-center mb-6">
-              {charImageSrc ? (
-                <div className="relative w-full h-52 rounded-xl overflow-hidden bg-black">
-                  <Cropper
-                    image={charImageSrc}
-                    crop={charCrop}
-                    zoom={charZoom}
-                    aspect={1}
-                    cropShape="round"
-                    onCropChange={setCharCrop}
-                    onZoomChange={setCharZoom}
-                    onCropComplete={(_, pixels) => setCharCroppedArea(pixels)}
-                  />
-                </div>
-              ) : (
-                <div
-                  onClick={() => charFileInputRef.current?.click()}
-                  className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-accent/20 bg-surface-overlay flex items-center justify-center cursor-pointer group"
-                >
-                  {(() => {
-                    if (charModal === 'create') return <LuUser size={32} className="text-ink-faint" />
-                    const url = avatarUrlFor(charModal as Character, charAvatarTs)
-                    return url
-                      ? <img src={url} alt="" className="w-full h-full object-cover" />
-                      : <LuUser size={32} className="text-ink-faint" />
-                  })()}
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                    <LuPencil size={16} className="text-white" />
+            {/* Header: title + avatar + name. shrink-0 keeps it pinned. */}
+            <div className="shrink-0 px-8 pt-8 pb-4 border-b border-accent/10">
+              <h2 className="text-base font-bold text-ink mb-6 pr-6">
+                {charModal === 'create' ? 'New Character' : `Edit "${(charModal as Character).name}"`}
+              </h2>
+
+              {/* Avatar */}
+              <div className="flex flex-col items-center mb-4">
+                {charImageSrc ? (
+                  <div className="relative w-full h-52 rounded-xl overflow-hidden bg-black">
+                    <Cropper
+                      image={charImageSrc}
+                      crop={charCrop}
+                      zoom={charZoom}
+                      aspect={1}
+                      cropShape="round"
+                      onCropChange={setCharCrop}
+                      onZoomChange={setCharZoom}
+                      onCropComplete={(_, pixels) => setCharCroppedArea(pixels)}
+                    />
                   </div>
-                </div>
-              )}
-              <input
-                ref={charFileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={e => {
-                  const file = e.target.files?.[0]
-                  if (!file) return
-                  const reader = new FileReader()
-                  reader.onload = () => setCharImageSrc(reader.result as string)
-                  reader.readAsDataURL(file)
-                  e.target.value = ''
-                }}
-              />
-            </div>
+                ) : (
+                  <div
+                    onClick={() => charFileInputRef.current?.click()}
+                    className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-accent/20 bg-surface-overlay flex items-center justify-center cursor-pointer group"
+                  >
+                    {(() => {
+                      if (charModal === 'create') return <LuUser size={32} className="text-ink-faint" />
+                      const url = avatarUrlFor(charModal as Character, charAvatarTs)
+                      return url
+                        ? <img src={url} alt="" className="w-full h-full object-cover" />
+                        : <LuUser size={32} className="text-ink-faint" />
+                    })()}
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                      <LuPencil size={16} className="text-white" />
+                    </div>
+                  </div>
+                )}
+                <input
+                  ref={charFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const reader = new FileReader()
+                    reader.onload = () => setCharImageSrc(reader.result as string)
+                    reader.readAsDataURL(file)
+                    e.target.value = ''
+                  }}
+                />
+              </div>
 
-            {/* Fields */}
-            <div className="flex flex-col gap-4 mb-6">
+              {/* Name */}
               <div>
                 <label className="block text-xs text-ink-faint mb-1 uppercase tracking-widest">Name</label>
                 <input
@@ -659,91 +666,99 @@ export default function BookDetailPage() {
                   className="w-full bg-surface-overlay border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
                 />
               </div>
-              <div>
-                <label className="block text-xs text-ink-faint mb-1 uppercase tracking-widest">
-                  Age <span className="normal-case">(optional)</span>
-                  {charModal !== 'create' && (charModal as Character).hasOverride && (
-                    <span className="ml-2 normal-case text-ink-muted italic">overridden in this book</span>
-                  )}
-                </label>
-                <input
-                  type="text"
-                  value={charAge}
-                  onChange={e => setCharAge(e.target.value)}
-                  placeholder="—"
-                  className={`w-24 bg-surface-overlay border rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-accent ${charAge.trim() !== '' && isNaN(Number(charAge)) ? 'border-choice-kill' : 'border-accent/20'}`}
-                />
-                {charAge.trim() !== '' && isNaN(Number(charAge)) && (
-                  <p className="text-xs text-choice-kill mt-1">Age must be a number</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs text-ink-faint mb-1 uppercase tracking-widest">Appears starting in</label>
-                <select
-                  value={charFirstBookId}
-                  onChange={e => setCharFirstBookId(e.target.value)}
-                  className="w-full bg-surface-overlay border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
-                >
-                  <option value="">— every book —</option>
-                  {[...series.books].sort((a, b) => a.order - b.order).map(b => (
-                    <option key={b.id} value={b.id}>{b.title}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-ink-faint mb-1 uppercase tracking-widest">Dies in</label>
-                <select
-                  value={charDeathBookId}
-                  onChange={e => setCharDeathBookId(e.target.value)}
-                  className="w-full bg-surface-overlay border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
-                >
-                  <option value="">— still alive —</option>
-                  {[...series.books].sort((a, b) => a.order - b.order).map(b => (
-                    <option key={b.id} value={b.id}>{b.title}</option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-ink-faint italic mt-1">
-                  Marks them &ldquo;Deceased&rdquo; in every later book. They still appear normally in the chosen book.
-                </p>
-              </div>
-              <div>
-                <label className="block text-xs text-ink-faint mb-1 uppercase tracking-widest">Last appears in</label>
-                <select
-                  value={charLastBookId}
-                  onChange={e => setCharLastBookId(e.target.value)}
-                  className="w-full bg-surface-overlay border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
-                >
-                  <option value="">— appears in every book —</option>
-                  {[...series.books].sort((a, b) => a.order - b.order).map(b => (
-                    <option key={b.id} value={b.id}>{b.title}</option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-ink-faint italic mt-1">
-                  Hidden from readers in every later book. You still see them
-                  here so you can un-hide them.
-                </p>
-              </div>
-              <label className="flex items-center gap-2 text-xs text-ink-muted cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={charStarred}
-                  onChange={e => setCharStarred(e.target.checked)}
-                  className="accent-accent"
-                />
-                <span>Primary character (starred)</span>
-              </label>
-              {charModal !== 'create' && (charModal as Character).hasOverride && (
-                <button
-                  type="button"
-                  onClick={() => resetOverridesForBook((charModal as Character).id)}
-                  className="self-start text-xs text-ink-muted hover:text-ink underline underline-offset-2 transition"
-                >
-                  Reset overrides for this book
-                </button>
-              )}
             </div>
 
-            <div className="flex items-center justify-between">
+            {/* Scrollable middle: everything below the name field. */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-8 py-4">
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className="block text-xs text-ink-faint mb-1 uppercase tracking-widest">
+                    Age <span className="normal-case">(optional)</span>
+                    {charModal !== 'create' && (charModal as Character).hasOverride && (
+                      <span className="ml-2 normal-case text-ink-muted italic">overridden in this book</span>
+                    )}
+                  </label>
+                  <input
+                    type="text"
+                    value={charAge}
+                    onChange={e => setCharAge(e.target.value)}
+                    placeholder="—"
+                    className={`w-24 bg-surface-overlay border rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-accent ${charAge.trim() !== '' && isNaN(Number(charAge)) ? 'border-choice-kill' : 'border-accent/20'}`}
+                  />
+                  {charAge.trim() !== '' && isNaN(Number(charAge)) && (
+                    <p className="text-xs text-choice-kill mt-1">Age must be a number</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-faint mb-1 uppercase tracking-widest">Appears starting in</label>
+                  <select
+                    value={charFirstBookId}
+                    onChange={e => setCharFirstBookId(e.target.value)}
+                    className="w-full bg-surface-overlay border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+                  >
+                    <option value="">— every book —</option>
+                    {[...series.books].sort((a, b) => a.order - b.order).map(b => (
+                      <option key={b.id} value={b.id}>{b.title}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-faint mb-1 uppercase tracking-widest">Dies in</label>
+                  <select
+                    value={charDeathBookId}
+                    onChange={e => setCharDeathBookId(e.target.value)}
+                    className="w-full bg-surface-overlay border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+                  >
+                    <option value="">— still alive —</option>
+                    {[...series.books].sort((a, b) => a.order - b.order).map(b => (
+                      <option key={b.id} value={b.id}>{b.title}</option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-ink-faint italic mt-1">
+                    Marks them &ldquo;Deceased&rdquo; in every later book. They still appear normally in the chosen book.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-faint mb-1 uppercase tracking-widest">Last appears in</label>
+                  <select
+                    value={charLastBookId}
+                    onChange={e => setCharLastBookId(e.target.value)}
+                    className="w-full bg-surface-overlay border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+                  >
+                    <option value="">— appears in every book —</option>
+                    {[...series.books].sort((a, b) => a.order - b.order).map(b => (
+                      <option key={b.id} value={b.id}>{b.title}</option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-ink-faint italic mt-1">
+                    Hidden from readers in every later book. You still see them
+                    here so you can un-hide them.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 text-xs text-ink-muted cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={charStarred}
+                    onChange={e => setCharStarred(e.target.checked)}
+                    className="accent-accent"
+                  />
+                  <span>Primary character (starred)</span>
+                </label>
+                {charModal !== 'create' && (charModal as Character).hasOverride && (
+                  <button
+                    type="button"
+                    onClick={() => resetOverridesForBook((charModal as Character).id)}
+                    className="self-start text-xs text-ink-muted hover:text-ink underline underline-offset-2 transition"
+                  >
+                    Reset overrides for this book
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Footer band — buttons stay reachable no matter how tall the
+                scrollable area gets. */}
+            <div className="shrink-0 px-8 py-4 border-t border-accent/10 flex items-center justify-between">
               {charModal !== 'create' ? (
                 <button
                   onClick={() => deleteCharacter((charModal as Character).id)}
