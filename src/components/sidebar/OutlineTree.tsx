@@ -20,11 +20,29 @@ type Props = {
   onInsertChapter: (bookId: string, title: string, atOrder: number) => void
 }
 
-function setTitle(title: string, order: number): string {
-  if (/^\d+$/.test(title)) return String(order)
-  const m = /^(Chapter )(\d+)$/i.exec(title)
-  if (m) return `${m[1]}${order}`
-  return title
+function parseNumberedTitle(title: string): { prefix: string; num: number } | null {
+  const bare = /^(\d+)$/.exec(title)
+  if (bare) return { prefix: '', num: Number(bare[1]) }
+  const m = /^(.+\s)(\d+)$/.exec(title)
+  if (m) return { prefix: m[1], num: Number(m[2]) }
+  return null
+}
+
+// Walks the dragged list in its new order and rewrites each chapter's
+// title using a per-prefix counter, so "Chapter" and "Bonus Chapter"
+// (and any other author-coined prefix) renumber independently after a
+// drag. Chapters whose titles don't match the numbered shape are left
+// alone — author-named one-offs (e.g. "Prologue") shouldn't be
+// touched by a drag of an unrelated chapter.
+function renumberAfterDrag<T extends { title: string }>(chapters: T[]): T[] {
+  const seen: Record<string, number> = {}
+  return chapters.map(c => {
+    const parsed = parseNumberedTitle(c.title)
+    if (!parsed) return c
+    const next = (seen[parsed.prefix] ?? 0) + 1
+    seen[parsed.prefix] = next
+    return { ...c, title: `${parsed.prefix}${next}` }
+  })
 }
 
 function SortableChapter({ chapter, seriesId, isActive, scrollOnDefault, openMenu, onOpenMenu, onInsert, onCloseMenu }: {
@@ -166,7 +184,11 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
     const chapters = localChapters[selectedBook] ?? books.find(b => b.id === selectedBook)?.chapters ?? []
     const oldIdx = chapters.findIndex(c => c.id === active.id)
     const newIdx = chapters.findIndex(c => c.id === over.id)
-    const reordered = arrayMove(chapters, oldIdx, newIdx).map((c, i) => ({ ...c, order: i + 1, title: setTitle(c.title, i + 1) }))
+    // Two-step renumber: positional order first, then per-prefix
+    // title rewriting so "Chapter" and "Bonus Chapter" stay
+    // independent series.
+    const moved = arrayMove(chapters, oldIdx, newIdx).map((c, i) => ({ ...c, order: i + 1 }))
+    const reordered = renumberAfterDrag(moved)
     setLocalChapters(prev => ({ ...prev, [selectedBook]: reordered }))
     const book = books.find(b => b.id === selectedBook)!
     await fetch(`/api/series/${seriesId}/books/${book.id}/chapters/reorder`, {

@@ -4,12 +4,19 @@ import { Prisma } from '@/generated/prisma/client'
 
 type Params = { params: Promise<{ chapterId: string }> }
 
-function bumpTitle(title: string, delta: number): string {
+// See the matching helper in ../route.ts. Inlined here to avoid a
+// shared-module import dance for two short functions.
+function parseNumberedTitle(title: string): { prefix: string; num: number } | null {
   const bare = /^(\d+)$/.exec(title)
-  if (bare) return String(Number(bare[1]) + delta)
-  const named = /^(Chapter )(\d+)$/i.exec(title)
-  if (named) return `${named[1]}${Number(named[2]) + delta}`
-  return title
+  if (bare) return { prefix: '', num: Number(bare[1]) }
+  const m = /^(.+\s)(\d+)$/.exec(title)
+  if (m) return { prefix: m[1], num: Number(m[2]) }
+  return null
+}
+function bumpTitleIfPrefixMatches(title: string, delta: number, matchPrefix: string): string {
+  const parsed = parseNumberedTitle(title)
+  if (!parsed || parsed.prefix !== matchPrefix) return title
+  return `${parsed.prefix}${parsed.num + delta}`
 }
 
 export async function PATCH(req: Request, { params }: Params) {
@@ -43,15 +50,22 @@ export async function DELETE(_: Request, { params }: Params) {
     const subsequent = await prisma.chapter.findMany({
       where: { bookId: target.bookId, order: { gt: target.order } },
     })
+    // Same prefix-match rule the insert path uses: only renumber
+    // siblings that share the deleted chapter's prefix.
+    const targetParsed = parseNumberedTitle(target.title)
+    const matchPrefix = targetParsed?.prefix ?? null
 
     await prisma.$transaction([
       prisma.chapter.delete({ where: { id: chapterId } }),
-      ...subsequent.map(c =>
-        prisma.chapter.update({
+      ...subsequent.map(c => {
+        const newTitle = matchPrefix !== null
+          ? bumpTitleIfPrefixMatches(c.title, -1, matchPrefix)
+          : c.title
+        return prisma.chapter.update({
           where: { id: c.id },
-          data: { order: c.order - 1, title: bumpTitle(c.title, -1) },
+          data: { order: c.order - 1, title: newTitle },
         })
-      ),
+      }),
     ])
 
     return new NextResponse(null, { status: 204 })

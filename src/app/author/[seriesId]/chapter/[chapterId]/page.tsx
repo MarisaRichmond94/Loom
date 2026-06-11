@@ -139,15 +139,15 @@ export default function ChapterEditorPage() {
     router.push(`/author/${seriesId}/book/${book.id}`)
   }
 
-  // Mirrors the API's bumpTitle: "Chapter 14" → "Chapter 15", "14" → "15",
-  // anything else stays a sensible-but-unique sibling title. Used for the
-  // footer's "Create Next Chapter" so the new chapter inherits the writer's
-  // existing numbering convention.
+  // Generalised "<prefix> <number>" bump: "Chapter 14" → "Chapter 15",
+  // "Bonus Chapter 1" → "Bonus Chapter 2", "14" → "15". Anything that
+  // doesn't fit the pattern gets " (cont.)" appended so the footer still
+  // produces something unique.
   function bumpChapterTitle(title: string): string {
     const bare = /^(\d+)$/.exec(title)
     if (bare) return String(Number(bare[1]) + 1)
-    const named = /^(Chapter )(\d+)$/i.exec(title)
-    if (named) return `${named[1]}${Number(named[2]) + 1}`
+    const m = /^(.+\s)(\d+)$/.exec(title)
+    if (m) return `${m[1]}${Number(m[2]) + 1}`
     return `${title} (cont.)`
   }
 
