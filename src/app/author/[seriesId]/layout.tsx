@@ -105,10 +105,21 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
   }
 
   async function addVariable(name: string, type: string, defaultValue: unknown) {
+    // Derive originBookId from the current route context so the
+    // Context modal's Origin column gets populated at creation time
+    // rather than waiting for a reference to point at the variable.
+    //   - book page → that book directly
+    //   - chapter page → the book containing that chapter
+    //   - series page → fall back to the in-progress book (if any)
+    //   - otherwise → null (the Origin column shows "—")
+    const originBookId =
+      bookId
+      ?? (chapterId ? series?.books.find(b => b.chapters.some(c => c.id === chapterId))?.id : null)
+      ?? (series?.books.find(b => b.inProgress)?.id ?? null)
     await fetch(`/api/series/${seriesId}/variables`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, type, defaultValue }),
+      body: JSON.stringify({ name, type, defaultValue, originBookId }),
     })
     loadSeries()
   }

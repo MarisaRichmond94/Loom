@@ -1,12 +1,20 @@
-// One-off backfill for StoryVariable.originBookId. Origin is defined
-// as the earliest book whose question block (choice point) *writes* to
-// the variable via setsVariables — i.e. where it first comes into
-// existence in the reader's state. Variables that are only ever read
-// fall back to the first book that reads them so they still get a
-// sensible origin. Variables that nothing references stay null.
+// Backfill for StoryVariable.originBookId. Origin is defined as the
+// earliest book whose question block (choice point) *writes* to the
+// variable via setsVariables — i.e. where it first comes into
+// existence in the reader's state.
 //
-// Re-runs are safe: the script overwrites every row's origin (so a
-// later logic change can be reapplied), not just nulls.
+// Fallbacks (in order):
+//   1. Earliest book that writes the variable (preferred — "where it
+//      was first created")
+//   2. Earliest book that reads it (read-only variables still get a
+//      sensible origin)
+//   3. The series's in-progress book (newly-created variables that
+//      haven't been wired up yet land on the writer's current book)
+//
+// Only stamps rows whose originBookId is currently null, so existing
+// stamps (including ones set from the route layer at creation) aren't
+// overwritten. To force a full re-stamp, delete the script's null
+// filter or clear the column first.
 //
 // Run with: npx tsx prisma/scripts/backfill-variable-origins.ts
 import { PrismaClient } from '../../src/generated/prisma/client'
@@ -58,7 +66,8 @@ function namesInTemplates(raw: string | null | undefined): string[] {
 async function main() {
   const seriesList = await prisma.series.findMany({
     include: {
-      variables: true,
+      // Only the variables that haven't been stamped yet.
+      variables: { where: { originBookId: null } },
       books: {
         orderBy: { order: 'asc' },
         include: {
@@ -77,9 +86,9 @@ async function main() {
   let updates = 0
   for (const series of seriesList) {
     if (series.variables.length === 0) continue
-    // First pass over the books captures, per variable, the earliest
-    // book that writes to it (preferred origin) and, separately, the
-    // earliest book that reads it (fallback when nothing ever writes).
+    // First pass: per-variable, capture the earliest book that writes
+    // to it (preferred) and, separately, the earliest book that reads
+    // it (fallback when nothing ever writes).
     const writeOrigin: Record<string, string> = {}
     const readOrigin: Record<string, string> = {}
 
@@ -109,18 +118,24 @@ async function main() {
       for (const name of reads) if (readOrigin[name] == null) readOrigin[name] = book.id
     }
 
+    // Final fallback for variables that nothing references yet:
+    // stamp them with the writer's currently in-progress book. That
+    // matches the layout's route-level stamp for newly-created
+    // variables with no references.
+    const inProgressBookId = series.books.find(b => b.inProgress)?.id ?? null
+
     let stamped = 0
     for (const v of series.variables) {
-      const bookId = writeOrigin[v.name] ?? readOrigin[v.name] ?? null
-      // Always update — supports rerunning after a logic change.
+      const bookId = writeOrigin[v.name] ?? readOrigin[v.name] ?? inProgressBookId ?? null
+      if (!bookId) continue
       await prisma.storyVariable.update({ where: { id: v.id }, data: { originBookId: bookId } })
-      if (bookId) stamped++
+      stamped++
       updates++
     }
-    console.log(`Series "${series.title}": stamped ${stamped}/${series.variables.length} variables`)
+    console.log(`Series "${series.title}": stamped ${stamped}/${series.variables.length} previously-null variables`)
   }
 
-  console.log(`Done. ${updates} variable rows touched.`)
+  console.log(`Done. ${updates} variable rows updated.`)
 }
 
 main()
