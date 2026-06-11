@@ -5,7 +5,19 @@ import { LuPencil, LuX, LuEye, LuArrowUpDown, LuArrowRightToLine, LuRotateCcw } 
 
 type Variable = { id: string; name: string; type: string; defaultValue: string }
 type Chapter = { bookId: string; bookTitle: string; bookOrder: number; chapterId: string; chapterTitle: string; chapterOrder: number; count: number }
-type UsageCounts = { conditions: number; text: number; total: number; chapters: Chapter[]; originBook: string | null }
+type UsageCounts = {
+  conditions: number; text: number; total: number
+  chapters: Chapter[]       // read-only locations — drives drill-in
+  writeChapters: Chapter[]  // write locations — surfaced in delete confirmation alongside reads
+  originBook: string | null
+}
+// Modal view variant. The single source of truth replaces the older
+// `drillVarName` boolean-ish so transitions are explicit and we can't
+// land in two views at once.
+type ModalView =
+  | { kind: 'overview' }
+  | { kind: 'drill'; name: string }
+  | { kind: 'confirmDelete'; name: string }
 type SortMode = 'occurrence' | 'usage' | 'alpha'
 type Props = {
   seriesId: string
@@ -79,9 +91,9 @@ export default function VariablesPanel({ seriesId, variables, onAdd, onUpdate, o
   // require a join client-side.
   const [usage, setUsage] = useState<Record<string, UsageCounts> | null>(null)
   const [sortMode, setSortMode] = useState<SortMode>('occurrence')
-  // When set, the modal is in the per-variable drill-in view showing
-  // every chapter that references this variable.
-  const [drillVarName, setDrillVarName] = useState<string | null>(null)
+  // Single source of truth for which sub-view the modal is in. Always
+  // resets to 'overview' on open.
+  const [view, setView] = useState<ModalView>({ kind: 'overview' })
 
   function openEdit() {
     const initial: Record<string, { name: string; type: string; defaultValue: unknown }> = {}
@@ -91,7 +103,7 @@ export default function VariablesPanel({ seriesId, variables, onAdd, onUpdate, o
     setUsage(null)
     // Reset to the default sort + overview view every time the modal opens.
     setSortMode('occurrence')
-    setDrillVarName(null)
+    setView({ kind: 'overview' })
     fetch(`/api/series/${seriesId}/variable-usage`)
       .then(r => r.ok ? r.json() : null)
       .then(setUsage)
@@ -215,8 +227,8 @@ export default function VariablesPanel({ seriesId, variables, onAdd, onUpdate, o
             className="bg-surface-raised border border-accent/20 rounded-xl p-6 w-full max-w-3xl mx-4 shadow-2xl flex flex-col max-h-[70vh]"
             onClick={e => e.stopPropagation()}
           >
-            {drillVarName
-              ? renderDrillIn(drillVarName)
+            {view.kind === 'drill' ? renderDrillIn(view.name)
+              : view.kind === 'confirmDelete' ? renderConfirmDelete(view.name)
               : renderOverview()}
           </div>
         </div>
@@ -283,8 +295,19 @@ export default function VariablesPanel({ seriesId, variables, onAdd, onUpdate, o
                     const usageTitle = counts
                       ? `Conditions: ${counts.conditions} · Text/templates: ${counts.text}`
                       : 'Loading usage…'
+                    // Row-level click drills in (same target as the eye
+                    // action). Disabled when there are no usages —
+                    // matches the eye button's disabled state. The
+                    // Default and action cells stop propagation so
+                    // their own controls (input, save, eye, delete)
+                    // run without also triggering the drill.
+                    const canDrill = !!counts && counts.total > 0
                     return (
-                      <tr key={v.id} className="border-t border-accent/10 group/row hover:bg-surface-overlay/40 transition">
+                      <tr
+                        key={v.id}
+                        onClick={canDrill ? () => setView({ kind: 'drill', name: v.name }) : undefined}
+                        className={`border-t border-accent/10 group/row hover:bg-surface-overlay/40 transition ${canDrill ? 'cursor-pointer' : ''}`}
+                      >
                         <td className="px-3 py-2 text-ink font-mono max-w-[220px]">
                           <span title={v.name} className="block truncate">{v.name}</span>
                         </td>
@@ -301,7 +324,7 @@ export default function VariablesPanel({ seriesId, variables, onAdd, onUpdate, o
                             ? <span title={counts.originBook} className="block truncate">{counts.originBook}</span>
                             : <span className="text-ink-faint">—</span>}
                         </td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-2" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center gap-2">
                             <div className="flex-1 min-w-0">
                               <DefaultInput
@@ -325,18 +348,18 @@ export default function VariablesPanel({ seriesId, variables, onAdd, onUpdate, o
                           </div>
                         </td>
                         <td className="px-2 py-2 text-ink-muted" title={usageTitle}>{usageText}</td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-2" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center gap-2 justify-end opacity-0 group-hover/row:opacity-100 transition">
                             <button
-                              onClick={() => setDrillVarName(v.name)}
-                              disabled={!counts || counts.total === 0}
+                              onClick={() => setView({ kind: 'drill', name: v.name })}
+                              disabled={!canDrill}
                               className="text-ink-faint hover:text-ink transition disabled:opacity-30 disabled:cursor-not-allowed"
-                              title={counts && counts.total > 0 ? 'View usages' : 'No usages yet'}
+                              title={canDrill ? 'View usages' : 'No usages yet'}
                             >
                               <LuEye size={14} />
                             </button>
                             <button
-                              onClick={() => onDelete(v.id)}
+                              onClick={() => setView({ kind: 'confirmDelete', name: v.name })}
                               className="text-ink-faint hover:text-choice-kill transition"
                               title="Delete"
                             >
@@ -387,13 +410,17 @@ export default function VariablesPanel({ seriesId, variables, onAdd, onUpdate, o
               </thead>
               <tbody>
                 {chapters.map(c => (
-                  <tr key={c.chapterId} className="border-t border-accent/10 group/row hover:bg-surface-overlay/40 transition">
+                  <tr
+                    key={c.chapterId}
+                    onClick={() => navigateToChapter(c.bookId, c.chapterId)}
+                    className="border-t border-accent/10 group/row hover:bg-surface-overlay/40 transition cursor-pointer"
+                  >
                     <td className="px-3 py-2 text-ink">{c.bookTitle}</td>
                     <td className="px-2 py-2 text-ink-muted">{c.chapterTitle}</td>
                     <td className="px-2 py-2 text-ink-muted">{c.count}</td>
                     <td className="px-2 py-2 text-right">
                       <button
-                        onClick={() => navigateToChapter(c.bookId, c.chapterId)}
+                        onClick={e => { e.stopPropagation(); navigateToChapter(c.bookId, c.chapterId) }}
                         className="opacity-0 group-hover/row:opacity-100 text-ink-faint hover:text-ink transition"
                         title={`Open ${c.chapterTitle}`}
                       >
@@ -408,11 +435,113 @@ export default function VariablesPanel({ seriesId, variables, onAdd, onUpdate, o
         )}
 
         <button
-          onClick={() => setDrillVarName(null)}
+          onClick={() => setView({ kind: 'overview' })}
           className="self-end mt-3 flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition"
         >
           <LuRotateCcw size={12} /> return to all context
         </button>
+      </>
+    )
+  }
+
+  function renderConfirmDelete(varName: string) {
+    const counts = usage?.[varName]
+    const total = counts?.total ?? 0
+    // Merge reads + writes by chapterId so the writer sees every site
+    // that references the variable in any way before pulling the
+    // trigger. Each row's count is the sum of reads and writes in that
+    // chapter. Sort follows book then chapter order — same as the
+    // walk produces. The chapter table is the friction: it's right
+    // there, the writer has to scroll past it to reach Delete.
+    const merged = new Map<string, Chapter>()
+    for (const c of counts?.chapters ?? []) merged.set(c.chapterId, { ...c })
+    for (const c of counts?.writeChapters ?? []) {
+      const existing = merged.get(c.chapterId)
+      if (existing) existing.count += c.count
+      else merged.set(c.chapterId, { ...c })
+    }
+    const mergedChapters = Array.from(merged.values()).sort(
+      (a, b) => a.bookOrder - b.bookOrder || a.chapterOrder - b.chapterOrder,
+    )
+    const variable = variables.find(v => v.name === varName)
+
+    async function commitDelete() {
+      if (!variable) return
+      // Switch back to overview first so the freshly deleted row is
+      // gone the moment the parent re-renders with the new variables
+      // prop. The fetch for usage will refetch next time the modal
+      // opens — sufficient for now.
+      setView({ kind: 'overview' })
+      await Promise.resolve(onDelete(variable.id))
+    }
+
+    return (
+      <>
+        <div className="flex items-center justify-between mb-4 shrink-0 gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <h2 className="text-sm font-semibold text-ink truncate">Are you sure you want to delete this context?</h2>
+            <span className="shrink-0 text-[10px] uppercase tracking-widest bg-accent/15 text-accent rounded-full px-2 py-0.5">
+              {total === 1 ? '1 usage' : `${total} usages`}
+            </span>
+          </div>
+          <button onClick={() => setEditOpen(false)} className="text-ink-faint hover:text-ink shrink-0"><LuX size={16} /></button>
+        </div>
+
+        <p className="text-xs text-ink-muted font-mono mb-3 shrink-0">{varName}</p>
+
+        {mergedChapters.length === 0 ? (
+          <p className="text-xs text-ink-faint italic text-center py-6 border border-accent/10 rounded-lg">
+            Nothing in the series references this. Safe to delete.
+          </p>
+        ) : (
+          <div className="overflow-y-auto min-h-0 -mr-3 pr-3 border border-accent/10 rounded-lg">
+            <table className="w-full text-xs">
+              <thead className="bg-surface-overlay sticky top-0 z-10">
+                <tr className="text-ink-faint uppercase tracking-widest">
+                  <th className="text-left font-medium px-3 py-2.5">Book</th>
+                  <th className="text-left font-medium px-2 py-2.5">Chapter</th>
+                  <th className="px-2 py-2.5 w-12" />
+                </tr>
+              </thead>
+              <tbody>
+                {mergedChapters.map(c => (
+                  <tr
+                    key={c.chapterId}
+                    onClick={() => navigateToChapter(c.bookId, c.chapterId)}
+                    className="border-t border-accent/10 group/row hover:bg-surface-overlay/40 transition cursor-pointer"
+                  >
+                    <td className="px-3 py-2 text-ink">{c.bookTitle}</td>
+                    <td className="px-2 py-2 text-ink-muted">{c.chapterTitle}</td>
+                    <td className="px-2 py-2 text-right">
+                      <button
+                        onClick={e => { e.stopPropagation(); navigateToChapter(c.bookId, c.chapterId) }}
+                        className="opacity-0 group-hover/row:opacity-100 text-ink-faint hover:text-ink transition"
+                        title={`Open ${c.chapterTitle}`}
+                      >
+                        <LuArrowRightToLine size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2 mt-4 shrink-0">
+          <button
+            onClick={() => setView({ kind: 'overview' })}
+            className="px-4 py-1.5 text-xs text-ink-muted hover:text-ink transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={commitDelete}
+            className="px-4 py-1.5 rounded text-xs bg-choice-kill text-white font-medium hover:opacity-90 transition"
+          >
+            Delete
+          </button>
+        </div>
       </>
     )
   }
