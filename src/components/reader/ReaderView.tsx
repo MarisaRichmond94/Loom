@@ -25,7 +25,7 @@ import InlineBadEnding from './InlineBadEnding'
 import AvatarButton from '@/components/AvatarButton'
 import Greeting from '@/components/Greeting'
 import PinnedAudio from '@/components/PinnedAudio'
-import { stripEmptyParagraphs, htmlToPlainText, inlineParagraphStyles, PASTE_FONT_FAMILY } from '@/lib/clipboardFormatting'
+import { stripEmptyParagraphs, htmlToPlainText, inlineParagraphStyles, educateHtml, educateQuotes, PASTE_FONT_FAMILY } from '@/lib/clipboardFormatting'
 
 type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
 type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null; isBadEnding?: boolean }
@@ -308,8 +308,10 @@ export default function ReaderView({
     // Wrap in a font-styled container so the destination picks up Charter 11pt
     // via inheritance instead of falling back to its default body font.
     const inner = htmlParts.map(inlineParagraphStyles).join('')
-    const htmlOut = `<div style="font-family:${PASTE_FONT_FAMILY}">${inner}</div>`
-    const textOut = textParts.filter(Boolean).join('\n\n')
+    // Educate straight quotes/apostrophes to their curly equivalents
+    // so a pasted manuscript reads like prose, not source code.
+    const htmlOut = educateHtml(`<div style="font-family:${PASTE_FONT_FAMILY}">${inner}</div>`)
+    const textOut = educateQuotes(textParts.filter(Boolean).join('\n\n'))
     try {
       if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
         await navigator.clipboard.write([

@@ -79,11 +79,49 @@ export function htmlToPlainText(html: string): string {
   return out.replace(/\n{3,}/g, '\n\n').trim()
 }
 
+// Converts straight quotes/apostrophes to their curly typographic
+// equivalents. The editor stores whatever the writer typed (TipTap
+// StarterKit doesn't ship a Typography extension), so without this
+// pass a pasted manuscript drops out as Bob's instead of Bob's, "hi"
+// instead of "hi". Contextual rules:
+//   - Single quote between a letter/digit and a letter (Bob's, don't)
+//     → right single quote (U+2019)
+//   - Single quote after whitespace or an opening bracket (was 'hi)
+//     → left single quote (U+2018)
+//   - Any other straight single quote → right single quote
+//   - Same shape for double quotes (U+201C / U+201D)
+export function educateQuotes(s: string): string {
+  return s
+    .replace(/([\p{L}\p{N}])'([\p{L}])/gu, '$1’$2')
+    .replace(/(^|[\s(\[{])'/g, '$1‘')
+    .replace(/'/g, '’')
+    .replace(/(^|[\s(\[{])"/g, '$1“')
+    .replace(/"/g, '”')
+}
+
+// Walks the HTML's text nodes and educates the quotes inside each one.
+// Attribute values (`style="…"`, etc.) are left untouched because the
+// walker only visits TEXT nodes. Browser-only — this runs from the
+// clipboard handlers, which never execute server-side.
+export function educateHtml(html: string): string {
+  if (typeof document === 'undefined' || !html) return html
+  const div = document.createElement('div')
+  div.innerHTML = html
+  const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT)
+  let node: Node | null
+  while ((node = walker.nextNode())) {
+    node.textContent = educateQuotes(node.textContent ?? '')
+  }
+  return div.innerHTML
+}
+
 // Takes raw HTML (one or more concatenated block fragments) and returns the
 // rich-text + plain-text pair to write to the clipboard.
 export function buildCharterClipboard(rawHtml: string): { html: string; text: string } {
   const cleaned = inlineParagraphStyles(stripEmptyParagraphs(rawHtml))
-  const html = `<div style="font-family:${PASTE_FONT_FAMILY}">${cleaned}</div>`
+  const html = educateHtml(`<div style="font-family:${PASTE_FONT_FAMILY}">${cleaned}</div>`)
+  // text is derived from the educated HTML, so curly quotes carry
+  // through without a second pass.
   const text = htmlToPlainText(html)
   return { html, text }
 }
