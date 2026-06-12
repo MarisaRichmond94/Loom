@@ -76,6 +76,24 @@ type Props = {
 
 const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
 
+// Legacy rows (pre-TipTap branch text / override endingMessage) stored
+// plain strings. JSON.parse on those would crash the editor on load,
+// so wrap any non-JSON content into a one-paragraph-per-line TipTap doc
+// — the writer's next save persists it in the new shape.
+function parseContent(raw: string): unknown {
+  try {
+    return JSON.parse(raw)
+  } catch {
+    const paragraphs = raw.split(/\n+/).map(line => {
+      const trimmed = line.trim()
+      return trimmed
+        ? { type: 'paragraph', content: [{ type: 'text', text: trimmed }] }
+        : { type: 'paragraph' }
+    })
+    return { type: 'doc', content: paragraphs.length > 0 ? paragraphs : [{ type: 'paragraph' }] }
+  }
+}
+
 const COLOR_PRESETS = [
   { label: 'Red',    value: '#ef4444' },
   { label: 'Rose',   value: '#f43f5e' },
@@ -106,6 +124,43 @@ function ToolBtn({ active, onClick, title, children }: {
       {children}
     </button>
   )
+}
+
+// Keeps the caret comfortably inside the scrolling viewport as the writer
+// types. ProseMirror's built-in scrollIntoView only fires when the caret
+// goes fully off-screen — that lets text crawl down to the bottom edge
+// before scrolling, so the writer can't see the line they're typing on.
+// We scroll proactively once the caret enters a margin zone at the top
+// or bottom of the scrolling ancestor.
+const CARET_MARGIN = 96
+function keepCaretInView(editor: { view: { coordsAtPos: (pos: number) => { top: number; bottom: number }; dom: HTMLElement }; state: { selection: { head: number } } }) {
+  // Defer to the next frame so the new line has been laid out — otherwise
+  // coordsAtPos returns the pre-update caret position and we under-scroll.
+  requestAnimationFrame(() => {
+    const caret = editor.view.coordsAtPos(editor.state.selection.head)
+    // Find the nearest scrolling ancestor by overflow alone; don't require
+    // it to be actively overflowing at this instant — it's the container
+    // *meant* to scroll regardless of current content height.
+    let el: HTMLElement | null = editor.view.dom.parentElement
+    while (el && el !== document.body) {
+      const style = getComputedStyle(el)
+      if (/(auto|scroll)/.test(style.overflowY)) break
+      el = el.parentElement
+    }
+    const root = el && el !== document.body ? el : (document.scrollingElement as HTMLElement | null) ?? document.documentElement
+    const usesWindow = root === document.scrollingElement || root === document.documentElement
+    const viewTop = usesWindow ? 0 : root.getBoundingClientRect().top
+    const viewBottom = usesWindow ? window.innerHeight : root.getBoundingClientRect().bottom
+    if (caret.bottom > viewBottom - CARET_MARGIN) {
+      const delta = caret.bottom - (viewBottom - CARET_MARGIN)
+      if (usesWindow) window.scrollBy(0, delta)
+      else root.scrollTop += delta
+    } else if (caret.top < viewTop + CARET_MARGIN) {
+      const delta = caret.top - (viewTop + CARET_MARGIN)
+      if (usesWindow) window.scrollBy(0, delta)
+      else root.scrollTop += delta
+    }
+  })
 }
 
 export default function TextBlock({ content, onChange, autoFocus, characters = [], variables = [], placeholder = 'Write your prose here…' }: Props) {
@@ -146,8 +201,13 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
       EmDash,
       SectionBreak,
     ],
-    content: content ? JSON.parse(content) : JSON.parse(EMPTY),
-    onUpdate: ({ editor }) => { localEditRef.current = true; onChange(JSON.stringify(editor.getJSON())) },
+    content: content ? parseContent(content) : JSON.parse(EMPTY),
+    onUpdate: ({ editor }) => {
+      localEditRef.current = true
+      onChange(JSON.stringify(editor.getJSON()))
+      keepCaretInView(editor)
+    },
+    onSelectionUpdate: ({ editor }) => { keepCaretInView(editor) },
     onFocus: () => setFocused(true),
     onBlur: ({ editor }) => { setFocused(false); editor.commands.setTextSelection(editor.state.selection.anchor) },
   })
