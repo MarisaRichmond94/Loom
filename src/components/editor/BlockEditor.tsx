@@ -39,7 +39,7 @@ type Props = {
   characters: Character[]
   onBlocksChange: () => void
   onChoicesChanged?: () => void
-  onCreateVariable: (name: string, type: string) => Promise<void>
+  onCreateVariable: (name: string, type: string, defaultValue?: unknown) => Promise<void>
   onActiveBlockChange?: (blockId: string | null) => void
 }
 
@@ -136,6 +136,25 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     const el = blocksContainerRef.current.querySelector(`[data-block-id="${newBlockId}"]`) as HTMLElement | null
     el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [newBlockId])
+
+  // Deep-link: when the chapter URL carries `?block=<id>`, scroll that
+  // block into view once the editor has rendered it. Used by the Context
+  // modal's Origin link (and any other future link-to-block flow). Fires
+  // once per id — re-firing on identical state would yank the writer's
+  // scroll position out from under them.
+  const searchParams = useSearchParams()
+  const targetBlockId = searchParams?.get('block') ?? null
+  const scrolledTargetRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!targetBlockId || !blocksContainerRef.current) return
+    if (scrolledTargetRef.current === targetBlockId) return
+    if (!blocks.some(b => b.id === targetBlockId)) return
+    const el = blocksContainerRef.current.querySelector(`[data-block-id="${targetBlockId}"]`) as HTMLElement | null
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setActiveBlockId(targetBlockId)
+    scrolledTargetRef.current = targetBlockId
+  }, [targetBlockId, blocks])
 
   // Ctrl+Shift+Up/Down — move active block
   useEffect(() => {

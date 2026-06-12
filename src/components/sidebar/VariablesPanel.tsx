@@ -4,12 +4,22 @@ import { useState } from 'react'
 import { LuPencil, LuX, LuEye, LuArrowUpDown, LuArrowRightToLine, LuRotateCcw } from 'react-icons/lu'
 
 type Variable = { id: string; name: string; type: string; defaultValue: string }
-type Chapter = { bookId: string; bookTitle: string; bookOrder: number; chapterId: string; chapterTitle: string; chapterOrder: number; count: number }
+type Chapter = { bookId: string; bookTitle: string; bookOrder: number; chapterId: string; chapterTitle: string; chapterOrder: number; count: number; firstBlockId: string | null }
+type Origin = {
+  bookTitle: string
+  chapterId: string
+  chapterTitle: string
+  blockId: string | null
+}
 type UsageCounts = {
   conditions: number; text: number; total: number
   chapters: Chapter[]       // read-only locations — drives drill-in
   writeChapters: Chapter[]  // write locations — surfaced in delete confirmation alongside reads
-  originBook: string | null
+  origin: Origin | null
+  // First time the variable appears in the natural book/chapter walk;
+  // drives the modal's default "occurrence" sort. Null when the variable
+  // is entirely unreferenced — those sort last in stable creation order.
+  firstAppearance: { bookOrder: number; chapterOrder: number } | null
 }
 // Modal view variant. The single source of truth replaces the older
 // `drillVarName` boolean-ish so transitions are explicit and we can't
@@ -115,12 +125,15 @@ export default function VariablesPanel({ seriesId, variables, onAdd, onUpdate, o
     setSortMode(SORT_CYCLE[(idx + 1) % SORT_CYCLE.length])
   }
 
-  function navigateToChapter(bookId: string, chapterId: string) {
+  function navigateToChapter(bookId: string, chapterId: string, blockId: string | null = null) {
     // Open in a new tab so the writer doesn't lose their current
     // context (and the modal's loaded usage data) just to peek at
     // where a variable is referenced. noopener prevents the new tab
-    // from gaining a reference back to this window.
-    window.open(`/author/${seriesId}/chapter/${chapterId}`, '_blank', 'noopener')
+    // from gaining a reference back to this window. `?block=` deep-
+    // links to the first block in that chapter where the variable
+    // appears, picked up by BlockEditor's scroll-into-view effect.
+    const suffix = blockId ? `?block=${blockId}` : ''
+    window.open(`/author/${seriesId}/chapter/${chapterId}${suffix}`, '_blank', 'noopener')
     void bookId  // routed by chapter directly
   }
 
@@ -238,14 +251,28 @@ export default function VariablesPanel({ seriesId, variables, onAdd, onUpdate, o
 
   function renderOverview() {
     // Sort the variables list per the current sort mode. Occurrence =
-    // creation order, which is what the variables prop already gives us
-    // (the layout sorts by id ascending = cuid is timestamp-prefixed).
+    // first appearance in the natural book/chapter walk (earliest write
+    // wins, falls back to earliest read), so renaming a variable mid-book
+    // still puts it where the writer expects to see it. Variables with no
+    // references sort last in stable creation order — the cuid ordering
+    // the layout already provides via `orderBy: { id: 'asc' }`.
     const sorted = (() => {
       if (sortMode === 'alpha') return [...variables].sort((a, b) => a.name.localeCompare(b.name))
       if (sortMode === 'usage') {
         return [...variables].sort((a, b) => (usage?.[b.name]?.total ?? 0) - (usage?.[a.name]?.total ?? 0))
       }
-      return variables
+      return [...variables].sort((a, b) => {
+        const fa = usage?.[a.name]?.firstAppearance
+        const fb = usage?.[b.name]?.firstAppearance
+        if (fa && fb) {
+          if (fa.bookOrder !== fb.bookOrder) return fa.bookOrder - fb.bookOrder
+          if (fa.chapterOrder !== fb.chapterOrder) return fa.chapterOrder - fb.chapterOrder
+          return a.id.localeCompare(b.id)
+        }
+        // Unreferenced variables fall to the bottom; sort stably among themselves.
+        if (!fa && !fb) return a.id.localeCompare(b.id)
+        return fa ? -1 : 1
+      })
     })()
     return (
       <>
@@ -319,10 +346,24 @@ export default function VariablesPanel({ seriesId, variables, onAdd, onUpdate, o
                             {TYPE_SHORT[v.type] ?? v.type}
                           </span>
                         </td>
-                        <td className="px-2 py-2 text-ink-muted max-w-[140px]">
-                          {counts?.originBook
-                            ? <span title={counts.originBook} className="block truncate">{counts.originBook}</span>
-                            : <span className="text-ink-faint">—</span>}
+                        <td className="px-2 py-2 text-ink-muted max-w-[180px]" onClick={e => e.stopPropagation()}>
+                          {counts?.origin ? (() => {
+                            const label = `${counts.origin.bookTitle} — ${counts.origin.chapterTitle}`
+                            const href = `/author/${seriesId}/chapter/${counts.origin.chapterId}${counts.origin.blockId ? `?block=${counts.origin.blockId}` : ''}`
+                            return (
+                              <a
+                                href={href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={label}
+                                className="block truncate text-accent hover:underline"
+                              >
+                                {label}
+                              </a>
+                            )
+                          })() : (
+                            <span className="text-ink-faint">—</span>
+                          )}
                         </td>
                         <td className="px-2 py-2" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center gap-2">
@@ -412,7 +453,7 @@ export default function VariablesPanel({ seriesId, variables, onAdd, onUpdate, o
                 {chapters.map(c => (
                   <tr
                     key={c.chapterId}
-                    onClick={() => navigateToChapter(c.bookId, c.chapterId)}
+                    onClick={() => navigateToChapter(c.bookId, c.chapterId, c.firstBlockId)}
                     className="border-t border-accent/10 group/row hover:bg-surface-overlay/40 transition cursor-pointer"
                   >
                     <td className="px-3 py-2 text-ink">{c.bookTitle}</td>
@@ -420,7 +461,7 @@ export default function VariablesPanel({ seriesId, variables, onAdd, onUpdate, o
                     <td className="px-2 py-2 text-ink-muted">{c.count}</td>
                     <td className="px-2 py-2 text-right">
                       <button
-                        onClick={e => { e.stopPropagation(); navigateToChapter(c.bookId, c.chapterId) }}
+                        onClick={e => { e.stopPropagation(); navigateToChapter(c.bookId, c.chapterId, c.firstBlockId) }}
                         className="opacity-0 group-hover/row:opacity-100 text-ink-faint hover:text-ink transition"
                         title={`Open ${c.chapterTitle}`}
                       >
@@ -507,14 +548,14 @@ export default function VariablesPanel({ seriesId, variables, onAdd, onUpdate, o
                 {mergedChapters.map(c => (
                   <tr
                     key={c.chapterId}
-                    onClick={() => navigateToChapter(c.bookId, c.chapterId)}
+                    onClick={() => navigateToChapter(c.bookId, c.chapterId, c.firstBlockId)}
                     className="border-t border-accent/10 group/row hover:bg-surface-overlay/40 transition cursor-pointer"
                   >
                     <td className="px-3 py-2 text-ink">{c.bookTitle}</td>
                     <td className="px-2 py-2 text-ink-muted">{c.chapterTitle}</td>
                     <td className="px-2 py-2 text-right">
                       <button
-                        onClick={e => { e.stopPropagation(); navigateToChapter(c.bookId, c.chapterId) }}
+                        onClick={e => { e.stopPropagation(); navigateToChapter(c.bookId, c.chapterId, c.firstBlockId) }}
                         className="opacity-0 group-hover/row:opacity-100 text-ink-faint hover:text-ink transition"
                         title={`Open ${c.chapterTitle}`}
                       >
