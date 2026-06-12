@@ -405,6 +405,7 @@ export default function ChapterEditorPage() {
                 condition={chapter.condition}
                 variables={series.variables}
                 onChange={handleConditionChange}
+                polarityToggle
                 labelExtra={
                   <span
                     className="relative inline-flex"
@@ -414,7 +415,7 @@ export default function ChapterEditorPage() {
                     <LuCircleHelp size={12} className="text-ink-faint hover:text-ink transition cursor-help" />
                     {showIfTooltip && (
                       <span className="absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 w-60 bg-surface-overlay border border-accent/20 rounded px-3 py-2 text-xs text-ink-muted shadow-lg normal-case tracking-normal font-normal leading-snug">
-                        Pick variables and the values they must have for this chapter to render to the reader. All listed variables must match. Leave empty to always show.
+                        Pick variables and the values they must have. SHOW IF renders the chapter only when the clauses match; HIDE IF renders it unless they match. Leave empty to always show.
                       </span>
                     )}
                   </span>

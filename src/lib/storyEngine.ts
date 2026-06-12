@@ -16,6 +16,11 @@ export type LegacyCondition = Record<string, ConditionLeafValue>
 export type CompoundCondition = {
   op: 'and' | 'or'
   clauses: Array<{ var: string; value: ConditionLeafValue }>
+  // When 'hide', the condition flips polarity: a matching clause set means
+  // "hide this chapter" rather than the default "show this chapter". Stored
+  // here (not on a sibling column) so the existing condition JSON is the
+  // single source of truth across the engine, reader, and editor.
+  mode?: 'hide'
 }
 export type Condition = LegacyCondition | CompoundCondition
 
@@ -78,7 +83,10 @@ function applyVarOp(current: StoryState[string] | undefined, instruction: Choice
 export function matchesCondition(condition: Condition, storyState: StoryState): boolean {
   if (isCompoundCondition(condition)) {
     const test = (cl: { var: string; value: ConditionLeafValue }) => storyState[cl.var] === cl.value
-    return condition.op === 'or' ? condition.clauses.some(test) : condition.clauses.every(test)
+    const matched = condition.op === 'or' ? condition.clauses.some(test) : condition.clauses.every(test)
+    // mode='hide' inverts: the chapter is "visible" when the clauses DON'T match.
+    // Block overrides never set this mode, so override resolution is unaffected.
+    return condition.mode === 'hide' ? !matched : matched
   }
   return Object.entries(condition).every(([k, v]) => storyState[k] === v)
 }

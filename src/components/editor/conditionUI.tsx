@@ -65,43 +65,54 @@ export function ValueSetter({ v, currentVal, onChange }: {
 }
 
 export type ConditionOp = 'and' | 'or'
+export type ConditionPolarity = 'show' | 'hide'
 export type ConditionClause = { var: string; value: unknown }
 
-type ParsedCondition = { op: ConditionOp; clauses: ConditionClause[] }
+type ParsedCondition = { op: ConditionOp; polarity: ConditionPolarity; clauses: ConditionClause[] }
 
-// Reads either legacy (`{ a: 1, b: 2 }`) or compound (`{ op, clauses }`) JSON shapes
-// and normalizes to a single in-memory form for the editor.
+// Reads either legacy (`{ a: 1, b: 2 }`) or compound (`{ op, clauses, mode? }`)
+// JSON shapes and normalizes to a single in-memory form for the editor. The
+// optional `mode: 'hide'` marker on the compound shape flips the polarity:
+// when present, the condition reads as "hide if matched" rather than the
+// default "show if matched". Legacy shape has no place to store polarity,
+// so it always parses as 'show'.
 export function parseCondition(raw: string | null): ParsedCondition {
-  if (!raw) return { op: 'and', clauses: [] }
+  if (!raw) return { op: 'and', polarity: 'show', clauses: [] }
   try {
     const parsed = JSON.parse(raw)
     if (parsed && typeof parsed === 'object') {
       if ('op' in parsed && Array.isArray((parsed as { clauses?: unknown }).clauses)) {
-        const compound = parsed as { op: unknown; clauses: ConditionClause[] }
+        const compound = parsed as { op: unknown; mode?: unknown; clauses: ConditionClause[] }
         return {
           op: compound.op === 'or' ? 'or' : 'and',
+          polarity: compound.mode === 'hide' ? 'hide' : 'show',
           clauses: compound.clauses,
         }
       }
       return {
         op: 'and',
+        polarity: 'show',
         clauses: Object.entries(parsed as Record<string, unknown>).map(([k, v]) => ({ var: k, value: v })),
       }
     }
   } catch { /* fall through */ }
-  return { op: 'and', clauses: [] }
+  return { op: 'and', polarity: 'show', clauses: [] }
 }
 
-// Writes back to legacy shape when op=AND (or single clause) to stay backwards
-// compatible on disk; only emits the compound shape when op=OR with 2+ clauses.
-export function stringifyCondition(op: ConditionOp, clauses: ConditionClause[]): string | null {
+// Writes back to legacy shape when op=AND, polarity=show, or single clause —
+// keeps existing on-disk data readable. Falls to the compound shape when we
+// need somewhere to store op=OR or mode=hide. An empty clause list never
+// emits anything, regardless of polarity (no "hide always" — degenerate).
+export function stringifyCondition(op: ConditionOp, clauses: ConditionClause[], polarity: ConditionPolarity = 'show'): string | null {
   if (clauses.length === 0) return null
-  if (op === 'and' || clauses.length === 1) {
+  if (polarity === 'show' && (op === 'and' || clauses.length === 1)) {
     const obj: Record<string, unknown> = {}
     for (const c of clauses) obj[c.var] = c.value
     return JSON.stringify(obj)
   }
-  return JSON.stringify({ op: 'or', clauses })
+  const compound: { op: ConditionOp; clauses: ConditionClause[]; mode?: 'hide' } = { op, clauses }
+  if (polarity === 'hide') compound.mode = 'hide'
+  return JSON.stringify(compound)
 }
 
 function OpToggle({ value, onChange, disabled }: {
@@ -127,12 +138,16 @@ function OpToggle({ value, onChange, disabled }: {
   )
 }
 
-export function ConditionRow({ condition, variables, onChange, label = 'Show if:', labelExtra }: {
+export function ConditionRow({ condition, variables, onChange, label = 'Show if:', labelExtra, polarityToggle = false }: {
   condition: string | null
   variables: ConditionVariable[]
   onChange: (next: string | null) => void
   label?: string
   labelExtra?: ReactNode
+  // When true, the row's leading label becomes a SHOW IF / HIDE IF toggle
+  // and the polarity is stored in the condition JSON. Off by default — only
+  // chapter settings opts in; block override conditions stay show-only.
+  polarityToggle?: boolean
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuQuery, setMenuQuery] = useState('')
@@ -157,15 +172,15 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
     }
   }, [menuOpen])
 
-  const { op, clauses } = parseCondition(condition)
+  const { op, polarity, clauses } = parseCondition(condition)
   const valueByName: Record<string, unknown> = {}
   for (const c of clauses) valueByName[c.var] = c.value
   const attachedNames = new Set(clauses.map(c => c.var))
   const attachedVars = variables.filter(v => attachedNames.has(v.name))
   const unattachedVars = variables.filter(v => !attachedNames.has(v.name))
 
-  function save(nextOp: ConditionOp, nextClauses: ConditionClause[]) {
-    onChange(stringifyCondition(nextOp, nextClauses.filter(c => c.value !== undefined)))
+  function save(nextOp: ConditionOp, nextClauses: ConditionClause[], nextPolarity: ConditionPolarity = polarity) {
+    onChange(stringifyCondition(nextOp, nextClauses.filter(c => c.value !== undefined), nextPolarity))
   }
 
   function setVal(name: string, val: unknown) {
@@ -190,9 +205,29 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
     save(nextOp, clauses)
   }
 
+  function setPolarity(nextPolarity: ConditionPolarity) {
+    save(op, clauses, nextPolarity)
+  }
+
   return (
     <div className="flex items-center gap-2 mb-2 flex-wrap">
-      <span className="text-xs text-ink-faint uppercase tracking-widest shrink-0">{label}</span>
+      {polarityToggle ? (
+        <div className="flex rounded overflow-hidden border border-accent/20 text-xs shrink-0">
+          {(['show', 'hide'] as const).map(p => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPolarity(p)}
+              title={p === 'show' ? 'Render to the reader only when these variables match' : 'Hide from the reader when these variables match'}
+              className={`px-2 py-0.5 transition uppercase tracking-wider ${polarity === p ? 'bg-accent text-surface-base' : 'text-ink-faint hover:text-ink'}`}
+            >
+              {p} if
+            </button>
+          ))}
+        </div>
+      ) : (
+        <span className="text-xs text-ink-faint uppercase tracking-widest shrink-0">{label}</span>
+      )}
       {labelExtra}
       {clauses.length === 0 && (
         <span className="text-xs text-ink-faint italic">always</span>
