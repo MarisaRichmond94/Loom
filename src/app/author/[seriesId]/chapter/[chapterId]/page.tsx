@@ -118,15 +118,20 @@ export default function ChapterEditorPage() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  async function createVariable(name: string, type: string) {
-    const defaultValue: unknown = type === 'boolean' ? false : type === 'number' ? 0 : ''
+  async function createVariable(name: string, type: string, defaultValue?: unknown) {
+    // Caller may specify defaultValue (the choice-block create form lets the
+    // writer pick the canon value while creating); otherwise fall back to
+    // the type's zero so existing call sites keep working.
+    const resolvedDefault: unknown = defaultValue !== undefined
+      ? defaultValue
+      : type === 'boolean' ? false : type === 'number' ? 0 : ''
     // Stamp the variable's origin with the book this chapter belongs to,
     // so the Context modal's Origin column shows where it came from.
     const originBookId = series.books.find(b => b.chapters.some(c => c.id === chapterId))?.id ?? null
     await fetch(`/api/series/${seriesId}/variables`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, type, defaultValue, originBookId }),
+      body: JSON.stringify({ name, type, defaultValue: resolvedDefault, originBookId }),
     })
     loadSeries()
   }

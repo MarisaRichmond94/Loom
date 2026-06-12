@@ -13,7 +13,7 @@ type Character = { id: string; name: string; age?: number | null; hasAvatar?: bo
 // existing data stays in its original form unless the writer flips to a
 // counter operation.
 type NumberSetValue = number | { op: '=' | '+=' | '-='; value: number }
-function NumberSetWithOp({ value, onChange }: { value: unknown; onChange: (v: NumberSetValue) => void }) {
+function NumberSetWithOp({ value, onChange, autoFocus }: { value: unknown; onChange: (v: NumberSetValue) => void; autoFocus?: boolean }) {
   const isObj = typeof value === 'object' && value !== null && 'op' in value && 'value' in value
   const op = isObj ? (value as { op: '=' | '+=' | '-=' }).op : '='
   const num = isObj
@@ -42,6 +42,7 @@ function NumberSetWithOp({ value, onChange }: { value: unknown; onChange: (v: Nu
           the browser's native up/down spinner controls on type="number" in
           Chrome, Safari, and Firefox. */}
       <input
+        autoFocus={autoFocus}
         type="number"
         value={num}
         onChange={e => update(op, Number(e.target.value))}
@@ -63,30 +64,82 @@ type Props = {
   characters?: Character[]
   onUpdateBlock: (data: Partial<{ displayType: string; prompt: string; condition: string | null }>) => void
   onUpdateChoice: (choiceId: string, data: Partial<Choice>) => void
-  onCreateVariable: (name: string, type: string) => Promise<void>
+  onCreateVariable: (name: string, type: string, defaultValue?: unknown) => Promise<void>
 }
 
 const VAR_TYPES = ['string', 'number', 'boolean'] as const
 const DEFAULT_VALUE = TYPE_DEFAULT_VALUE
 
+// The value the sibling branch should receive when a writer creates a new
+// variable from one branch. Booleans flip — the typical pattern is "the
+// two branches set the same flag to opposite values". Strings and numbers
+// don't have a meaningful "opposite", so they go to the type's zero and
+// the writer can edit the sibling's value directly after creation.
+function siblingValueFor(type: typeof VAR_TYPES[number], thisBranchValue: unknown): unknown {
+  if (type === 'boolean') return !(thisBranchValue as boolean)
+  if (type === 'number') return 0
+  return ''
+}
+
 function ChoicePanel({
   choice, slotPlaceholder, labelClass, bgClass, borderClass,
-  variables, characters, onUpdateChoice, onCreateVariable,
+  variables, characters, hasSibling, focusVarName, onUpdateChoice, onCreateAndPair,
 }: {
   choice: Choice; slotPlaceholder: string; labelClass: string; bgClass: string; borderClass: string
   variables: Variable[]
   characters?: Character[]
+  hasSibling: boolean
+  // When the parent has just paired a newly-created variable onto this
+  // panel as the sibling, this carries that variable's name so the
+  // panel can autoFocus its input — useful for string vars where the
+  // writer needs to immediately type the alternate value.
+  focusVarName: string | null
   onUpdateChoice: Props['onUpdateChoice']
-  onCreateVariable: Props['onCreateVariable']
+  onCreateAndPair: (params: {
+    fromChoiceId: string
+    name: string
+    type: typeof VAR_TYPES[number]
+    defaultValue: unknown
+    thisBranchValue: unknown
+    otherBranchValue: unknown
+  }) => Promise<void>
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [showAttach, setShowAttach] = useState(false)
   const [attachQuery, setAttachQuery] = useState('')
   const [newName, setNewName] = useState('')
-  const [newType, setNewType] = useState<typeof VAR_TYPES[number]>('string')
+  const [newType, setNewType] = useState<typeof VAR_TYPES[number]>('boolean')
+  const [newDefault, setNewDefault] = useState<unknown>('')
+  const [newThisVal, setNewThisVal] = useState<unknown>('')
+  const [newOtherVal, setNewOtherVal] = useState<unknown>('')
+  // Tracks whether the writer has manually edited the other-branch value.
+  // Until they do, it stays paired with this-branch — flipping a boolean
+  // on this-branch flips the other side too. Once edited, the writer
+  // owns it and we stop auto-pairing.
+  const [otherEdited, setOtherEdited] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const attachSearchRef = useRef<HTMLInputElement>(null)
+
+  // Reset value pickers whenever the writer changes the type or opens the
+  // form fresh. Default → type's zero. This-branch defaults to the OPPOSITE
+  // of the canon value for booleans (writers usually flag a special branch
+  // by flipping the canon), and to the same zero otherwise. Other-branch
+  // is auto-paired off this-branch via siblingValueFor.
+  useEffect(() => {
+    const zero = DEFAULT_VALUE[newType] ?? ''
+    const thisVal = newType === 'boolean' ? !(zero as boolean) : zero
+    setNewDefault(zero)
+    setNewThisVal(thisVal)
+    setNewOtherVal(siblingValueFor(newType, thisVal))
+    setOtherEdited(false)
+  }, [newType, showCreate])
+
+  // Auto-pair the other branch as long as the writer hasn't taken it over.
+  useEffect(() => {
+    if (otherEdited) return
+    setNewOtherVal(siblingValueFor(newType, newThisVal))
+  }, [newThisVal, newType, otherEdited])
 
   useEffect(() => {
     function onDown(e: MouseEvent) {
@@ -137,9 +190,20 @@ function ChoicePanel({
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     const name = newName.trim(); if (!name) return
-    save({ ...vars, [name]: DEFAULT_VALUE[newType] ?? '' })
-    await onCreateVariable(name, newType)
-    setNewName(''); setNewType('string'); setShowCreate(false); setMenuOpen(false)
+    // Attach to THIS branch with the writer's chosen this-branch value
+    // immediately so the local row renders even before the variable
+    // creation round-trips. Parent then creates the variable and pairs
+    // it onto the sibling panel.
+    save({ ...vars, [name]: newThisVal })
+    await onCreateAndPair({
+      fromChoiceId: choice.id,
+      name,
+      type: newType,
+      defaultValue: newDefault,
+      thisBranchValue: newThisVal,
+      otherBranchValue: newOtherVal,
+    })
+    setNewName(''); setNewType('boolean'); setShowCreate(false); setMenuOpen(false)
   }
 
   return (
@@ -226,46 +290,84 @@ function ChoicePanel({
         {attachedVars.length === 0 && !showCreate && (
           <p className="text-xs text-ink-faint italic">No context applied yet</p>
         )}
-        {attachedVars.map(v => (
-          <div key={v.id} className="flex items-center gap-2">
-            <span className="text-xs text-ink-muted truncate min-w-0" title={v.name}>{v.name}</span>
-            {/* Number setter is compact (op dropdown + ~80px input) and
-                sits flush against the X; ValueSetter for boolean/string
-                still wraps in flex-1 so its full-width inputs stretch. */}
-            {v.type === 'number' ? (
-              <NumberSetWithOp value={vars[v.name]} onChange={val => setVal(v.name, val)} />
-            ) : (
-              <div className="flex-1">
-                <ValueSetter v={v} currentVal={vars[v.name]} onChange={val => setVal(v.name, val)} />
-              </div>
-            )}
-            <button onClick={() => detach(v.name)} className="text-ink-muted hover:text-choice-kill transition shrink-0"><LuX size={13} /></button>
-          </div>
-        ))}
+        {attachedVars.map(v => {
+          const shouldFocus = v.name === focusVarName
+          return (
+            <div key={v.id} className="flex items-center gap-2">
+              <span className="text-xs text-ink-muted truncate min-w-0" title={v.name}>{v.name}</span>
+              {/* Number setter is compact (op dropdown + ~80px input) and
+                  sits flush against the X; ValueSetter for boolean/string
+                  still wraps in flex-1 so its full-width inputs stretch. */}
+              {v.type === 'number' ? (
+                <NumberSetWithOp value={vars[v.name]} onChange={val => setVal(v.name, val)} autoFocus={shouldFocus} />
+              ) : (
+                <div className="flex-1">
+                  <ValueSetter v={v} currentVal={vars[v.name]} onChange={val => setVal(v.name, val)} autoFocus={shouldFocus} />
+                </div>
+              )}
+              <button onClick={() => detach(v.name)} className="text-ink-muted hover:text-choice-kill transition shrink-0"><LuX size={13} /></button>
+            </div>
+          )
+        })}
       </div>
 
-      {/* Create new inline form */}
+      {/* Create new inline form. Row 1: name (wide) + type. Row 2: Default,
+          This branch, Other branch value pickers + save/cancel. Other-branch
+          is pre-filled from this-branch (boolean → opposite, number → 0,
+          string → empty) but the writer can override before submitting. */}
       {showCreate && (
-        <form onSubmit={handleCreate} className="flex items-center gap-2 mt-2">
-          <input
-            autoFocus
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => e.key === 'Escape' && (setShowCreate(false))}
-            placeholder="Variable name"
-            className="flex-1 bg-black/20 border border-black/20 rounded px-2 py-1 text-xs text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
-          />
-          <select
-            value={newType}
-            onChange={e => setNewType(e.target.value as typeof VAR_TYPES[number])}
-            className="bg-black/20 border border-black/20 rounded px-2 py-1 text-xs text-ink outline-none"
-          >
-            <option value="string">Text</option>
-            <option value="number">Number</option>
-            <option value="boolean">Boolean</option>
-          </select>
-          <button type="submit" className="text-accent px-1"><LuCheck size={13} /></button>
-          <button type="button" onClick={() => setShowCreate(false)} className="text-ink-faint px-1"><LuX size={13} /></button>
+        <form onSubmit={handleCreate} className="flex flex-col gap-2 mt-2">
+          <div className="flex items-center gap-2">
+            <input
+              autoFocus
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => e.key === 'Escape' && (setShowCreate(false))}
+              placeholder="Enter the name of the variable"
+              className="flex-1 bg-black/20 border border-black/20 rounded px-2 py-1 text-xs text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
+            />
+            <select
+              value={newType}
+              onChange={e => setNewType(e.target.value as typeof VAR_TYPES[number])}
+              className="bg-black/20 border border-black/20 rounded px-2 py-1 text-xs text-ink outline-none"
+            >
+              <option value="string">Text</option>
+              <option value="number">Number</option>
+              <option value="boolean">Boolean</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-ink-faint uppercase tracking-wider shrink-0">Default</span>
+            <div className="flex-1 min-w-0">
+              <ValueSetter
+                v={{ id: '_new_default', name: '_new', type: newType }}
+                currentVal={newDefault}
+                onChange={val => setNewDefault(val ?? (DEFAULT_VALUE[newType] ?? ''))}
+              />
+            </div>
+            <span className="text-ink-faint uppercase tracking-wider shrink-0 ml-1">This branch</span>
+            <div className="flex-1 min-w-0">
+              <ValueSetter
+                v={{ id: '_new_thisval', name: '_new', type: newType }}
+                currentVal={newThisVal}
+                onChange={val => setNewThisVal(val ?? (DEFAULT_VALUE[newType] ?? ''))}
+              />
+            </div>
+            {hasSibling && (
+              <>
+                <span className="text-ink-faint uppercase tracking-wider shrink-0 ml-1">Other branch</span>
+                <div className="flex-1 min-w-0">
+                  <ValueSetter
+                    v={{ id: '_new_otherval', name: '_new', type: newType }}
+                    currentVal={newOtherVal}
+                    onChange={val => { setNewOtherVal(val ?? (DEFAULT_VALUE[newType] ?? '')); setOtherEdited(true) }}
+                  />
+                </div>
+              </>
+            )}
+            <button type="submit" className="text-accent px-1 shrink-0"><LuCheck size={13} /></button>
+            <button type="button" onClick={() => setShowCreate(false)} className="text-ink-faint px-1 shrink-0"><LuX size={13} /></button>
+          </div>
         </form>
       )}
 
@@ -310,6 +412,26 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
   const primaryChoice = choices[0] ?? null
   const secondaryChoice = choices[1] ?? null
 
+  // After creating a variable from one panel, signal the sibling to
+  // autoFocus the freshly-paired row — keyed by { choiceId: varName } so
+  // each panel only picks up its own focus targets. React's autoFocus
+  // fires on mount only, so the signal can stay set without re-focusing
+  // on unrelated rerenders.
+  const [pairedFocus, setPairedFocus] = useState<{ choiceId: string; varName: string } | null>(null)
+
+  async function handleCreateAndPair({ fromChoiceId, name, type, defaultValue, otherBranchValue }: {
+    fromChoiceId: string; name: string; type: typeof VAR_TYPES[number]; defaultValue: unknown; thisBranchValue: unknown; otherBranchValue: unknown
+  }) {
+    await onCreateVariable(name, type, defaultValue)
+    const sibling = choices.find(c => c.id !== fromChoiceId)
+    if (!sibling) return
+    const siblingVars = JSON.parse(sibling.setsVariables || '{}') as Record<string, unknown>
+    onUpdateChoice(sibling.id, {
+      setsVariables: JSON.stringify({ ...siblingVars, [name]: otherBranchValue }),
+    })
+    setPairedFocus({ choiceId: sibling.id, varName: name })
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
@@ -349,7 +471,9 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             choice={primaryChoice} slotPlaceholder="Choice 1" labelClass="text-choice-spare"
             bgClass="bg-choice-spare-bg" borderClass="border-choice-spare-border"
             variables={variables} characters={characters}
-            onUpdateChoice={onUpdateChoice} onCreateVariable={onCreateVariable}
+            hasSibling={!!secondaryChoice}
+            focusVarName={pairedFocus?.choiceId === primaryChoice.id ? pairedFocus.varName : null}
+            onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
           />
         )}
         {secondaryChoice && (
@@ -357,7 +481,9 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             choice={secondaryChoice} slotPlaceholder="Choice 2" labelClass="text-choice-kill"
             bgClass="bg-choice-kill-bg" borderClass="border-choice-kill-border"
             variables={variables} characters={characters}
-            onUpdateChoice={onUpdateChoice} onCreateVariable={onCreateVariable}
+            hasSibling={!!primaryChoice}
+            focusVarName={pairedFocus?.choiceId === secondaryChoice.id ? pairedFocus.varName : null}
+            onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
           />
         )}
       </div>

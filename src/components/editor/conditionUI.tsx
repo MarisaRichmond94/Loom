@@ -28,15 +28,17 @@ export function resolveAttachDefault(v: ConditionVariable): unknown {
 
 const baseCls = 'bg-black/20 border border-black/20 rounded pl-2 py-1 text-xs text-ink outline-none focus:border-accent/50 w-full'
 
-export function ValueSetter({ v, currentVal, onChange }: {
+export function ValueSetter({ v, currentVal, onChange, autoFocus }: {
   v: ConditionVariable
   currentVal: unknown
   onChange: (val: unknown) => void
+  autoFocus?: boolean
 }) {
   if (v.type === 'boolean') {
     return (
       <div className="relative w-full">
         <select
+          autoFocus={autoFocus}
           value={currentVal !== undefined ? String(currentVal) : ''}
           onChange={e => onChange(e.target.value === '' ? undefined : e.target.value === 'true')}
           className={`${baseCls} appearance-none pr-6`}
@@ -51,6 +53,7 @@ export function ValueSetter({ v, currentVal, onChange }: {
   }
   return (
     <input
+      autoFocus={autoFocus}
       type={v.type === 'number' ? 'number' : 'text'}
       value={currentVal !== undefined ? String(currentVal) : ''}
       onChange={e => {
