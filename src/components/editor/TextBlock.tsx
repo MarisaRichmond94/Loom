@@ -53,7 +53,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   LuMessageSquare, LuCheck, LuX, LuPencil, LuUser,
   LuAlignLeft, LuAlignCenter, LuAlignRight, LuAlignJustify,
-  LuBold, LuItalic, LuMinus,
+  LuBold, LuItalic, LuUnderline, LuStrikethrough, LuMinus,
 } from 'react-icons/lu'
 import { Footnote } from '@/lib/extensions/footnote'
 import { CharacterMark } from '@/lib/extensions/character'
@@ -479,6 +479,12 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
           </ToolBtn>
           <ToolBtn active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()} title="Italic">
             <LuItalic size={13} />
+          </ToolBtn>
+          <ToolBtn active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()} title="Underline (⌘U)">
+            <LuUnderline size={13} />
+          </ToolBtn>
+          <ToolBtn active={editor.isActive('strike')} onClick={() => editor.chain().focus().toggleStrike().run()} title="Strikethrough (⌘⇧X)">
+            <LuStrikethrough size={13} />
           </ToolBtn>
           <Sep />
           <ToolBtn active={editor.isActive({ textAlign: 'left' })} onClick={() => editor.chain().focus().setTextAlign('left').run()} title="Align left">
