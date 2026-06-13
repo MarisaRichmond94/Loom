@@ -73,7 +73,7 @@ function SortableBlock({
       className="flex items-start group"
       onClick={onActivate}
     >
-      <div className={`flex-1 min-w-0 bg-surface-raised border border-accent/10 border-l-4 ${BLOCK_BORDER[block.type] ?? ''} rounded-r-lg p-4 relative transition-[margin] duration-200 group-hover:mr-2 ${isActive ? 'ring-1 ring-inset ring-accent/30' : ''}`}>
+      <div className={`flex-1 min-w-0 bg-surface-raised border border-accent/10 border-l-4 ${BLOCK_BORDER[block.type] ?? ''} rounded-r-lg p-4 relative transition-shadow duration-150 ${isActive ? 'ring-1 ring-inset ring-accent/40' : 'group-hover:ring-1 group-hover:ring-inset group-hover:ring-accent/20'}`}>
         <button
           {...attributes}
           {...listeners}
