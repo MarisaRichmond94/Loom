@@ -29,10 +29,24 @@ export async function POST(req: Request, { params }: Params) {
   const { title, insertAtOrder } = await req.json()
   if (!title?.trim()) return NextResponse.json({ error: 'title required' }, { status: 400 })
 
+  // New chapters inherit pov/date from the chapter that comes just
+  // before them in order — writers usually continue the same POV across
+  // chapters, and dates either repeat or advance from the previous one.
+  // The Author can edit both fields after the navigate; this is just a
+  // smarter default than "blank".
+  async function previousChapterMeta(beforeOrder: number): Promise<{ pov: string | null; date: string | null }> {
+    const prev = await prisma.chapter.findFirst({
+      where: { bookId, order: { lt: beforeOrder } },
+      orderBy: { order: 'desc' },
+    })
+    return { pov: prev?.pov ?? null, date: prev?.date ?? null }
+  }
+
   if (insertAtOrder == null) {
     const count = await prisma.chapter.count({ where: { bookId } })
+    const inheritedMeta = await previousChapterMeta(count + 1)
     const chapter = await prisma.chapter.create({
-      data: { bookId, title: title.trim(), order: count + 1 },
+      data: { bookId, title: title.trim(), order: count + 1, ...inheritedMeta },
     })
     return NextResponse.json(chapter, { status: 201 })
   }
@@ -56,8 +70,9 @@ export async function POST(req: Request, { params }: Params) {
         data: { order: c.order + 1, title: newTitle },
       })
     }
+    const inheritedMeta = await previousChapterMeta(insertAtOrder)
     return tx.chapter.create({
-      data: { bookId, title: trimmedTitle, order: insertAtOrder },
+      data: { bookId, title: trimmedTitle, order: insertAtOrder, ...inheritedMeta },
     })
   })
 

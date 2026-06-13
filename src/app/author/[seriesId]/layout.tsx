@@ -91,7 +91,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
     })
     const chapter = await res.json()
     await loadSeries()
-    router.push(`/author/${seriesId}/chapter/${chapter.id}`)
+    router.push(`/author/${seriesId}/chapter/${chapter.id}?focus=pov`)
   }
 
   async function insertChapter(forBookId: string, title: string, atOrder: number) {
@@ -102,7 +102,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
     })
     const chapter = await res.json()
     await loadSeries()
-    router.push(`/author/${seriesId}/chapter/${chapter.id}`)
+    router.push(`/author/${seriesId}/chapter/${chapter.id}?focus=pov`)
   }
 
   async function addVariable(name: string, type: string, defaultValue: unknown) {

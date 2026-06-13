@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp } from 'react-icons/lu'
 import BlockEditor from '@/components/editor/BlockEditor'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
@@ -31,6 +31,39 @@ export default function ChapterEditorPage() {
   const [showIfTooltip, setShowIfTooltip] = useState(false)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
+  const povInputRef = useRef<HTMLInputElement>(null)
+  const focusedPovRef = useRef<string | null>(null)
+  const searchParams = useSearchParams()
+  // POV draft + autocomplete bookkeeping.
+  //   povDraft        — what the input currently shows (typed + any suggested suffix)
+  //   typedPrefixRef  — the portion the writer has actually typed; the rest is
+  //                     the auto-suggestion that gets selection-highlighted.
+  //   rejectedPrefixRef — when the writer presses Backspace on a selected
+  //                       suggestion, we lock in their typed prefix as
+  //                       "don't re-suggest this exact string" so they can
+  //                       commit a partial match like "N" or "No" without
+  //                       fighting the autocomplete.
+  const [povDraft, setPovDraft] = useState('')
+  const typedPrefixRef = useRef('')
+  const rejectedPrefixRef = useRef<string | null>(null)
+  const povSyncedChapterRef = useRef<string | null>(null)
+
+  // Focus the POV field once after navigation from chapter creation.
+  // The router uses `?focus=pov` to signal it; we only fire on the
+  // first render where the input is mounted for that chapterId, so
+  // a manual refresh of the URL doesn't keep yanking focus back.
+  // Depending on `chapter?.id` (not just chapterId) keeps the effect
+  // alive past the skeleton render — without that, the first run
+  // happens while povInputRef is still null and the focus is lost.
+  useEffect(() => {
+    if (searchParams?.get('focus') !== 'pov') return
+    if (focusedPovRef.current === chapterId) return
+    const el = povInputRef.current
+    if (!el) return
+    el.focus()
+    el.select()
+    focusedPovRef.current = chapterId
+  }, [searchParams, chapterId, chapter?.id])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -54,6 +87,78 @@ export default function ChapterEditorPage() {
     setChapter(prev => prev ? { ...prev, [field]: value } : null)
     patchChapter({ [field]: value || null })
   }
+
+  // Distinct POV values used in the same book, frequency-sorted.
+  // Excludes the current chapter so a freshly inherited POV doesn't
+  // shadow other valid completions.
+  const pastPOVs = useMemo(() => {
+    if (!series) return []
+    const book = series.books.find(b => b.chapters.some(c => c.id === chapterId))
+    if (!book) return []
+    const counts = new Map<string, number>()
+    for (const c of book.chapters) {
+      if (c.id === chapterId) continue
+      const pov = c.pov?.trim()
+      if (pov) counts.set(pov, (counts.get(pov) ?? 0) + 1)
+    }
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([name]) => name)
+  }, [series, chapterId])
+
+  function findPovSuggestion(typed: string): string | null {
+    if (!typed) return null
+    if (rejectedPrefixRef.current && typed.toLowerCase() === rejectedPrefixRef.current.toLowerCase()) return null
+    const lower = typed.toLowerCase()
+    return pastPOVs.find(p => p.toLowerCase().startsWith(lower) && p.length > typed.length) ?? null
+  }
+
+  function handlePovChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const next = e.target.value
+    // Any keystroke that changes the typed prefix invalidates the prior
+    // rejection — the writer is exploring a different stem now.
+    if (rejectedPrefixRef.current && next !== rejectedPrefixRef.current) {
+      rejectedPrefixRef.current = null
+    }
+    typedPrefixRef.current = next
+    const suggestion = findPovSuggestion(next)
+    setPovDraft(suggestion ?? next)
+  }
+
+  function handlePovKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    // Backspace while the suggestion's tail is highlighted means "I don't
+    // want this completion" — keep just the typed prefix and remember to
+    // not re-suggest it on the next render.
+    if (e.key === 'Backspace') {
+      const input = e.currentTarget
+      const hasSelection = input.selectionStart !== input.selectionEnd
+      if (hasSelection && typedPrefixRef.current.length < povDraft.length) {
+        e.preventDefault()
+        rejectedPrefixRef.current = typedPrefixRef.current
+        setPovDraft(typedPrefixRef.current)
+        return
+      }
+    }
+    // Enter commits + drops focus, same as blur. Useful when the writer
+    // wants to keep both hands on the keyboard after typing a brand-new
+    // POV (no autocomplete suggestion to Tab onto).
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      e.currentTarget.blur()
+    }
+  }
+
+  // After every render where the draft contains an unaccepted suggestion,
+  // highlight just the suggested tail. Selection-based highlight lets Tab
+  // accept naturally (focus moves → blur commits the draft as-is) and
+  // lets any other keystroke replace the suggestion as if it weren't
+  // there.
+  useEffect(() => {
+    const input = povInputRef.current
+    if (!input || document.activeElement !== input) return
+    const typed = typedPrefixRef.current
+    if (typed.length < povDraft.length) {
+      input.setSelectionRange(typed.length, povDraft.length)
+    }
+  }, [povDraft])
 
   function handleConditionChange(next: string | null) {
     setChapter(prev => prev ? { ...prev, condition: next } : null)
@@ -85,6 +190,13 @@ export default function ChapterEditorPage() {
     }
     setChapter(data)
     setTitleDraft(data.title)
+    // Reset POV draft + autocomplete bookkeeping every time we land on a
+    // new chapter so the previous chapter's typed/rejected state doesn't
+    // bleed across navigation.
+    setPovDraft(data.pov ?? '')
+    typedPrefixRef.current = data.pov ?? ''
+    rejectedPrefixRef.current = null
+    povSyncedChapterRef.current = data.id
   }, [chapterId])
 
   const reloadBlocks = useCallback(async () => {
@@ -103,6 +215,7 @@ export default function ChapterEditorPage() {
   // Keep stable refs so the hotkey listener never goes stale
   const addBlockRef = useRef<(type: string) => Promise<void>>(async () => {})
   const addChoiceBlockRef = useRef<() => Promise<void>>(async () => {})
+  const createNextChapterRef = useRef<() => Promise<void>>(async () => {})
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -112,6 +225,7 @@ export default function ChapterEditorPage() {
         case 'KeyQ': e.preventDefault(); addChoiceBlockRef.current(); break
         case 'KeyC': e.preventDefault(); addBlockRef.current('conditional_fragment'); break
         case 'KeyS': e.preventDefault(); addBlockRef.current('soundtrack'); break
+        case 'KeyR': e.preventDefault(); createNextChapterRef.current(); break
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -167,8 +281,9 @@ export default function ChapterEditorPage() {
     if (!res.ok) return
     const created = await res.json()
     await loadSeries()
-    router.push(`/author/${seriesId}/chapter/${created.id}`)
+    router.push(`/author/${seriesId}/chapter/${created.id}?focus=pov`)
   }
+  createNextChapterRef.current = createNextChapter
 
   function scrollToTop() {
     // The author layout's <main> is the scroll container; scrollTo it
@@ -294,9 +409,18 @@ export default function ChapterEditorPage() {
             className="w-full bg-transparent border-none outline-none text-center text-3xl font-bold uppercase text-ink tracking-wide focus:opacity-80 transition-opacity"
           />
           <input
-            value={chapter.pov ?? ''}
-            onChange={e => handleMetaChange('pov', e.target.value)}
-            onFocus={e => e.target.setSelectionRange(0, 0)}
+            ref={povInputRef}
+            value={povDraft}
+            onChange={handlePovChange}
+            onKeyDown={handlePovKeyDown}
+            onBlur={() => {
+              const committed = povDraft.trim()
+              // If the writer left without rejecting, accept the visible
+              // value (which may include the suggestion's tail).
+              if (committed !== (chapter.pov ?? '')) handleMetaChange('pov', committed)
+              typedPrefixRef.current = committed
+            }}
+            placeholder="POV"
             className="mt-1 bg-surface-raised border border-accent/20 rounded-lg px-3 py-1 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent text-center w-48"
           />
         </div>
@@ -366,6 +490,7 @@ export default function ChapterEditorPage() {
         ) : (
           <button
             onClick={createNextChapter}
+            title="Create next chapter (⌥⇧R)"
             className="shrink-0 flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition"
           >
             Create Next Chapter <LuPlus size={13} />
