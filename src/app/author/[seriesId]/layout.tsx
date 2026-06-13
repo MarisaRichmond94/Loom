@@ -9,6 +9,7 @@ import VariablesPanel from '@/components/sidebar/VariablesPanel'
 import ChoicesPanel from '@/components/sidebar/ChoicesPanel'
 import AvatarButton from '@/components/AvatarButton'
 import Greeting from '@/components/Greeting'
+import SearchBar from '@/components/SearchBar'
 import { AuthorProvider, type AuthorSeries } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
@@ -222,7 +223,11 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
               <span className="text-ink self-center">{activeChapter.title}</span>
             </>
           )}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-3">
+            <SearchBar
+              seriesId={seriesId}
+              books={series.books.map(b => ({ id: b.id, title: b.title }))}
+            />
             <Greeting />
             <button
               role="switch"
