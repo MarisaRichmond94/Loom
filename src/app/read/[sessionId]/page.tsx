@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import ReaderView from '@/components/reader/ReaderView'
-import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
+import type { StoryState, HistoryEntry, Condition } from '@/lib/storyEngine'
+import { matchesCondition, solveCondition } from '@/lib/storyEngine'
 import { computeChapterLabels } from '@/lib/chapterLabels'
 
 type Block = {
@@ -86,7 +87,43 @@ export default function ReaderPage() {
       // block not found — fall through to first chapter
     }
 
-    // Fresh session — start at requested chapter or first chapter
+    // Fresh session — start at requested chapter or first chapter.
+    // When the writer explicitly previews a gated chapter (startChapterId
+    // is set), seed enough state to make that chapter visible — otherwise
+    // the closest-visible-chapter fallback would silently land them on a
+    // different chapter than they asked for. Only runs on truly fresh
+    // sessions (empty choiceHistory); once the reader is playing, we
+    // respect whatever state the choices have built up.
+    if (startChapterId && session.choiceHistory.length === 0) {
+      const targetChapter = (series.books ?? [])
+        .flatMap((b: SeriesBook) => b.chapters)
+        .find((c: { id: string }) => c.id === startChapterId)
+      if (targetChapter?.condition) {
+        try {
+          const parsed = JSON.parse(targetChapter.condition) as Condition
+          // Merge defaults under whatever the session already has so the
+          // visibility check matches what computeChapterLabels will see.
+          const merged: StoryState = {}
+          for (const v of series.variables ?? []) {
+            try { merged[v.name] = JSON.parse(v.defaultValue) } catch { /* ignore malformed */ }
+          }
+          Object.assign(merged, session.storyState)
+          if (!matchesCondition(parsed, merged)) {
+            const patch = solveCondition(parsed, series.variables ?? [])
+            if (patch) {
+              const newState: StoryState = { ...session.storyState, ...patch }
+              await fetch(`/api/sessions/${sessionId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ storyState: newState, choiceHistory: session.choiceHistory }),
+              })
+              setStoryState(newState)
+            }
+          }
+        } catch { /* malformed condition — fall through to default landing */ }
+      }
+    }
+
     if (startChapterId) {
       setCurrentChapterId(startChapterId)
     } else if (series.books?.[0]?.chapters?.[0]) {
@@ -132,16 +169,38 @@ export default function ReaderPage() {
   // Compute the reader-facing label and visibility for every chapter under the current state.
   const chapterLabels = useMemo(() => computeChapterLabels(seriesBooks, mergedStoryState), [seriesBooks, mergedStoryState])
 
-  // If the chapter we're currently on becomes hidden (e.g., after a rewind that flipped
-  // the gating variable), jump to the first visible chapter in book order. No-op if
-  // labels haven't been computed yet or if the current chapter is still visible.
+  // If the chapter we're currently on becomes hidden (e.g., after Configure
+  // flipped a gating variable, or a rewind), land at the nearest visible
+  // chapter to where we were — walk backward from the current chapter
+  // through earlier chapters in the same book then earlier books, then
+  // forward as a last resort. Jumping to the series's first visible
+  // chapter (the old behavior) yanked the reader all the way back to
+  // book 1 chapter 1, which was disorienting after a Configure apply.
   useEffect(() => {
     if (!currentChapterId) return
     if (Object.keys(chapterLabels).length === 0) return
     const label = chapterLabels[currentChapterId]
     if (label && label.visible) return
-    const visibleNext = seriesBooks.flatMap(b => b.chapters).find(c => chapterLabels[c.id]?.visible)
-    if (visibleNext) setCurrentChapterId(visibleNext.id)
+    const ordered = seriesBooks.flatMap(b => b.chapters)
+    const currentIdx = ordered.findIndex(c => c.id === currentChapterId)
+    const visible = (c: { id: string }) => chapterLabels[c.id]?.visible
+    let target: { id: string } | undefined
+    if (currentIdx >= 0) {
+      // Walk backward first — staying earlier in the read keeps the reader
+      // anchored to where they were reading rather than scrolling the
+      // series back to the start.
+      for (let i = currentIdx - 1; i >= 0; i--) {
+        if (visible(ordered[i])) { target = ordered[i]; break }
+      }
+      if (!target) {
+        for (let i = currentIdx + 1; i < ordered.length; i++) {
+          if (visible(ordered[i])) { target = ordered[i]; break }
+        }
+      }
+    } else {
+      target = ordered.find(visible)
+    }
+    if (target) setCurrentChapterId(target.id)
     else setNoContent(true)
   }, [chapterLabels, currentChapterId, seriesBooks])
 

@@ -91,6 +91,66 @@ export function matchesCondition(condition: Condition, storyState: StoryState): 
   return Object.entries(condition).every(([k, v]) => storyState[k] === v)
 }
 
+// Compute the smallest state patch that flips a condition from failing to
+// passing. Used by the reader when a writer previews a gated chapter that
+// the defaults can't reach: rather than silently redirect them to the
+// nearest visible chapter, seed the session with just enough to make the
+// requested chapter visible.
+//
+// Strategy by shape:
+//   - show-if + AND (or legacy implicit AND): set every clause's variable
+//     to its required value.
+//   - show-if + OR: set the first clause; that alone satisfies the OR.
+//   - hide-if + AND: clauses match → hidden; flip the first clause to
+//     break the AND. Boolean only — non-boolean "non-matching" values
+//     are ambiguous and skipped.
+//   - hide-if + OR: any clause matching hides → push every clause to a
+//     non-matching value. Boolean only.
+//
+// Returns null when the shape can't be solved with simple flips (e.g. a
+// hide-if condition on a non-boolean variable). Callers fall back to
+// the previous behavior (redirect to the closest visible chapter).
+export function solveCondition(
+  condition: Condition,
+  variables: Array<{ name: string; type: string }>,
+): StoryState | null {
+  const typeByName: Record<string, string> = {}
+  for (const v of variables) typeByName[v.name] = v.type
+
+  function flip(value: ConditionLeafValue, varName: string): ConditionLeafValue | null {
+    if (typeof value === 'boolean') return !value
+    if (typeByName[varName] === 'boolean') return !Boolean(value)
+    return null
+  }
+
+  if (isCompoundCondition(condition)) {
+    if (condition.clauses.length === 0) return null
+    const isHide = condition.mode === 'hide'
+    if (!isHide) {
+      if (condition.op === 'or') {
+        const c = condition.clauses[0]
+        return { [c.var]: c.value }
+      }
+      const patch: StoryState = {}
+      for (const c of condition.clauses) patch[c.var] = c.value
+      return patch
+    }
+    if (condition.op === 'and') {
+      const c = condition.clauses[0]
+      const flipped = flip(c.value, c.var)
+      return flipped === null ? null : { [c.var]: flipped }
+    }
+    const patch: StoryState = {}
+    for (const c of condition.clauses) {
+      const flipped = flip(c.value, c.var)
+      if (flipped === null) return null
+      patch[c.var] = flipped
+    }
+    return patch
+  }
+  return { ...condition }
+}
+
 export function resolveConditional(block: ConditionalBlock, storyState: StoryState): string | null {
   const matched = resolveConditionalOverride(block, storyState)
   return matched?.content ?? null
