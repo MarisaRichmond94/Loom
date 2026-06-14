@@ -31,6 +31,7 @@ export default function ChapterEditorPage() {
   const [showIfTooltip, setShowIfTooltip] = useState(false)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
+  const titleInputRef = useRef<HTMLInputElement>(null)
   const povInputRef = useRef<HTMLInputElement>(null)
   const focusedPovRef = useRef<string | null>(null)
   const searchParams = useSearchParams()
@@ -208,6 +209,22 @@ export default function ChapterEditorPage() {
   }, [chapterId])
 
   useEffect(() => { loadChapter() }, [loadChapter])
+
+  // The sidebar's insert/delete flow auto-renumbers neighbouring chapters
+  // in the DB and refetches `series` for the outline tree, but this page's
+  // local chapter state was taken from the initial fetch and never re-synced
+  // — so the title at the top of the page kept showing the stale value
+  // even after the sidebar updated. When the series view of this chapter's
+  // title shifts under us, mirror it into local state, unless the writer
+  // is currently editing the title input (in which case their draft wins).
+  useEffect(() => {
+    if (!series) return
+    const fresh = series.books.flatMap(b => b.chapters).find(c => c.id === chapterId)
+    if (!fresh) return
+    if (document.activeElement === titleInputRef.current) return
+    setChapter(prev => (prev && prev.title !== fresh.title) ? { ...prev, title: fresh.title } : prev)
+    setTitleDraft(prev => prev !== fresh.title ? fresh.title : prev)
+  }, [series, chapterId])
   useEffect(() => {
     fetch(`/api/series/${seriesId}/characters`).then(r => r.ok ? r.json() : []).then(setCharacters)
   }, [seriesId])
@@ -397,6 +414,7 @@ export default function ChapterEditorPage() {
         {/* Title + POV — centered */}
         <div className="flex flex-col items-center mb-8">
           <input
+            ref={titleInputRef}
             value={titleDraft}
             onChange={e => setTitleDraft(e.target.value)}
             onBlur={handleTitleBlur}
