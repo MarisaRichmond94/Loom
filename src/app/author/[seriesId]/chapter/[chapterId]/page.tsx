@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp } from 'react-icons/lu'
+import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown } from 'react-icons/lu'
 import BlockEditor from '@/components/editor/BlockEditor'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import { ConditionRow } from '@/components/editor/conditionUI'
@@ -30,6 +30,11 @@ export default function ChapterEditorPage() {
   const [showChapterSettings, setShowChapterSettings] = useState(false)
   const [showIfTooltip, setShowIfTooltip] = useState(false)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
+  // Lifted from BlockEditor so the date-row toggle can flip every block at
+  // once. Resets to empty on chapter switch (chapterId is in the dep list
+  // below), matching the "all uncollapsed on initial load" rule.
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
+  useEffect(() => { setCollapsedIds(new Set()) }, [chapterId])
   const addMenuRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const povInputRef = useRef<HTMLInputElement>(null)
@@ -437,13 +442,33 @@ export default function ChapterEditorPage() {
           />
         </div>
 
-        {/* Date — left-justified, 8px above first block */}
-        <input
-          value={chapter.date ?? ''}
-          onChange={e => handleMetaChange('date', e.target.value)}
-          onFocus={e => e.target.setSelectionRange(0, 0)}
-          className="bg-surface-raised border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent w-60 mb-2"
-        />
+        {/* Date on the left, expand/collapse-all toggle on the right.
+            Right padding matches the per-block delete/chevron column
+            (15px icon + ml-2 gap) so the toggle's right edge aligns with
+            each block's content right edge, not the outer container. */}
+        <div className="flex items-end justify-between mb-2 pr-[23px]">
+          <input
+            value={chapter.date ?? ''}
+            onChange={e => handleMetaChange('date', e.target.value)}
+            onFocus={e => e.target.setSelectionRange(0, 0)}
+            className="bg-surface-raised border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent w-60"
+          />
+          {chapter.blocks.length > 0 && (() => {
+            const anyCollapsed = chapter.blocks.some(b => collapsedIds.has(b.id))
+            return (
+              <button
+                onClick={() => {
+                  if (anyCollapsed) setCollapsedIds(new Set())
+                  else setCollapsedIds(new Set(chapter.blocks.map(b => b.id)))
+                }}
+                className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition"
+              >
+                {anyCollapsed ? <LuChevronsUpDown size={12} /> : <LuChevronsDownUp size={12} />}
+                {anyCollapsed ? 'Expand All' : 'Collapse All'}
+              </button>
+            )
+          })()}
+        </div>
 
         <BlockEditor
           chapterId={chapterId}
@@ -454,6 +479,8 @@ export default function ChapterEditorPage() {
           onChoicesChanged={loadChoices}
           onCreateVariable={createVariable}
           onActiveBlockChange={setActiveBlockId}
+          collapsedIds={collapsedIds}
+          onCollapsedIdsChange={setCollapsedIds}
         />
       </div>
 

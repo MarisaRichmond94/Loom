@@ -6,11 +6,13 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragOv
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { LuGripVertical, LuX } from 'react-icons/lu'
+import { LuGripVertical, LuX, LuChevronDown, LuChevronRight } from 'react-icons/lu'
 import TextBlock from './TextBlock'
 import ChoicePointBlock from './ChoicePointBlock'
 import ConditionalBlock from './ConditionalBlock'
 import SoundtrackBlock from './SoundtrackBlock'
+import { extractTextFromTipTap } from '@/lib/tiptapText'
+import ConfirmDialog from '@/components/ConfirmDialog'
 
 type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
 type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null }
@@ -41,6 +43,11 @@ type Props = {
   onChoicesChanged?: () => void
   onCreateVariable: (name: string, type: string, defaultValue?: unknown) => Promise<void>
   onActiveBlockChange?: (blockId: string | null) => void
+  // Controlled collapsed-block state. Lifted to the chapter page so the
+  // page-level "expand all / collapse all" toggle and the per-block
+  // chevron operate on the same source of truth.
+  collapsedIds: Set<string>
+  onCollapsedIdsChange: (next: Set<string>) => void
 }
 
 const BLOCK_BORDER: Record<string, string> = {
@@ -50,20 +57,70 @@ const BLOCK_BORDER: Record<string, string> = {
   soundtrack: 'border-l-accent/60',
 }
 
+const BLOCK_TYPE_LABEL: Record<string, string> = {
+  text: 'Text',
+  choice_point: 'Choose',
+  conditional_fragment: 'Conditional',
+  soundtrack: 'Music',
+}
+
+// One-line preview of a block's content for the collapsed view — picks
+// whichever field carries the most distinctive text per block type. Keeps
+// the writer oriented without expanding the block. The CSS truncate on
+// the rendering span handles overflow, so we return the full first line
+// rather than slicing to a fixed character cap (the cap would chop the
+// text before the container ever needed to ellipsize).
+function collapsedSummary(block: Block): string {
+  function firstLine(s: string): string {
+    return s.split('\n')[0]?.trim() ?? ''
+  }
+  if (block.type === 'text') return firstLine(extractTextFromTipTap(block.content ?? null))
+  if (block.type === 'choice_point') return block.prompt?.trim() || ''
+  if (block.type === 'conditional_fragment') {
+    // Conditional blocks usually have an empty baseContent — fall back to
+    // the first override's content so the writer can still tell collapsed
+    // conditionals apart by their first branch text.
+    const base = firstLine(extractTextFromTipTap(block.baseContent ?? null))
+    if (base) return base
+    const firstOverride = [...block.overrides].sort((a, b) => a.order - b.order)[0]
+    return firstOverride ? firstLine(extractTextFromTipTap(firstOverride.content)) : ''
+  }
+  if (block.type === 'soundtrack') return block.content?.trim() || ''
+  return ''
+}
+
 function SortableBlock({
   block,
   children,
   onDelete,
   isActive,
   onActivate,
+  isCollapsed,
+  onToggleCollapse,
 }: {
   block: Block
   children: React.ReactNode
   onDelete: () => void
   isActive: boolean
   onActivate: () => void
+  isCollapsed: boolean
+  onToggleCollapse: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id })
+
+  const summary = isCollapsed ? collapsedSummary(block) : ''
+
+  // Double-click anywhere outside an editable region toggles the block's
+  // collapsed state. The closest-ancestor check covers TipTap's
+  // contenteditable surface AND every input/select/textarea inside the
+  // block (variable pickers, condition setters, choice labels, etc.) so
+  // a normal double-click-to-select-word in those still works.
+  function handleDoubleClick(e: React.MouseEvent<HTMLDivElement>) {
+    const target = e.target as HTMLElement
+    if (target.closest('[contenteditable="true"], input, textarea, select, button')) return
+    e.preventDefault()
+    onToggleCollapse()
+  }
 
   return (
     <div
@@ -72,6 +129,7 @@ function SortableBlock({
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.3 : 1 }}
       className="flex items-start group"
       onClick={onActivate}
+      onDoubleClick={handleDoubleClick}
     >
       <div className={`flex-1 min-w-0 bg-surface-raised border border-accent/10 border-l-4 ${BLOCK_BORDER[block.type] ?? ''} rounded-r-lg p-4 relative transition-shadow duration-150 ${isActive ? 'ring-1 ring-inset ring-accent/40' : 'group-hover:ring-1 group-hover:ring-inset group-hover:ring-accent/20'}`}>
         <button
@@ -83,25 +141,58 @@ function SortableBlock({
           <LuGripVertical size={16} />
         </button>
         <div className="pl-4">
-          {children}
+          {isCollapsed ? (
+            <div className="flex items-baseline gap-3 min-w-0">
+              <span className="shrink-0 text-xs font-bold text-ink uppercase tracking-widest">
+                {BLOCK_TYPE_LABEL[block.type] ?? block.type}
+              </span>
+              {summary && (
+                <span className="flex-1 min-w-0 truncate text-xs text-ink-faint italic">{summary}</span>
+              )}
+            </div>
+          ) : (
+            children
+          )}
         </div>
       </div>
-      <button
-        onClick={e => { e.stopPropagation(); onDelete() }}
-        className="shrink-0 mt-2 text-ink-faint opacity-0 group-hover:opacity-100 hover:text-choice-kill transition-all duration-200"
-        style={{ marginLeft: '8px' }}
-      >
-        <LuX size={15} />
-      </button>
+      <div className="shrink-0 flex flex-col gap-1.5 mt-2 ml-2">
+        <button
+          onClick={e => { e.stopPropagation(); onDelete() }}
+          className="text-ink-faint opacity-0 group-hover:opacity-100 hover:text-choice-kill transition-all duration-200"
+          title="Delete block"
+        >
+          <LuX size={15} />
+        </button>
+        <button
+          onClick={e => { e.stopPropagation(); onToggleCollapse() }}
+          className="text-ink-faint opacity-0 group-hover:opacity-100 hover:text-ink transition-all duration-200"
+          title={isCollapsed ? 'Expand block' : 'Collapse block'}
+        >
+          {isCollapsed ? <LuChevronRight size={15} /> : <LuChevronDown size={15} />}
+        </button>
+      </div>
     </div>
   )
 }
 
-export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange }: Props) {
+export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const [newBlockId, setNewBlockId] = useState<string | null>(null)
   const [draggingBlock, setDraggingBlock] = useState<Block | null>(null)
+  // Per-block collapsed state is controlled by the parent so the chapter
+  // page's expand-all / collapse-all toggle and the per-block chevron
+  // operate on the same source of truth.
+  function toggleCollapsed(id: string) {
+    const next = new Set(collapsedIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    onCollapsedIdsChange(next)
+  }
+  // Pending block-delete confirmation. Storing the whole block (not just
+  // the id) keeps the modal's summary text stable even if the underlying
+  // list reshuffles during the confirm round-trip.
+  const [pendingDelete, setPendingDelete] = useState<Block | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
   const blocksContainerRef = useRef<HTMLDivElement>(null)
   // Written every render so the ⌥⇧D handler never reads a stale value
@@ -308,7 +399,9 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                 block={block}
                 isActive={activeBlockId === block.id}
                 onActivate={() => setActiveBlockId(block.id)}
-                onDelete={() => deleteBlock(block.id)}
+                onDelete={() => setPendingDelete(block)}
+                isCollapsed={collapsedIds.has(block.id)}
+                onToggleCollapse={() => toggleCollapsed(block.id)}
               >
                 {block.type === 'text' && (
                   <TextBlock
@@ -392,6 +485,18 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
           )}
         </DragOverlay>
       </DndContext>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={`Delete this ${pendingDelete ? (BLOCK_TYPE_LABEL[pendingDelete.type] ?? 'block').toLowerCase() : 'block'}?`}
+        message="The block and its content will be removed from the chapter."
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          const id = pendingDelete?.id
+          setPendingDelete(null)
+          if (id) deleteBlock(id)
+        }}
+      />
     </div>
   )
 }

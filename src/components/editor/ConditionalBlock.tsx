@@ -1,8 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import { LuSplit, LuX } from 'react-icons/lu'
 import TextBlock from './TextBlock'
 import { ConditionRow, parseCondition } from './conditionUI'
+import ConfirmDialog from '@/components/ConfirmDialog'
 
 type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
 type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
@@ -18,6 +20,8 @@ type Props = {
 const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
 
 export default function ConditionalBlock({ overrides, variables, characters, onAddOverride, onUpdateOverride, onDeleteOverride }: Props) {
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+
   function handleAddOverride() {
     // Common pattern: writer adds a boolean condition (X = true) and then
     // immediately wants its mirror (X = false). When the previous override
@@ -60,7 +64,7 @@ export default function ConditionalBlock({ overrides, variables, characters, onA
                 />
               </div>
               <button
-                onClick={() => onDeleteOverride(override.id)}
+                onClick={() => setPendingDeleteId(override.id)}
                 className="text-ink-faint hover:text-choice-kill transition shrink-0 mt-1"
                 title="Delete this condition"
               >
@@ -103,6 +107,18 @@ export default function ConditionalBlock({ overrides, variables, characters, onA
           Add Condition
         </button>
       )}
+
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        title="Delete this condition?"
+        message="The condition and its content will be removed from the conditional block."
+        onCancel={() => setPendingDeleteId(null)}
+        onConfirm={() => {
+          const id = pendingDeleteId
+          setPendingDeleteId(null)
+          if (id) onDeleteOverride(id)
+        }}
+      />
     </div>
   )
 }
