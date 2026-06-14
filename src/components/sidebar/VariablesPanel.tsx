@@ -32,12 +32,10 @@ type SortMode = 'occurrence' | 'usage' | 'alpha'
 type Props = {
   seriesId: string
   variables: Variable[]
-  onAdd: (name: string, type: string, defaultValue: unknown) => void
   onUpdate: (id: string, data: { name?: string; type?: string; defaultValue?: unknown }) => void
   onDelete: (id: string) => void
 }
 
-const TYPE_DEFAULTS: Record<string, unknown> = { boolean: false, number: 0, string: '' }
 const TYPE_SHORT: Record<string, string> = { boolean: 'bool', number: 'num', string: 'str' }
 const SORT_CYCLE: SortMode[] = ['occurrence', 'usage', 'alpha']
 const SORT_LABEL: Record<SortMode, string> = {
@@ -88,11 +86,7 @@ function DefaultInput({ type, value, onChange }: { type: string; value: unknown;
   )
 }
 
-export default function VariablesPanel({ seriesId, variables, onAdd, onUpdate, onDelete }: Props) {
-  const [name, setName] = useState('')
-  const [type, setType] = useState('boolean')
-  const [defaultValue, setDefaultValue] = useState<unknown>(false)
-  const [showForm, setShowForm] = useState(false)
+export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete }: Props) {
   const [editOpen, setEditOpen] = useState(false)
   // Local draft state for the modal: id → { name, type, defaultValue }
   const [drafts, setDrafts] = useState<Record<string, { name: string; type: string; defaultValue: unknown }>>({})
@@ -137,19 +131,6 @@ export default function VariablesPanel({ seriesId, variables, onAdd, onUpdate, o
     void bookId  // routed by chapter directly
   }
 
-  function handleAdd(e: React.FormEvent) {
-    e.preventDefault()
-    if (!name.trim()) return
-    onAdd(name.trim(), type, defaultValue)
-    setName('')
-    setDefaultValue(TYPE_DEFAULTS[type])
-    setShowForm(false)
-  }
-
-  function changeType(newType: string) {
-    setType(newType)
-    setDefaultValue(TYPE_DEFAULTS[newType])
-  }
 
   function saveDraftDefault(id: string) {
     const draft = drafts[id]
@@ -187,46 +168,6 @@ export default function VariablesPanel({ seriesId, variables, onAdd, onUpdate, o
             </div>
           ))}
         </div>
-      </div>
-
-      {/* Add form / button — fixed at bottom */}
-      <div className="shrink-0 pt-2">
-      {showForm ? (
-        <form onSubmit={handleAdd} className="flex flex-col gap-2">
-          <input
-            autoFocus
-            value={name}
-            onChange={e => setName(e.target.value)}
-            onKeyDown={e => e.key === 'Escape' && setShowForm(false)}
-            placeholder="Variable name"
-            className="w-full bg-surface-base border border-accent/20 rounded px-2 py-1 text-xs text-ink placeholder:text-ink-faint outline-none focus:border-accent font-mono"
-          />
-          <select
-            value={type}
-            onChange={e => changeType(e.target.value)}
-            className="w-full bg-surface-base border border-accent/20 rounded px-2 py-1 text-xs text-ink outline-none focus:border-accent"
-          >
-            <option value="string">String</option>
-            <option value="number">Number</option>
-            <option value="boolean">Boolean</option>
-          </select>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-ink-faint shrink-0">Default:</span>
-            <DefaultInput type={type} value={defaultValue} onChange={setDefaultValue} />
-          </div>
-          <div className="flex gap-1">
-            <button type="submit" className="flex-1 py-1 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition">Add</button>
-            <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-1 rounded text-xs text-ink-faint hover:text-ink transition">Cancel</button>
-          </div>
-        </form>
-      ) : (
-        <button
-          onClick={() => { setShowForm(true); setDefaultValue(TYPE_DEFAULTS[type]) }}
-          className="w-full py-1 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
-        >
-          Add Context
-        </button>
-      )}
       </div>
 
       {/* Context modal — overview table by default, drill-in view per

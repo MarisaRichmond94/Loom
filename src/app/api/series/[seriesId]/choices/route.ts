@@ -9,6 +9,10 @@ export async function GET(req: NextRequest, { params }: Params) {
   const upToBookId = searchParams.get('upToBookId')
   const upToChapterId = searchParams.get('upToChapterId')
 
+  // Reachability is now a per-question flag rather than a filter, so the
+  // sidebar can render every choice in the series and dim the ones that
+  // come after the current chapter. When neither upTo* is set (e.g. on
+  // the series landing page), everything reads as reachable.
   let bookOrderLimit: number | undefined
   let chapterOrderLimit: number | undefined
   let limitedBookId: string | undefined
@@ -18,21 +22,18 @@ export async function GET(req: NextRequest, { params }: Params) {
       where: { id: upToChapterId },
       include: { book: true },
     })
-    if (!chapter) return NextResponse.json([])
-    bookOrderLimit = chapter.book.order
-    chapterOrderLimit = chapter.order
-    limitedBookId = chapter.bookId
+    if (chapter) {
+      bookOrderLimit = chapter.book.order
+      chapterOrderLimit = chapter.order
+      limitedBookId = chapter.bookId
+    }
   } else if (upToBookId) {
     const book = await prisma.book.findUnique({ where: { id: upToBookId } })
-    if (!book) return NextResponse.json([])
-    bookOrderLimit = book.order
+    if (book) bookOrderLimit = book.order
   }
 
   const books = await prisma.book.findMany({
-    where: {
-      seriesId,
-      ...(bookOrderLimit !== undefined ? { order: { lte: bookOrderLimit } } : {}),
-    },
+    where: { seriesId },
     orderBy: { order: 'asc' },
     include: {
       chapters: {
@@ -48,11 +49,16 @@ export async function GET(req: NextRequest, { params }: Params) {
     },
   })
 
-  const questions: { id: string; prompt: string; chapterId: string; chapterTitle: string; bookTitle: string }[] = []
+  const questions: { id: string; prompt: string; chapterId: string; chapterTitle: string; bookTitle: string; reachable: boolean }[] = []
 
   for (const book of books) {
     for (const chapter of book.chapters) {
-      if (chapterOrderLimit !== undefined && book.id === limitedBookId && chapter.order > chapterOrderLimit) continue
+      let reachable = true
+      if (bookOrderLimit !== undefined && book.order > bookOrderLimit) reachable = false
+      if (
+        reachable && chapterOrderLimit !== undefined && book.id === limitedBookId
+        && chapter.order > chapterOrderLimit
+      ) reachable = false
       for (const block of chapter.blocks) {
         questions.push({
           id: block.id,
@@ -60,6 +66,7 @@ export async function GET(req: NextRequest, { params }: Params) {
           chapterId: chapter.id,
           chapterTitle: chapter.title,
           bookTitle: book.title,
+          reachable,
         })
       }
     }

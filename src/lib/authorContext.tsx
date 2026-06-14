@@ -23,7 +23,11 @@ export type AuthorContextValue = {
   loadSeries: () => Promise<void>
   loadChoices: () => Promise<void>
   lightMode: boolean
-  registerAddChoice: (fn: (() => void) | null) => void
+  // Distinct string values written to each variable by any choice in
+  // the series. Drives the condition-row datalist autocomplete so a
+  // writer typing a string condition value sees the exact strings
+  // that exist elsewhere. Empty map until the layout's fetch resolves.
+  knownStringValues: Record<string, string[]>
 }
 
 const AuthorContext = createContext<AuthorContextValue | null>(null)

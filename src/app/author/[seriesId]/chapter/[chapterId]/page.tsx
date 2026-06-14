@@ -21,7 +21,7 @@ type Character = { id: string; name: string; age?: number | null; hasAvatar?: bo
 export default function ChapterEditorPage() {
   const { seriesId, chapterId } = useParams() as { seriesId: string; chapterId: string }
   const router = useRouter()
-  const { series, loadSeries, loadChoices, registerAddChoice } = useAuthor()
+  const { series, loadSeries, loadChoices } = useAuthor()
   const [chapter, setChapter] = useState<Chapter | null>(null)
   const [characters, setCharacters] = useState<Character[]>([])
   const [titleDraft, setTitleDraft] = useState('')
@@ -319,12 +319,6 @@ export default function ChapterEditorPage() {
   // Always point at the latest versions of these functions
   addBlockRef.current = addBlock
   addChoiceBlockRef.current = addChoiceBlock
-
-  // Bridge addChoiceBlock to the sidebar ChoicesPanel via context
-  useEffect(() => {
-    registerAddChoice(() => addChoiceBlockRef.current())
-    return () => registerAddChoice(null)
-  }, [registerAddChoice])
 
   if (!chapter) return <ChapterSkeleton />
 

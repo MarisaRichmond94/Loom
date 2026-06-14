@@ -16,7 +16,7 @@ import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import BookSkeleton from '@/components/editor/BookSkeleton'
 import SeriesPageSkeleton from '@/components/editor/SeriesPageSkeleton'
 
-type ChoiceQuestion = { id: string; prompt: string; chapterId: string; chapterTitle: string; bookTitle: string }
+type ChoiceQuestion = { id: string; prompt: string; chapterId: string; chapterTitle: string; bookTitle: string; reachable: boolean }
 
 export default function AuthorLayout({ children }: { children: ReactNode }) {
   const router = useRouter()
@@ -25,7 +25,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
 
   const [series, setSeries] = useState<AuthorSeries | null>(null)
   const [choiceQuestions, setChoiceQuestions] = useState<ChoiceQuestion[]>([])
-  const [addChoice, setAddChoice] = useState<(() => void) | null>(null)
+  const [knownStringValues, setKnownStringValues] = useState<Record<string, string[]>>({})
   const [lightMode, setLightMode] = useState(false)
   useEffect(() => {
     setLightMode(localStorage.getItem('loom-light-mode') === 'true')
@@ -66,13 +66,18 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
     if (res.ok) setChoiceQuestions(await res.json())
   }, [seriesId, bookId, chapterId])
 
+  // Refreshes alongside choices so adding/removing a value via a choice
+  // block shows up in the datalist on the next interaction. Same trigger
+  // surface (loadChoices fires when chapterId/bookId/seriesId change)
+  // keeps the two payloads aligned.
+  const loadKnownStringValues = useCallback(async () => {
+    const res = await fetch(`/api/series/${seriesId}/string-values`)
+    if (res.ok) setKnownStringValues(await res.json())
+  }, [seriesId])
+
   useEffect(() => { loadSeries() }, [loadSeries])
   useEffect(() => { loadChoices() }, [loadChoices])
-
-  // Stable so chapter page can register a callback in an effect without churn
-  const registerAddChoice = useCallback((fn: (() => void) | null) => {
-    setAddChoice(() => fn)
-  }, [])
+  useEffect(() => { loadKnownStringValues() }, [loadKnownStringValues, choiceQuestions])
 
   async function addBook(title: string) {
     await fetch(`/api/series/${seriesId}/books`, {
@@ -105,25 +110,6 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
     router.push(`/author/${seriesId}/chapter/${chapter.id}?focus=pov`)
   }
 
-  async function addVariable(name: string, type: string, defaultValue: unknown) {
-    // Derive originBookId from the current route context so the
-    // Context modal's Origin column gets populated at creation time
-    // rather than waiting for a reference to point at the variable.
-    //   - book page → that book directly
-    //   - chapter page → the book containing that chapter
-    //   - series page → fall back to the in-progress book (if any)
-    //   - otherwise → null (the Origin column shows "—")
-    const originBookId =
-      bookId
-      ?? (chapterId ? series?.books.find(b => b.chapters.some(c => c.id === chapterId))?.id : null)
-      ?? (series?.books.find(b => b.inProgress)?.id ?? null)
-    await fetch(`/api/series/${seriesId}/variables`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, type, defaultValue, originBookId }),
-    })
-    loadSeries()
-  }
   async function updateVariable(id: string, data: { name?: string; type?: string; defaultValue?: unknown }) {
     await fetch(`/api/variables/${id}`, {
       method: 'PATCH',
@@ -194,7 +180,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
     : null
 
   return (
-    <AuthorProvider value={{ series, loadSeries, loadChoices, lightMode, registerAddChoice }}>
+    <AuthorProvider value={{ series, loadSeries, loadChoices, lightMode, knownStringValues }}>
       <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
         <nav className="bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
           <Link href="/" className="flex items-center gap-2">
@@ -261,14 +247,12 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
               <ChoicesPanel
                 seriesId={seriesId}
                 questions={choiceQuestions}
-                onAddChoice={addChoice ?? undefined}
               />
             </div>
             <div className="flex flex-col min-h-0 max-h-[25%] p-4 pt-3 border-t border-accent/10">
               <VariablesPanel
                 seriesId={seriesId}
                 variables={series.variables}
-                onAdd={addVariable}
                 onUpdate={updateVariable}
                 onDelete={deleteVariable}
               />

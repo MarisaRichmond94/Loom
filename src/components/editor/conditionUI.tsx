@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { LuX } from 'react-icons/lu'
+import { useAuthor } from '@/lib/authorContext'
 
 export type ConditionVariable = { id: string; name: string; type: string; defaultValue?: string }
 
@@ -28,11 +29,16 @@ export function resolveAttachDefault(v: ConditionVariable): unknown {
 
 const baseCls = 'bg-black/20 border border-black/20 rounded pl-2 py-1 text-xs text-ink outline-none focus:border-accent/50 w-full'
 
-export function ValueSetter({ v, currentVal, onChange, autoFocus }: {
+export function ValueSetter({ v, currentVal, onChange, autoFocus, suggestions }: {
   v: ConditionVariable
   currentVal: unknown
   onChange: (val: unknown) => void
   autoFocus?: boolean
+  // Distinct values written to this variable across the series. When
+  // provided for a string-type field, drives a native <datalist> so
+  // typing offers the matching prior values — handy for matching
+  // exactly what a choice elsewhere set the variable to.
+  suggestions?: string[]
 }) {
   if (v.type === 'boolean') {
     return (
@@ -51,19 +57,34 @@ export function ValueSetter({ v, currentVal, onChange, autoFocus }: {
       </div>
     )
   }
+  // datalist only meaningful for strings (numbers get a numeric input,
+  // booleans get a select handled above). Listing duplicates is fine —
+  // upstream dedupes — but the id has to be unique enough that two rows
+  // pointing at the same variable don't share a list with stale data.
+  const listId = v.type === 'string' && suggestions && suggestions.length > 0
+    ? `cond-suggest-${v.id || v.name}`
+    : undefined
   return (
-    <input
-      autoFocus={autoFocus}
-      type={v.type === 'number' ? 'number' : 'text'}
-      value={currentVal !== undefined ? String(currentVal) : ''}
-      onChange={e => {
-        const val = e.target.value
-        if (val === '') onChange(undefined)
-        else if (v.type === 'number') { if (!isNaN(Number(val))) onChange(Number(val)) }
-        else onChange(val)
-      }}
-      className={`${baseCls} pr-2`}
-    />
+    <>
+      <input
+        autoFocus={autoFocus}
+        type={v.type === 'number' ? 'number' : 'text'}
+        value={currentVal !== undefined ? String(currentVal) : ''}
+        list={listId}
+        onChange={e => {
+          const val = e.target.value
+          if (val === '') onChange(undefined)
+          else if (v.type === 'number') { if (!isNaN(Number(val))) onChange(Number(val)) }
+          else onChange(val)
+        }}
+        className={`${baseCls} pr-2`}
+      />
+      {listId && (
+        <datalist id={listId}>
+          {suggestions!.map(s => <option key={s} value={s} />)}
+        </datalist>
+      )}
+    </>
   )
 }
 
@@ -175,6 +196,12 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
     }
   }, [menuOpen])
 
+  // Suggestions for the string value input come from the author layout
+  // (loaded once, refreshed when choices change). ConditionRow itself
+  // is currently only rendered under the author layout, so useAuthor
+  // is safe.
+  const { knownStringValues } = useAuthor()
+
   const { op, polarity, clauses } = parseCondition(condition)
   const valueByName: Record<string, unknown> = {}
   for (const c of clauses) valueByName[c.var] = c.value
@@ -250,7 +277,7 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
             <span className="text-xs text-ink-muted">{v.name}</span>
             <span className="text-xs text-ink-faint">=</span>
             <div className="w-24">
-              <ValueSetter v={v} currentVal={valueByName[v.name]} onChange={val => setVal(v.name, val)} />
+              <ValueSetter v={v} currentVal={valueByName[v.name]} onChange={val => setVal(v.name, val)} suggestions={knownStringValues[v.name]} />
             </div>
             <button onClick={() => detach(v.name)} className="text-ink-muted hover:text-choice-kill transition shrink-0">
               <LuX size={11} />
