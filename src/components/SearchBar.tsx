@@ -38,6 +38,7 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
   const [bookFilter, setBookFilter] = useState<Set<string>>(new Set())  // empty = all books
   const [showFilter, setShowFilter] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   // Click-outside closes the panel without losing the query — writers
   // can reopen by focusing the input again.
@@ -50,6 +51,25 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
+  }, [])
+
+  // ⌥⇧F focuses + selects the input from anywhere in author mode, so the
+  // writer doesn't have to leave the keyboard to start a search. e.code
+  // (not e.key) so the binding survives the Option key's char shifting
+  // on macOS — ⌥F produces 'ƒ' which would break a key-based match.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!e.altKey || !e.shiftKey) return
+      if (e.code !== 'KeyF') return
+      e.preventDefault()
+      const el = inputRef.current
+      if (!el) return
+      el.focus()
+      el.select()
+      setOpen(true)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
   }, [])
 
   // Debounced fetch. Each keystroke re-arms the timer so we don't fire a
@@ -128,10 +148,12 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
       <div className="relative flex items-center w-52">
         <LuSearch size={12} className="absolute left-2 text-ink-faint pointer-events-none" />
         <input
+          ref={inputRef}
           value={query}
           onChange={e => { setQuery(e.target.value); setOpen(true) }}
           onFocus={() => setOpen(true)}
           placeholder="Search the series…"
+          title="Search the series (⌥⇧F)"
           className="w-full pl-7 pr-14 py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
         />
         <div className="absolute right-1.5 flex items-center gap-0.5">
