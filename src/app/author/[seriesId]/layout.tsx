@@ -182,39 +182,47 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
   return (
     <AuthorProvider value={{ series, loadSeries, loadChoices, lightMode, knownStringValues }}>
       <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
+        {/* Header collapses progressively as width shrinks so the breadcrumbs
+            and right-side controls never wrap onto a second line:
+              - below xl (1280px): hide the "LOOM" wordmark, logo stays
+              - below lg (1024px): hide the greeting
+              - always: cap breadcrumb segments and truncate with a title
+                attribute so the full label is one hover away */}
         <nav className="bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2 shrink-0">
             <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
-            <span className="text-accent font-bold tracking-wider text-2xl leading-none">LOOM</span>
+            <span className="hidden xl:inline text-accent font-bold tracking-wider text-2xl leading-none">LOOM</span>
           </Link>
-          <span className="text-ink-faint self-center">›</span>
+          <span className="text-ink-faint self-center shrink-0">›</span>
           {activeBook || activeChapter ? (
-            <Link href={`/author/${seriesId}`} className="text-ink-muted hover:text-ink self-center">{series.title}</Link>
+            <Link href={`/author/${seriesId}`} title={series.title} className="text-ink-muted hover:text-ink self-center truncate max-w-[200px]">{series.title}</Link>
           ) : (
-            <span className="text-ink self-center">{series.title}</span>
+            <span title={series.title} className="text-ink self-center truncate max-w-[200px]">{series.title}</span>
           )}
           {activeBook && (
             <>
-              <span className="text-ink-faint self-center">›</span>
+              <span className="text-ink-faint self-center shrink-0">›</span>
               {activeChapter ? (
-                <Link href={`/author/${seriesId}/book/${activeBook.id}`} className="text-ink-muted hover:text-ink self-center">{activeBook.title}</Link>
+                <Link href={`/author/${seriesId}/book/${activeBook.id}`} title={activeBook.title} className="text-ink-muted hover:text-ink self-center truncate max-w-[180px]">{activeBook.title}</Link>
               ) : (
-                <span className="text-ink self-center">{activeBook.title}</span>
+                <span title={activeBook.title} className="text-ink self-center truncate max-w-[180px]">{activeBook.title}</span>
               )}
             </>
           )}
           {activeChapter && (
             <>
-              <span className="text-ink-faint self-center">›</span>
-              <span className="text-ink self-center">{activeChapter.title}</span>
+              <span className="text-ink-faint self-center shrink-0">›</span>
+              <span title={activeChapter.title} className="text-ink self-center truncate max-w-[180px]">{activeChapter.title}</span>
             </>
           )}
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-3 shrink-0">
             <SearchBar
               seriesId={seriesId}
               books={series.books.map(b => ({ id: b.id, title: b.title }))}
             />
-            <Greeting />
+            <div className="hidden lg:block">
+              <Greeting />
+            </div>
             <button
               role="switch"
               aria-checked={lightMode}
