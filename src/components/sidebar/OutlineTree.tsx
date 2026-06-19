@@ -28,20 +28,22 @@ function parseNumberedTitle(title: string): { prefix: string; num: number } | nu
   return null
 }
 
-// Walks the dragged list in its new order and rewrites each chapter's
-// title using a per-prefix counter, so "Chapter" and "Bonus Chapter"
-// (and any other author-coined prefix) renumber independently after a
-// drag. Chapters whose titles don't match the numbered shape are left
-// alone — author-named one-offs (e.g. "Prologue") shouldn't be
-// touched by a drag of an unrelated chapter.
-function renumberAfterDrag<T extends { title: string }>(chapters: T[]): T[] {
-  const seen: Record<string, number> = {}
+// Renumbers ONLY chapters whose prefix matches the dragged chapter's
+// prefix. So dragging "Bonus Chapter 7" re-sequences "Bonus Chapter N"
+// (so it becomes 1, 2, 3, … in the new order) while every "Chapter N"
+// and one-off ("Prologue", "Epilogue") is left untouched — both their
+// titles AND their numbering. Walking every prefix on every drag was
+// the previous behavior and caused unrelated prefixes to silently
+// shift when their on-disk titles didn't already form a clean sequence.
+function renumberAfterDrag<T extends { title: string }>(chapters: T[], movedTitle: string): T[] {
+  const movedParsed = parseNumberedTitle(movedTitle)
+  if (!movedParsed) return chapters
+  let n = 0
   return chapters.map(c => {
     const parsed = parseNumberedTitle(c.title)
-    if (!parsed) return c
-    const next = (seen[parsed.prefix] ?? 0) + 1
-    seen[parsed.prefix] = next
-    return { ...c, title: `${parsed.prefix}${next}` }
+    if (!parsed || parsed.prefix !== movedParsed.prefix) return c
+    n++
+    return { ...c, title: `${parsed.prefix}${n}` }
   })
 }
 
@@ -148,15 +150,23 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
     setSelectedBook(prev => prev && books.some(b => b.id === prev) ? prev : fallback)
   }, [books, params.chapterId, params.bookId])
 
-  // Sync localChapters when chapters are added/deleted (structural change only, not reorder)
+  // Sync localChapters from the layout's series prop whenever any
+  // chapter's id, title, OR order differs from what we currently have
+  // locally. Previously this only watched the id set, so a title
+  // change made elsewhere (e.g. the chapter editor saving a new
+  // title) wasn't reflected here until a page refresh.
+  //
+  // During a drag, the `books` prop reference doesn't change (we
+  // don't loadSeries() in handleDragEnd), so this effect doesn't fire
+  // and the optimistic local state is preserved.
   useEffect(() => {
     setLocalChapters(prev => {
       let changed = false
       const next = { ...prev }
       for (const book of books) {
-        const incomingIds = book.chapters.map(c => c.id).sort().join(',')
-        const localIds = (prev[book.id] ?? []).map(c => c.id).sort().join(',')
-        if (incomingIds !== localIds) {
+        const incomingKey = book.chapters.map(c => `${c.id}|${c.title}|${c.order}`).join(',')
+        const localKey = (prev[book.id] ?? []).map(c => `${c.id}|${c.title}|${c.order}`).join(',')
+        if (incomingKey !== localKey) {
           next[book.id] = book.chapters
           changed = true
         }
@@ -184,17 +194,22 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
     const chapters = localChapters[selectedBook] ?? books.find(b => b.id === selectedBook)?.chapters ?? []
     const oldIdx = chapters.findIndex(c => c.id === active.id)
     const newIdx = chapters.findIndex(c => c.id === over.id)
-    // Two-step renumber: positional order first, then per-prefix
-    // title rewriting so "Chapter" and "Bonus Chapter" stay
-    // independent series.
+    // Two-step renumber: positional order first, then renumber only
+    // chapters that share the dragged chapter's prefix so "Chapter"
+    // and "Bonus Chapter" stay independent series and unrelated
+    // prefixes are never touched.
+    const movedTitle = chapters[oldIdx]?.title ?? ''
     const moved = arrayMove(chapters, oldIdx, newIdx).map((c, i) => ({ ...c, order: i + 1 }))
-    const reordered = renumberAfterDrag(moved)
+    const reordered = renumberAfterDrag(moved, movedTitle)
     setLocalChapters(prev => ({ ...prev, [selectedBook]: reordered }))
     const book = books.find(b => b.id === selectedBook)!
     await fetch(`/api/series/${seriesId}/books/${book.id}/chapters/reorder`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(reordered.map(c => ({ id: c.id, order: c.order }))),
+      // Send title alongside order so the server persists the same
+      // per-prefix renumbering the client computed — no second-guessing
+      // on the server.
+      body: JSON.stringify(reordered.map(c => ({ id: c.id, order: c.order, title: c.title }))),
     })
   }
 
