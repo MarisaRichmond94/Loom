@@ -67,6 +67,12 @@ type Props = {
   variables?: Variable[]
   chapterLabels?: Record<string, ChapterLabel>
   currentChapterId?: string
+  // When true, any block that isn't a plain text block (conditional
+  // fragment content, choice branch text, override endings) is wrapped
+  // in a left-stripe highlight so the writer can see at a glance which
+  // prose is dynamic. Toggled from the Configure modal.
+  highlightConditionals: boolean
+  onHighlightConditionalsChange: (next: boolean) => void
   onSessionUpdate: (state: StoryState, history: HistoryEntry[]) => void
   onNavigate: (chapterId: string) => void
 }
@@ -88,7 +94,7 @@ function renderTipTap(json: string | null | undefined, storyState?: StoryState):
 }
 
 export default function ReaderView({
-  sessionId, seriesId, blocks, storyState, choiceHistory, chapterLabel, chapterPov, chapterDate, returnTo, characters = [], currentBookId, books = [], variables = [], chapterLabels = {}, currentChapterId, onSessionUpdate, onNavigate
+  sessionId, seriesId, blocks, storyState, choiceHistory, chapterLabel, chapterPov, chapterDate, returnTo, characters = [], currentBookId, books = [], variables = [], chapterLabels = {}, currentChapterId, highlightConditionals, onHighlightConditionalsChange, onSessionUpdate, onNavigate
 }: Props) {
   // Only visible chapters participate in prev/next navigation.
   const allChapters = books
@@ -97,9 +103,17 @@ export default function ReaderView({
   const currentIdx = allChapters.findIndex(c => c.id === currentChapterId)
   const prevChapter = currentIdx > 0 ? allChapters[currentIdx - 1] : null
   const nextChapter = currentIdx !== -1 && currentIdx < allChapters.length - 1 ? allChapters[currentIdx + 1] : null
+
+  // Tailwind classes applied to any non-plain-text rendered prose when the
+  // writer turns on Color-code conditional text in the Configure modal.
+  // A left accent stripe + soft tint frames each dynamic block without
+  // changing the prose typography itself (negative left padding pulls the
+  // stripe outside the column so the indent of the first line is undisturbed).
+  const HIGHLIGHT_CLASSES = highlightConditionals
+    ? 'border-l-2 border-accent/50 bg-accent/5 pl-3 -ml-3 rounded-r'
+    : ''
   const router = useRouter()
   const mainRef = useRef<HTMLElement>(null)
-  const prevChoiceCountRef = useRef(choiceHistory.length)
   const [pendingChoiceBlock, setPendingChoiceBlock] = useState<Block | null>(null)
   const [lightMode, setLightMode] = useState(false)
   useEffect(() => {
@@ -183,25 +197,10 @@ export default function ReaderView({
     return () => cancelAnimationFrame(id)
   }, [blocks, choiceHistory])
 
-  useEffect(() => {
-    if (choiceHistory.length <= prevChoiceCountRef.current) {
-      prevChoiceCountRef.current = choiceHistory.length
-      return
-    }
-    prevChoiceCountRef.current = choiceHistory.length
-
-    const lastEntry = choiceHistory[choiceHistory.length - 1]
-    if (!lastEntry) return
-    const choiceIdx = blocks.findIndex(b => b.id === lastEntry.choicePointId)
-    const nextBlock = blocks[choiceIdx + 1]
-    if (!nextBlock) return
-
-    const el = document.getElementById(`block-${nextBlock.id}`)
-    const container = mainRef.current
-    if (!el || !container) return
-    const offset = el.getBoundingClientRect().top - container.getBoundingClientRect().top
-    container.scrollBy({ top: offset - 16, behavior: 'smooth' })
-  }, [choiceHistory, blocks])
+  // Auto-scroll after a choice answer was jumpy in practice — the block
+  // expansion shifted the content under the scroll mid-animation, which
+  // made the reveal feel disorienting. Choices now just reveal the next
+  // text in place; the reader scrolls themselves when ready.
 
   function toggleLightMode() {
     setLightMode(m => {
@@ -432,7 +431,7 @@ export default function ReaderView({
                 <div
                   key={block.id}
                   id={`block-${block.id}`}
-                  className="prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_p:empty]:min-h-[1em] [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6"
+                  className={`prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_p:empty]:min-h-[1em] [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6 ${HIGHLIGHT_CLASSES}`}
                   dangerouslySetInnerHTML={{ __html: renderTipTap(matched.content, storyState) }}
                 />
               )
@@ -456,7 +455,7 @@ export default function ReaderView({
                     <div
                       key={block.id}
                       id={`block-${block.id}`}
-                      className="prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_p:empty]:min-h-[1em] [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6"
+                      className={`prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_p:empty]:min-h-[1em] [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6 ${HIGHLIGHT_CLASSES}`}
                     >
                       {rich
                         ? <div dangerouslySetInnerHTML={{ __html: rich }} />
@@ -604,6 +603,9 @@ export default function ReaderView({
           sessionId={sessionId}
           choiceHistory={choiceHistory}
           variables={variables}
+          currentChapterId={currentChapterId ?? null}
+          highlightConditionals={highlightConditionals}
+          onHighlightConditionalsChange={onHighlightConditionalsChange}
           onApply={(state, history) => {
             onSessionUpdate(state, history)
             setShowConfig(false)

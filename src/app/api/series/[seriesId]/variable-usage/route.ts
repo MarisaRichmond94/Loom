@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { namesInCondition, namesInTemplates, namesInSetsVariables } from '@/lib/variableRefs'
 
 // Counts each place a series's variables are *read*, plus the list of
 // chapters that contain at least one read. The Context modal uses the
@@ -52,31 +53,6 @@ type Usage = Counts & {
   firstAppearance: { bookOrder: number; chapterOrder: number } | null
 }
 
-const TEMPLATE_VAR_RE = /\{\{\s*([a-zA-Z_$][a-zA-Z0-9_$]*)/g
-
-function namesInCondition(raw: string | null | undefined): string[] {
-  if (!raw) return []
-  try {
-    const c = JSON.parse(raw)
-    if (c && typeof c === 'object') {
-      if ('op' in c && Array.isArray((c as { clauses?: unknown }).clauses)) {
-        const clauses = (c as { clauses: Array<{ var?: string }> }).clauses
-        return clauses.map(cl => cl.var ?? '').filter(Boolean)
-      }
-      return Object.keys(c as Record<string, unknown>)
-    }
-  } catch { /* malformed — count as no references */ }
-  return []
-}
-
-function namesInTemplates(raw: string | null | undefined): string[] {
-  if (!raw) return []
-  const out: string[] = []
-  TEMPLATE_VAR_RE.lastIndex = 0
-  let m: RegExpExecArray | null
-  while ((m = TEMPLATE_VAR_RE.exec(raw)) !== null) out.push(m[1])
-  return out
-}
 
 export async function GET(_: Request, { params }: { params: Promise<{ seriesId: string }> }) {
   const { seriesId } = await params
@@ -264,11 +240,3 @@ export async function GET(_: Request, { params }: { params: Promise<{ seriesId: 
   return NextResponse.json(usage)
 }
 
-function namesInSetsVariables(raw: string | null | undefined): string[] {
-  if (!raw) return []
-  try {
-    const v = JSON.parse(raw)
-    if (v && typeof v === 'object') return Object.keys(v as Record<string, unknown>)
-  } catch { /* malformed */ }
-  return []
-}

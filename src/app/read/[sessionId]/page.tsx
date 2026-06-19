@@ -35,6 +35,10 @@ export default function ReaderPage() {
   const [chapterDate, setChapterDate] = useState<string | null>(null)
   const [currentChapterId, setCurrentChapterId] = useState<string | null>(null)
   const [noContent, setNoContent] = useState(false)
+  // Lifted so the Configure modal's "color-code conditional text" toggle
+  // updates ReaderView's render immediately, without needing to hit Apply.
+  // Pure presentation — never touches session state.
+  const [highlightConditionals, setHighlightConditionals] = useState(false)
   const [characters, setCharacters] = useState<{
     id: string
     name: string
@@ -249,6 +253,8 @@ export default function ReaderPage() {
       books={seriesBooks}
       chapterLabels={chapterLabels}
       currentChapterId={currentChapterId ?? undefined}
+      highlightConditionals={highlightConditionals}
+      onHighlightConditionalsChange={setHighlightConditionals}
       onSessionUpdate={handleSessionUpdate}
       onNavigate={handleNavigate}
     />
