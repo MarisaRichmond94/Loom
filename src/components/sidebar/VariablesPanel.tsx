@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { LuPencil, LuX, LuEye, LuArrowUpDown, LuArrowRightToLine, LuRotateCcw } from 'react-icons/lu'
+import { LuPencil, LuX, LuEye, LuArrowUpDown, LuArrowRightToLine, LuRotateCcw, LuSearch } from 'react-icons/lu'
 
 type Variable = { id: string; name: string; type: string; defaultValue: string }
 type Chapter = { bookId: string; bookTitle: string; bookOrder: number; chapterId: string; chapterTitle: string; chapterOrder: number; count: number; firstBlockId: string | null }
@@ -95,6 +95,11 @@ export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete
   // require a join client-side.
   const [usage, setUsage] = useState<Record<string, UsageCounts> | null>(null)
   const [sortMode, setSortMode] = useState<SortMode>('occurrence')
+  // Substring search across variable names — case-insensitive, applied
+  // after sorting so the order the writer chose is preserved within
+  // the filtered subset. Reset whenever the modal is opened so a
+  // stale query doesn't hide rows on the next visit.
+  const [searchQuery, setSearchQuery] = useState('')
   // Single source of truth for which sub-view the modal is in. Always
   // resets to 'overview' on open.
   const [view, setView] = useState<ModalView>({ kind: 'overview' })
@@ -105,8 +110,10 @@ export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete
     setDrafts(initial)
     setEditOpen(true)
     setUsage(null)
-    // Reset to the default sort + overview view every time the modal opens.
+    // Reset to the default sort + overview view + empty search every
+    // time the modal opens.
     setSortMode('occurrence')
+    setSearchQuery('')
     setView({ kind: 'overview' })
     fetch(`/api/series/${seriesId}/variable-usage`)
       .then(r => r.ok ? r.json() : null)
@@ -215,6 +222,8 @@ export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete
         return fa ? -1 : 1
       })
     })()
+    const q = searchQuery.trim().toLowerCase()
+    const visible = q ? sorted.filter(v => v.name.toLowerCase().includes(q)) : sorted
     return (
       <>
         <div className="flex items-center justify-between mb-4 shrink-0">
@@ -226,22 +235,42 @@ export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete
           <p className="text-xs text-ink-faint italic text-center py-4">No context variables yet.</p>
         ) : (
           <>
-            {/* Show what clicking will do (the *next* mode), not the
-                current mode. The default visible state is the
-                occurrence sort, so the button reads "sort by usage"
-                until the writer engages with it. */}
-            {(() => {
-              const next = SORT_CYCLE[(SORT_CYCLE.indexOf(sortMode) + 1) % SORT_CYCLE.length]
-              return (
-                <button
-                  onClick={cycleSort}
-                  className="self-start flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition mb-2"
-                  title="Cycle sort order"
-                >
-                  <LuArrowUpDown size={12} /> {SORT_LABEL[next]}
-                </button>
-              )
-            })()}
+            <div className="flex items-center gap-3 mb-2">
+              {/* Show what clicking will do (the *next* mode), not the
+                  current mode. The default visible state is the
+                  occurrence sort, so the button reads "sort by usage"
+                  until the writer engages with it. */}
+              {(() => {
+                const next = SORT_CYCLE[(SORT_CYCLE.indexOf(sortMode) + 1) % SORT_CYCLE.length]
+                return (
+                  <button
+                    onClick={cycleSort}
+                    className="shrink-0 flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition"
+                    title="Cycle sort order"
+                  >
+                    <LuArrowUpDown size={12} /> {SORT_LABEL[next]}
+                  </button>
+                )
+              })()}
+              <div className="relative flex-1 max-w-xs ml-auto">
+                <LuSearch size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+                <input
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search context…"
+                  className="w-full pl-7 pr-7 py-1 text-xs bg-surface-base border border-accent/20 rounded text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink p-0.5"
+                    title="Clear search"
+                  >
+                    <LuX size={11} />
+                  </button>
+                )}
+              </div>
+            </div>
 
             <div className="overflow-y-auto min-h-0 -mr-3 pr-3 border border-accent/10 rounded-lg">
               <table className="w-full text-xs">
@@ -256,7 +285,14 @@ export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete
                   </tr>
                 </thead>
                 <tbody>
-                  {sorted.map(v => {
+                  {visible.length === 0 && searchQuery.trim() && (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-6 text-xs text-ink-faint italic text-center">
+                        No context matches &quot;{searchQuery.trim()}&quot;.
+                      </td>
+                    </tr>
+                  )}
+                  {visible.map(v => {
                     const draft = drafts[v.id] ?? { name: v.name, type: v.type, defaultValue: parseDefault(v.defaultValue) }
                     const counts = usage?.[v.name]
                     const usageText = usage == null ? '…' : counts?.total ?? 0
