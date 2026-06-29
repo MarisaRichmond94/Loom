@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { LuSearch, LuX } from 'react-icons/lu'
 import { FaBookOpen } from 'react-icons/fa'
 
@@ -31,7 +32,11 @@ const KIND_LABEL: Record<Hit['kind'], string> = {
 const DEBOUNCE_MS = 200
 
 export default function SearchBar({ seriesId, books }: { seriesId: string; books: Book[] }) {
-  const [query, setQuery] = useState('')
+  // Seed from the URL so navigating from a previous search result lands
+  // here with the same query already populated. Pure read of the initial
+  // value — subsequent typing owns the state.
+  const initialQuery = useSearchParams()?.get('q') ?? ''
+  const [query, setQuery] = useState(initialQuery)
   const [hits, setHits] = useState<Hit[]>([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
@@ -116,7 +121,14 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
   }
 
   function hrefFor(h: Hit): string {
-    const suffix = h.blockId ? `?block=${h.blockId}` : ''
+    // Pass q= alongside block= so the destination chapter page highlights
+    // matches in its TipTap surfaces. URLSearchParams handles encoding so
+    // a query with spaces / unicode survives the trip.
+    const params = new URLSearchParams()
+    if (h.blockId) params.set('block', h.blockId)
+    const q = query.trim()
+    if (q) params.set('q', q)
+    const suffix = params.toString() ? `?${params.toString()}` : ''
     return `/author/${seriesId}/chapter/${h.chapterId}${suffix}`
   }
 

@@ -62,6 +62,7 @@ type Props = {
   choices: Choice[]
   variables: Variable[]
   characters?: Character[]
+  searchQuery?: string
   onUpdateBlock: (data: Partial<{ displayType: string; prompt: string; condition: string | null }>) => void
   onUpdateChoice: (choiceId: string, data: Partial<Choice>) => void
   onCreateVariable: (name: string, type: string, defaultValue?: unknown) => Promise<void>
@@ -83,11 +84,12 @@ function siblingValueFor(type: typeof VAR_TYPES[number], thisBranchValue: unknow
 
 function ChoicePanel({
   choice, slotPlaceholder, labelClass, bgClass, borderClass,
-  variables, characters, hasSibling, focusVarName, onUpdateChoice, onCreateAndPair,
+  variables, characters, hasSibling, focusVarName, searchQuery, onUpdateChoice, onCreateAndPair,
 }: {
   choice: Choice; slotPlaceholder: string; labelClass: string; bgClass: string; borderClass: string
   variables: Variable[]
   characters?: Character[]
+  searchQuery?: string
   hasSibling: boolean
   // When the parent has just paired a newly-created variable onto this
   // panel as the sibling, this carries that variable's name so the
@@ -385,6 +387,7 @@ function ChoicePanel({
           onChange={json => onUpdateChoice(choice.id, { endingMessage: json })}
           characters={characters}
           variables={variables}
+          searchQuery={searchQuery}
           placeholder={choice.isBadEnding
             ? 'What the reader sees on the full-screen overlay…'
             : 'Optional: text shown inline when this choice is picked…'}
@@ -404,7 +407,7 @@ function ChoicePanel({
 }
 
 
-export default function ChoicePointBlock({ prompt, displayType, condition, choices, variables, characters, onUpdateBlock, onUpdateChoice, onCreateVariable }: Props) {
+export default function ChoicePointBlock({ prompt, displayType, condition, choices, variables, characters, searchQuery, onUpdateBlock, onUpdateChoice, onCreateVariable }: Props) {
   // Slot by array order — choices[0] is the green/primary slot,
   // choices[1] is the red/secondary slot. Used to differ from the
   // old label-based matching ('Yes' / 'No') so writers can rename
@@ -473,6 +476,7 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             variables={variables} characters={characters}
             hasSibling={!!secondaryChoice}
             focusVarName={pairedFocus?.choiceId === primaryChoice.id ? pairedFocus.varName : null}
+            searchQuery={searchQuery}
             onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
           />
         )}
@@ -483,6 +487,7 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             variables={variables} characters={characters}
             hasSibling={!!primaryChoice}
             focusVarName={pairedFocus?.choiceId === secondaryChoice.id ? pairedFocus.varName : null}
+            searchQuery={searchQuery}
             onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
           />
         )}

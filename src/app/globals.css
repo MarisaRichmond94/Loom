@@ -95,6 +95,29 @@ button, a, select, [role="button"] {
 .var-ref-known { color: #10b981; }
 .var-ref-unknown { color: #ef4444; }
 
+/* Highlight for series-search matches across the chapter editor. Pale
+   yellow reads clearly on both light and dark themes; a thin shadow
+   keeps adjacent matches from blurring together. Applied by the
+   TipTap SearchHighlight plugin (prose) on a <mark> wrapper. The
+   compound selector beats Typography's prose-* mark color reset. */
+.search-match,
+mark.search-match,
+.prose .search-match,
+.prose-invert .search-match,
+.ProseMirror .search-match {
+  background-color: rgba(250, 204, 21, 0.4) !important;
+  color: inherit !important;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.5);
+  padding: 0 1px;
+  /* Underline as a defense-in-depth signal — even if a parent style
+     overrides background-color (some themes do), the match still
+     reads visually. */
+  text-decoration: underline;
+  text-decoration-color: rgba(250, 204, 21, 0.9);
+  text-decoration-thickness: 2px;
+}
+
 /* Reader prose, when the current user is the writer — overrides the global
    `*, *::before, *::after { user-select: none }` for the chapter content. */
 .reader-selectable, .reader-selectable * {

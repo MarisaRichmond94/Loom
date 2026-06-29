@@ -481,6 +481,7 @@ export default function ChapterEditorPage() {
           onActiveBlockChange={setActiveBlockId}
           collapsedIds={collapsedIds}
           onCollapsedIdsChange={setCollapsedIds}
+          searchQuery={searchParams?.get('q') ?? ''}
         />
       </div>
 

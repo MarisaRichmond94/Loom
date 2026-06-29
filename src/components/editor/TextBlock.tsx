@@ -58,6 +58,7 @@ import {
 import { Footnote } from '@/lib/extensions/footnote'
 import { CharacterMark } from '@/lib/extensions/character'
 import { VariableHighlight } from '@/lib/extensions/variableHighlight'
+import { SearchHighlight } from '@/lib/extensions/searchHighlight'
 import VariableSuggestionList from './VariableSuggestionList'
 import { buildCharterClipboard } from '@/lib/clipboardFormatting'
 import { DOMSerializer } from '@tiptap/pm/model'
@@ -72,6 +73,9 @@ type Props = {
   characters?: Character[]
   variables?: Variable[]
   placeholder?: string
+  // Live series-search query. When non-empty, every occurrence in this
+  // editor's text gets a yellow highlight via the SearchHighlight plugin.
+  searchQuery?: string
 }
 
 const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
@@ -163,7 +167,7 @@ function keepCaretInView(editor: { view: { coordsAtPos: (pos: number) => { top: 
   })
 }
 
-export default function TextBlock({ content, onChange, autoFocus, characters = [], variables = [], placeholder = 'Write your prose here…' }: Props) {
+export default function TextBlock({ content, onChange, autoFocus, characters = [], variables = [], placeholder = 'Write your prose here…', searchQuery = '' }: Props) {
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
   // footnote state
   const [showInput, setShowInput] = useState(false)
@@ -183,6 +187,11 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
   const localEditRef = useRef(false)
   const variablesRef = useRef(variables)
   variablesRef.current = variables
+  // Live ref so the SearchHighlight plugin always reads the current
+  // query without having to recreate the editor when the writer
+  // adjusts the header search bar.
+  const searchQueryRef = useRef(searchQuery)
+  searchQueryRef.current = searchQuery
   const [varSuggest, setVarSuggest] = useState<{ from: number; query: string; coords: { x: number; y: number } } | null>(null)
   const [varSelectedIdx, setVarSelectedIdx] = useState(0)
 
@@ -195,6 +204,9 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
       CharacterMark,
       VariableHighlight.configure({
         getVariableNames: () => variablesRef.current.map(v => v.name),
+      }),
+      SearchHighlight.configure({
+        getQuery: () => searchQueryRef.current,
       }),
       TextAlign.configure({ types: ['paragraph', 'heading'] }),
       TextStyleColor,
@@ -225,6 +237,12 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
   useEffect(() => {
     if (editor) editor.view.dispatch(editor.state.tr)
   }, [editor, variables])
+
+  // Same redraw nudge when the series-search query changes, so the
+  // SearchHighlight plugin runs against the new query immediately.
+  useEffect(() => {
+    if (editor) editor.view.dispatch(editor.state.tr)
+  }, [editor, searchQuery])
 
   // Native Cmd+C / Ctrl+C out of any text block (normal or conditional override)
   // produces the same Charter / 11px clipboard payload that the reader's

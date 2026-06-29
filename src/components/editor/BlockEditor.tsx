@@ -48,6 +48,10 @@ type Props = {
   // chevron operate on the same source of truth.
   collapsedIds: Set<string>
   onCollapsedIdsChange: (next: Set<string>) => void
+  // Series-search query from the URL — forwarded into every TipTap
+  // surface (prose, conditional override prose, choice branch text) so
+  // matches highlight after a search-result navigation.
+  searchQuery?: string
 }
 
 const BLOCK_BORDER: Record<string, string> = {
@@ -175,7 +179,7 @@ function SortableBlock({
   )
 }
 
-export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange }: Props) {
+export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '' }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const [newBlockId, setNewBlockId] = useState<string | null>(null)
@@ -228,15 +232,19 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [newBlockId])
 
-  // Deep-link: when the chapter URL carries `?block=<id>`, scroll that
-  // block into view once the editor has rendered it. Used by the Context
-  // modal's Origin link (and any other future link-to-block flow). Fires
-  // once per id — re-firing on identical state would yank the writer's
-  // scroll position out from under them.
+  // Deep-link: when the chapter URL carries `?block=<id>` (e.g. from the
+  // Context modal's Origin link), scroll that block into view once the
+  // editor has rendered it. Skipped entirely when `?q=` is also present
+  // — search results just rely on the in-prose highlighting; auto-scroll
+  // there was finicky in practice and being dropped mid-page was worse
+  // than the writer scrolling to a highlight themselves. Fires once per
+  // block id so it doesn't keep yanking the writer's scroll position.
   const searchParams = useSearchParams()
   const targetBlockId = searchParams?.get('block') ?? null
+  const hasSearchQuery = !!(searchParams?.get('q') ?? '').trim()
   const scrolledTargetRef = useRef<string | null>(null)
   useEffect(() => {
+    if (hasSearchQuery) return
     if (!targetBlockId || !blocksContainerRef.current) return
     if (scrolledTargetRef.current === targetBlockId) return
     if (!blocks.some(b => b.id === targetBlockId)) return
@@ -245,7 +253,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
     setActiveBlockId(targetBlockId)
     scrolledTargetRef.current = targetBlockId
-  }, [targetBlockId, blocks])
+  }, [targetBlockId, hasSearchQuery, blocks])
 
   // Ctrl+Shift+Up/Down — move active block
   useEffect(() => {
@@ -410,6 +418,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                     autoFocus={block.id === newBlockId}
                     characters={characters}
                     variables={variables}
+                    searchQuery={searchQuery}
                   />
                 )}
 
@@ -421,6 +430,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                     choices={block.choices}
                     variables={variables}
                     characters={characters}
+                    searchQuery={searchQuery}
                     onUpdateBlock={data => updateBlock(block.id, data)}
                     onUpdateChoice={updateChoice}
                     onCreateVariable={onCreateVariable}
@@ -432,6 +442,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                     overrides={block.overrides}
                     variables={variables}
                     characters={characters}
+                    searchQuery={searchQuery}
                     onAddOverride={(condition, content) => addOverride(block.id, condition, content)}
                     onUpdateOverride={updateOverride}
                     onDeleteOverride={deleteOverride}

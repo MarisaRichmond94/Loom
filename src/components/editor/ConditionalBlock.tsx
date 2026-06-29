@@ -12,6 +12,7 @@ type Props = {
   overrides: Override[]
   variables: { id: string; name: string; type: string; defaultValue?: string }[]
   characters?: Character[]
+  searchQuery?: string
   onAddOverride: (condition: Record<string, unknown>, content: string) => void
   onUpdateOverride: (overrideId: string, data: Partial<Override>) => void
   onDeleteOverride: (overrideId: string) => void
@@ -19,7 +20,7 @@ type Props = {
 
 const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
 
-export default function ConditionalBlock({ overrides, variables, characters, onAddOverride, onUpdateOverride, onDeleteOverride }: Props) {
+export default function ConditionalBlock({ overrides, variables, characters, searchQuery, onAddOverride, onUpdateOverride, onDeleteOverride }: Props) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   function handleAddOverride() {
@@ -77,6 +78,7 @@ export default function ConditionalBlock({ overrides, variables, characters, onA
               onChange={content => onUpdateOverride(override.id, { content })}
               characters={characters}
               variables={variables}
+              searchQuery={searchQuery}
             />
 
             <label className="mt-2 flex items-center gap-2 text-xs text-ink-muted cursor-pointer">
