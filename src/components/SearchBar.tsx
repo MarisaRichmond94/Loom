@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { LuSearch, LuX } from 'react-icons/lu'
+import { LuSearch, LuX, LuReplace } from 'react-icons/lu'
 import { FaBookOpen } from 'react-icons/fa'
+import ConfirmDialog from '@/components/ConfirmDialog'
 
 type Hit = {
   bookId: string
@@ -14,6 +15,11 @@ type Hit = {
   chapterOrder: number
   blockId: string | null
   kind: 'prose' | 'prompt' | 'choice' | 'override' | 'chapter-title'
+  // Field-level pointer the per-hit replace endpoint uses to target
+  // exactly the column this hit came from.
+  recordKind: 'block' | 'choice' | 'override' | 'chapter'
+  recordId: string
+  field: 'content' | 'baseContent' | 'prompt' | 'label' | 'endingMessage' | 'title'
   snippet: string
   matchStart: number
   matchLength: number
@@ -42,6 +48,15 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
   const [open, setOpen] = useState(false)
   const [bookFilter, setBookFilter] = useState<Set<string>>(new Set())  // empty = all books
   const [showFilter, setShowFilter] = useState(false)
+  // Replace mode: when on, a second input appears below for the
+  // replacement string. Replace All hits the dry-run endpoint to count
+  // matches across the book filter, then shows a confirmation modal
+  // before persisting.
+  const [replaceMode, setReplaceMode] = useState(false)
+  const [replaceWith, setReplaceWith] = useState('')
+  const [pendingReplace, setPendingReplace] = useState<{ total: number; counts: { prose: number; prompt: number; choice: number; override: number } } | null>(null)
+  const [replacing, setReplacing] = useState(false)
+  const [replaceError, setReplaceError] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -108,6 +123,73 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
       else next.add(id)
       return next
     })
+  }
+
+  // Step 1 of Replace All: dry-run the endpoint to count matches under
+  // the current book filter, then surface the totals in a ConfirmDialog
+  // so the writer can back out before any DB writes happen.
+  async function previewReplace() {
+    const find = query.trim()
+    if (!find) return
+    setReplaceError(null)
+    setReplacing(true)
+    try {
+      const bookIds = Array.from(bookFilter)
+      const res = await fetch(`/api/series/${seriesId}/replace`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ find, replace: replaceWith, bookIds, dryRun: true }),
+      })
+      if (!res.ok) { setReplaceError('Could not preview replacements.'); return }
+      const data = await res.json()
+      setPendingReplace({ total: data.total, counts: data.counts })
+    } finally { setReplacing(false) }
+  }
+
+  // Per-hit replace: targets exactly the column the hit came from. Used
+  // when the writer hovers a single result and decides only THIS one
+  // should change. Chapter-title hits are blocked (the bulk endpoint
+  // doesn't touch them either — renumbering cascade lives elsewhere).
+  async function replaceSingle(h: Hit) {
+    const find = query.trim()
+    if (!find) return
+    if (h.recordKind === 'chapter') return
+    setReplaceError(null)
+    try {
+      const res = await fetch(`/api/series/${seriesId}/replace/single`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          find, replace: replaceWith,
+          recordKind: h.recordKind, recordId: h.recordId, field: h.field,
+        }),
+      })
+      if (!res.ok) { setReplaceError('Replace failed.'); return }
+      // Refresh matches so the now-rewritten row drops out of (or
+      // updates in) the list.
+      runFetch(query, Array.from(bookFilter))
+    } catch { setReplaceError('Replace failed.') }
+  }
+
+  // Step 2: persist the replace. Re-issues the same call with dryRun=false,
+  // then refetches matches so the dropdown reflects the post-replace state.
+  async function confirmReplace() {
+    const find = query.trim()
+    if (!find) return
+    setReplaceError(null)
+    setReplacing(true)
+    try {
+      const bookIds = Array.from(bookFilter)
+      const res = await fetch(`/api/series/${seriesId}/replace`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ find, replace: replaceWith, bookIds, dryRun: false }),
+      })
+      if (!res.ok) { setReplaceError('Replace failed.'); return }
+      setPendingReplace(null)
+      // Refresh the match list so the writer sees the new state.
+      runFetch(query, bookIds)
+    } finally { setReplacing(false) }
   }
 
   // Group hits by chapter so a single chapter with N matches renders as
@@ -179,6 +261,13 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
             </button>
           )}
           <button
+            onClick={() => { setReplaceMode(o => !o); setOpen(true) }}
+            title={replaceMode ? 'Hide replace input' : 'Find and replace'}
+            className={`p-0.5 transition ${replaceMode ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
+          >
+            <LuReplace size={11} />
+          </button>
+          <button
             onClick={() => setShowFilter(o => !o)}
             title={filterTitle}
             className={`relative p-0.5 transition ${bookFilter.size > 0 ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
@@ -217,6 +306,26 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
 
       {open && query.trim() && (
         <div className="absolute top-full left-0 mt-1 z-40 bg-surface-raised border border-accent/20 rounded-lg shadow-xl w-[28rem] max-h-[60vh] overflow-y-auto">
+          {replaceMode && (
+            <div className="p-2 border-b border-accent/10 bg-surface-overlay/40 flex items-center gap-2 sticky top-0 z-10">
+              <input
+                value={replaceWith}
+                onChange={e => setReplaceWith(e.target.value)}
+                placeholder="Replace with…"
+                className="flex-1 px-2 py-1 text-xs bg-surface-base border border-accent/20 rounded text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
+              />
+              <button
+                onClick={previewReplace}
+                disabled={replacing || !query.trim()}
+                className="shrink-0 px-3 py-1 text-xs rounded bg-accent text-white font-medium hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {replacing ? '…' : 'Replace All'}
+              </button>
+            </div>
+          )}
+          {replaceError && (
+            <p className="px-4 py-2 text-xs text-choice-kill italic">{replaceError}</p>
+          )}
           {loading && hits.length === 0 ? (
             <p className="px-4 py-3 text-xs text-ink-faint italic">Searching…</p>
           ) : grouped.length === 0 ? (
@@ -229,18 +338,31 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
                     {g.bookTitle} — {g.chapterTitle}
                   </div>
                   {g.items.map((h, i) => (
-                    <a
+                    <div
                       key={`${h.blockId ?? 'title'}-${h.kind}-${i}`}
-                      href={hrefFor(h)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block px-3 py-2 hover:bg-surface-overlay/40 transition"
+                      className="group/hit flex items-start gap-2 px-3 py-2 hover:bg-surface-overlay/40 transition"
                     >
-                      <div className="flex items-baseline gap-2 mb-0.5">
-                        <span className="text-[10px] uppercase tracking-wider text-accent/80 shrink-0">{KIND_LABEL[h.kind]}</span>
-                      </div>
-                      <p className="text-xs leading-relaxed">{renderSnippet(h)}</p>
-                    </a>
+                      <a
+                        href={hrefFor(h)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 min-w-0 block"
+                      >
+                        <div className="flex items-baseline gap-2 mb-0.5">
+                          <span className="text-[10px] uppercase tracking-wider text-accent/80 shrink-0">{KIND_LABEL[h.kind]}</span>
+                        </div>
+                        <p className="text-xs leading-relaxed">{renderSnippet(h)}</p>
+                      </a>
+                      {replaceMode && h.recordKind !== 'chapter' && (
+                        <button
+                          onClick={() => replaceSingle(h)}
+                          title={`Replace this match with "${replaceWith}"`}
+                          className="shrink-0 self-center text-[10px] px-2 py-1 rounded bg-accent/20 text-accent hover:bg-accent hover:text-white opacity-0 group-hover/hit:opacity-100 transition"
+                        >
+                          Replace
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               ))}
@@ -248,6 +370,27 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingReplace !== null}
+        title={pendingReplace?.total === 0 ? 'No matches to replace' : `Replace ${pendingReplace?.total ?? 0} match${pendingReplace?.total === 1 ? '' : 'es'}?`}
+        message={pendingReplace
+          ? pendingReplace.total === 0
+            ? `Nothing in ${bookFilter.size === 0 ? 'the series' : 'the selected books'} contains "${query.trim()}".`
+            : `"${query.trim()}" → "${replaceWith}" across ${[
+                pendingReplace.counts.prose && `${pendingReplace.counts.prose} prose`,
+                pendingReplace.counts.prompt && `${pendingReplace.counts.prompt} prompt${pendingReplace.counts.prompt === 1 ? '' : 's'}`,
+                pendingReplace.counts.choice && `${pendingReplace.counts.choice} choice${pendingReplace.counts.choice === 1 ? '' : 's'}`,
+                pendingReplace.counts.override && `${pendingReplace.counts.override} override${pendingReplace.counts.override === 1 ? '' : 's'}`,
+              ].filter(Boolean).join(', ')}. This can't be undone.`
+          : undefined}
+        confirmLabel={pendingReplace?.total === 0 ? 'OK' : 'Replace All'}
+        onCancel={() => setPendingReplace(null)}
+        onConfirm={() => {
+          if (pendingReplace?.total === 0) setPendingReplace(null)
+          else confirmReplace()
+        }}
+      />
     </div>
   )
 }

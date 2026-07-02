@@ -14,6 +14,13 @@ import { extractTextFromTipTap } from '@/lib/tiptapText'
 // so the writer can tell "this is the prose" vs "this is the prompt".
 export type SearchHitKind = 'prose' | 'prompt' | 'choice' | 'override' | 'chapter-title'
 
+// Precise pointer to the source field a hit came from. The replace-single
+// endpoint uses this triple ({recordKind, recordId, field}) to target a
+// specific column without re-walking the doc — the search already knew
+// exactly where it found the match.
+export type RecordKind = 'block' | 'choice' | 'override' | 'chapter'
+export type SearchHitField = 'content' | 'baseContent' | 'prompt' | 'label' | 'endingMessage' | 'title'
+
 export type SearchHit = {
   bookId: string
   bookTitle: string
@@ -24,6 +31,13 @@ export type SearchHit = {
   // Null for chapter-title hits (no block to anchor to).
   blockId: string | null
   kind: SearchHitKind
+  // Field-level addressing so per-hit replace can update exactly the
+  // column the match came from. recordKind=chapter / field=title is
+  // intentionally not replaceable (chapter renumber cascade lives
+  // outside the search-replace flow).
+  recordKind: RecordKind
+  recordId: string
+  field: SearchHitField
   snippet: string         // ~120-char window centered on the match
   matchStart: number      // offset into snippet where the match begins
   matchLength: number     // for the UI to highlight the right span
@@ -51,13 +65,14 @@ function snippetAround(haystack: string, needle: string): { snippet: string; mat
   }
 }
 
-type Loc = Omit<SearchHit, 'kind' | 'snippet' | 'matchStart' | 'matchLength' | 'blockId'>
+type Loc = Omit<SearchHit, 'kind' | 'snippet' | 'matchStart' | 'matchLength' | 'blockId' | 'recordKind' | 'recordId' | 'field'>
 
 function emit(
   out: SearchHit[],
   loc: Loc,
   blockId: string | null,
   kind: SearchHitKind,
+  record: { recordKind: RecordKind; recordId: string; field: SearchHitField },
   text: string,
   needle: string,
 ): void {
@@ -68,6 +83,9 @@ function emit(
     ...loc,
     blockId,
     kind,
+    recordKind: record.recordKind,
+    recordId: record.recordId,
+    field: record.field,
     snippet: found.snippet,
     matchStart: found.matchStart,
     matchLength: needle.length,
@@ -110,27 +128,41 @@ export function runSearch(series: SeriesShape, query: string, bookIds: string[] 
         chapterId: chapter.id, chapterTitle: chapter.title, chapterOrder: chapter.order,
       }
       // Chapter title — common "find every chapter named X" search.
-      emit(out, loc, null, 'chapter-title', chapter.title, needle)
+      emit(out, loc, null, 'chapter-title',
+        { recordKind: 'chapter', recordId: chapter.id, field: 'title' },
+        chapter.title, needle)
 
       for (const block of chapter.blocks) {
-        // Prose: text blocks AND conditional-fragment baseContent
-        // (the "canon" branch that runs when no override matches).
-        const prose = extractTextFromTipTap(block.content) || extractTextFromTipTap(block.baseContent)
-        emit(out, loc, block.id, 'prose', prose, needle)
+        // Prose splits across two block columns. Emit each separately so
+        // a per-hit replace targets the right one (text-block prose lives
+        // in content; conditional-fragment canon lives in baseContent).
+        emit(out, loc, block.id, 'prose',
+          { recordKind: 'block', recordId: block.id, field: 'content' },
+          extractTextFromTipTap(block.content), needle)
+        emit(out, loc, block.id, 'prose',
+          { recordKind: 'block', recordId: block.id, field: 'baseContent' },
+          extractTextFromTipTap(block.baseContent), needle)
 
         // Question prompt — plain string field on choice_point blocks.
-        emit(out, loc, block.id, 'prompt', block.prompt ?? '', needle)
+        emit(out, loc, block.id, 'prompt',
+          { recordKind: 'block', recordId: block.id, field: 'prompt' },
+          block.prompt ?? '', needle)
 
         for (const choice of block.choices) {
-          // Each branch's label + its branch text. Choice.endingMessage
-          // is TipTap JSON in the modern shape; legacy plain text falls
-          // back to itself via extractTextFromTipTap.
-          emit(out, loc, block.id, 'choice', choice.label, needle)
-          emit(out, loc, block.id, 'choice', extractTextFromTipTap(choice.endingMessage), needle)
+          emit(out, loc, block.id, 'choice',
+            { recordKind: 'choice', recordId: choice.id, field: 'label' },
+            choice.label, needle)
+          emit(out, loc, block.id, 'choice',
+            { recordKind: 'choice', recordId: choice.id, field: 'endingMessage' },
+            extractTextFromTipTap(choice.endingMessage), needle)
         }
         for (const override of block.overrides) {
-          emit(out, loc, block.id, 'override', extractTextFromTipTap(override.content), needle)
-          emit(out, loc, block.id, 'override', extractTextFromTipTap(override.endingMessage), needle)
+          emit(out, loc, block.id, 'override',
+            { recordKind: 'override', recordId: override.id, field: 'content' },
+            extractTextFromTipTap(override.content), needle)
+          emit(out, loc, block.id, 'override',
+            { recordKind: 'override', recordId: override.id, field: 'endingMessage' },
+            extractTextFromTipTap(override.endingMessage), needle)
         }
       }
     }
