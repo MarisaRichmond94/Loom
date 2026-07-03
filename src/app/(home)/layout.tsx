@@ -7,8 +7,8 @@ import { LuMoon, LuSun } from 'react-icons/lu'
 import AvatarButton from '@/components/AvatarButton'
 import Greeting from '@/components/Greeting'
 
-// Top-level shell for the marketing/home routes (Explore + Write). Provides
-// the logo, the Explore | Write tab pair, and the right-side greeting +
+// Top-level shell for the marketing/home routes (Write + Explore). Provides
+// the logo, the Write | Explore tab pair, and the right-side greeting +
 // light-mode toggle + avatar. Author pages, reader pages, and preview pages
 // each have their own chrome and don't sit under this layout.
 export default function HomeLayout({ children }: { children: React.ReactNode }) {
@@ -26,10 +26,10 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
     })
   }
 
-  // Anchored at `/write` so other future write-rooted routes (write/...)
-  // still light up the tab. Explore is the root index.
-  const isWrite = pathname.startsWith('/write')
-  const isExplore = !isWrite
+  // Write is the root index; Explore lives at /explore (and future
+  // explore-rooted routes still light up the tab).
+  const isExplore = pathname.startsWith('/explore')
+  const isWrite = !isExplore
 
   return (
     <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
@@ -41,16 +41,16 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
         <div className="flex items-center gap-3 text-sm">
           <Link
             href="/"
-            className={`transition ${isExplore ? 'text-accent font-medium' : 'text-ink-muted hover:text-ink'}`}
-          >
-            Explore
-          </Link>
-          <span className="text-ink-faint">|</span>
-          <Link
-            href="/write"
             className={`transition ${isWrite ? 'text-accent font-medium' : 'text-ink-muted hover:text-ink'}`}
           >
             Write
+          </Link>
+          <span className="text-ink-faint">|</span>
+          <Link
+            href="/explore"
+            className={`transition ${isExplore ? 'text-accent font-medium' : 'text-ink-muted hover:text-ink'}`}
+          >
+            Explore
           </Link>
         </div>
         <div className="ml-auto flex items-center gap-2">

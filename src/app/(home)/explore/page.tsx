@@ -1,0 +1,574 @@
+'use client'
+
+import { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
+import Image from 'next/image'
+import { LuBookOpen, LuSearch, LuSearchX, LuX, LuChevronDown, LuCheck, LuStar } from 'react-icons/lu'
+import { GENRES } from '@/lib/genres'
+import {
+  getStarredSeries,
+  toggleStarredSeries,
+  getActiveReaderSessions,
+  forgetReaderSession,
+} from '@/lib/readerProgress'
+import AuthorModal from '@/components/AuthorModal'
+
+type ExploreSeries = {
+  id: string
+  title: string
+  description: string
+  genres: string[]
+  keywords: string[]
+  heroCoverPath: string | null
+  publishedBookCount: number
+  totalBookCount: number
+  bookTitles: string[]
+  authorName: string
+  inProgressBook: { id: string; title: string; order: number } | null
+}
+
+type ResumeEntry = {
+  sessionId: string
+  seriesId: string
+  seriesTitle: string
+  authorName: string
+  currentBookId: string | null
+  currentBookTitle: string | null
+  currentBookOrder: number | null
+  currentBookCoverPath: string | null
+  currentBookChapterCount: number
+  currentChapterId: string | null
+  currentChapterTitle: string | null
+  currentChapterOrder: number | null
+  hasProgress: boolean
+  updatedAt: string
+}
+
+// Reader-facing landing. Lists every series with at least one published
+// book; each card links to the existing /preview/series/[seriesId] landing
+// where the reader can read more and start a session.
+export default function ExplorePage() {
+  const [series, setSeries] = useState<ExploreSeries[] | null>(null)
+  const [query, setQuery] = useState('')
+  // Active genre filter — multi-select with OR semantics. Empty set means
+  // no filter applied (every series passes the genre check).
+  const [activeGenres, setActiveGenres] = useState<string[]>([])
+  const [genreMenuOpen, setGenreMenuOpen] = useState(false)
+  const [genreFilterQuery, setGenreFilterQuery] = useState('')
+  const genreMenuRef = useRef<HTMLDivElement>(null)
+  const genreFilterInputRef = useRef<HTMLInputElement>(null)
+  // Reader-side state lives in localStorage; mirror it in component state
+  // so renders react to toggles immediately.
+  const [starred, setStarred] = useState<string[]>([])
+  const [resumeEntries, setResumeEntries] = useState<ResumeEntry[]>([])
+  // When a byline is clicked, open the author modal targeted at THAT
+  // card's author (per-series override or the global profile fallback).
+  // Tracking the name lets the modal stub a minimal view for demo
+  // authors who don't have a real profile.
+  const [authorModalName, setAuthorModalName] = useState<string | null>(null)
+  // The catalog area scrolls instead of the whole page so the filter
+  // bar stays accessible. atBottom drives the fade-out gradient — true
+  // when there's nothing more to scroll to (or no overflow at all),
+  // false while content sits below the visible area.
+  const catalogScrollRef = useRef<HTMLDivElement>(null)
+  const [catalogAtBottom, setCatalogAtBottom] = useState(true)
+
+  // Focus the search input as the dropdown opens; clear it on close so the
+  // next visit starts fresh.
+  useEffect(() => {
+    if (genreMenuOpen) {
+      requestAnimationFrame(() => genreFilterInputRef.current?.focus())
+    } else {
+      setGenreFilterQuery('')
+    }
+  }, [genreMenuOpen])
+
+  // Close the genre dropdown when the user mousedowns anywhere outside it.
+  // Escape also closes — handled on the dropdown's onKeyDown.
+  useEffect(() => {
+    if (!genreMenuOpen) return
+    function onMouseDown(e: MouseEvent) {
+      if (genreMenuRef.current && !genreMenuRef.current.contains(e.target as Node)) {
+        setGenreMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [genreMenuOpen])
+
+  useEffect(() => {
+    fetch('/api/explore')
+      .then(r => r.ok ? r.json() : [])
+      .then(setSeries)
+      .catch(() => setSeries([]))
+  }, [])
+
+  // Hydrate the starred list from localStorage after mount. SSR can't see
+  // localStorage so we keep initial state empty and fill in client-side.
+  useEffect(() => {
+    setStarred(getStarredSeries())
+  }, [])
+
+  // Load Continue Reading entries. Walks every cached session id in
+  // localStorage, asks the server for the resume context in one batch,
+  // prunes any that 404'd, and filters to sessions that actually have
+  // progress so a "just-started, never-touched" session doesn't appear.
+  useEffect(() => {
+    const cached = getActiveReaderSessions()
+    if (cached.length === 0) { setResumeEntries([]); return }
+    let cancelled = false
+    fetch('/api/sessions/resume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionIds: cached.map(c => c.sessionId) }),
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then((rows: ResumeEntry[]) => {
+        if (cancelled) return
+        const returnedIds = new Set(rows.map(r => r.seriesId))
+        // Drop localStorage entries the server didn't return — usually
+        // means the session was deleted.
+        for (const c of cached) {
+          if (!returnedIds.has(c.seriesId)) forgetReaderSession(c.seriesId)
+        }
+        // Most-recently-opened first so the card the reader most likely
+        // wants to resume is the leftmost in the horizontal strip.
+        const sorted = rows
+          .filter(r => r.hasProgress)
+          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        setResumeEntries(sorted)
+      })
+      .catch(() => { if (!cancelled) setResumeEntries([]) })
+    return () => { cancelled = true }
+  }, [])
+
+  function toggleStar(seriesId: string) {
+    setStarred(toggleStarredSeries(seriesId))
+  }
+
+  // Update atBottom based on the scroll container's current position.
+  // A small tolerance handles sub-pixel rounding so the gradient
+  // disappears cleanly at the actual bottom.
+  function checkCatalogScroll() {
+    const el = catalogScrollRef.current
+    if (!el) { setCatalogAtBottom(true); return }
+    const tolerance = 4
+    setCatalogAtBottom(el.scrollTop + el.clientHeight >= el.scrollHeight - tolerance)
+  }
+
+  // Show every genre from the canonical list so the reader can find any
+  // tag the platform supports — not just the subset currently in use.
+  // The in-dropdown search whittles it down as they type.
+  const visibleGenresInMenu = useMemo(() => {
+    const q = genreFilterQuery.trim().toLowerCase()
+    if (!q) return [...GENRES]
+    return GENRES.filter(g => g.toLowerCase().includes(q))
+  }, [genreFilterQuery])
+
+  // Search + genre filter. Series title, keywords, and book titles all
+  // contribute to the text match; genre filter is OR across selections.
+  const filtered = useMemo(() => {
+    if (!series) return []
+    const q = query.trim().toLowerCase()
+    return series.filter(s => {
+      if (activeGenres.length > 0 && !s.genres.some(g => activeGenres.includes(g))) {
+        return false
+      }
+      if (!q) return true
+      const matchesTitle = s.title.toLowerCase().includes(q)
+      const matchesKeyword = s.keywords.some(k => k.toLowerCase().includes(q))
+      const matchesBook = s.bookTitles.some(t => t.toLowerCase().includes(q))
+      return matchesTitle || matchesKeyword || matchesBook
+    })
+  }, [series, query, activeGenres])
+
+  function toggleGenre(genre: string) {
+    setActiveGenres(prev =>
+      prev.includes(genre) ? prev.filter(g => g !== genre) : [...prev, genre]
+    )
+  }
+
+  // Re-evaluate the bottom-gradient state whenever the filtered set or
+  // continue-reading set changes (which is when the scroll height shifts).
+  // Also on window resize — what fit before may now overflow or vice versa.
+  useEffect(() => {
+    checkCatalogScroll()
+    const onResize = () => checkCatalogScroll()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [filtered.length, resumeEntries.length])
+
+  if (series == null) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <p className="text-ink-faint text-sm">Loading…</p>
+      </div>
+    )
+  }
+
+  const filtersActive = query.trim() !== '' || activeGenres.length > 0
+
+  return (
+    <div className="h-full px-8 py-10 flex flex-col">
+      {resumeEntries.length > 0 && (
+        <section className="shrink-0 mb-4">
+          <div className="flex flex-col mb-4">
+            <h2 className="text-2xl font-bold text-ink">Continue Reading</h2>
+            <p className="text-sm text-ink-muted mt-1">
+              Pick up where you left off...
+            </p>
+          </div>
+          {/* Horizontal strip — newest first. -mx-8 px-8 lets the row scroll
+              edge-to-edge while the cards still respect the page's gutter. */}
+          <div className="-mx-8 px-8 overflow-x-auto pb-2">
+            <div className="flex gap-4">
+              {resumeEntries.map(r => {
+                const progressPct = r.currentBookChapterCount > 0 && r.currentChapterOrder != null
+                  ? Math.round((r.currentChapterOrder / r.currentBookChapterCount) * 100)
+                  : null
+                const seriesIsBook = !r.currentBookTitle || r.currentBookTitle === r.seriesTitle
+                return (
+                  <Link
+                    key={r.sessionId}
+                    href={`/read/${r.sessionId}`}
+                    className="group shrink-0 w-[28rem] flex items-stretch gap-4 p-4 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
+                  >
+                    <div className="relative w-20 aspect-[2/3] shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 flex items-center justify-center">
+                      {r.currentBookCoverPath
+                        ? <Image src={r.currentBookCoverPath} alt="" fill sizes="80px" className="object-cover" />
+                        : <LuBookOpen size={24} className="text-ink-faint" />}
+                    </div>
+                    <div className="flex-1 min-w-0 flex flex-col gap-1">
+                      <p className="text-base font-bold text-ink truncate group-hover:text-accent transition">
+                        {r.currentBookTitle ?? r.seriesTitle}
+                        {!seriesIsBook && r.currentBookOrder != null && (
+                          <span className="font-normal text-ink-faint ml-2">(Book {r.currentBookOrder})</span>
+                        )}
+                      </p>
+                      {!seriesIsBook && (
+                        <p className="text-xs text-ink-faint truncate">{r.seriesTitle}</p>
+                      )}
+                      {r.authorName && (
+                        <p className="text-xs text-ink-muted truncate">by: {r.authorName}</p>
+                      )}
+                      {r.currentChapterTitle && (
+                        <p className="text-xs text-ink-muted truncate">{r.currentChapterTitle}</p>
+                      )}
+                      {progressPct != null && (
+                        <div className="mt-auto flex items-center gap-2">
+                          <div className="flex-1 h-1.5 rounded-full bg-surface-overlay overflow-hidden">
+                            <div
+                              className="h-full bg-accent"
+                              style={{ width: `${progressPct}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-ink-faint tabular-nums shrink-0">{progressPct}%</span>
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <div className='flex flex-row justify-between items-end'>
+        <div className="flex flex-col shrink-0 mb-4">
+          <h1 className="text-2xl font-bold text-ink">Explore</h1>
+          <p className="text-sm text-ink-muted mt-1">
+            Find your next great read...
+          </p>
+        </div>
+
+        {series.length > 0 && (
+          <p className="shrink-0 mb-4 text-right text-xs uppercase tracking-widest text-ink-faint">
+            {filtered.length} result(s)
+          </p>
+        )}
+      </div>
+
+      {series.length > 0 && (
+        <div className="shrink-0 mb-4 flex items-center gap-3">
+          <div className="relative flex-1">
+            <LuSearch size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search by book/series title or keyword…"
+              className="w-full bg-surface-raised border border-accent/15 rounded-lg pl-9 pr-9 py-2.5 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                title="Clear search"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink transition"
+              >
+                <LuX size={14} />
+              </button>
+            )}
+          </div>
+          <div ref={genreMenuRef} className="relative shrink-0">
+            {/* Both trigger and dropdown share the same width so the
+                dropdown reads as a continuation of the field. w-44 is
+                tuned to the canonical genre list's longest entry
+                ("Contemporary") + the checkbox + padding chrome. */}
+            <button
+              type="button"
+              onClick={() => setGenreMenuOpen(o => !o)}
+              onKeyDown={e => { if (e.key === 'Escape') setGenreMenuOpen(false) }}
+              className={`w-44 flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border text-sm transition ${
+                activeGenres.length > 0
+                  ? 'bg-accent/10 border-accent/40 text-ink'
+                  : 'bg-surface-raised border-accent/15 text-ink-muted hover:border-accent/40 hover:text-ink'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                Genre(s)
+                {activeGenres.length > 0 && (
+                  <span className="text-[10px] bg-accent text-white rounded-full px-1.5 py-0.5 leading-none">
+                    {activeGenres.length}
+                  </span>
+                )}
+              </span>
+              <LuChevronDown
+                size={14}
+                className={`transition-transform ${genreMenuOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {genreMenuOpen && (
+              <div
+                onKeyDown={e => { if (e.key === 'Escape') setGenreMenuOpen(false) }}
+                className="absolute top-full right-0 mt-2 w-44 z-20 bg-surface-raised border border-accent/20 rounded-lg shadow-xl overflow-hidden"
+              >
+                {/* In-dropdown filter. Pulled from the canonical genre list
+                    so the reader can find every supported tag, not just
+                    ones already in the catalog. */}
+                <div className="relative border-b border-accent/10">
+                  <LuSearch size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+                  <input
+                    ref={genreFilterInputRef}
+                    value={genreFilterQuery}
+                    onChange={e => setGenreFilterQuery(e.target.value)}
+                    placeholder="Filter genres…"
+                    className="w-full bg-transparent pl-8 pr-3 py-2 text-xs text-ink placeholder:text-ink-faint outline-none"
+                  />
+                </div>
+                <div className="relative">
+                  {visibleGenresInMenu.length === 0 ? (
+                    <p className="text-xs text-ink-faint italic px-3 py-3 text-center">No matches.</p>
+                  ) : (
+                    <>
+                      {/* ~40px per row × 4.5 = 180px, so the fifth option
+                          peeks as a "scroll for more" cue. Gradient fades
+                          to surface-raised — the dropdown's own bg. */}
+                      <div className="overflow-y-auto max-h-[180px] py-1">
+                        {visibleGenresInMenu.map(g => {
+                          const on = activeGenres.includes(g)
+                          return (
+                            <button
+                              type="button"
+                              key={g}
+                              onClick={() => toggleGenre(g)}
+                              className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition ${
+                                on
+                                  ? 'text-ink bg-accent/10'
+                                  : 'text-ink-muted hover:bg-surface-overlay hover:text-ink'
+                              }`}
+                            >
+                              <span
+                                className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                  on ? 'bg-accent border-accent' : 'border-accent/30'
+                                }`}
+                              >
+                                {on && <LuCheck size={11} className="text-white" />}
+                              </span>
+                              {g}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {visibleGenresInMenu.length > 4 && (
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-surface-raised to-transparent" />
+                      )}
+                    </>
+                  )}
+                </div>
+                {activeGenres.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveGenres([])}
+                    className="w-full text-xs text-ink-muted hover:text-ink transition py-2 border-t border-accent/10"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Scrollable catalog area. Continue Reading + the grid live in a
+          single contained scroll region so the filter bar above stays
+          fixed; a gradient at the bottom fades the last row when more
+          cards sit below the visible area. */}
+      <div className="relative flex-1 min-h-0">
+        <div
+          ref={catalogScrollRef}
+          onScroll={checkCatalogScroll}
+          className="absolute inset-0 overflow-y-auto flex flex-col pr-1"
+        >
+      {series.length === 0 ? (
+        <div className="flex-1 rounded-xl border-2 border-dashed border-accent/20 px-8 py-10 flex items-center justify-center">
+          <p className="text-sm text-ink-faint italic text-center">
+            Nothing to read yet. Publish a book from the Write view to see it here.
+          </p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex-1 rounded-xl border-2 border-dashed border-accent/20 px-8 py-10 flex items-center justify-center">
+          <div className="flex flex-col items-center text-center">
+            <LuSearchX size={80} className="text-ink-faint mb-3" />
+            <p className="text-base text-ink">
+              {filtersActive
+                ? 'No books or series match the applied search parameters'
+                : 'No series to show'}
+            </p>
+            {filtersActive && (
+              <p className="text-sm text-ink-muted mt-2">Try adjusting or relaxing your filter(s)</p>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filtered.map(s => {
+            const isStarred = starred.includes(s.id)
+            return (
+            <Link
+              key={s.id}
+              href={`/preview/series/${s.id}`}
+              className="group relative flex gap-4 p-4 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
+            >
+              {/* Star toggle — preventDefault keeps the outer link from
+                  navigating; the click is purely a localStorage flip. */}
+              <button
+                type="button"
+                onClick={e => { e.preventDefault(); e.stopPropagation(); toggleStar(s.id) }}
+                title={isStarred ? 'Unstar this series' : 'Star this series'}
+                className={`absolute top-3 right-3 p-1 rounded transition ${
+                  isStarred
+                    ? 'text-accent'
+                    : 'text-ink-faint opacity-0 group-hover:opacity-100 hover:text-ink'
+                }`}
+              >
+                <LuStar size={16} className={isStarred ? 'fill-accent' : ''} />
+              </button>
+              <div className="relative w-40 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 aspect-[2/3] flex items-center justify-center">
+                {s.heroCoverPath
+                  ? <Image src={s.heroCoverPath} alt="" fill sizes="160px" className="object-cover" />
+                  : <LuBookOpen size={32} className="text-ink-faint" />}
+              </div>
+              <div className="flex-1 min-w-0 flex flex-col">
+                <p className="font-semibold text-ink truncate pr-8 group-hover:text-accent transition">{s.title}</p>
+                {s.authorName && (
+                  <p className="text-xs text-ink-muted truncate">
+                    by{' '}
+                    <button
+                      type="button"
+                      onClick={e => { e.preventDefault(); e.stopPropagation(); setAuthorModalName(s.authorName) }}
+                      className="hover:text-ink hover:underline transition"
+                    >
+                      {s.authorName}
+                    </button>
+                  </p>
+                )}
+                <p className={`text-[11px] uppercase tracking-widest text-ink-faint ${s.authorName ? 'mt-2' : 'mt-0.5'}`}>
+                  {s.totalBookCount} book(s)
+                  {s.publishedBookCount < s.totalBookCount && (
+                    <> ({s.publishedBookCount} published)</>
+                  )}
+                </p>
+                {s.inProgressBook && (
+                  <p className="mt-1 text-[10px] uppercase tracking-widest text-accent inline-flex items-center gap-1.5 self-start border border-accent/40 bg-accent/10 rounded px-2 py-0.5">
+                    <span>In progress</span>
+                    <span className="text-accent/70 normal-case tracking-normal">Book {s.inProgressBook.order}: {s.inProgressBook.title}</span>
+                  </p>
+                )}
+                {s.description && (
+                  <CardDescription text={s.description} />
+                )}
+                {(s.genres.length > 0 || s.keywords.length > 0) && (
+                  <div className="mt-auto pt-2 flex flex-col gap-1.5">
+                    {s.genres.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {s.genres.map(g => (
+                          <span key={g} className="text-[10px] px-2 py-0.5 rounded-full bg-accent text-white">{g}</span>
+                        ))}
+                      </div>
+                    )}
+                    {s.keywords.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {s.keywords.map(k => (
+                          <span key={k} className="text-[10px] px-2 py-0.5 rounded-full bg-accent/15 text-ink border border-accent/20">{k}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Link>
+          )})}
+        </div>
+      )}
+        </div>
+        {!catalogAtBottom && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-surface-base to-transparent" />
+        )}
+      </div>
+
+      {authorModalName && (
+        <AuthorModal
+          authorName={authorModalName}
+          onClose={() => setAuthorModalName(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// Scrollable description block for each catalog card. Paints a fade-out
+// gradient only when the content overflows AND the reader isn't already
+// at the bottom — same behavior as the catalog-level gradient so the
+// affordance reads consistently everywhere.
+function CardDescription({ text }: { text: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  // atBottom starts true so short blurbs never paint the gradient. The
+  // mount effect below corrects this if the content actually overflows.
+  const [atBottom, setAtBottom] = useState(true)
+
+  function check() {
+    const el = ref.current
+    if (!el) { setAtBottom(true); return }
+    const tolerance = 4
+    setAtBottom(el.scrollTop + el.clientHeight >= el.scrollHeight - tolerance)
+  }
+
+  useEffect(check, [text])
+
+  return (
+    <div className="relative mt-2">
+      <div
+        ref={ref}
+        onScroll={check}
+        className="overflow-y-auto pr-1 max-h-[140px]"
+      >
+        <p className="text-xs text-ink-muted leading-relaxed">{text}</p>
+      </div>
+      {!atBottom && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-surface-raised to-transparent" />
+      )}
+    </div>
+  )
+}
