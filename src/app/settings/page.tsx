@@ -7,6 +7,7 @@ import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
 import Greeting from '@/components/Greeting'
 import AvatarButton from '@/components/AvatarButton'
+import ExportFormattingSection from '@/components/ExportFormattingSection'
 
 async function cropImageToBlob(imageSrc: string, pixelCrop: Area): Promise<Blob> {
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -459,6 +460,9 @@ export default function SettingsPage() {
               </div>
             </div>
           </section>
+
+          {/* Manuscript export formatting */}
+          <ExportFormattingSection />
 
           {/* Backups */}
           <section>

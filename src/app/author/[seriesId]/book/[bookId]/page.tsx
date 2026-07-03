@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { LuUser, LuCheck, LuPencil, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff } from 'react-icons/lu'
+import { LuUser, LuCheck, LuPencil, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff, LuDownload, LuFileText } from 'react-icons/lu'
 import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import BookSkeleton from '@/components/editor/BookSkeleton'
+import ExportBookModal from '@/components/editor/ExportBookModal'
 import { pinLabel } from '@/lib/pinLabel'
 import PinnedAudio from '@/components/PinnedAudio'
 
@@ -84,6 +85,13 @@ export default function BookDetailPage() {
   const [charAvatarTs, setCharAvatarTs] = useState(0)
   const charFileInputRef = useRef<HTMLInputElement>(null)
   const isInitialBookLoadRef = useRef(true)
+  // Manuscript export + front matter (title page / copyright pages the
+  // writer keeps in Pages; spliced ahead of Chapter 1 on export).
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [frontMatter, setFrontMatter] = useState<{ originalName: string; uploadedAt: string } | null>(null)
+  const [frontMatterBusy, setFrontMatterBusy] = useState(false)
+  const [frontMatterError, setFrontMatterError] = useState<string | null>(null)
+  const frontMatterInputRef = useRef<HTMLInputElement>(null)
   // Soundtracks aggregated across every chapter in this book.
   const [soundtracks, setSoundtracks] = useState<Soundtrack[]>([])
   // Cache-buster keyed by song id so a fresh upload re-renders the thumbnail
@@ -156,9 +164,38 @@ export default function BookDetailPage() {
     }
   }
 
+  const loadFrontMatter = useCallback(async () => {
+    const res = await fetch(`/api/series/${seriesId}/books/${bookId}/front-matter`)
+    if (res.ok) setFrontMatter((await res.json()).frontMatter)
+  }, [seriesId, bookId])
+
+  async function handleFrontMatterChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setFrontMatterBusy(true)
+    setFrontMatterError(null)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`/api/series/${seriesId}/books/${bookId}/front-matter`, { method: 'POST', body: form })
+      const payload = await res.json().catch(() => null)
+      if (res.ok) setFrontMatter(payload.frontMatter)
+      else setFrontMatterError(payload?.error ?? 'Upload failed')
+    } finally {
+      setFrontMatterBusy(false)
+    }
+  }
+
+  async function removeFrontMatter() {
+    const res = await fetch(`/api/series/${seriesId}/books/${bookId}/front-matter`, { method: 'DELETE' })
+    if (res.ok) setFrontMatter(null)
+  }
+
   useEffect(() => { loadSoundtracks() }, [loadSoundtracks])
   useEffect(() => { loadBook() }, [loadBook])
   useEffect(() => { loadCharacters() }, [loadCharacters])
+  useEffect(() => { loadFrontMatter() }, [loadFrontMatter])
 
   function openCreateModal() {
     setCharName('')
@@ -377,6 +414,13 @@ export default function BookDetailPage() {
             <span className={`inline-block w-1.5 h-1.5 rounded-full ${book.published ? 'bg-accent' : 'bg-ink-faint'}`} />
             {book.published ? 'Published' : 'Draft'}
           </button>
+          <button
+            onClick={() => setShowExportModal(true)}
+            title="Export this book as a Pages manuscript"
+            className="px-3 py-1.5 rounded text-xs bg-surface-overlay text-ink-muted border border-accent/20 font-medium hover:text-ink transition flex items-center gap-1.5"
+          >
+            <LuDownload size={12} /> Export
+          </button>
           <a
             href={`/preview/book/${bookId}`}
             target="_blank"
@@ -570,6 +614,54 @@ export default function BookDetailPage() {
               })}
             </div>
           )}
+        </div>
+
+        {/* Front matter — spliced ahead of Chapter 1 in manuscript exports */}
+        <div className="mb-8">
+          <h2 className="text-sm font-semibold uppercase tracking-widest text-ink mb-2">Front Matter</h2>
+          <div className="px-4 py-3 rounded-lg bg-surface-raised border border-accent/10 flex items-center gap-3">
+            <input
+              ref={frontMatterInputRef}
+              type="file"
+              accept=".pages,.docx"
+              className="hidden"
+              onChange={handleFrontMatterChange}
+            />
+            <LuFileText size={16} className="text-accent shrink-0" />
+            <div className="flex-1 min-w-0">
+              {frontMatter ? (
+                <>
+                  <p className="text-sm text-ink truncate">{frontMatter.originalName}</p>
+                  <p className="text-xs text-ink-faint">
+                    Uploaded {new Date(frontMatter.uploadedAt).toLocaleDateString()} — included at the start of every export.
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-ink-faint">
+                  Title page, copyright, dedication… Upload a <span className="font-mono">.pages</span> or{' '}
+                  <span className="font-mono">.docx</span> and exports will open with it.
+                </p>
+              )}
+              {frontMatterError && <p className="text-xs text-choice-kill mt-0.5">{frontMatterError}</p>}
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={() => frontMatterInputRef.current?.click()}
+                disabled={frontMatterBusy}
+                className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition disabled:opacity-50"
+              >
+                {frontMatterBusy ? 'Uploading…' : frontMatter ? 'Replace' : 'Upload'}
+              </button>
+              {frontMatter && !frontMatterBusy && (
+                <button
+                  onClick={removeFrontMatter}
+                  className="px-3 py-1.5 rounded text-xs text-ink-muted hover:text-choice-kill transition"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Delete */}
@@ -780,6 +872,15 @@ export default function BookDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showExportModal && (
+        <ExportBookModal
+          seriesId={seriesId}
+          bookId={bookId}
+          bookTitle={book.title}
+          onClose={() => setShowExportModal(false)}
+        />
       )}
 
       {showDeleteConfirm && (
