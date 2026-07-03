@@ -3,7 +3,7 @@
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LuMoon, LuSun } from 'react-icons/lu'
+import { LuMoon, LuSparkles, LuSun } from 'react-icons/lu'
 import OutlineTree from '@/components/sidebar/OutlineTree'
 import VariablesPanel from '@/components/sidebar/VariablesPanel'
 import ChoicesPanel from '@/components/sidebar/ChoicesPanel'
@@ -215,6 +215,15 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
               <span title={activeChapter.title} className="text-ink self-center truncate max-w-[180px]">{activeChapter.title}</span>
             </>
           )}
+          {/* Jump to the companion WriteAI app (same tab — the browser's
+              back button is the return trip). */}
+          <a
+            href={process.env.NEXT_PUBLIC_WRITEAI_URL ?? 'http://localhost:5173'}
+            title="Open WriteAI"
+            className="self-center shrink-0 ml-1 p-1 rounded text-ink-faint hover:text-accent hover:bg-accent/10 transition"
+          >
+            <LuSparkles size={14} />
+          </a>
           <div className="ml-auto flex items-center gap-3 shrink-0">
             <SearchBar
               seriesId={seriesId}
