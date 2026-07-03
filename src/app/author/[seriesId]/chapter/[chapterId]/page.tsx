@@ -71,6 +71,17 @@ export default function ChapterEditorPage() {
     focusedPovRef.current = chapterId
   }, [searchParams, chapterId, chapter?.id])
 
+  // Stamp this chapter as the series' "last touched" so jump-in surfaces
+  // (WriteAI's Write link, future resume flows) can land here. Opening the
+  // editor is the touch — you can't edit without opening.
+  useEffect(() => {
+    fetch(`/api/series/${seriesId}/last-touched`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chapterId }),
+    }).catch(() => { /* non-fatal */ })
+  }, [seriesId, chapterId])
+
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
