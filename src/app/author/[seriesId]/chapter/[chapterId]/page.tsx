@@ -8,6 +8,7 @@ import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import { ConditionRow } from '@/components/editor/conditionUI'
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
+import { useCanonSave } from '@/components/editor/useCanonSave'
 
 type Block = {
   id: string; order: number; type: string
@@ -249,6 +250,7 @@ export default function ChapterEditorPage() {
   const addBlockRef = useRef<(type: string) => Promise<void>>(async () => {})
   const addChoiceBlockRef = useRef<() => Promise<void>>(async () => {})
   const createNextChapterRef = useRef<() => Promise<void>>(async () => {})
+  const saveCanonRef = useRef<() => Promise<void>>(async () => {})
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -259,11 +261,19 @@ export default function ChapterEditorPage() {
         case 'KeyC': e.preventDefault(); addBlockRef.current('conditional_fragment'); break
         case 'KeyS': e.preventDefault(); addBlockRef.current('soundtrack'); break
         case 'KeyR': e.preventDefault(); createNextChapterRef.current(); break
+        case 'KeyE': e.preventDefault(); saveCanonRef.current(); break
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
+
+  // ⌥⇧E — render the canon manuscript and save it to the book's folder on
+  // disk (Settings → Export configures where).
+  const { saveCanon } = useCanonSave(seriesId)
+  saveCanonRef.current = async () => {
+    await saveCanon(series.books.find(b => b.chapters.some(c => c.id === chapterId))?.id)
+  }
 
   async function createVariable(name: string, type: string, defaultValue?: unknown) {
     // Caller may specify defaultValue (the choice-block create form lets the
@@ -631,6 +641,7 @@ export default function ChapterEditorPage() {
           </div>
         </div>
       )}
+
     </div>
   )
 }

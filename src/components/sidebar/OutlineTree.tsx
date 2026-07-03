@@ -125,6 +125,13 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
   // falling back to book 1 when nothing is flagged.
   const defaultBookId = books.find(b => b.inProgress)?.id ?? books[0]?.id ?? null
   const [selectedBook, setSelectedBook] = useState<string | null>(() => defaultBookId)
+  // The chapter the writer last worked in, so a bare series-page landing can
+  // open + scroll to it instead of the bottom of the in-progress book. Two
+  // sources, newest first: the chapter opened during THIS session (tracked
+  // via the URL below), then the server-remembered last-touched chapter
+  // fetched on mount. The chapter editor stamps the server value on open.
+  const [lastTouchedId, setLastTouchedId] = useState<string | null>(null)
+  const lastVisitedChapterRef = useRef<string | null>(null)
   const [addingBook, setAddingBook] = useState(false)
   const [addingChapter, setAddingChapter] = useState<string | null>(null)
   const [inputVal, setInputVal] = useState('')
@@ -134,6 +141,36 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const [insertingAt, setInsertingAt] = useState<{ bookId: string; order: number } | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+
+  // Track the chapter open in THIS session. The sidebar stays mounted across
+  // book/chapter navigation within a series, so this ref outlives the
+  // once-per-mount server fetch and reflects the most recent work.
+  useEffect(() => {
+    if (params.chapterId) lastVisitedChapterRef.current = params.chapterId as string
+  }, [params.chapterId])
+
+  // Server-remembered last-touched chapter, fetched once per series.
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/series/${seriesId}/last-touched`)
+      .then(r => r.ok ? r.json() : { lastTouched: null })
+      .then((d: { lastTouched: { chapterId: string } | null }) => {
+        if (!cancelled) setLastTouchedId(d.lastTouched?.chapterId ?? null)
+      })
+      .catch(() => { /* non-fatal — falls back to the in-progress book */ })
+    return () => { cancelled = true }
+  }, [seriesId])
+
+  // The chapter to land on when the URL carries no book/chapter context,
+  // newest source first, skipping any id that no longer exists.
+  const rememberedChapterId = (!params.bookId && !params.chapterId)
+    ? [lastVisitedChapterRef.current, lastTouchedId].find(
+        id => !!id && books.some(b => b.chapters.some(c => c.id === id)),
+      ) ?? null
+    : null
+  const rememberedBookId = rememberedChapterId
+    ? books.find(b => b.chapters.some(c => c.id === rememberedChapterId))?.id ?? null
+    : null
 
   useEffect(() => {
     if (params.bookId) {
@@ -145,10 +182,12 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
       setSelectedBook(activeBook.id)
       return
     }
-    // No book/chapter context in the URL — prefer the in-progress book.
-    const fallback = books.find(b => b.inProgress)?.id ?? books[0]?.id ?? null
-    setSelectedBook(prev => prev && books.some(b => b.id === prev) ? prev : fallback)
-  }, [books, params.chapterId, params.bookId])
+    // Bare series page — a landing, where there's no manual book selection to
+    // preserve (choosing a book navigates to its own URL). Open the book the
+    // writer left off in: the remembered chapter's book, else the in-progress
+    // book, else the first.
+    setSelectedBook(rememberedBookId ?? books.find(b => b.inProgress)?.id ?? books[0]?.id ?? null)
+  }, [books, params.chapterId, params.bookId, rememberedBookId])
 
   // Sync localChapters from the layout's series prop whenever any
   // chapter's id, title, OR order differs from what we currently have
@@ -251,14 +290,16 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
     </form>
   )
 
-  // When the writer lands on a series page with no specific book/chapter
-  // in the URL, scroll the in-progress book's last chapter into view. The
-  // last chapter (= highest order) is "where they left off" for the most
-  // common workflow of appending new chapters.
+  // When the writer lands on a series page with no specific book/chapter in
+  // the URL, scroll the chapter they last worked in into view. Without one
+  // (brand-new series, never opened a chapter), fall back to the in-progress
+  // book's last chapter — "where they left off" for the common workflow of
+  // appending new chapters.
   const inProgressBook = books.find(b => b.inProgress)
   const scrollDefaultChapterId =
-    !params.bookId && !params.chapterId && inProgressBook
-      ? (localChapters[inProgressBook.id] ?? inProgressBook.chapters).at(-1)?.id ?? null
+    !params.bookId && !params.chapterId
+      ? rememberedChapterId
+        ?? (inProgressBook ? (localChapters[inProgressBook.id] ?? inProgressBook.chapters).at(-1)?.id ?? null : null)
       : null
 
   return (

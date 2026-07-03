@@ -1,5 +1,6 @@
 import JSZip from 'jszip'
 import type { ExportFormatting, ManuscriptStyle } from '@/lib/exportFormatting'
+import type { TemplateStyles } from '@/lib/templateStyles'
 import type { ManuscriptChapter } from './walk'
 import { serializeTipTapDoc, escapeXml, type FootnoteCollector } from './tiptapToOoxml'
 
@@ -58,8 +59,20 @@ function styleXml(styleId: string, name: string, s: ManuscriptStyle): string {
   )
 }
 
-function buildStylesXml(f: ExportFormatting): string {
+// When a template is configured, its exported definition wins over the
+// Export-tab numbers for any style it actually carries — the manuscript
+// then matches the template exactly instead of Loom's approximation.
+function buildStylesXml(f: ExportFormatting, template: TemplateStyles | null): string {
   const body = f.styles.body
+  const structural: Array<[string, ManuscriptStyle]> = [
+    ['Chapter', f.styles.chapter],
+    ['POV', f.styles.pov],
+    ['Date', f.styles.date],
+    ['Body', f.styles.body],
+    ['Section Breaks', f.styles.sectionBreak],
+    ['Footnotes', f.styles.footnote],
+    ['Header & Footer', f.styles.header],
+  ]
   return (
     `${XML_DECL}<w:styles ${W_NS}>` +
     '<w:docDefaults><w:rPrDefault><w:rPr>' +
@@ -67,13 +80,12 @@ function buildStylesXml(f: ExportFormatting): string {
     `<w:sz w:val="${ptHalf(body.sizePt)}"/><w:szCs w:val="${ptHalf(body.sizePt)}"/>` +
     '</w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>' +
     '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
-    styleXml('Chapter', 'Chapter', f.styles.chapter) +
-    styleXml('POV', 'POV', f.styles.pov) +
-    styleXml('Date', 'Date', f.styles.date) +
-    styleXml('Body', 'Body', f.styles.body) +
-    styleXml('Section Breaks', 'Section Breaks', f.styles.sectionBreak) +
-    styleXml('Footnotes', 'Footnotes', f.styles.footnote) +
-    styleXml('Header & Footer', 'Header & Footer', f.styles.header) +
+    structural
+      .map(([name, s]) => template?.paragraphBlocks.get(name) ?? styleXml(name, name, s))
+      .join('') +
+    // The writer's "<color> Text" styles, verbatim from the template, so
+    // colored runs/paragraphs can reference them by name.
+    (template?.colorStyles.map(s => s.block).join('') ?? '') +
     '</w:styles>'
   )
 }
@@ -255,12 +267,18 @@ async function extractFrontMatter(buffer: Buffer, knownStyleIds: Set<string>): P
     .replace(/<w:commentRangeEnd\b[^>]*\/>/g, '')
 
   // Carry over fm-only styles so custom front-matter formatting survives.
+  // The captured styleId is still XML-escaped ("Header &amp; Footer") —
+  // unescape before checking, or styles we already define duplicate.
+  // Word's structural boilerplate is skipped outright; it exists in every
+  // docx and only pads the style list.
+  const boilerplate = new Set(['Normal', 'Default Paragraph Font', 'Table Normal', 'No List', 'Hyperlink'])
   let extraStyles = ''
   const stylesFile = zip.file('word/styles.xml')
   if (stylesFile) {
     const stylesXml = await stylesFile.async('string')
     for (const m of stylesXml.matchAll(/<w:style\b[^>]*w:styleId="([^"]+)"[^>]*>[\s\S]*?<\/w:style>/g)) {
-      if (!knownStyleIds.has(m[1])) extraStyles += m[0]
+      const id = m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+      if (!knownStyleIds.has(id) && !boilerplate.has(id)) extraStyles += m[0]
     }
   }
 
@@ -275,10 +293,12 @@ export type BuildManuscriptOptions = {
   chapters: ManuscriptChapter[]
   formatting: ExportFormatting
   frontMatterDocx?: Buffer | null
+  templateStyles?: TemplateStyles | null
 }
 
 export async function buildManuscriptDocx(opts: BuildManuscriptOptions): Promise<Buffer> {
   const f = opts.formatting
+  const template = opts.templateStyles ?? null
   const footnotes: FootnoteCollector = { notes: [] }
 
   let chaptersXml = ''
@@ -289,11 +309,13 @@ export async function buildManuscriptDocx(opts: BuildManuscriptOptions): Promise
       chaptersXml += serializeTipTapDoc(content, {
         sectionBreakText: f.sectionBreakText,
         storyState: chapter.stateByContent[ci] ?? {},
+        colorStyles: template?.colorStyles,
       }, footnotes)
     })
   })
 
   const knownStyleIds = new Set(['Normal', 'Chapter', 'POV', 'Date', 'Body', 'Section Breaks', 'Footnotes', 'Header & Footer'])
+  for (const s of template?.colorStyles ?? []) knownStyleIds.add(s.name)
   const fm = opts.frontMatterDocx
     ? await extractFrontMatter(opts.frontMatterDocx, knownStyleIds)
     : null
@@ -311,7 +333,7 @@ export async function buildManuscriptDocx(opts: BuildManuscriptOptions): Promise
     `<w:sectPr>${sectPrXml(f, true)}</w:sectPr>` +
     '</w:body></w:document>'
 
-  let stylesXml = buildStylesXml(f)
+  let stylesXml = buildStylesXml(f, template)
   if (fm?.extraStyles) stylesXml = stylesXml.replace('</w:styles>', `${fm.extraStyles}</w:styles>`)
 
   const hasHeaders = f.runningHeaders

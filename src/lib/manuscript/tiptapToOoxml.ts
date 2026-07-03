@@ -1,5 +1,6 @@
 import { substituteVarTemplates } from '@/lib/templateVars'
 import type { StoryState } from '@/lib/storyEngine'
+import { nearestColorStyle, type TemplateColorStyle } from '@/lib/templateStyles'
 
 // Serializes a TipTap doc JSON string into a sequence of WordprocessingML
 // <w:p> elements. Marks map to run properties; footnote marks become real
@@ -14,6 +15,11 @@ export type SerializeOptions = {
   // keeps the break as a small styled gap.
   sectionBreakText: string
   storyState: StoryState
+  // The template's "<color> Text" styles. When present, colored text is
+  // tagged with the nearest matching named style instead of a raw color
+  // override — a uniformly colored paragraph takes the paragraph style,
+  // colored spans take the character style.
+  colorStyles?: TemplateColorStyle[]
 }
 
 type TipTapMark = { type: string; attrs?: Record<string, unknown> }
@@ -59,8 +65,9 @@ function markOfType(node: TipTapNode, type: string): TipTapMark | undefined {
   return node.marks?.find(m => m.type === type)
 }
 
-function runProps(marks: TipTapMark[] | undefined): string {
+function runProps(marks: TipTapMark[] | undefined, opts: SerializeOptions, suppressColor?: string | null): string {
   if (!marks?.length) return ''
+  let rStyle = ''  // must precede the toggle/color properties in rPr
   let rpr = ''
   for (const m of marks) {
     if (m.type === 'bold') rpr += '<w:b w:val="1"/>'
@@ -69,17 +76,20 @@ function runProps(marks: TipTapMark[] | undefined): string {
     else if (m.type === 'strike') rpr += '<w:strike w:val="1"/>'
     else if (m.type === 'textStyle') {
       const color = normalizeColor(m.attrs?.color)
-      if (color) rpr += `<w:color w:val="${color}"/>`
+      if (!color || color === suppressColor) continue
+      const named = opts.colorStyles ? nearestColorStyle(color, opts.colorStyles, 'character') : null
+      if (named) rStyle = `<w:rStyle w:val="${escapeXml(named.name)}"/>`
+      else rpr += `<w:color w:val="${color}"/>`
     }
     // 'footnote' and 'character' don't style the run itself.
   }
-  return rpr ? `<w:rPr>${rpr}</w:rPr>` : ''
+  return (rStyle || rpr) ? `<w:rPr>${rStyle}${rpr}</w:rPr>` : ''
 }
 
-function textRun(text: string, marks: TipTapMark[] | undefined, state: StoryState): string {
-  const substituted = substituteVarTemplates(text, state, s => s)
+function textRun(text: string, marks: TipTapMark[] | undefined, opts: SerializeOptions, suppressColor?: string | null): string {
+  const substituted = substituteVarTemplates(text, opts.storyState, s => s)
   if (!substituted) return ''
-  return `<w:r>${runProps(marks)}<w:t xml:space="preserve">${escapeXml(substituted)}</w:t></w:r>`
+  return `<w:r>${runProps(marks, opts, suppressColor)}<w:t xml:space="preserve">${escapeXml(substituted)}</w:t></w:r>`
 }
 
 function footnoteRefRun(id: number): string {
@@ -89,14 +99,14 @@ function footnoteRefRun(id: number): string {
 // Serialize the inline content of one paragraph-like node. Footnote marks
 // can be split across several text nodes by overlapping marks — the
 // reference is emitted once, after the last node carrying the same note.
-function serializeInline(nodes: TipTapNode[] | undefined, opts: SerializeOptions, footnotes: FootnoteCollector): string {
+function serializeInline(nodes: TipTapNode[] | undefined, opts: SerializeOptions, footnotes: FootnoteCollector, suppressColor?: string | null): string {
   if (!nodes?.length) return ''
   let out = ''
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i]
     if (node.type === 'hardBreak') { out += '<w:r><w:br/></w:r>'; continue }
     if (node.type !== 'text' || !node.text) continue
-    out += textRun(node.text, node.marks, opts.storyState)
+    out += textRun(node.text, node.marks, opts, suppressColor)
     const fn = markOfType(node, 'footnote')
     if (fn) {
       const content = String(fn.attrs?.content ?? '')
@@ -126,10 +136,34 @@ function jcOverride(node: TipTapNode): string | null {
   return ALIGN_TO_JC[align] ?? null
 }
 
+// The single color shared by every piece of text in the paragraph, or null
+// when the paragraph is uncolored / mixed. Only real text weighs in;
+// hard breaks don't carry marks.
+function uniformParagraphColor(node: TipTapNode): string | null {
+  let color: string | null = null
+  for (const n of node.content ?? []) {
+    if (n.type !== 'text' || !n.text?.trim()) continue
+    const c = normalizeColor(n.marks?.find(m => m.type === 'textStyle')?.attrs?.color)
+    if (!c) return null
+    if (color === null) color = c
+    else if (c !== color) return null
+  }
+  return color
+}
+
 function serializeBlock(node: TipTapNode, opts: SerializeOptions, footnotes: FootnoteCollector): string {
   switch (node.type) {
-    case 'paragraph':
+    case 'paragraph': {
+      // A paragraph colored wall-to-wall belongs to the matching template
+      // paragraph style ("Gray Text" text-message beats, …); the style then
+      // carries the color and the runs stay clean.
+      const uniform = opts.colorStyles ? uniformParagraphColor(node) : null
+      const paraStyle = uniform ? nearestColorStyle(uniform, opts.colorStyles!, 'paragraph') : null
+      if (paraStyle) {
+        return paragraphXml(paraStyle.name, jcOverride(node), serializeInline(node.content, opts, footnotes, uniform))
+      }
       return paragraphXml('Body', jcOverride(node), serializeInline(node.content, opts, footnotes))
+    }
     case 'heading': {
       // Fiction rarely uses headings; render as bold Body so the manuscript
       // stays typographically quiet.
@@ -190,7 +224,7 @@ export function serializeTipTapDoc(json: string, opts: SerializeOptions, footnot
   } catch {
     // Legacy plain text — one paragraph per line.
     return json.split(/\n+/).filter(l => l.trim()).map(line =>
-      paragraphXml('Body', null, textRun(line.trim(), undefined, opts.storyState)),
+      paragraphXml('Body', null, textRun(line.trim(), undefined, opts)),
     ).join('')
   }
   let blocks = doc.content ?? []

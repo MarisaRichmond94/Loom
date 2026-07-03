@@ -61,6 +61,7 @@ import { VariableHighlight } from '@/lib/extensions/variableHighlight'
 import { SearchHighlight } from '@/lib/extensions/searchHighlight'
 import VariableSuggestionList from './VariableSuggestionList'
 import { buildCharterClipboard } from '@/lib/clipboardFormatting'
+import { useEditorColors } from '@/lib/useEditorColors'
 import { DOMSerializer } from '@tiptap/pm/model'
 
 type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
@@ -97,17 +98,6 @@ function parseContent(raw: string): unknown {
     return { type: 'doc', content: paragraphs.length > 0 ? paragraphs : [{ type: 'paragraph' }] }
   }
 }
-
-const COLOR_PRESETS = [
-  { label: 'Red',    value: '#ef4444' },
-  { label: 'Rose',   value: '#f43f5e' },
-  { label: 'Orange', value: '#f97316' },
-  { label: 'Amber',  value: '#f59e0b' },
-  { label: 'Emerald',value: '#10b981' },
-  { label: 'Blue',   value: '#3b82f6' },
-  { label: 'Violet', value: '#8b5cf6' },
-  { label: 'Gray',   value: '#9ca3af' },
-]
 
 function Sep() {
   return <span className="w-px h-4 bg-accent/20 mx-1 shrink-0" />
@@ -481,6 +471,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
     savedSelection.current = null
   }
 
+  const colorPresets = useEditorColors()
   const currentColor = editor?.getAttributes('textStyle').color as string | undefined
   const menuOpen = showInput || showCharPicker || (focused && !!menuPos)
 
@@ -522,7 +513,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
             <LuMinus size={13} />
           </ToolBtn>
           <Sep />
-          {COLOR_PRESETS.map(({ label, value }) => (
+          {colorPresets.map(({ label, value }) => (
             <button
               key={value}
               onMouseDown={e => {

@@ -9,6 +9,7 @@ import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import BookSkeleton from '@/components/editor/BookSkeleton'
 import ExportBookModal from '@/components/editor/ExportBookModal'
+import { useCanonSave } from '@/components/editor/useCanonSave'
 import { pinLabel } from '@/lib/pinLabel'
 import PinnedAudio from '@/components/PinnedAudio'
 
@@ -99,6 +100,21 @@ export default function BookDetailPage() {
   const [albumArtTs, setAlbumArtTs] = useState<Record<string, number>>({})
   const albumArtFileInputRef = useRef<HTMLInputElement>(null)
   const albumArtTargetIdRef = useRef<string | null>(null)
+
+  // ⌥⇧E — save the canon manuscript to the book's folder on disk
+  // (Settings → Export configures where).
+  const { saveCanon } = useCanonSave(seriesId)
+  const saveCanonRef = useRef(saveCanon)
+  saveCanonRef.current = saveCanon
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!e.altKey || !e.shiftKey || e.code !== 'KeyE') return
+      e.preventDefault()
+      saveCanonRef.current(bookId)
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [bookId])
 
   const loadBook = useCallback(async () => {
     const start = Date.now()

@@ -8,6 +8,7 @@ import OutlineTree from '@/components/sidebar/OutlineTree'
 import VariablesPanel from '@/components/sidebar/VariablesPanel'
 import ChoicesPanel from '@/components/sidebar/ChoicesPanel'
 import AvatarButton from '@/components/AvatarButton'
+import NotificationBell from '@/components/NotificationBell'
 import Greeting from '@/components/Greeting'
 import SearchBar from '@/components/SearchBar'
 import { AuthorProvider, type AuthorSeries } from '@/lib/authorContext'
@@ -245,6 +246,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
               </span>
               <LuSun size={13} />
             </button>
+            <NotificationBell />
             <AvatarButton />
           </div>
         </nav>

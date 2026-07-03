@@ -8,6 +8,9 @@ import type { Area } from 'react-easy-crop'
 import Greeting from '@/components/Greeting'
 import AvatarButton from '@/components/AvatarButton'
 import ExportFormattingSection from '@/components/ExportFormattingSection'
+import CanonSaveLocationSection from '@/components/CanonSaveLocationSection'
+import ManuscriptTemplateSection from '@/components/ManuscriptTemplateSection'
+import EditorColorsSection from '@/components/EditorColorsSection'
 
 async function cropImageToBlob(imageSrc: string, pixelCrop: Area): Promise<Blob> {
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -246,6 +249,10 @@ export default function SettingsPage() {
     setRunningBackup(false)
   }
 
+  const TABS = ['Profile', 'Editor', 'Export', 'Backups', 'Demo Data'] as const
+  type Tab = typeof TABS[number]
+  const [activeTab, setActiveTab] = useState<Tab>('Profile')
+
   return (
     <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
       <nav className="sticky top-0 z-10 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
@@ -275,12 +282,27 @@ export default function SettingsPage() {
       </nav>
 
       <main className={`flex-1 overflow-y-auto${lightMode ? ' light-body' : ''}`}>
-        <div className="max-w-2xl mx-auto px-8 py-10">
-          <h1 className="text-2xl font-bold text-ink mb-8">Settings</h1>
+        <div className="px-8 py-10">
+          <h1 className="text-2xl font-bold text-ink mb-6">Settings</h1>
+
+          <div className="flex gap-1 border-b border-accent/10 mb-8">
+            {TABS.map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2 text-sm font-medium rounded-t transition-colors ${
+                  activeTab === tab
+                    ? 'text-accent border-b-2 border-accent -mb-px'
+                    : 'text-ink-faint hover:text-ink'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
 
           {/* Profile */}
-          <section className="mb-8">
-            <h2 className="text-xs uppercase tracking-widest text-ink-faint mb-4">Profile</h2>
+          {activeTab === 'Profile' && <section>
             <div className="bg-surface-raised border border-accent/10 rounded-xl p-6 flex flex-col gap-5">
               <div className="flex items-center gap-6">
                 <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileChange} />
@@ -412,12 +434,10 @@ export default function SettingsPage() {
                 )}
               </div>
             </div>
-          </section>
+          </section>}
 
-          {/* Demo data — author-facing tool for browsing Explore with a
-              populated catalog without hand-crafting fake series. */}
-          <section className="mb-8">
-            <h2 className="text-xs uppercase tracking-widest text-ink-faint mb-4">Demo Data</h2>
+          {/* Demo Data */}
+          {activeTab === 'Demo Data' && <section>
             <div className="bg-surface-raised border border-accent/10 rounded-xl p-6 flex flex-col gap-4">
               <p className="text-xs text-ink-faint leading-relaxed">
                 Generate fake series to see how Explore reads with a real
@@ -459,14 +479,20 @@ export default function SettingsPage() {
                 )}
               </div>
             </div>
-          </section>
+          </section>}
 
-          {/* Manuscript export formatting */}
-          <ExportFormattingSection />
+          {/* Editor preferences */}
+          {activeTab === 'Editor' && <EditorColorsSection />}
+
+          {/* Manuscript export formatting + template + canon save location */}
+          {activeTab === 'Export' && <>
+            <ManuscriptTemplateSection />
+            <CanonSaveLocationSection />
+            <ExportFormattingSection />
+          </>}
 
           {/* Backups */}
-          <section>
-            <h2 className="text-xs uppercase tracking-widest text-ink-faint mb-4">Backups</h2>
+          {activeTab === 'Backups' && <section>
             <div className="bg-surface-raised border border-accent/10 rounded-xl p-6 flex flex-col gap-6">
 
               {/* Enable toggle */}
@@ -566,7 +592,7 @@ export default function SettingsPage() {
               </div>
 
             </div>
-          </section>
+          </section>}
 
         </div>
       </main>
