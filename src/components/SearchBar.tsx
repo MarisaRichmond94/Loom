@@ -80,7 +80,7 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!e.altKey || !e.shiftKey) return
-      if (e.code !== 'KeyF') return
+      if (e.code !== 'KeyG') return
       e.preventDefault()
       const el = inputRef.current
       if (!el) return
@@ -247,7 +247,7 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
           onChange={e => { setQuery(e.target.value); setOpen(true) }}
           onFocus={() => setOpen(true)}
           placeholder="Search the series…"
-          title="Search the series (⌥⇧F)"
+          title="Search the series (⌥⇧G)"
           className="w-full pl-7 pr-14 py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
         />
         <div className="absolute right-1.5 flex items-center gap-0.5">

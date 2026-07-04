@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown } from 'react-icons/lu'
+import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace } from 'react-icons/lu'
 import { PiCopySimpleThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
+import { extractTextFromTipTap } from '@/lib/tiptapText'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import { ConditionRow } from '@/components/editor/conditionUI'
 import { useAuthor } from '@/lib/authorContext'
@@ -39,6 +40,11 @@ export default function ChapterEditorPage() {
   // below), matching the "all uncollapsed on initial load" rule.
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
   useEffect(() => { setCollapsedIds(new Set()) }, [chapterId])
+  const [localSearchQuery, setLocalSearchQuery] = useState('')
+  const [localSearchReplace, setLocalSearchReplace] = useState('')
+  const [localSearchReplaceMode, setLocalSearchReplaceMode] = useState(false)
+  const localSearchInputRef = useRef<HTMLInputElement>(null)
+  const replaceAllRef = useRef<((search: string, replacement: string) => number) | null>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const povInputRef = useRef<HTMLInputElement>(null)
@@ -263,8 +269,9 @@ export default function ChapterEditorPage() {
         case 'KeyQ': e.preventDefault(); addChoiceBlockRef.current(); break
         case 'KeyC': e.preventDefault(); addBlockRef.current('conditional_fragment'); break
         case 'KeyS': e.preventDefault(); addBlockRef.current('soundtrack'); break
-        case 'KeyR': e.preventDefault(); createNextChapterRef.current(); break
+        case 'KeyN': e.preventDefault(); createNextChapterRef.current(); break
         case 'KeyE': e.preventDefault(); saveCanonRef.current(); break
+        case 'KeyF': e.preventDefault(); setTimeout(() => { localSearchInputRef.current?.focus(); localSearchInputRef.current?.select() }, 0); break
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -278,6 +285,16 @@ export default function ChapterEditorPage() {
   saveCanonRef.current = async () => {
     await saveCanon(series.books.find(b => b.chapters.some(c => c.id === chapterId))?.id)
   }
+
+  const localSearchMatchCount = useMemo(() => {
+    if (!localSearchQuery.trim() || !chapter) return 0
+    const esc = localSearchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(esc, 'gi')
+    return chapter.blocks.reduce((n, b) => {
+      const text = extractTextFromTipTap(b.content ?? null)
+      return n + (text.match(regex)?.length ?? 0)
+    }, 0)
+  }, [localSearchQuery, chapter])
 
   async function createVariable(name: string, type: string, defaultValue?: unknown) {
     // Caller may specify defaultValue (the choice-block create form lets the
@@ -526,33 +543,87 @@ export default function ChapterEditorPage() {
           />
         </div>
 
-        {/* Date on the left, expand/collapse-all toggle on the right.
+        {/* Date · chapter search · collapse-all — all in one row.
             Right padding matches the per-block delete/chevron column
             (15px icon + ml-2 gap) so the toggle's right edge aligns with
             each block's content right edge, not the outer container. */}
-        <div className="flex items-end justify-between mb-2 pr-[23px]">
+        <div className="flex items-center gap-4 mb-2 pr-[23px]">
           <input
             value={chapter.date ?? ''}
             onChange={e => handleMetaChange('date', e.target.value)}
             onFocus={e => e.target.setSelectionRange(0, 0)}
-            className="bg-surface-raised border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent w-60"
+            className="bg-surface-raised border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent w-60 shrink-0"
           />
-          {chapter.blocks.length > 0 && (() => {
-            const anyCollapsed = chapter.blocks.some(b => collapsedIds.has(b.id))
-            return (
-              <button
-                onClick={() => {
-                  if (anyCollapsed) setCollapsedIds(new Set())
-                  else setCollapsedIds(new Set(chapter.blocks.map(b => b.id)))
+
+          <div className="ml-auto flex items-center gap-4">
+            {/* Chapter-local find bar — always visible, styled like the global series search */}
+            <div className="relative flex items-center w-62">
+              <LuSearch size={12} className="absolute left-2 text-ink-faint pointer-events-none" />
+              <input
+                ref={localSearchInputRef}
+                value={localSearchQuery}
+                onChange={e => setLocalSearchQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Escape') { setLocalSearchQuery(''); setLocalSearchReplaceMode(false); e.currentTarget.blur() }
                 }}
-                className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition"
-              >
-                {anyCollapsed ? <LuChevronsUpDown size={12} /> : <LuChevronsDownUp size={12} />}
-                {anyCollapsed ? 'Expand All' : 'Collapse All'}
-              </button>
-            )
-          })()}
+                placeholder="Find in chapter… (⌥⇧F)"
+                title="Find in chapter (⌥⇧F)"
+                className="w-full pl-7 pr-14 py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
+              />
+              <div className="absolute right-1.5 flex items-center gap-0.5">
+                {localSearchQuery && localSearchMatchCount > 0 && (
+                  <span className="text-[10px] text-ink-faint mr-0.5 tabular-nums">{localSearchMatchCount}</span>
+                )}
+                {localSearchQuery && (
+                  <button onClick={() => setLocalSearchQuery('')} className="text-ink-faint hover:text-ink p-0.5" title="Clear">
+                    <LuX size={12} />
+                  </button>
+                )}
+                <button
+                  onClick={() => setLocalSearchReplaceMode(m => !m)}
+                  title={localSearchReplaceMode ? 'Hide replace' : 'Find and replace'}
+                  className={`p-0.5 transition ${localSearchReplaceMode ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
+                >
+                  <LuReplace size={11} />
+                </button>
+              </div>
+            </div>
+
+            {chapter.blocks.length > 0 && (() => {
+              const anyCollapsed = chapter.blocks.some(b => collapsedIds.has(b.id))
+              return (
+                <button
+                  onClick={() => {
+                    if (anyCollapsed) setCollapsedIds(new Set())
+                    else setCollapsedIds(new Set(chapter.blocks.map(b => b.id)))
+                  }}
+                  className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition shrink-0"
+                >
+                  {anyCollapsed ? <LuChevronsUpDown size={12} /> : <LuChevronsDownUp size={12} />}
+                  {anyCollapsed ? 'Expand All' : 'Collapse All'}
+                </button>
+              )
+            })()}
+          </div>
         </div>
+
+        {localSearchReplaceMode && (
+          <div className="flex items-center gap-2 mb-2 pr-[23px]">
+            <input
+              value={localSearchReplace}
+              onChange={e => setLocalSearchReplace(e.target.value)}
+              placeholder="Replace with…"
+              className="flex-1 px-3 py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
+            />
+            <button
+              onClick={() => replaceAllRef.current?.(localSearchQuery, localSearchReplace)}
+              disabled={!localSearchQuery}
+              className="shrink-0 px-3 py-1.5 text-xs border border-accent/40 text-accent rounded-lg hover:bg-accent/10 transition disabled:opacity-40"
+            >
+              Replace All
+            </button>
+          </div>
+        )}
 
         <BlockEditor
           chapterId={chapterId}
@@ -565,7 +636,8 @@ export default function ChapterEditorPage() {
           onActiveBlockChange={setActiveBlockId}
           collapsedIds={collapsedIds}
           onCollapsedIdsChange={setCollapsedIds}
-          searchQuery={searchParams?.get('q') ?? ''}
+          searchQuery={localSearchQuery || (searchParams?.get('q') ?? '')}
+          replaceAllRef={replaceAllRef}
         />
       </div>
 
@@ -614,7 +686,7 @@ export default function ChapterEditorPage() {
         ) : (
           <button
             onClick={createNextChapter}
-            title="Create next chapter (⌥⇧R)"
+            title="Create next chapter (⌥⇧N)"
             className="shrink-0 flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition"
           >
             Create Next Chapter <LuPlus size={13} />

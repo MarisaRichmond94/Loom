@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import type { Editor } from '@tiptap/core'
 import { useSearchParams } from 'next/navigation'
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
@@ -52,6 +53,9 @@ type Props = {
   // surface (prose, conditional override prose, choice branch text) so
   // matches highlight after a search-result navigation.
   searchQuery?: string
+  // Ref that receives a replaceAll function once editors mount. The chapter
+  // page uses this to drive replace-all from the local chapter search bar.
+  replaceAllRef?: React.MutableRefObject<((search: string, replacement: string) => number) | null>
 }
 
 const BLOCK_BORDER: Record<string, string> = {
@@ -179,7 +183,9 @@ function SortableBlock({
   )
 }
 
-export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '' }: Props) {
+function escapeRegExp(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
+
+export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', replaceAllRef }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const [newBlockId, setNewBlockId] = useState<string | null>(null)
@@ -204,6 +210,38 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   const onBlocksChangeRef = useRef(onBlocksChange)
   activeBlockIdRef.current = activeBlockId
   onBlocksChangeRef.current = onBlocksChange
+
+  const textEditorsRef = useRef<Map<string, Editor>>(new Map())
+  if (replaceAllRef) {
+    replaceAllRef.current = (search: string, replacement: string) => {
+      if (!search) return 0
+      const regex = new RegExp(escapeRegExp(search), 'gi')
+      let total = 0
+      textEditorsRef.current.forEach(editor => {
+        const { state } = editor
+        const { doc, schema } = state
+        const matches: Array<{ from: number; to: number }> = []
+        doc.descendants((node, pos) => {
+          if (!node.isText || !node.text) return
+          regex.lastIndex = 0
+          let m
+          while ((m = regex.exec(node.text)) !== null) {
+            matches.push({ from: pos + m.index, to: pos + m.index + m[0].length })
+          }
+        })
+        if (!matches.length) return
+        let tr = state.tr
+        for (const { from, to } of [...matches].reverse()) {
+          tr = replacement
+            ? tr.replaceWith(from, to, schema.text(replacement))
+            : tr.delete(from, to)
+        }
+        editor.view.dispatch(tr)
+        total += matches.length
+      })
+      return total
+    }
+  }
 
 
   // Sync when the set of blocks changes structurally (add/delete), but not during drags
@@ -419,6 +457,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                     characters={characters}
                     variables={variables}
                     searchQuery={searchQuery}
+                    onEditorReady={editor => textEditorsRef.current.set(block.id, editor)}
                   />
                 )}
 

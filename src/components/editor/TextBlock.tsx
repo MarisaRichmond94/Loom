@@ -1,6 +1,7 @@
 'use client'
 
 import { useEditor, EditorContent } from '@tiptap/react'
+import type { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import TextAlign from '@tiptap/extension-text-align'
@@ -49,6 +50,28 @@ const SectionBreak = Extension.create({
   },
 })
 
+const ReadAloud = Extension.create({
+  name: 'readAloud',
+  addKeyboardShortcuts() {
+    return {
+      'Alt-Shift-r': ({ editor }) => {
+        if (!window.speechSynthesis) return false
+        if (window.speechSynthesis.speaking) {
+          window.speechSynthesis.cancel()
+          return true
+        }
+        const { from, to, empty, $from } = editor.state.selection
+        const text = empty
+          ? editor.state.doc.textBetween(from, $from.end(), ' ')
+          : editor.state.doc.textBetween(from, to, ' ')
+        if (!text.trim()) return false
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(text))
+        return true
+      },
+    }
+  },
+})
+
 import { useEffect, useRef, useState } from 'react'
 import {
   LuMessageSquare, LuCheck, LuX, LuPencil, LuUser,
@@ -77,6 +100,7 @@ type Props = {
   // Live series-search query. When non-empty, every occurrence in this
   // editor's text gets a yellow highlight via the SearchHighlight plugin.
   searchQuery?: string
+  onEditorReady?: (editor: Editor) => void
 }
 
 const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
@@ -157,7 +181,7 @@ function keepCaretInView(editor: { view: { coordsAtPos: (pos: number) => { top: 
   })
 }
 
-export default function TextBlock({ content, onChange, autoFocus, characters = [], variables = [], placeholder = 'Write your prose here…', searchQuery = '' }: Props) {
+export default function TextBlock({ content, onChange, autoFocus, characters = [], variables = [], placeholder = 'Write your prose here…', searchQuery = '', onEditorReady }: Props) {
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
   // footnote state
   const [showInput, setShowInput] = useState(false)
@@ -202,6 +226,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
       TextStyleColor,
       EmDash,
       SectionBreak,
+      ReadAloud,
     ],
     content: content ? parseContent(content) : JSON.parse(EMPTY),
     onUpdate: ({ editor }) => {
@@ -221,6 +246,12 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
       if (current !== content) editor.commands.setContent(JSON.parse(content))
     }
   }, [editor, content])
+
+  useEffect(() => {
+    if (editor && onEditorReady) onEditorReady(editor)
+  // onEditorReady is stable (passed from a ref setter); editor is stable after mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor])
 
   // When the variables list changes, force decorations to re-evaluate
   // (the ref already has the latest; this just triggers redraw)
