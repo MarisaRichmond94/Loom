@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown } from 'react-icons/lu'
+import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuCopy } from 'react-icons/lu'
 import BlockEditor from '@/components/editor/BlockEditor'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import { ConditionRow } from '@/components/editor/conditionUI'
@@ -30,6 +30,7 @@ export default function ChapterEditorPage() {
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showChapterSettings, setShowChapterSettings] = useState(false)
+  const [copyDone, setCopyDone] = useState(false)
   const [showIfTooltip, setShowIfTooltip] = useState(false)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   // Lifted from BlockEditor so the date-row toggle can flip every block at
@@ -295,6 +296,46 @@ export default function ChapterEditorPage() {
     loadSeries()
   }
 
+  function extractPlainText(jsonStr: string): string {
+    try {
+      const doc = JSON.parse(jsonStr) as Record<string, unknown>
+      const paragraphs: string[] = []
+      function walkBlock(node: Record<string, unknown>) {
+        if (node.type === 'paragraph') {
+          const texts: string[] = []
+          function walkInline(n: Record<string, unknown>) {
+            if (n.type === 'text') texts.push(String(n.text ?? ''))
+            if (Array.isArray(n.content)) (n.content as Record<string, unknown>[]).forEach(walkInline)
+          }
+          if (Array.isArray(node.content)) (node.content as Record<string, unknown>[]).forEach(walkInline)
+          paragraphs.push(texts.join(''))
+        } else if (Array.isArray(node.content)) {
+          (node.content as Record<string, unknown>[]).forEach(walkBlock)
+        }
+      }
+      walkBlock(doc)
+      return paragraphs.filter(p => p.length > 0).join('\n\n')
+    } catch { return '' }
+  }
+
+  async function copyCanonText() {
+    if (!chapter) return
+    const parts: string[] = []
+    for (const block of chapter.blocks) {
+      const src = block.type === 'text' ? block.content
+        : block.type === 'conditional_fragment' ? block.baseContent
+        : null
+      if (!src) continue
+      const text = extractPlainText(src)
+      if (text) parts.push(text)
+    }
+    try {
+      await navigator.clipboard.writeText(parts.join('\n\n'))
+      setCopyDone(true)
+      setTimeout(() => setCopyDone(false), 2000)
+    } catch { /* clipboard denied */ }
+  }
+
   async function handleDeleteChapter() {
     const book = series.books.find(b => b.chapters.some(c => c.id === chapterId))
     if (!book) return
@@ -391,20 +432,31 @@ export default function ChapterEditorPage() {
         >
           <LuSettings size={20} />
         </button>
-        <button
-          onClick={() => setShowDeleteConfirm(true)}
-          className="px-3 py-1.5 rounded text-xs border border-choice-kill/40 text-choice-kill font-medium hover:bg-choice-kill/10 transition"
-        >
-          Delete
-        </button>
-        <button
-          onClick={() => reviewInWriteAi(currentBook, chapterId)}
-          disabled={reviewing}
-          title="Save canon and review this chapter in WriteAI"
-          className="px-3 py-1.5 rounded text-xs border border-accent/40 text-accent font-medium hover:bg-accent/10 transition disabled:opacity-60"
-        >
-          <span className="flex items-center gap-1.5"><LuScanText size={12} /> {reviewing ? 'Syncing…' : 'Review'}</span>
-        </button>
+        <div className="relative group/copybtn">
+          <button
+            onClick={copyCanonText}
+            className="px-3 py-1.5 rounded text-xs border border-accent/20 text-ink-muted font-medium hover:border-accent/40 hover:text-ink transition"
+          >
+            <span className="flex items-center gap-1.5">
+              <LuCopy size={12} />{copyDone ? 'Copied!' : 'Copy'}
+            </span>
+          </button>
+          <div className="pointer-events-none absolute right-0 top-full mt-1.5 z-50 w-56 rounded border border-accent/20 bg-surface-overlay px-3 py-2 text-xs leading-snug text-ink-muted shadow-lg opacity-0 transition-opacity group-hover/copybtn:opacity-100">
+            Copies this chapter's canon story text to your clipboard — the rendered text as it would appear in the published book.
+          </div>
+        </div>
+        <div className="relative group/reviewbtn">
+          <button
+            onClick={() => reviewInWriteAi(currentBook, chapterId)}
+            disabled={reviewing}
+            className="px-3 py-1.5 rounded text-xs border border-accent/40 text-accent font-medium hover:bg-accent/10 transition disabled:opacity-60"
+          >
+            <span className="flex items-center gap-1.5"><LuScanText size={12} /> {reviewing ? 'Syncing…' : 'Review'}</span>
+          </button>
+          <div className="pointer-events-none absolute right-0 top-full mt-1.5 z-50 w-64 rounded border border-accent/20 bg-surface-overlay px-3 py-2 text-xs leading-snug text-ink-muted shadow-lg opacity-0 transition-opacity group-hover/reviewbtn:opacity-100">
+            Exports this book's canon manuscript, then opens WriteAI to review this chapter. The AI reads the rendered story text — choices and conditions resolved — grounded in the full series canon.
+          </div>
+        </div>
         <button
           onClick={async () => {
             const res = await fetch('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seriesId }) })
@@ -622,6 +674,15 @@ export default function ChapterEditorPage() {
                   </span>
                 }
               />
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-choice-kill/20">
+              <button
+                onClick={() => { setShowChapterSettings(false); setShowDeleteConfirm(true) }}
+                className="w-full px-3 py-2 rounded text-xs border border-choice-kill/30 text-choice-kill hover:bg-choice-kill/10 transition"
+              >
+                Delete Chapter
+              </button>
             </div>
           </div>
         </div>
