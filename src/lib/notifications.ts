@@ -15,17 +15,25 @@ export type AppNotification = {
   read: boolean
 }
 
+export type AppToast = {
+  id: number
+  kind: 'error' | 'warn'
+  message: string
+}
+
 type Snapshot = {
   notifications: AppNotification[]
   // True while a background job (canon save) runs; the bell pulses.
   busy: boolean
   unread: number
+  toasts: AppToast[]
 }
 
 let notifications: AppNotification[] = []
+let toasts: AppToast[] = []
 let busy = false
 let nextId = 1
-let snapshot: Snapshot = { notifications, busy, unread: 0 }
+let snapshot: Snapshot = { notifications, busy, unread: 0, toasts }
 const listeners = new Set<() => void>()
 
 function emit() {
@@ -33,12 +41,23 @@ function emit() {
     notifications,
     busy,
     unread: notifications.filter(n => !n.read).length,
+    toasts,
   }
   listeners.forEach(l => l())
 }
 
+export function dismissToast(id: number) {
+  toasts = toasts.filter(t => t.id !== id)
+  emit()
+}
+
 export function notify(kind: AppNotification['kind'], message: string) {
-  notifications = [{ id: nextId++, kind, message, at: Date.now(), read: false }, ...notifications].slice(0, 50)
+  const id = nextId++
+  notifications = [{ id, kind, message, at: Date.now(), read: false }, ...notifications].slice(0, 50)
+  if (kind === 'error') {
+    toasts = [...toasts, { id, kind, message }]
+    setTimeout(() => { toasts = toasts.filter(t => t.id !== id); emit() }, 5000)
+  }
   emit()
 }
 

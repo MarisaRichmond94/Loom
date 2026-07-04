@@ -20,7 +20,7 @@ export default function CanonSaveLocationSection() {
     fetch('/api/settings/canon-export')
       .then(r => r.json())
       .then((s: Settings) => {
-        setSettings({ autosave: true, ...s })
+        setSettings(s)
         loadSubfolders(s.root)
       })
   }, [])

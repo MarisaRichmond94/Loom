@@ -35,7 +35,7 @@ export function useCanonSave(seriesId: string) {
           if (data.warnings?.length) console.info('Canon export warnings:', data.warnings)
         }
       } else {
-        notify('error', data.error ?? 'Canon save failed.')
+        notify('error', 'Canon save failed.')
       }
     } catch {
       notify('error', 'Canon save failed.')

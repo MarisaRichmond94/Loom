@@ -9,6 +9,7 @@ import VariablesPanel from '@/components/sidebar/VariablesPanel'
 import ChoicesPanel from '@/components/sidebar/ChoicesPanel'
 import AvatarButton from '@/components/AvatarButton'
 import NotificationBell from '@/components/NotificationBell'
+import ToastLayer from '@/components/ToastLayer'
 import Greeting from '@/components/Greeting'
 import SearchBar from '@/components/SearchBar'
 import { AuthorProvider, type AuthorSeries } from '@/lib/authorContext'
@@ -251,6 +252,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
           </div>
         </nav>
 
+        <ToastLayer />
         <div className="flex flex-1 overflow-hidden">
           <aside className="w-56 bg-surface-raised border-r border-accent/10 flex flex-col overflow-hidden">
             <div className="flex flex-col min-h-0 max-h-[50%] p-4">
