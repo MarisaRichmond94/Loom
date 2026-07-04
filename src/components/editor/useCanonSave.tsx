@@ -18,10 +18,10 @@ function shortenHome(p: string): string {
 export function useCanonSave(seriesId: string) {
   const busyRef = useRef(false)
 
-  async function saveCanon(bookId: string | undefined) {
+  async function saveCanon(bookId: string | undefined, silent = false) {
     if (!bookId || busyRef.current) return
     busyRef.current = true
-    setNotificationBusy(true)
+    if (!silent) setNotificationBusy(true)
     try {
       const res = await fetch(`/api/series/${seriesId}/books/${bookId}/export/canon`, {
         method: 'POST',
@@ -30,11 +30,10 @@ export function useCanonSave(seriesId: string) {
       })
       const data = await res.json() as { ok?: boolean; path?: string; warnings?: string[]; error?: string }
       if (res.ok && data.ok) {
-        // Just the one notification. The walk's warnings (auto-resolved
-        // choice points etc.) are expected noise for a canon save — log
-        // them for the curious and keep the bell quiet.
-        notify('ok', `Canon saved to ${shortenHome(data.path ?? '')}`)
-        if (data.warnings?.length) console.info('Canon export warnings:', data.warnings)
+        if (!silent) {
+          notify('ok', `Canon saved to ${shortenHome(data.path ?? '')}`)
+          if (data.warnings?.length) console.info('Canon export warnings:', data.warnings)
+        }
       } else {
         notify('error', data.error ?? 'Canon save failed.')
       }
@@ -42,7 +41,7 @@ export function useCanonSave(seriesId: string) {
       notify('error', 'Canon save failed.')
     } finally {
       busyRef.current = false
-      setNotificationBusy(false)
+      if (!silent) setNotificationBusy(false)
     }
   }
 

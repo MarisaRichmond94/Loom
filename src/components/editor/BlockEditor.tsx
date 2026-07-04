@@ -56,6 +56,7 @@ type Props = {
   // Ref that receives a replaceAll function once editors mount. The chapter
   // page uses this to drive replace-all from the local chapter search bar.
   replaceAllRef?: React.MutableRefObject<((search: string, replacement: string) => number) | null>
+  onTextBlockBlur?: () => void
 }
 
 const BLOCK_BORDER: Record<string, string> = {
@@ -185,7 +186,7 @@ function SortableBlock({
 
 function escapeRegExp(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
 
-export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', replaceAllRef }: Props) {
+export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', replaceAllRef, onTextBlockBlur }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const [newBlockId, setNewBlockId] = useState<string | null>(null)
@@ -458,6 +459,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                     variables={variables}
                     searchQuery={searchQuery}
                     onEditorReady={editor => textEditorsRef.current.set(block.id, editor)}
+                    onBlur={onTextBlockBlur}
                   />
                 )}
 

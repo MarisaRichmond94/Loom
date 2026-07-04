@@ -10,12 +10,13 @@ import path from 'path'
 export type CanonExportSettings = {
   root: string
   subfolder: string
+  autosave: boolean
 }
 
 const SETTINGS_PATH = path.join(process.cwd(), 'data', 'canon-export-settings.json')
 
 export function canonExportDefaults(): CanonExportSettings {
-  return { root: path.join(homedir(), 'Writing'), subfolder: 'Versions' }
+  return { root: path.join(homedir(), 'Writing'), subfolder: 'Versions', autosave: true }
 }
 
 export async function readCanonExportSettings(): Promise<CanonExportSettings> {
@@ -26,6 +27,7 @@ export async function readCanonExportSettings(): Promise<CanonExportSettings> {
     return {
       root: typeof parsed.root === 'string' && parsed.root.trim() ? parsed.root : defaults.root,
       subfolder: typeof parsed.subfolder === 'string' ? parsed.subfolder : defaults.subfolder,
+      autosave: typeof parsed.autosave === 'boolean' ? parsed.autosave : defaults.autosave,
     }
   } catch {
     return defaults

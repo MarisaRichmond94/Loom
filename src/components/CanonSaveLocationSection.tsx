@@ -8,7 +8,7 @@ import { LuFolderOpen } from 'react-icons/lu'
 // dropdown offers the folder names that actually exist inside those book
 // folders (plus "book folder itself" for saving at the top level).
 
-type Settings = { root: string; subfolder: string }
+type Settings = { root: string; subfolder: string; autosave: boolean }
 
 export default function CanonSaveLocationSection() {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -20,7 +20,7 @@ export default function CanonSaveLocationSection() {
     fetch('/api/settings/canon-export')
       .then(r => r.json())
       .then((s: Settings) => {
-        setSettings(s)
+        setSettings({ autosave: true, ...s })
         loadSubfolders(s.root)
       })
   }, [])
@@ -67,6 +67,25 @@ export default function CanonSaveLocationSection() {
     <section className="mb-8">
       <h2 className="text-xs uppercase tracking-widest text-ink-faint mb-4">Canon Save Location</h2>
       <div className="bg-surface-raised border border-accent/10 rounded-xl p-6 flex flex-col gap-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium text-ink mb-1">Auto-Export on Save</div>
+            <div className="text-xs text-ink-faint">Exports the canon manuscript silently whenever you pause writing or navigate away from a chapter.</div>
+          </div>
+          <button
+            role="switch"
+            aria-checked={settings.autosave}
+            onClick={() => { const next = !settings.autosave; setSettings(s => s ? { ...s, autosave: next } : s); patch({ autosave: next }) }}
+            className="flex items-center shrink-0 ml-6"
+          >
+            <span className={`relative inline-flex w-9 h-5 rounded-full transition-colors duration-200 ${settings.autosave ? 'bg-accent' : 'bg-surface-muted'}`}>
+              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${settings.autosave ? 'left-4' : 'left-0.5'}`} />
+            </span>
+          </button>
+        </div>
+
+        <div className="border-t border-accent/10 -mx-6" />
+
         <p className="text-xs text-ink-faint leading-relaxed -mb-1">
           Where ⌥⇧E saves a book's canon manuscript. The folder below should
           hold one folder per book (the name just needs to contain the book's

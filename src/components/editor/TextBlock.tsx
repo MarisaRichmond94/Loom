@@ -101,6 +101,7 @@ type Props = {
   // editor's text gets a yellow highlight via the SearchHighlight plugin.
   searchQuery?: string
   onEditorReady?: (editor: Editor) => void
+  onBlur?: () => void
 }
 
 const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
@@ -181,7 +182,7 @@ function keepCaretInView(editor: { view: { coordsAtPos: (pos: number) => { top: 
   })
 }
 
-export default function TextBlock({ content, onChange, autoFocus, characters = [], variables = [], placeholder = 'Write your prose here…', searchQuery = '', onEditorReady }: Props) {
+export default function TextBlock({ content, onChange, autoFocus, characters = [], variables = [], placeholder = 'Write your prose here…', searchQuery = '', onEditorReady, onBlur: onBlurProp }: Props) {
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
   // footnote state
   const [showInput, setShowInput] = useState(false)
@@ -206,6 +207,8 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
   // adjusts the header search bar.
   const searchQueryRef = useRef(searchQuery)
   searchQueryRef.current = searchQuery
+  const onBlurPropRef = useRef(onBlurProp)
+  onBlurPropRef.current = onBlurProp
   const [varSuggest, setVarSuggest] = useState<{ from: number; query: string; coords: { x: number; y: number } } | null>(null)
   const [varSelectedIdx, setVarSelectedIdx] = useState(0)
 
@@ -236,7 +239,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
     },
     onSelectionUpdate: ({ editor }) => { keepCaretInView(editor) },
     onFocus: () => setFocused(true),
-    onBlur: ({ editor }) => { setFocused(false); editor.commands.setTextSelection(editor.state.selection.anchor) },
+    onBlur: ({ editor }) => { setFocused(false); editor.commands.setTextSelection(editor.state.selection.anchor); onBlurPropRef.current?.() },
   })
 
   useEffect(() => {

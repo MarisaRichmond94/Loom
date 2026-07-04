@@ -65,6 +65,9 @@ export default function ChapterEditorPage() {
   const typedPrefixRef = useRef('')
   const rejectedPrefixRef = useRef<string | null>(null)
   const povSyncedChapterRef = useRef<string | null>(null)
+  const autosaveEnabledRef = useRef(true)
+  const currentBookIdRef = useRef<string | undefined>(undefined)
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Focus the POV field once after navigation from chapter creation.
   // The router uses `?focus=pov` to signal it; we only fire on the
@@ -106,6 +109,43 @@ export default function ChapterEditorPage() {
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
+
+  // Load autosave preference once on mount.
+  useEffect(() => {
+    fetch('/api/settings/canon-export')
+      .then(r => r.ok ? r.json() : null)
+      .then((s: { autosave?: boolean } | null) => {
+        autosaveEnabledRef.current = s?.autosave !== false
+      })
+      .catch(() => {})
+  }, [])
+
+  // Keep currentBookIdRef updated via effect (not during render) so the
+  // navigation-away cleanup below sees the old chapter's book ID, not the
+  // new one, when chapterId changes.
+  useEffect(() => {
+    const book = series?.books?.find(b => b.chapters?.some(c => c.id === chapterId))
+    currentBookIdRef.current = book?.id
+  })
+
+  // On chapter switch or page unmount, flush any pending debounce and fire
+  // one final silent export if autosave is enabled.
+  useEffect(() => {
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+      if (autosaveEnabledRef.current) saveCanon(currentBookIdRef.current, true)
+    }
+  // saveCanon is stable (closes only over seriesId from URL params)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chapterId])
+
+  function handleTextBlockBlur() {
+    if (!autosaveEnabledRef.current) return
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+    autosaveTimerRef.current = setTimeout(() => {
+      saveCanon(currentBookIdRef.current, true)
+    }, 1500)
+  }
 
   async function patchChapter(data: Record<string, string | boolean | null>) {
     await fetch(`/api/chapters/${chapterId}`, {
@@ -701,6 +741,7 @@ export default function ChapterEditorPage() {
           onCollapsedIdsChange={setCollapsedIds}
           searchQuery={localSearchQuery || (searchParams?.get('q') ?? '')}
           replaceAllRef={replaceAllRef}
+          onTextBlockBlur={handleTextBlockBlur}
         />
       </div>
 
