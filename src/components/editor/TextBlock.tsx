@@ -6,6 +6,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import TextAlign from '@tiptap/extension-text-align'
 import { Extension, InputRule, Mark, mergeAttributes } from '@tiptap/core'
+import { substituteVarTemplates } from '@/lib/templateVars'
 
 // Custom mark — addAttributes() path guarantees color renders in the live editor
 const TextStyleColor = Mark.create({
@@ -51,9 +52,15 @@ const SectionBreak = Extension.create({
   },
 })
 
-const ReadAloud = Extension.create({
+type ReadAloudVariable = { name: string; type: string; defaultValue?: string | null }
+
+const ReadAloud = Extension.create<{ getVariables: () => ReadAloudVariable[] }>({
   name: 'readAloud',
+  addOptions() {
+    return { getVariables: () => [] }
+  },
   addKeyboardShortcuts() {
+    const getVariables = this.options.getVariables
     return {
       'Alt-Shift-r': ({ editor }) => {
         if (!window.speechSynthesis) return false
@@ -61,11 +68,22 @@ const ReadAloud = Extension.create({
           window.speechSynthesis.cancel()
           return true
         }
-        const { from, to, empty, $from } = editor.state.selection
-        const text = empty
+        const { from, to, empty } = editor.state.selection
+        const raw = empty
           ? editor.state.doc.textBetween(from, editor.state.doc.content.size, ' ')
           : editor.state.doc.textBetween(from, to, ' ')
-        if (!text.trim()) return false
+        if (!raw.trim()) return false
+
+        // Build a canon story state from each variable's default value so
+        // {{condition ? 'a' : 'b'}} resolves to the same branch the export uses.
+        const storyState: Record<string, unknown> = {}
+        for (const v of getVariables()) {
+          if (v.type === 'boolean') storyState[v.name] = String(v.defaultValue).toLowerCase() === 'true'
+          else if (v.type === 'number') storyState[v.name] = Number(v.defaultValue ?? 0)
+          else storyState[v.name] = v.defaultValue ?? ''
+        }
+        const text = substituteVarTemplates(raw, storyState, s => s)
+
         window.speechSynthesis.speak(new SpeechSynthesisUtterance(text))
         return true
       },
@@ -89,7 +107,7 @@ import { useEditorColors } from '@/lib/useEditorColors'
 import { DOMSerializer } from '@tiptap/pm/model'
 
 type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
-type Variable = { id: string; name: string; type: string }
+type Variable = { id: string; name: string; type: string; defaultValue?: string | null }
 
 type Props = {
   content: string | null
@@ -230,7 +248,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
       TextStyleColor,
       EmDash,
       SectionBreak,
-      ReadAloud,
+      ReadAloud.configure({ getVariables: () => variablesRef.current }),
     ],
     content: content ? parseContent(content) : JSON.parse(EMPTY),
     onUpdate: ({ editor }) => {
