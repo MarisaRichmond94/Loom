@@ -23,6 +23,20 @@ export function useWriteAiReview(seriesId: string) {
     busyRef.current = true
     setReviewing(true)
     setNotificationBusy(true)
+    // WriteAI opens in a NEW tab so Loom stays on the chapter — the iteration
+    // loop is edit here, ⌥⇧E, then "Send Updated Draft" over there. The tab
+    // must be opened synchronously inside the click gesture (popup blockers
+    // kill a window.open issued after the export's await); it gets pointed
+    // at WriteAI when the export lands, or closed if the export fails.
+    const tab = window.open('', '_blank')
+    if (tab) {
+      tab.document.write(
+        '<title>Opening WriteAI…</title>'
+        + '<body style="margin:0;display:flex;align-items:center;justify-content:center;'
+        + 'height:100vh;background:#12121e;color:#aaa;'
+        + 'font:14px system-ui">Exporting manuscript for review…</body>',
+      )
+    }
     try {
       const res = await fetch(`/api/series/${seriesId}/books/${book.id}/export/canon`, {
         method: 'POST',
@@ -32,6 +46,7 @@ export function useWriteAiReview(seriesId: string) {
       const data = await res.json() as { ok?: boolean; reviewChapter?: number | null; error?: string }
       if (!res.ok || !data.ok) {
         notify('error', data.error ?? 'Canon save failed — review not started.')
+        tab?.close()
         return
       }
       const params = new URLSearchParams({
@@ -48,9 +63,12 @@ export function useWriteAiReview(seriesId: string) {
         params.set('chapter', String(data.reviewChapter))
       }
       const base = process.env.NEXT_PUBLIC_WRITEAI_URL ?? 'http://localhost:5173'
-      window.location.href = `${base}/?${params.toString()}`
+      const url = `${base}/?${params.toString()}`
+      if (tab) tab.location.href = url
+      else window.location.href = url // popup blocked — same-tab fallback
     } catch {
       notify('error', 'Canon save failed — review not started.')
+      tab?.close()
     } finally {
       busyRef.current = false
       setReviewing(false)
