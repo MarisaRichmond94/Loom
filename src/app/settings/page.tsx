@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
-import { LuMoon, LuSun, LuShield, LuPlay, LuFolderOpen, LuUser, LuX, LuCheck } from 'react-icons/lu'
+import { useRouter } from 'next/navigation'
+import { LuMoon, LuSun, LuShield, LuPlay, LuFolderOpen, LuUser, LuX, LuCheck, LuArrowLeft } from 'react-icons/lu'
 import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
 import Greeting from '@/components/Greeting'
@@ -37,6 +38,7 @@ type BackupSettings = {
 }
 
 export default function SettingsPage() {
+  const router = useRouter()
   const [lightMode, setLightMode] = useState(false)
   useEffect(() => {
     setLightMode(localStorage.getItem('loom-light-mode') === 'true')
@@ -283,7 +285,13 @@ export default function SettingsPage() {
 
       <main className={`flex-1 overflow-y-auto${lightMode ? ' light-body' : ''}`}>
         <div className="px-8 py-10">
-          <h1 className="text-2xl font-bold text-ink mb-6">Settings</h1>
+          <h1 className="text-2xl font-bold text-ink mb-2">Settings</h1>
+          <button
+            onClick={() => router.back()}
+            className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition mb-6"
+          >
+            <LuArrowLeft size={13} /> Back
+          </button>
 
           <div className="flex gap-1 border-b border-accent/10 mb-8">
             {TABS.map(tab => (
