@@ -18,7 +18,14 @@ async function runOsascript(script: string): Promise<void> {
     await execFileAsync('osascript', ['-e', script], { timeout: 120_000 })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    throw new Error(`Pages conversion failed — is Pages installed and allowed to be automated? (${message})`)
+    // -600/-1743 mean macOS blocked the Apple Event: the app that launched
+    // this server (Terminal, VS Code, a Dock launcher .app) needs Automation
+    // permission for Pages, and launcher bundles must declare
+    // NSAppleEventsUsageDescription in their Info.plist to even be prompted.
+    const hint = /-600|-1743/.test(message)
+      ? ' macOS blocked the automation: grant the app that launched Loom access to Pages under System Settings → Privacy & Security → Automation.'
+      : ''
+    throw new Error(`Pages conversion failed — is Pages installed and allowed to be automated?${hint} (${message})`)
   }
 }
 
