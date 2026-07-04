@@ -491,6 +491,12 @@ export default function ChapterEditorPage() {
                     { keys: '⌥⇧B', label: 'Insert scene break' },
                   ],
                 },
+                {
+                  group: 'Series',
+                  items: [
+                    { keys: '⌥⇧G', label: 'Find in series (global)' },
+                  ],
+                },
               ] as { group: string; items: { keys: string; label: string }[] }[]).map(({ group, items }) => (
                 <div key={group} className="mb-3 last:mb-0">
                   <p className="text-[9px] uppercase tracking-widest text-ink-faint mb-1.5">{group}</p>
