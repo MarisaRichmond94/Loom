@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuCopy } from 'react-icons/lu'
+import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown } from 'react-icons/lu'
+import { PiCopySimpleThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import { ConditionRow } from '@/components/editor/conditionUI'
@@ -438,7 +439,7 @@ export default function ChapterEditorPage() {
             className="px-3 py-1.5 rounded text-xs border border-accent/20 text-ink-muted font-medium hover:border-accent/40 hover:text-ink transition"
           >
             <span className="flex items-center gap-1.5">
-              <LuCopy size={12} />{copyDone ? 'Copied!' : 'Copy'}
+              <PiCopySimpleThin size={14} />{copyDone ? 'Copied!' : 'Copy'}
             </span>
           </button>
           <div className="pointer-events-none absolute right-0 top-full mt-1.5 z-50 w-56 rounded border border-accent/20 bg-surface-overlay px-3 py-2 text-xs leading-snug text-ink-muted shadow-lg opacity-0 transition-opacity group-hover/copybtn:opacity-100">

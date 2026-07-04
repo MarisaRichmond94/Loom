@@ -5,11 +5,12 @@
 export default function ChapterSkeleton() {
   return (
     <div className="px-8 min-h-full flex flex-col animate-pulse">
-      {/* Mirrors the real action row so the layout doesn't jump on load. */}
+      {/* Mirrors the real action row: settings cog · copy · review · preview */}
       <div className="flex justify-end items-center gap-2 py-3 pr-6">
         <div className="w-5 h-5 rounded bg-surface-muted" />
-        <div className="h-7 w-16 rounded bg-surface-muted" />
-        <div className="h-7 w-20 rounded bg-accent/30" />
+        <div className="h-7 w-[62px] rounded bg-surface-muted" />
+        <div className="h-7 w-[72px] rounded bg-accent/20" />
+        <div className="h-7 w-[76px] rounded bg-accent/30" />
       </div>
       <div className="pb-8 flex-1">
         {/* Title + POV — centered */}
