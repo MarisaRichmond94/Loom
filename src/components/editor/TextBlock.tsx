@@ -62,7 +62,7 @@ const ReadAloud = Extension.create({
         }
         const { from, to, empty, $from } = editor.state.selection
         const text = empty
-          ? editor.state.doc.textBetween(from, $from.end(), ' ')
+          ? editor.state.doc.textBetween(from, editor.state.doc.content.size, ' ')
           : editor.state.doc.textBetween(from, to, ' ')
         if (!text.trim()) return false
         window.speechSynthesis.speak(new SpeechSynthesisUtterance(text))

@@ -5,8 +5,9 @@
 export default function ChapterSkeleton() {
   return (
     <div className="px-8 min-h-full flex flex-col animate-pulse">
-      {/* Mirrors the real action row: settings cog · copy · review · preview */}
+      {/* Mirrors the real action row: settings cog · shortcuts · copy · review · preview */}
       <div className="flex justify-end items-center gap-2 py-3 pr-6">
+        <div className="w-5 h-5 rounded bg-surface-muted" />
         <div className="w-5 h-5 rounded bg-surface-muted" />
         <div className="h-7 w-[76px] rounded bg-surface-muted" />
         <div className="h-7 w-[85px] rounded bg-accent/20" />

@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace } from 'react-icons/lu'
-import { PiCopySimpleThin } from 'react-icons/pi'
+import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
 import { extractTextFromTipTap } from '@/lib/tiptapText'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
@@ -33,6 +33,7 @@ export default function ChapterEditorPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showChapterSettings, setShowChapterSettings] = useState(false)
   const [copyDone, setCopyDone] = useState(false)
+  const [showShortcuts, setShowShortcuts] = useState(false)
   const [showIfTooltip, setShowIfTooltip] = useState(false)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   // Lifted from BlockEditor so the date-row toggle can flip every block at
@@ -46,6 +47,7 @@ export default function ChapterEditorPage() {
   const localSearchInputRef = useRef<HTMLInputElement>(null)
   const replaceAllRef = useRef<((search: string, replacement: string) => number) | null>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
+  const shortcutsRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const povInputRef = useRef<HTMLInputElement>(null)
   const focusedPovRef = useRef<string | null>(null)
@@ -96,6 +98,9 @@ export default function ChapterEditorPage() {
     function handleClick(e: MouseEvent) {
       if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
         setAddMenuOpen(false)
+      }
+      if (shortcutsRef.current && !shortcutsRef.current.contains(e.target as Node)) {
+        setShowShortcuts(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
@@ -450,6 +455,58 @@ export default function ChapterEditorPage() {
         >
           <LuSettings size={20} />
         </button>
+        <div ref={shortcutsRef} className="relative">
+          <button
+            onClick={() => setShowShortcuts(o => !o)}
+            title="Keyboard shortcuts"
+            className="text-ink-faint hover:text-ink transition flex items-center"
+          >
+            <PiNotebookThin size={20} />
+          </button>
+          {showShortcuts && (
+            <div className="absolute right-0 top-full mt-2 z-50 w-72 bg-surface-raised border border-accent/20 rounded-xl shadow-xl p-4">
+              <p className="text-[10px] uppercase tracking-widest text-ink-faint font-semibold mb-3">Keyboard Shortcuts</p>
+              {([
+                {
+                  group: 'Add Blocks',
+                  items: [
+                    { keys: '⌥⇧T', label: 'Text block' },
+                    { keys: '⌥⇧Q', label: 'Choice block' },
+                    { keys: '⌥⇧C', label: 'Conditional block' },
+                    { keys: '⌥⇧S', label: 'Soundtrack block' },
+                  ],
+                },
+                {
+                  group: 'Chapter',
+                  items: [
+                    { keys: '⌥⇧N', label: 'Create next chapter' },
+                    { keys: '⌥⇧E', label: 'Export canon' },
+                    { keys: '⌥⇧F', label: 'Find in chapter' },
+                  ],
+                },
+                {
+                  group: 'While Writing',
+                  items: [
+                    { keys: '⌥⇧R', label: 'Read aloud from cursor' },
+                    { keys: '⌥⇧B', label: 'Insert scene break' },
+                  ],
+                },
+              ] as { group: string; items: { keys: string; label: string }[] }[]).map(({ group, items }) => (
+                <div key={group} className="mb-3 last:mb-0">
+                  <p className="text-[9px] uppercase tracking-widest text-ink-faint mb-1.5">{group}</p>
+                  <div className="flex flex-col gap-1">
+                    {items.map(({ keys, label }) => (
+                      <div key={keys} className="flex items-center justify-between gap-3">
+                        <span className="text-xs text-ink-muted">{label}</span>
+                        <span className="font-mono text-[10px] bg-surface-overlay border border-accent/20 rounded px-1.5 py-0.5 text-ink-muted tracking-wider shrink-0">{keys}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="relative group/copybtn">
           <button
             onClick={copyCanonText}
