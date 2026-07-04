@@ -8,9 +8,9 @@ export default function ChapterSkeleton() {
       {/* Mirrors the real action row: settings cog · copy · review · preview */}
       <div className="flex justify-end items-center gap-2 py-3 pr-6">
         <div className="w-5 h-5 rounded bg-surface-muted" />
-        <div className="h-7 w-[62px] rounded bg-surface-muted" />
-        <div className="h-7 w-[72px] rounded bg-accent/20" />
-        <div className="h-7 w-[76px] rounded bg-accent/30" />
+        <div className="h-7 w-[76px] rounded bg-surface-muted" />
+        <div className="h-7 w-[85px] rounded bg-accent/20" />
+        <div className="h-7 w-[88px] rounded bg-accent/30" />
       </div>
       <div className="pb-8 flex-1">
         {/* Title + POV — centered */}
