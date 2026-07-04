@@ -6,7 +6,7 @@ import { notify, setNotificationBusy } from '@/lib/notifications'
 // "Review in WriteAI" — the chapter header's Review button. Saves the book's
 // canon manuscript to disk (the same export WriteAI ingests from), then hands
 // off to WriteAI's review page with the book, chapter, and reviewer persona
-// pre-selected and the chapter preview open. `draft=1` tells WriteAI to read
+// pre-selected. `draft=1` tells WriteAI to read
 // the chapter's text straight from the freshly exported file (no ingest, no
 // LLM cost) so the writer can iterate review→revise→re-review and only
 // reindex once the revision lands. Loom's side of the contract ends at
@@ -53,7 +53,6 @@ export function useWriteAiReview(seriesId: string) {
         pane: 'review',
         book: book.title,
         focus: REVIEW_FOCUS,
-        preview: '1',
         draft: '1',
       })
       // Unnumbered non-prologue chapters (and chapters the canon walk skips)
