@@ -2,13 +2,14 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown } from 'react-icons/lu'
+import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown } from 'react-icons/lu'
 import BlockEditor from '@/components/editor/BlockEditor'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import { ConditionRow } from '@/components/editor/conditionUI'
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import { useCanonSave } from '@/components/editor/useCanonSave'
+import { useWriteAiReview } from '@/components/editor/useWriteAiReview'
 
 type Block = {
   id: string; order: number; type: string
@@ -271,6 +272,7 @@ export default function ChapterEditorPage() {
   // ⌥⇧E — render the canon manuscript and save it to the book's folder on
   // disk (Settings → Export configures where).
   const { saveCanon } = useCanonSave(seriesId)
+  const { reviewInWriteAi, reviewing } = useWriteAiReview(seriesId)
   saveCanonRef.current = async () => {
     await saveCanon(series.books.find(b => b.chapters.some(c => c.id === chapterId))?.id)
   }
@@ -394,6 +396,14 @@ export default function ChapterEditorPage() {
           className="px-3 py-1.5 rounded text-xs border border-choice-kill/40 text-choice-kill font-medium hover:bg-choice-kill/10 transition"
         >
           Delete
+        </button>
+        <button
+          onClick={() => reviewInWriteAi(currentBook, chapterId)}
+          disabled={reviewing}
+          title="Save canon and review this chapter in WriteAI"
+          className="px-3 py-1.5 rounded text-xs border border-accent/40 text-accent font-medium hover:bg-accent/10 transition disabled:opacity-60"
+        >
+          <span className="flex items-center gap-1.5"><LuScanText size={12} /> {reviewing ? 'Syncing…' : 'Review'}</span>
         </button>
         <button
           onClick={async () => {

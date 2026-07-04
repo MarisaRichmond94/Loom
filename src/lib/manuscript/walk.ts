@@ -32,6 +32,7 @@ export type WalkChoicePoint = {
 }
 
 export type ManuscriptChapter = {
+  id: string
   // "1", "2", … for numbered chapters; the authored title otherwise.
   label: string
   numbered: boolean
@@ -147,6 +148,7 @@ export function walkBook(
     const numbered = chapter.numbered !== false
     const label = numbered ? String(++counter) : chapter.title
     const out: ManuscriptChapter = {
+      id: chapter.id,
       label,
       numbered,
       pov: chapter.pov,

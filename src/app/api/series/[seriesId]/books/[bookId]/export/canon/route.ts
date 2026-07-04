@@ -62,7 +62,7 @@ export async function POST(req: Request, { params }: Params) {
   const data = await loadManuscriptBook(seriesId, bookId)
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const body = await req.json().catch(() => ({})) as { format?: 'pages' | 'docx' }
+  const body = await req.json().catch(() => ({})) as { format?: 'pages' | 'docx'; chapterId?: string }
   const format = body.format === 'docx' ? 'docx' : 'pages'
 
   const dest = await findDestDir(data.bookTitle)
@@ -74,6 +74,18 @@ export async function POST(req: Request, { params }: Params) {
   for (const cp of result.choicePoints.filter(c => c.ambiguous)) {
     const picked = cp.choices.find(c => c.id === cp.resolvedChoiceId)
     warnings.push(`${cp.chapterLabel}: ambiguous choice point — took the first branch "${picked?.label ?? '?'}".`)
+  }
+
+  // When the caller passes a chapterId (the Review-in-WriteAI hand-off), map
+  // it to the chapter's position in this manuscript, the way WriteAI's
+  // chunker will read it back: a bare-number heading is that chapter's
+  // number, a literal "Prologue" heading is 0. Anything else — including a
+  // chapter the canon walk skipped — isn't addressable there, so null.
+  let reviewChapter: number | null = null
+  if (body.chapterId) {
+    const walked = result.chapters.find(c => c.id === body.chapterId)
+    if (walked?.numbered) reviewChapter = Number(walked.label)
+    else if (walked && walked.label.trim().toLowerCase() === 'prologue') reviewChapter = 0
   }
 
   // A configured-but-broken template (moved file, Pages hiccup) downgrades
@@ -108,7 +120,7 @@ export async function POST(req: Request, { params }: Params) {
   if (format === 'docx') {
     const outPath = path.join(dest.dir, `${safeTitle}.docx`)
     await writeFile(outPath, docx)
-    return NextResponse.json({ ok: true, path: outPath, warnings })
+    return NextResponse.json({ ok: true, path: outPath, warnings, reviewChapter })
   }
 
   const workDir = path.join(tmpdir(), `loom-canon-${bookId}-${Date.now()}`)
@@ -120,7 +132,7 @@ export async function POST(req: Request, { params }: Params) {
     await docxToPages(docxPath, pagesPath)
     const outPath = path.join(dest.dir, `${safeTitle}.pages`)
     await copyFile(pagesPath, outPath)
-    return NextResponse.json({ ok: true, path: outPath, warnings })
+    return NextResponse.json({ ok: true, path: outPath, warnings, reviewChapter })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Canon export failed'
     return NextResponse.json({ error: message }, { status: 500 })
