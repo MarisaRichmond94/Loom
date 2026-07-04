@@ -35,7 +35,8 @@ const EmDash = Extension.create({
   name: 'emDash',
   addInputRules() {
     return [new InputRule({ find: /--$/, handler: ({ state, range }) => {
-      state.tr.replaceWith(range.from, range.to, state.schema.text('—'))
+      const marks = state.storedMarks ?? state.selection.$from.marks()
+      state.tr.replaceWith(range.from, range.to, state.schema.text('—', marks))
     } })]
   },
 })
