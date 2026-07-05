@@ -1,11 +1,11 @@
 'use client'
 
-import { LuTriangleAlert, LuX } from 'react-icons/lu'
+import { LuTriangleAlert, LuX, LuLoader } from 'react-icons/lu'
 import { useNotifications, dismissToast } from '@/lib/notifications'
 
 export default function ToastLayer() {
-  const { toasts } = useNotifications()
-  if (!toasts.length) return null
+  const { toasts, saving } = useNotifications()
+  if (!toasts.length && !saving) return null
 
   return (
     <div className="fixed bottom-6 right-6 z-[200] flex flex-col gap-2 pointer-events-none">
@@ -24,6 +24,12 @@ export default function ToastLayer() {
           </button>
         </div>
       ))}
+      {saving && (
+        <div className="flex items-center gap-2.5 bg-surface-raised border border-accent/20 rounded-xl px-4 py-3 shadow-2xl pointer-events-auto">
+          <LuLoader size={14} className="text-accent animate-spin shrink-0" />
+          <span className="text-sm text-ink-muted">Saving…</span>
+        </div>
+      )}
     </div>
   )
 }

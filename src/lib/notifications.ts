@@ -27,13 +27,16 @@ type Snapshot = {
   busy: boolean
   unread: number
   toasts: AppToast[]
+  // True during any save (including silent autosaves); drives the Saving… toast.
+  saving: boolean
 }
 
 let notifications: AppNotification[] = []
 let toasts: AppToast[] = []
 let busy = false
+let saving = false
 let nextId = 1
-let snapshot: Snapshot = { notifications, busy, unread: 0, toasts }
+let snapshot: Snapshot = { notifications, busy, unread: 0, toasts, saving }
 const listeners = new Set<() => void>()
 
 function emit() {
@@ -42,8 +45,15 @@ function emit() {
     busy,
     unread: notifications.filter(n => !n.read).length,
     toasts,
+    saving,
   }
   listeners.forEach(l => l())
+}
+
+export function setNotificationSaving(value: boolean) {
+  if (saving === value) return
+  saving = value
+  emit()
 }
 
 export function dismissToast(id: number) {
