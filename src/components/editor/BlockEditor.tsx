@@ -62,6 +62,10 @@ type Props = {
   // Ref that receives a scrollToCursor function — refocuses the active text
   // editor and scrolls the cursor position into the centre of the viewport.
   scrollToCursorRef?: React.MutableRefObject<(() => void) | null>
+  // Ref written every render with the current block list. The chapter page
+  // reads this in copyCanonText to avoid the stale chapter.blocks state
+  // (which only refreshes on structural changes, not on per-keystroke PATCHes).
+  currentBlocksRef?: React.MutableRefObject<{ id: string; type: string; content?: string | null; baseContent?: string | null }[] | null>
   onTextBlockBlur?: () => void
 }
 
@@ -192,7 +196,7 @@ function SortableBlock({
 
 function escapeRegExp(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
 
-export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', replaceAllRef, jumpToFirstMatchRef, scrollToCursorRef, onTextBlockBlur }: Props) {
+export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', replaceAllRef, jumpToFirstMatchRef, scrollToCursorRef, currentBlocksRef, onTextBlockBlur }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const [newBlockId, setNewBlockId] = useState<string | null>(null)
@@ -219,6 +223,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   activeBlockIdRef.current = activeBlockId
   blocksRef.current = blocks
   onBlocksChangeRef.current = onBlocksChange
+  if (currentBlocksRef) currentBlocksRef.current = blocks
 
   const textEditorsRef = useRef<Map<string, Editor>>(new Map())
   if (replaceAllRef) {
