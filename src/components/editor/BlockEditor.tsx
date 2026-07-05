@@ -211,8 +211,10 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   const blocksContainerRef = useRef<HTMLDivElement>(null)
   // Written every render so the ⌥⇧D handler never reads a stale value
   const activeBlockIdRef = useRef<string | null>(null)
+  const blocksRef = useRef<Block[]>(blocks)
   const onBlocksChangeRef = useRef(onBlocksChange)
   activeBlockIdRef.current = activeBlockId
+  blocksRef.current = blocks
   onBlocksChangeRef.current = onBlocksChange
 
   const textEditorsRef = useRef<Map<string, Editor>>(new Map())
@@ -341,15 +343,17 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [activeBlockId, blocks, chapterId])
 
-  // ⌥⇧D — delete active block (refs avoid stale-closure bugs with activeBlockId)
+  // ⌥⇧D — open delete confirmation for the active block. ConfirmDialog
+  // autofocuses the Delete button, so Enter immediately confirms and ESC cancels.
   useEffect(() => {
-    async function handleKeyDown(e: KeyboardEvent) {
+    function handleKeyDown(e: KeyboardEvent) {
       if (!e.altKey || !e.shiftKey || e.code !== 'KeyD') return
       const blockId = activeBlockIdRef.current
       if (!blockId) return
+      const block = blocksRef.current.find(b => b.id === blockId)
+      if (!block) return
       e.preventDefault()
-      await fetch(`/api/chapters/${chapterId}/blocks/${blockId}`, { method: 'DELETE' })
-      onBlocksChangeRef.current()
+      setPendingDelete(block)
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)

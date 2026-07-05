@@ -530,6 +530,7 @@ export default function ChapterEditorPage() {
                     { keys: '⌥⇧N', label: 'Create next chapter' },
                     { keys: '⌥⇧E', label: 'Export canon' },
                     { keys: '⌥⇧F', label: 'Find in chapter' },
+                    { keys: '⌥⇧D', label: 'Delete active block' },
                   ],
                 },
                 {
