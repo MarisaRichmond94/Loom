@@ -17,13 +17,17 @@ function appleScriptString(p: string): string {
 // Apple Event can arrive before Pages finishes starting and bounce with -600
 // (procNotFound, "Application isn't running"). Worse, Pages opts into macOS
 // automatic termination: with no windows open (exactly the state each
-// conversion leaves it in) the OS silently kills the process, while Launch
-// Services keeps reporting it as running — so an `is running` poll passes
-// against a corpse and the real event still bounces -600. The only reliable
-// readiness signal is Pages answering an actual Apple Event, so poll with
-// `get version` and keep re-nudging `launch` until it answers (~15s max).
+// conversion leaves it in) the OS may silently kill the process, while Launch
+// Services keeps reporting it as running — so events bounce off a zombie.
+// The only reliable readiness signal is Pages answering an actual Apple
+// Event, so poll with `get version` and keep re-nudging `launch` until it
+// answers (~15s max). The initial `launch` MUST be inside a try: against a
+// zombie it throws -600 itself, and unwrapped it aborts the whole script
+// before the retry loop ever runs (observed in live stress testing).
 const LAUNCH_PREAMBLE =
-  'tell application "Pages" to launch\n' +
+  'try\n' +
+  '  tell application "Pages" to launch\n' +
+  'end try\n' +
   'repeat 60 times\n' +
   '  try\n' +
   '    tell application "Pages" to get version\n' +
@@ -42,7 +46,10 @@ const LAUNCH_PREAMBLE =
 // because dev-mode HMR re-instantiates this module per recompiled route —
 // a module-local queue would let scripts from different route bundles
 // overlap despite the queue.
-const g = globalThis as typeof globalThis & { __loomPagesQueue?: Promise<unknown> }
+const g = globalThis as typeof globalThis & {
+  __loomPagesQueue?: Promise<unknown>
+  __loomPagesScriptCount?: number
+}
 
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   const prev = g.__loomPagesQueue ?? Promise.resolve()
@@ -63,6 +70,23 @@ function isTransient(err: unknown): boolean {
   return typeof err === 'object' && err !== null && 'killed' in err && (err as { killed?: boolean }).killed === true
 }
 
+// Last-resort recovery for a zombie Pages (-600/-609 that survives a plain
+// retry). Probe with a real event: if Pages answers, it's alive and killing
+// it would be wrong (and could lose the writer's open work). If the probe
+// itself errors or times out, the process is a corpse — clear it and start
+// a fresh one through Launch Services (`open -ga` succeeds where a scripted
+// `launch` bounces off the zombie's cached registration).
+async function recoverZombiePages(): Promise<void> {
+  try {
+    await execFileAsync('osascript', ['-e', 'tell application "Pages" to count documents'], { timeout: 10_000 })
+    return // Pages answered — alive, leave it alone
+  } catch {
+    await execFileAsync('killall', ['Pages']).catch(() => {})
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    await execFileAsync('open', ['-ga', 'Pages']).catch(() => {})
+  }
+}
+
 async function runOsascript(script: string): Promise<void> {
   const attempts = 4
   for (let attempt = 1; ; attempt++) {
@@ -72,6 +96,9 @@ async function runOsascript(script: string): Promise<void> {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (isTransient(err) && attempt < attempts) {
+        // A -600/-609 that made it past the preamble means the zombie state
+        // is sticky — recover it before burning another attempt on it.
+        if (attempt >= 2 && /-600|-609/.test(message)) await recoverZombiePages()
         await new Promise((resolve) => setTimeout(resolve, attempt * 1500))
         continue
       }
@@ -89,22 +116,53 @@ async function runOsascript(script: string): Promise<void> {
   }
 }
 
-export async function docxToPages(docxPath: string, pagesPath: string): Promise<void> {
-  await enqueue(() => runOsascript(
+// Pages accretes ~10MB RSS per scripted conversion (measured), so after a
+// batch of conversions give it a fresh start — but only when the writer has
+// nothing open, and only from inside the queue so the quit can never race a
+// conversion (an external quit mid-script fails 100% of the time with -609).
+const RESTART_EVERY = 25
+
+async function maybeRestartPages(): Promise<void> {
+  g.__loomPagesScriptCount = (g.__loomPagesScriptCount ?? 0) + 1
+  if (g.__loomPagesScriptCount < RESTART_EVERY) return
+  g.__loomPagesScriptCount = 0
+  await execFileAsync('osascript', ['-e',
     'tell application "Pages"\n' +
-    `  set theDoc to open POSIX file ${appleScriptString(docxPath)}\n` +
-    `  save theDoc in POSIX file ${appleScriptString(pagesPath)}\n` +
-    '  close theDoc saving no\n' +
+    '  if (count documents) = 0 then quit\n' +
     'end tell',
-  ))
+  ], { timeout: 15_000 }).catch(() => {}) // best-effort; next preamble relaunches
+}
+
+// The AppleScript-side timeout must be shorter than the Node execFile
+// timeout (120s): that way a stuck conversion errors cleanly as -1712 and
+// retries, instead of Node SIGKILLing osascript mid-save and leaving Pages
+// holding a half-open document.
+function withTimeout(body: string): string {
+  return 'with timeout of 90 seconds\n' + body + '\nend timeout'
+}
+
+export async function docxToPages(docxPath: string, pagesPath: string): Promise<void> {
+  await enqueue(async () => {
+    await runOsascript(withTimeout(
+      'tell application "Pages"\n' +
+      `  set theDoc to open POSIX file ${appleScriptString(docxPath)}\n` +
+      `  save theDoc in POSIX file ${appleScriptString(pagesPath)}\n` +
+      '  close theDoc saving no\n' +
+      'end tell',
+    ))
+    await maybeRestartPages()
+  })
 }
 
 export async function pagesToDocx(pagesPath: string, docxPath: string): Promise<void> {
-  await enqueue(() => runOsascript(
-    'tell application "Pages"\n' +
-    `  set theDoc to open POSIX file ${appleScriptString(pagesPath)}\n` +
-    `  export theDoc to POSIX file ${appleScriptString(docxPath)} as Microsoft Word\n` +
-    '  close theDoc saving no\n' +
-    'end tell',
-  ))
+  await enqueue(async () => {
+    await runOsascript(withTimeout(
+      'tell application "Pages"\n' +
+      `  set theDoc to open POSIX file ${appleScriptString(pagesPath)}\n` +
+      `  export theDoc to POSIX file ${appleScriptString(docxPath)} as Microsoft Word\n` +
+      '  close theDoc saving no\n' +
+      'end tell',
+    ))
+    await maybeRestartPages()
+  })
 }

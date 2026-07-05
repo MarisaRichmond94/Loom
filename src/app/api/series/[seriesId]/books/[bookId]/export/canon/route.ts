@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { copyFile, mkdir, readdir, rm, writeFile } from 'fs/promises'
+import { access, copyFile, mkdir, readdir, rename, rm, writeFile } from 'fs/promises'
+import { createHash } from 'crypto'
 import { tmpdir } from 'os'
 import path from 'path'
 import { walkBook } from '@/lib/manuscript/walk'
@@ -55,6 +56,17 @@ async function findDestDir(bookTitle: string): Promise<{ dir: string } | { error
   return { dir }
 }
 
+// Content hash of the last successful export per destination path, so an
+// autosave that changed nothing (blur without edits, re-visits) skips the
+// Pages round-trip entirely — by far the most failure-prone step. Lives on
+// globalThis to survive dev-HMR module reloads; a server restart just means
+// one extra real export.
+const g = globalThis as typeof globalThis & { __loomCanonHashes?: Map<string, string> }
+function canonHashes(): Map<string, string> {
+  if (!g.__loomCanonHashes) g.__loomCanonHashes = new Map()
+  return g.__loomCanonHashes
+}
+
 type Params = { params: Promise<{ seriesId: string; bookId: string }> }
 
 export async function POST(req: Request, { params }: Params) {
@@ -106,6 +118,22 @@ export async function POST(req: Request, { params }: Params) {
     ? profile.pseudonym.trim()
     : profile.authorName.trim() || 'Unknown Author'
 
+  const safeTitle = data.bookTitle.replace(/[/\\:]/g, '-').trim() || 'Manuscript'
+  const outPath = path.join(dest.dir, `${safeTitle}.${format}`)
+
+  // Hash every input that shapes the output file (the docx bytes themselves
+  // are nondeterministic — JSZip stamps entry dates). If nothing changed
+  // since the last successful export to this path and the file is still
+  // there, skip the whole build + Pages round-trip.
+  const hash = createHash('sha256')
+  hash.update(JSON.stringify({ chapters: result.chapters, formatting, authorName, templateStyles, format }))
+  if (frontMatter) hash.update(frontMatter)
+  const contentHash = hash.digest('hex')
+  if (canonHashes().get(outPath) === contentHash) {
+    const stillThere = await access(outPath).then(() => true, () => false)
+    if (stillThere) return NextResponse.json({ ok: true, path: outPath, warnings, reviewChapter, skipped: true })
+  }
+
   const docx = await buildManuscriptDocx({
     bookTitle: data.bookTitle,
     authorName,
@@ -115,11 +143,13 @@ export async function POST(req: Request, { params }: Params) {
     templateStyles,
   })
 
-  const safeTitle = data.bookTitle.replace(/[/\\:]/g, '-').trim() || 'Manuscript'
-
   if (format === 'docx') {
-    const outPath = path.join(dest.dir, `${safeTitle}.docx`)
-    await writeFile(outPath, docx)
+    // Write-then-rename so a failure mid-write never leaves a truncated
+    // manuscript at the destination.
+    const tmpPath = `${outPath}.loom-tmp`
+    await writeFile(tmpPath, docx)
+    await rename(tmpPath, outPath)
+    canonHashes().set(outPath, contentHash)
     return NextResponse.json({ ok: true, path: outPath, warnings, reviewChapter })
   }
 
@@ -130,13 +160,16 @@ export async function POST(req: Request, { params }: Params) {
     const pagesPath = path.join(workDir, `${safeTitle}.pages`)
     await writeFile(docxPath, docx)
     await docxToPages(docxPath, pagesPath)
-    const outPath = path.join(dest.dir, `${safeTitle}.pages`)
-    await copyFile(pagesPath, outPath)
+    const tmpPath = `${outPath}.loom-tmp`
+    await copyFile(pagesPath, tmpPath)
+    await rename(tmpPath, outPath)
+    canonHashes().set(outPath, contentHash)
     return NextResponse.json({ ok: true, path: outPath, warnings, reviewChapter })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Canon export failed'
     return NextResponse.json({ error: message }, { status: 500 })
   } finally {
     await rm(workDir, { recursive: true, force: true }).catch(() => {})
+    await rm(`${outPath}.loom-tmp`, { force: true }).catch(() => {})
   }
 }
