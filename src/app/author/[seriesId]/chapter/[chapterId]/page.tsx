@@ -42,6 +42,13 @@ export default function ChapterEditorPage() {
   // below), matching the "all uncollapsed on initial load" rule.
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
   useEffect(() => { setCollapsedIds(new Set()) }, [chapterId])
+  // The layout's <main> scroller stays mounted across chapter navigation,
+  // so the old scroll position (e.g. the footer, after clicking next
+  // chapter) would otherwise carry over to the new chapter. Keyed on the
+  // LOADED chapter's id — firing after the new content has rendered means
+  // it wins over both late layout shifts and Chrome's scroll restoration
+  // of the inner scroller on a full page reload.
+  useEffect(() => { document.querySelector('main')?.scrollTo(0, 0) }, [chapter?.id])
   const [localSearchQuery, setLocalSearchQuery] = useState('')
   const [localSearchReplace, setLocalSearchReplace] = useState('')
   const [localSearchReplaceMode, setLocalSearchReplaceMode] = useState(false)
@@ -758,6 +765,7 @@ export default function ChapterEditorPage() {
         )}
 
         <BlockEditor
+          key={chapter.id}
           chapterId={chapterId}
           blocks={chapter.blocks}
           variables={series.variables}
