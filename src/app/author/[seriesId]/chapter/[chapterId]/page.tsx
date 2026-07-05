@@ -49,6 +49,7 @@ export default function ChapterEditorPage() {
   const replaceAllRef = useRef<((search: string, replacement: string) => number) | null>(null)
   const jumpToFirstMatchRef = useRef<((query: string) => void) | null>(null)
   const scrollToCursorRef = useRef<(() => void) | null>(null)
+  const currentBlocksRef = useRef<{ id: string; type: string; content?: string | null; baseContent?: string | null }[] | null>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
   const shortcutsRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -71,6 +72,7 @@ export default function ChapterEditorPage() {
   const autosaveEnabledRef = useRef(true)
   const currentBookIdRef = useRef<string | undefined>(undefined)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const footerRef = useRef<HTMLElement>(null)
 
   // Focus the POV field once after navigation from chapter creation.
   // The router uses `?focus=pov` to signal it; we only fire on the
@@ -303,6 +305,18 @@ export default function ChapterEditorPage() {
     fetch(`/api/series/${seriesId}/characters`).then(r => r.ok ? r.json() : []).then(setCharacters)
   }, [seriesId])
 
+  // Keep --loom-footer-h in sync so ToastLayer can sit above the footer.
+  useEffect(() => {
+    const el = footerRef.current
+    if (!el) return
+    const obs = new ResizeObserver(() => {
+      document.documentElement.style.setProperty('--loom-footer-h', `${el.offsetHeight}px`)
+    })
+    obs.observe(el)
+    document.documentElement.style.setProperty('--loom-footer-h', `${el.offsetHeight}px`)
+    return () => { obs.disconnect(); document.documentElement.style.removeProperty('--loom-footer-h') }
+  }, [])
+
   // Keep stable refs so the hotkey listener never goes stale
   const addBlockRef = useRef<(type: string) => Promise<void>>(async () => {})
   const addChoiceBlockRef = useRef<() => Promise<void>>(async () => {})
@@ -394,7 +408,7 @@ export default function ChapterEditorPage() {
       else storyState[v.name] = v.defaultValue ?? ''
     }
     const parts: string[] = []
-    for (const block of chapter.blocks) {
+    for (const block of (currentBlocksRef.current ?? chapter.blocks)) {
       const src = block.type === 'text' ? block.content
         : block.type === 'conditional_fragment' ? block.baseContent
         : null
@@ -757,6 +771,7 @@ export default function ChapterEditorPage() {
           replaceAllRef={replaceAllRef}
           jumpToFirstMatchRef={jumpToFirstMatchRef}
           scrollToCursorRef={scrollToCursorRef}
+          currentBlocksRef={currentBlocksRef}
           onTextBlockBlur={handleTextBlockBlur}
         />
       </div>
@@ -772,6 +787,7 @@ export default function ChapterEditorPage() {
             matches the reader, which gets that for free by living
             outside the light-body wrapper. */}
       <footer
+        ref={footerRef}
         style={{
           '--color-surface-raised': '#12121e',
           '--color-ink': '#e0d9c8',
