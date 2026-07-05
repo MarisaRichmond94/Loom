@@ -101,6 +101,7 @@ import { Footnote } from '@/lib/extensions/footnote'
 import { CharacterMark } from '@/lib/extensions/character'
 import { VariableHighlight } from '@/lib/extensions/variableHighlight'
 import { SearchHighlight } from '@/lib/extensions/searchHighlight'
+import { ParagraphIndent } from '@/lib/extensions/paragraphIndent'
 import VariableSuggestionList from './VariableSuggestionList'
 import { buildCharterClipboard } from '@/lib/clipboardFormatting'
 import { useEditorColors } from '@/lib/useEditorColors'
@@ -245,6 +246,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
         getQuery: () => searchQueryRef.current,
       }),
       TextAlign.configure({ types: ['paragraph', 'heading'] }),
+      ParagraphIndent,
       TextStyleColor,
       EmDash,
       SectionBreak,
@@ -699,7 +701,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
 
       <EditorContent
         editor={editor}
-        className="prose prose-invert max-w-none text-ink text-base leading-relaxed [&_.ProseMirror]:outline-none [&_.ProseMirror_p]:text-justify [&_.ProseMirror_p]:indent-8 [&_.ProseMirror_p]:my-0 [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ink-faint [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror:focus_p.is-editor-empty:first-child::before]:hidden [&_.ProseMirror_hr]:border-none [&_.ProseMirror_hr]:h-px [&_.ProseMirror_hr]:bg-accent/20 [&_.ProseMirror_hr]:w-1/3 [&_.ProseMirror_hr]:mx-auto [&_.ProseMirror_hr]:my-6 [&_.ProseMirror_hr.ProseMirror-selectednode]:bg-accent/60 [&_.character-ref]:text-accent/80 [&_.character-ref]:underline [&_.character-ref]:decoration-dotted [&_.character-ref]:decoration-accent/40 [&_.character-ref]:cursor-default"
+        className="prose prose-invert max-w-none text-ink text-base leading-relaxed [&_.ProseMirror]:outline-none [&_.ProseMirror_p]:text-justify [&_.ProseMirror_p]:indent-8 [&_.ProseMirror_p.no-indent]:indent-0 [&_.ProseMirror_p[style*='center']]:indent-0 [&_.ProseMirror_p]:my-0 [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ink-faint [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror:focus_p.is-editor-empty:first-child::before]:hidden [&_.ProseMirror_hr]:border-none [&_.ProseMirror_hr]:h-px [&_.ProseMirror_hr]:bg-accent/20 [&_.ProseMirror_hr]:w-1/3 [&_.ProseMirror_hr]:mx-auto [&_.ProseMirror_hr]:my-6 [&_.ProseMirror_hr.ProseMirror-selectednode]:bg-accent/60 [&_.character-ref]:text-accent/80 [&_.character-ref]:underline [&_.character-ref]:decoration-dotted [&_.character-ref]:decoration-accent/40 [&_.character-ref]:cursor-default"
       />
 
       {varSuggest && (

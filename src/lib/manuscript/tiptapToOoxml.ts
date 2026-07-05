@@ -159,10 +159,16 @@ function serializeBlock(node: TipTapNode, opts: SerializeOptions, footnotes: Foo
       // carries the color and the runs stay clean.
       const uniform = opts.colorStyles ? uniformParagraphColor(node) : null
       const paraStyle = uniform ? nearestColorStyle(uniform, opts.colorStyles!, 'paragraph') : null
+      const jc = jcOverride(node)
+      // Mirror the editor: a paragraph the writer un-indented (⌥⇧I) or
+      // centered gets no first-line indent, overriding the Body style's.
+      const noIndent = node.attrs?.indent === false || jc === 'center'
+        ? '<w:ind w:firstLine="0"/>'
+        : ''
       if (paraStyle) {
-        return paragraphXml(paraStyle.name, jcOverride(node), serializeInline(node.content, opts, footnotes, uniform))
+        return paragraphXml(paraStyle.name, jc, serializeInline(node.content, opts, footnotes, uniform), noIndent)
       }
-      return paragraphXml('Body', jcOverride(node), serializeInline(node.content, opts, footnotes))
+      return paragraphXml('Body', jc, serializeInline(node.content, opts, footnotes), noIndent)
     }
     case 'heading': {
       // Fiction rarely uses headings; render as bold Body so the manuscript

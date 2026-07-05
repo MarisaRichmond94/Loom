@@ -11,6 +11,7 @@ import { TextStyle } from '@tiptap/extension-text-style'
 import Color from '@tiptap/extension-color'
 import { Footnote } from '@/lib/extensions/footnote'
 import { CharacterMark } from '@/lib/extensions/character'
+import { ParagraphIndent } from '@/lib/extensions/paragraphIndent'
 import { stripEmptyParagraphs } from '@/lib/clipboardFormatting'
 import { substituteVarTemplates } from '@/lib/templateVars'
 import type { StoryState } from '@/lib/storyEngine'
@@ -25,7 +26,7 @@ function escapeHtml(s: string): string {
 export function renderTipTapJson(json: string | null | undefined, storyState?: StoryState): string {
   if (!json) return ''
   try {
-    const html = generateHTML(JSON.parse(json), [StarterKit, TextAlign.configure({ types: ['paragraph', 'heading'] }), TextStyle, Color, Footnote, CharacterMark])
+    const html = generateHTML(JSON.parse(json), [StarterKit, TextAlign.configure({ types: ['paragraph', 'heading'] }), ParagraphIndent, TextStyle, Color, Footnote, CharacterMark])
     const stripped = stripEmptyParagraphs(html)
     if (!storyState) return stripped
     return substituteVarTemplates(stripped, storyState, escapeHtml)

@@ -553,6 +553,7 @@ export default function ChapterEditorPage() {
                   group: 'While Writing',
                   items: [
                     { keys: '⌥⇧J', label: 'Jump to cursor' },
+                    { keys: '⌥⇧I', label: 'Toggle paragraph indent' },
                     { keys: '⌥⇧R', label: 'Read aloud from cursor' },
                     { keys: '⌥⇧B', label: 'Insert scene break' },
                   ],
