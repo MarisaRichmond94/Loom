@@ -3,7 +3,7 @@
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LuMoon, LuSparkles, LuSun } from 'react-icons/lu'
+import { LuChevronLeft, LuChevronRight, LuMoon, LuSparkles, LuSun } from 'react-icons/lu'
 import OutlineTree from '@/components/sidebar/OutlineTree'
 import VariablesPanel from '@/components/sidebar/VariablesPanel'
 import ChoicesPanel from '@/components/sidebar/ChoicesPanel'
@@ -29,8 +29,12 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
   const [choiceQuestions, setChoiceQuestions] = useState<ChoiceQuestion[]>([])
   const [knownStringValues, setKnownStringValues] = useState<Record<string, string[]>>({})
   const [lightMode, setLightMode] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [edgeHovered, setEdgeHovered] = useState(false)
+  const edgeLeaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     setLightMode(localStorage.getItem('loom-light-mode') === 'true')
+    setSidebarCollapsed(localStorage.getItem('loom-sidebar-collapsed') === 'true')
   }, [])
 
   function toggleLightMode() {
@@ -40,6 +44,37 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
       return next
     })
   }
+
+  function onEdgeEnter() {
+    if (edgeLeaveTimer.current) clearTimeout(edgeLeaveTimer.current)
+    setEdgeHovered(true)
+  }
+  function onEdgeLeave() {
+    edgeLeaveTimer.current = setTimeout(() => setEdgeHovered(false), 150)
+  }
+
+  function toggleSidebar() {
+    setSidebarCollapsed(prev => {
+      const next = !prev
+      localStorage.setItem('loom-sidebar-collapsed', String(next))
+      return next
+    })
+  }
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.altKey && e.shiftKey && e.code === 'Digit1') {
+        e.preventDefault()
+        setSidebarCollapsed(prev => {
+          const next = !prev
+          localStorage.setItem('loom-sidebar-collapsed', String(next))
+          return next
+        })
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   const isInitialSeriesLoadRef = useRef(true)
   const loadSeries = useCallback(async () => {
@@ -145,7 +180,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
 
         <div className="flex flex-1 overflow-hidden">
           {/* Sidebar — outline / choices / variables panels mocked. */}
-          <aside className="w-56 bg-surface-raised border-r border-accent/10 flex flex-col overflow-hidden animate-pulse">
+          <aside className={`h-full bg-surface-raised flex flex-col overflow-hidden animate-pulse transition-[width] duration-300 ease-in-out ${sidebarCollapsed ? 'w-0 border-r-0' : 'w-56 border-r border-accent/10'}`}>
             <div className="flex flex-col gap-2 p-4 max-h-[50%]">
               <div className="h-3 w-20 bg-surface-muted rounded mb-1" />
               {[0, 1, 2, 3, 4].map(i => (
@@ -254,31 +289,56 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
 
         <ToastLayer />
         <div className="flex flex-1 overflow-hidden">
-          <aside className="w-56 bg-surface-raised border-r border-accent/10 flex flex-col overflow-hidden">
-            <div className="flex flex-col min-h-0 max-h-[50%] p-4">
-              <OutlineTree
-                seriesId={seriesId}
-                books={series.books}
-                onAddBook={addBook}
-                onAddChapter={addChapter}
-                onInsertChapter={insertChapter}
-              />
+          {/* Sidebar wrapper — stays w-3 when collapsed so the hover zone persists at the edge */}
+          <div
+            className={`relative flex-shrink-0 transition-[width] duration-300 ease-in-out ${sidebarCollapsed ? 'w-3' : 'w-56'}`}
+            onMouseEnter={onEdgeEnter}
+            onMouseLeave={onEdgeLeave}
+          >
+            <aside className={`h-full bg-surface-raised flex flex-col overflow-hidden transition-[width] duration-300 ease-in-out ${sidebarCollapsed ? 'w-0 border-r-0' : 'w-56 border-r border-accent/10'}`}>
+              <div className="flex flex-col min-h-0 max-h-[50%] p-4">
+                <OutlineTree
+                  seriesId={seriesId}
+                  books={series.books}
+                  onAddBook={addBook}
+                  onAddChapter={addChapter}
+                  onInsertChapter={insertChapter}
+                />
+              </div>
+              <div className="flex flex-col min-h-0 max-h-[25%] p-4 pt-3 border-t border-accent/10">
+                <ChoicesPanel
+                  seriesId={seriesId}
+                  questions={choiceQuestions}
+                />
+              </div>
+              <div className="flex flex-col min-h-0 max-h-[25%] p-4 pt-3 border-t border-accent/10">
+                <VariablesPanel
+                  seriesId={seriesId}
+                  variables={series.variables}
+                  onUpdate={updateVariable}
+                  onDelete={deleteVariable}
+                />
+              </div>
+            </aside>
+
+            {/* Handle — always at the right edge of the wrapper, pops out the same way whether expanded or collapsed */}
+            <div
+              className="absolute inset-y-0 left-full flex items-center z-40"
+              onMouseEnter={onEdgeEnter}
+              onMouseLeave={onEdgeLeave}
+            >
+              <button
+                onClick={toggleSidebar}
+                title={`${sidebarCollapsed ? 'Expand' : 'Collapse'} sidebar (⌥⇧1)`}
+                aria-label={`${sidebarCollapsed ? 'Expand' : 'Collapse'} sidebar`}
+                className={`flex items-center justify-center bg-surface-raised border border-accent/20 border-l-0 rounded-r-xl shadow-lg text-ink-faint hover:text-ink transition-all duration-300 ease-in-out overflow-hidden h-14 ${edgeHovered ? 'w-7 opacity-100' : 'w-0 opacity-0'}`}
+              >
+                {sidebarCollapsed
+                  ? <LuChevronRight size={13} className="shrink-0" />
+                  : <LuChevronLeft size={13} className="shrink-0" />}
+              </button>
             </div>
-            <div className="flex flex-col min-h-0 max-h-[25%] p-4 pt-3 border-t border-accent/10">
-              <ChoicesPanel
-                seriesId={seriesId}
-                questions={choiceQuestions}
-              />
-            </div>
-            <div className="flex flex-col min-h-0 max-h-[25%] p-4 pt-3 border-t border-accent/10">
-              <VariablesPanel
-                seriesId={seriesId}
-                variables={series.variables}
-                onUpdate={updateVariable}
-                onDelete={deleteVariable}
-              />
-            </div>
-          </aside>
+          </div>
 
           <main className={`flex-1 overflow-y-auto${lightMode ? ' light-body' : ''}`}>
             {children}

@@ -543,6 +543,7 @@ export default function ChapterEditorPage() {
                   group: 'Series',
                   items: [
                     { keys: '⌥⇧G', label: 'Find in series (global)' },
+                    { keys: '⌥⇧1', label: 'Toggle sidebar' },
                   ],
                 },
               ] as { group: string; items: { keys: string; label: string }[] }[]).map(({ group, items }) => (
