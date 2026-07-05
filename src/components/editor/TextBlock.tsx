@@ -250,6 +250,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
       SectionBreak,
       ReadAloud.configure({ getVariables: () => variablesRef.current }),
     ],
+    editorProps: { attributes: { spellcheck: 'true' } },
     content: content ? parseContent(content) : JSON.parse(EMPTY),
     onUpdate: ({ editor }) => {
       localEditRef.current = true
