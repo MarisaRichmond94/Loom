@@ -11,6 +11,7 @@ import { ConditionRow } from '@/components/editor/conditionUI'
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import { useCanonSave } from '@/components/editor/useCanonSave'
+import { substituteVarTemplates } from '@/lib/templateVars'
 import { useWriteAiReview } from '@/components/editor/useWriteAiReview'
 
 type Block = {
@@ -46,6 +47,7 @@ export default function ChapterEditorPage() {
   const [localSearchReplaceMode, setLocalSearchReplaceMode] = useState(false)
   const localSearchInputRef = useRef<HTMLInputElement>(null)
   const replaceAllRef = useRef<((search: string, replacement: string) => number) | null>(null)
+  const jumpToFirstMatchRef = useRef<((query: string) => void) | null>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
   const shortcutsRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -383,13 +385,19 @@ export default function ChapterEditorPage() {
 
   async function copyCanonText() {
     if (!chapter) return
+    const storyState: Record<string, unknown> = {}
+    for (const v of series.variables) {
+      if (v.type === 'boolean') storyState[v.name] = String(v.defaultValue).toLowerCase() === 'true'
+      else if (v.type === 'number') storyState[v.name] = Number(v.defaultValue ?? 0)
+      else storyState[v.name] = v.defaultValue ?? ''
+    }
     const parts: string[] = []
     for (const block of chapter.blocks) {
       const src = block.type === 'text' ? block.content
         : block.type === 'conditional_fragment' ? block.baseContent
         : null
       if (!src) continue
-      const text = extractPlainText(src)
+      const text = substituteVarTemplates(extractPlainText(src), storyState, s => s)
       if (text) parts.push(text)
     }
     try {
@@ -668,6 +676,7 @@ export default function ChapterEditorPage() {
                 onChange={e => setLocalSearchQuery(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Escape') { setLocalSearchQuery(''); setLocalSearchReplaceMode(false); e.currentTarget.blur() }
+                  if (e.key === 'Enter') jumpToFirstMatchRef.current?.(localSearchQuery)
                 }}
                 placeholder="Find in chapter… (⌥⇧F)"
                 title="Find in chapter (⌥⇧F)"
@@ -741,6 +750,7 @@ export default function ChapterEditorPage() {
           onCollapsedIdsChange={setCollapsedIds}
           searchQuery={localSearchQuery || (searchParams?.get('q') ?? '')}
           replaceAllRef={replaceAllRef}
+          jumpToFirstMatchRef={jumpToFirstMatchRef}
           onTextBlockBlur={handleTextBlockBlur}
         />
       </div>

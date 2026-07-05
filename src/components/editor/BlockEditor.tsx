@@ -56,6 +56,9 @@ type Props = {
   // Ref that receives a replaceAll function once editors mount. The chapter
   // page uses this to drive replace-all from the local chapter search bar.
   replaceAllRef?: React.MutableRefObject<((search: string, replacement: string) => number) | null>
+  // Ref that receives a jumpToFirstMatch function — places the cursor at the
+  // end of the first match in document order and focuses that editor.
+  jumpToFirstMatchRef?: React.MutableRefObject<((query: string) => void) | null>
   onTextBlockBlur?: () => void
 }
 
@@ -186,7 +189,7 @@ function SortableBlock({
 
 function escapeRegExp(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
 
-export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', replaceAllRef, onTextBlockBlur }: Props) {
+export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', replaceAllRef, jumpToFirstMatchRef, onTextBlockBlur }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const [newBlockId, setNewBlockId] = useState<string | null>(null)
@@ -244,6 +247,25 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     }
   }
 
+  if (jumpToFirstMatchRef) {
+    jumpToFirstMatchRef.current = (query: string) => {
+      if (!query.trim()) return
+      const needle = query.toLowerCase()
+      for (const editor of textEditorsRef.current.values()) {
+        let found: { from: number; to: number } | null = null
+        editor.state.doc.descendants((node, pos) => {
+          if (found || !node.isText || !node.text) return
+          const idx = node.text.toLowerCase().indexOf(needle)
+          if (idx !== -1) found = { from: pos + idx, to: pos + idx + needle.length }
+        })
+        if (found) {
+          editor.commands.focus()
+          editor.commands.setTextSelection((found as { from: number; to: number }).to)
+          return
+        }
+      }
+    }
+  }
 
   // Sync when the set of blocks changes structurally (add/delete), but not during drags
   useEffect(() => {
