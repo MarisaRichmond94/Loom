@@ -48,6 +48,7 @@ export default function ChapterEditorPage() {
   const localSearchInputRef = useRef<HTMLInputElement>(null)
   const replaceAllRef = useRef<((search: string, replacement: string) => number) | null>(null)
   const jumpToFirstMatchRef = useRef<((query: string) => void) | null>(null)
+  const scrollToCursorRef = useRef<(() => void) | null>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
   const shortcutsRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -319,6 +320,7 @@ export default function ChapterEditorPage() {
         case 'KeyN': e.preventDefault(); createNextChapterRef.current(); break
         case 'KeyE': e.preventDefault(); saveCanonRef.current(); break
         case 'KeyF': e.preventDefault(); setTimeout(() => { localSearchInputRef.current?.focus(); localSearchInputRef.current?.select() }, 0); break
+        case 'KeyJ': e.preventDefault(); scrollToCursorRef.current?.(); break
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -536,6 +538,7 @@ export default function ChapterEditorPage() {
                 {
                   group: 'While Writing',
                   items: [
+                    { keys: '⌥⇧J', label: 'Jump to cursor' },
                     { keys: '⌥⇧R', label: 'Read aloud from cursor' },
                     { keys: '⌥⇧B', label: 'Insert scene break' },
                   ],
@@ -753,6 +756,7 @@ export default function ChapterEditorPage() {
           searchQuery={localSearchQuery || (searchParams?.get('q') ?? '')}
           replaceAllRef={replaceAllRef}
           jumpToFirstMatchRef={jumpToFirstMatchRef}
+          scrollToCursorRef={scrollToCursorRef}
           onTextBlockBlur={handleTextBlockBlur}
         />
       </div>

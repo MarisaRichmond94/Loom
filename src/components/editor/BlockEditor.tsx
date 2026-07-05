@@ -59,6 +59,9 @@ type Props = {
   // Ref that receives a jumpToFirstMatch function — places the cursor at the
   // end of the first match in document order and focuses that editor.
   jumpToFirstMatchRef?: React.MutableRefObject<((query: string) => void) | null>
+  // Ref that receives a scrollToCursor function — refocuses the active text
+  // editor and scrolls the cursor position into the centre of the viewport.
+  scrollToCursorRef?: React.MutableRefObject<(() => void) | null>
   onTextBlockBlur?: () => void
 }
 
@@ -189,7 +192,7 @@ function SortableBlock({
 
 function escapeRegExp(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
 
-export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', replaceAllRef, jumpToFirstMatchRef, onTextBlockBlur }: Props) {
+export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', replaceAllRef, jumpToFirstMatchRef, scrollToCursorRef, onTextBlockBlur }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const [newBlockId, setNewBlockId] = useState<string | null>(null)
@@ -266,6 +269,22 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
           return
         }
       }
+    }
+  }
+
+  if (scrollToCursorRef) {
+    scrollToCursorRef.current = () => {
+      const blockId = activeBlockIdRef.current
+      if (!blockId) return
+      const editor = textEditorsRef.current.get(blockId)
+      if (!editor) return
+      editor.commands.focus()
+      const { from } = editor.state.selection
+      try {
+        const { node } = editor.view.domAtPos(from)
+        const el = node instanceof Element ? node : node.parentElement
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      } catch { /* pos out of range */ }
     }
   }
 
