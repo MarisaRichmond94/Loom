@@ -48,10 +48,12 @@ export function useCanonSave(seriesId: string) {
           if (data.warnings?.length) console.info('Canon export warnings:', data.warnings)
         }
       } else {
-        notify('error', data.error ? `Canon save failed. ${data.error}` : 'Canon save failed.')
+        if (data.error) console.error('Canon save failed:', data.error)
+        notify('error', 'Save failed…')
       }
-    } catch {
-      notify('error', 'Canon save failed.')
+    } catch (err) {
+      console.error('Canon save failed:', err)
+      notify('error', 'Save failed…')
     } finally {
       busyRef.current = false
       setNotificationSaving(false)
