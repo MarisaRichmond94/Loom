@@ -172,10 +172,18 @@ function ToolBtn({ active, onClick, title, children }: {
 // We scroll proactively once the caret enters a margin zone at the top
 // or bottom of the scrolling ancestor.
 const CARET_MARGIN = 96
-function keepCaretInView(editor: { view: { coordsAtPos: (pos: number) => { top: number; bottom: number }; dom: HTMLElement }; state: { selection: { head: number } } }) {
+function keepCaretInView(editor: { view: { coordsAtPos: (pos: number) => { top: number; bottom: number }; dom: HTMLElement; hasFocus: () => boolean }; state: { selection: { head: number } } }) {
+  // Only chase the caret while the writer is actually editing this block.
+  // onUpdate/onSelectionUpdate also fire when a block's content is set
+  // programmatically on mount (every editor re-applies its stored JSON,
+  // which now always differs by the ParagraphIndent default attr) — without
+  // this guard, each off-screen block mounting would scroll itself into
+  // view via the RAF below, yanking a freshly-loaded chapter to the bottom.
+  if (!editor.view.hasFocus()) return
   // Defer to the next frame so the new line has been laid out — otherwise
   // coordsAtPos returns the pre-update caret position and we under-scroll.
   requestAnimationFrame(() => {
+    if (!editor.view.hasFocus()) return
     const caret = editor.view.coordsAtPos(editor.state.selection.head)
     // Find the nearest scrolling ancestor by overflow alone; don't require
     // it to be actively overflowing at this instant — it's the container
