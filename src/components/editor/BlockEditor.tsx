@@ -65,7 +65,7 @@ type Props = {
   // Ref written every render with the current block list. The chapter page
   // reads this in copyCanonText to avoid the stale chapter.blocks state
   // (which only refreshes on structural changes, not on per-keystroke PATCHes).
-  currentBlocksRef?: React.MutableRefObject<{ id: string; type: string; content?: string | null; baseContent?: string | null }[] | null>
+  currentBlocksRef?: React.MutableRefObject<{ id: string; type: string; content?: string | null; baseContent?: string | null; overrides?: { id: string; order: number; condition: string; content: string; endingMessage?: string | null }[] }[] | null>
   onTextBlockBlur?: () => void
 }
 

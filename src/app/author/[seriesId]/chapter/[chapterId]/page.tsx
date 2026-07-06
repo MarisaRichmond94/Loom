@@ -12,6 +12,7 @@ import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import { useCanonSave } from '@/components/editor/useCanonSave'
 import { substituteVarTemplates } from '@/lib/templateVars'
+import { resolveConditionalOverride, type StoryState } from '@/lib/storyEngine'
 import { useWriteAiReview } from '@/components/editor/useWriteAiReview'
 
 type Block = {
@@ -56,7 +57,7 @@ export default function ChapterEditorPage() {
   const replaceAllRef = useRef<((search: string, replacement: string) => number) | null>(null)
   const jumpToFirstMatchRef = useRef<((query: string) => void) | null>(null)
   const scrollToCursorRef = useRef<(() => void) | null>(null)
-  const currentBlocksRef = useRef<{ id: string; type: string; content?: string | null; baseContent?: string | null }[] | null>(null)
+  const currentBlocksRef = useRef<{ id: string; type: string; content?: string | null; baseContent?: string | null; overrides?: { id: string; order: number; condition: string; content: string; endingMessage?: string | null }[] }[] | null>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
   const shortcutsRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -408,7 +409,7 @@ export default function ChapterEditorPage() {
 
   async function copyCanonText() {
     if (!chapter) return
-    const storyState: Record<string, unknown> = {}
+    const storyState: StoryState = {}
     for (const v of series.variables) {
       if (v.type === 'boolean') storyState[v.name] = String(v.defaultValue).toLowerCase() === 'true'
       else if (v.type === 'number') storyState[v.name] = Number(v.defaultValue ?? 0)
@@ -416,9 +417,22 @@ export default function ChapterEditorPage() {
     }
     const parts: string[] = []
     for (const block of (currentBlocksRef.current ?? chapter.blocks)) {
-      const src = block.type === 'text' ? block.content
-        : block.type === 'conditional_fragment' ? block.baseContent
-        : null
+      // Resolve each block to its canon source exactly like the reader
+      // (Preview): text blocks render their content; conditional fragments
+      // render the matching override for the default variable state — NOT
+      // the base editing scaffold — and contribute nothing when no override
+      // matches. Choice points are interactive in Preview (no prose until
+      // answered), so they're skipped here.
+      let src: string | null | undefined = null
+      if (block.type === 'text') {
+        src = block.content
+      } else if (block.type === 'conditional_fragment') {
+        const matched = resolveConditionalOverride(
+          { overrides: (block.overrides ?? []).map(o => ({ id: o.id, order: o.order, condition: JSON.parse(o.condition), content: o.content, endingMessage: null })) },
+          storyState,
+        )
+        src = matched?.content ?? null
+      }
       if (!src) continue
       const text = substituteVarTemplates(extractPlainText(src), storyState, s => s)
       if (text) parts.push(text)
