@@ -59,6 +59,9 @@ type Props = {
   // Ref that receives a jumpToFirstMatch function — places the cursor at the
   // end of the first match in document order and focuses that editor.
   jumpToFirstMatchRef?: React.MutableRefObject<((query: string) => void) | null>
+  // Jump to the next/previous search match relative to the caret, wrapping
+  // around at the ends. Drives ⌥⇧→ / ⌥⇧← from the chapter search bar.
+  jumpToMatchRef?: React.MutableRefObject<((query: string, dir: 'next' | 'prev') => void) | null>
   // Ref that receives a scrollToCursor function — refocuses the active text
   // editor and scrolls the cursor position into the centre of the viewport.
   scrollToCursorRef?: React.MutableRefObject<(() => void) | null>
@@ -196,7 +199,7 @@ function SortableBlock({
 
 function escapeRegExp(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
 
-export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', replaceAllRef, jumpToFirstMatchRef, scrollToCursorRef, currentBlocksRef, onTextBlockBlur }: Props) {
+export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', replaceAllRef, jumpToFirstMatchRef, jumpToMatchRef, scrollToCursorRef, currentBlocksRef, onTextBlockBlur }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const [newBlockId, setNewBlockId] = useState<string | null>(null)
@@ -257,23 +260,68 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     }
   }
 
+  // All occurrences of the query across the text-block editors, in document
+  // (block) order — iterating blocksRef rather than the editor Map so drag
+  // reorders don't scramble the sequence.
+  function collectMatches(query: string): { idx: number; editor: Editor; from: number; to: number }[] {
+    const needle = query.trim().toLowerCase()
+    if (!needle) return []
+    const matches: { idx: number; editor: Editor; from: number; to: number }[] = []
+    blocksRef.current.forEach((block, idx) => {
+      if (block.type !== 'text') return
+      const editor = textEditorsRef.current.get(block.id)
+      if (!editor) return
+      editor.state.doc.descendants((node, pos) => {
+        if (!node.isText || !node.text) return
+        const hay = node.text.toLowerCase()
+        let from = 0
+        while (true) {
+          const i = hay.indexOf(needle, from)
+          if (i === -1) break
+          matches.push({ idx, editor, from: pos + i, to: pos + i + needle.length })
+          from = i + needle.length
+        }
+      })
+    })
+    return matches
+  }
+
+  function landOnMatch(m: { editor: Editor; from: number; to: number }) {
+    m.editor.commands.focus()
+    m.editor.commands.setTextSelection({ from: m.from, to: m.to })
+    try {
+      const { node } = m.editor.view.domAtPos(m.from)
+      const el = node instanceof Element ? node : node.parentElement
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    } catch { /* pos out of range */ }
+  }
+
   if (jumpToFirstMatchRef) {
     jumpToFirstMatchRef.current = (query: string) => {
-      if (!query.trim()) return
-      const needle = query.toLowerCase()
-      for (const editor of textEditorsRef.current.values()) {
-        let found: { from: number; to: number } | null = null
-        editor.state.doc.descendants((node, pos) => {
-          if (found || !node.isText || !node.text) return
-          const idx = node.text.toLowerCase().indexOf(needle)
-          if (idx !== -1) found = { from: pos + idx, to: pos + idx + needle.length }
-        })
-        if (found) {
-          editor.commands.focus()
-          editor.commands.setTextSelection((found as { from: number; to: number }).to)
-          return
-        }
+      const matches = collectMatches(query)
+      if (matches.length) landOnMatch(matches[0])
+    }
+  }
+
+  if (jumpToMatchRef) {
+    jumpToMatchRef.current = (query: string, dir: 'next' | 'prev') => {
+      const matches = collectMatches(query)
+      if (!matches.length) return
+      // Anchor navigation to the currently focused editor's selection start;
+      // with nothing focused, next→first and prev→last.
+      let curIdx = -1, curPos = -1
+      blocksRef.current.forEach((block, idx) => {
+        const editor = textEditorsRef.current.get(block.id)
+        if (editor?.view.hasFocus()) { curIdx = idx; curPos = editor.state.selection.from }
+      })
+      let target
+      if (dir === 'next') {
+        target = matches.find(m => m.idx > curIdx || (m.idx === curIdx && m.from > curPos)) ?? matches[0]
+      } else {
+        const before = matches.filter(m => m.idx < curIdx || (m.idx === curIdx && m.from < curPos))
+        target = before.length ? before[before.length - 1] : matches[matches.length - 1]
       }
+      landOnMatch(target)
     }
   }
 

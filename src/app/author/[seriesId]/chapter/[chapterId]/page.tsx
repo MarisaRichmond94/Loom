@@ -54,8 +54,12 @@ export default function ChapterEditorPage() {
   const [localSearchReplace, setLocalSearchReplace] = useState('')
   const [localSearchReplaceMode, setLocalSearchReplaceMode] = useState(false)
   const localSearchInputRef = useRef<HTMLInputElement>(null)
+  // Live query for the empty-dep global hotkey handler (⌥⇧→ / ⌥⇧←).
+  const localSearchQueryRef = useRef(localSearchQuery)
+  localSearchQueryRef.current = localSearchQuery
   const replaceAllRef = useRef<((search: string, replacement: string) => number) | null>(null)
   const jumpToFirstMatchRef = useRef<((query: string) => void) | null>(null)
+  const jumpToMatchRef = useRef<((query: string, dir: 'next' | 'prev') => void) | null>(null)
   const scrollToCursorRef = useRef<(() => void) | null>(null)
   const currentBlocksRef = useRef<{ id: string; type: string; content?: string | null; baseContent?: string | null; overrides?: { id: string; order: number; condition: string; content: string; endingMessage?: string | null }[] }[] | null>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
@@ -343,6 +347,9 @@ export default function ChapterEditorPage() {
         case 'KeyE': e.preventDefault(); saveCanonRef.current(); break
         case 'KeyF': e.preventDefault(); setTimeout(() => { localSearchInputRef.current?.focus(); localSearchInputRef.current?.select() }, 0); break
         case 'KeyJ': e.preventDefault(); scrollToCursorRef.current?.(); break
+        case 'KeyK': e.preventDefault(); setLocalSearchQuery(''); setLocalSearchReplaceMode(false); break
+        case 'ArrowRight': if (localSearchQueryRef.current.trim()) { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'next') } break
+        case 'ArrowLeft': if (localSearchQueryRef.current.trim()) { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'prev') } break
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -567,6 +574,8 @@ export default function ChapterEditorPage() {
                     { keys: '⌥⇧N', label: 'Create next chapter' },
                     { keys: '⌥⇧E', label: 'Export canon' },
                     { keys: '⌥⇧F', label: 'Find in chapter' },
+                    { keys: '⌥⇧→ / ←', label: 'Next / previous match' },
+                    { keys: '⌥⇧K', label: 'Clear chapter search' },
                     { keys: '⌥⇧D', label: 'Delete active block' },
                   ],
                 },
@@ -793,6 +802,7 @@ export default function ChapterEditorPage() {
           searchQuery={localSearchQuery || (searchParams?.get('q') ?? '')}
           replaceAllRef={replaceAllRef}
           jumpToFirstMatchRef={jumpToFirstMatchRef}
+          jumpToMatchRef={jumpToMatchRef}
           scrollToCursorRef={scrollToCursorRef}
           currentBlocksRef={currentBlocksRef}
           onTextBlockBlur={handleTextBlockBlur}
