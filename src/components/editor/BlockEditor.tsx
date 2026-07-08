@@ -13,6 +13,7 @@ import ChoicePointBlock from './ChoicePointBlock'
 import ConditionalBlock from './ConditionalBlock'
 import SoundtrackBlock from './SoundtrackBlock'
 import { extractTextFromTipTap } from '@/lib/tiptapText'
+import { findBlockMatches } from '@/lib/searchMatch'
 import ConfirmDialog from '@/components/ConfirmDialog'
 
 type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
@@ -264,24 +265,17 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   // (block) order — iterating blocksRef rather than the editor Map so drag
   // reorders don't scramble the sequence.
   function collectMatches(query: string): { idx: number; editor: Editor; from: number; to: number }[] {
-    const needle = query.trim().toLowerCase()
-    if (!needle) return []
+    if (!query.trim()) return []
     const matches: { idx: number; editor: Editor; from: number; to: number }[] = []
     blocksRef.current.forEach((block, idx) => {
       if (block.type !== 'text') return
       const editor = textEditorsRef.current.get(block.id)
       if (!editor) return
-      editor.state.doc.descendants((node, pos) => {
-        if (!node.isText || !node.text) return
-        const hay = node.text.toLowerCase()
-        let from = 0
-        while (true) {
-          const i = hay.indexOf(needle, from)
-          if (i === -1) break
-          matches.push({ idx, editor, from: pos + i, to: pos + i + needle.length })
-          from = i + needle.length
-        }
-      })
+      // Shared matcher so jump targets line up exactly with the yellow
+      // highlights, including matches that straddle mark boundaries.
+      for (const { from, to } of findBlockMatches(editor.state.doc, query)) {
+        matches.push({ idx, editor, from, to })
+      }
     })
     return matches
   }
