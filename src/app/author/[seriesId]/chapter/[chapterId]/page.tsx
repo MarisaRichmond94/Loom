@@ -767,6 +767,27 @@ export default function ChapterEditorPage() {
                   <LuReplace size={11} />
                 </button>
               </div>
+
+              {/* Replace field — popover anchored below the search bar. */}
+              {localSearchReplaceMode && (
+                <div className="absolute top-full right-0 mt-1.5 z-50 w-72 bg-surface-raised border border-accent/20 rounded-xl shadow-xl p-2 flex items-center gap-2">
+                  <input
+                    value={localSearchReplace}
+                    onChange={e => setLocalSearchReplace(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Escape') { setLocalSearchReplaceMode(false); localSearchInputRef.current?.focus() } }}
+                    placeholder="Replace with…"
+                    autoFocus
+                    className="flex-1 px-3 py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
+                  />
+                  <button
+                    onClick={() => replaceAllRef.current?.(localSearchQuery, localSearchReplace)}
+                    disabled={!localSearchQuery}
+                    className="shrink-0 px-3 py-1.5 text-xs border border-accent/40 text-accent rounded-lg hover:bg-accent/10 transition disabled:opacity-40"
+                  >
+                    Replace All
+                  </button>
+                </div>
+              )}
             </div>
 
             {chapter.blocks.length > 0 && (() => {
@@ -786,24 +807,6 @@ export default function ChapterEditorPage() {
             })()}
           </div>
         </div>
-
-        {localSearchReplaceMode && (
-          <div className="flex items-center gap-2 mb-2 pr-[23px]">
-            <input
-              value={localSearchReplace}
-              onChange={e => setLocalSearchReplace(e.target.value)}
-              placeholder="Replace with…"
-              className="flex-1 px-3 py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
-            />
-            <button
-              onClick={() => replaceAllRef.current?.(localSearchQuery, localSearchReplace)}
-              disabled={!localSearchQuery}
-              className="shrink-0 px-3 py-1.5 text-xs border border-accent/40 text-accent rounded-lg hover:bg-accent/10 transition disabled:opacity-40"
-            >
-              Replace All
-            </button>
-          </div>
-        )}
 
         <BlockEditor
           key={chapter.id}
