@@ -86,6 +86,21 @@ export default function ChapterEditorPage() {
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const footerRef = useRef<HTMLElement>(null)
 
+  // Visual text-block zoom (⌥⇧+ / ⌥⇧-). Drives --loom-prose-scale on <html>,
+  // which every TextBlock's font size reads; persisted so it survives reloads.
+  const proseScaleRef = useRef(1)
+  useEffect(() => {
+    const saved = parseFloat(localStorage.getItem('loom-prose-scale') ?? '1')
+    proseScaleRef.current = Number.isFinite(saved) ? Math.min(2, Math.max(0.8, saved)) : 1
+    document.documentElement.style.setProperty('--loom-prose-scale', String(proseScaleRef.current))
+  }, [])
+  function adjustProseScale(delta: number) {
+    const next = Math.min(2, Math.max(0.8, Math.round((proseScaleRef.current + delta) * 100) / 100))
+    proseScaleRef.current = next
+    document.documentElement.style.setProperty('--loom-prose-scale', String(next))
+    localStorage.setItem('loom-prose-scale', String(next))
+  }
+
   // Focus the POV field once after navigation from chapter creation.
   // The router uses `?focus=pov` to signal it; we only fire on the
   // first render where the input is mounted for that chapterId, so
@@ -350,6 +365,8 @@ export default function ChapterEditorPage() {
         case 'KeyK': e.preventDefault(); setLocalSearchQuery(''); setLocalSearchReplaceMode(false); break
         case 'ArrowRight': if (localSearchQueryRef.current.trim()) { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'next') } break
         case 'ArrowLeft': if (localSearchQueryRef.current.trim()) { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'prev') } break
+        case 'Equal': case 'NumpadAdd': e.preventDefault(); adjustProseScale(0.1); break
+        case 'Minus': case 'NumpadSubtract': e.preventDefault(); adjustProseScale(-0.1); break
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -584,6 +601,7 @@ export default function ChapterEditorPage() {
                   items: [
                     { keys: '⌥⇧J', label: 'Jump to cursor' },
                     { keys: '⌥⇧I', label: 'Toggle paragraph indent' },
+                    { keys: '⌥⇧+ / -', label: 'Enlarge / shrink text' },
                     { keys: '⌥⇧R', label: 'Read aloud from cursor' },
                     { keys: '⌥⇧B', label: 'Insert scene break' },
                   ],
