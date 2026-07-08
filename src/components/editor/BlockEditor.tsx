@@ -287,13 +287,20 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   }
 
   function landOnMatch(m: { editor: Editor; from: number; to: number }) {
-    m.editor.commands.focus()
+    // Order matters. Set the selection first, while the editor is still
+    // unfocused, so keepCaretInView bails instead of anchoring the match to
+    // the bottom margin. Then centre it with an instant scroll, and finally
+    // focus with scrollIntoView:false — TipTap's focus() otherwise queues a
+    // RAF that re-scrolls the caret to the nearest edge, undoing the centre.
+    // Because the match is already centred (and visible) when focus lands,
+    // nothing re-scrolls.
     m.editor.commands.setTextSelection({ from: m.from, to: m.to })
     try {
       const { node } = m.editor.view.domAtPos(m.from)
       const el = node instanceof Element ? node : node.parentElement
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el?.scrollIntoView({ block: 'center' })
     } catch { /* pos out of range */ }
+    m.editor.commands.focus(undefined, { scrollIntoView: false })
   }
 
   if (jumpToFirstMatchRef) {
