@@ -60,7 +60,7 @@ function findMatchingClose(s: string, openIdx: number): number {
 // nested {{...}} span) occurrence of `needle` in `s`, starting at `from`.
 // Lets a quoted branch contain a literal `:`, and a nested ternary contain
 // its own `?` / `:` without confusing the outer split.
-function findTopLevel(s: string, needle: string, from = 0): number {
+export function findTopLevel(s: string, needle: string, from = 0): number {
   let i = from
   while (i < s.length) {
     const c = s[i]

@@ -1,4 +1,4 @@
-import { substituteVarTemplates } from '@/lib/templateVars'
+import { substituteVarTemplates, findVarTemplates, findTopLevel, evalCondition, type TemplateMatch } from '@/lib/templateVars'
 import type { StoryState } from '@/lib/storyEngine'
 import { nearestColorStyle, type TemplateColorStyle } from '@/lib/templateStyles'
 
@@ -96,11 +96,163 @@ function footnoteRefRun(id: number): string {
   return `<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteReference w:id="${id}"/></w:r>`
 }
 
+// --- Paragraph-level {{template}} resolution ---------------------------------
+//
+// textRun substitutes templates one text node at a time, which fails when a
+// {{...}} straddles a mark boundary: italicising a word inside a branch splits
+// the run into separate text nodes, so the "{{" node never sees its "}}" and
+// the raw template leaks into the manuscript. We fix that by resolving over the
+// whole paragraph while preserving each character's marks — so the chosen
+// branch keeps its own formatting (a bold/italic word inside it stays styled).
+//
+// A "cell" is one UTF-16 code unit (keeping offsets aligned with the string
+// parser) carrying the marks of the text node it came from; hard breaks and
+// any other inline node pass through opaquely.
+type Cell =
+  | { kind: 'char'; ch: string; marks?: TipTapMark[] }
+  | { kind: 'break'; node: TipTapNode }
+  | { kind: 'opaque'; node: TipTapNode }
+
+function cellChar(c: Cell): string {
+  return c.kind === 'char' ? c.ch : c.kind === 'break' ? '\n' : '￿'
+}
+
+function nodesToCells(nodes: TipTapNode[]): Cell[] {
+  const cells: Cell[] = []
+  for (const n of nodes) {
+    if (n.type === 'text' && n.text) {
+      for (let i = 0; i < n.text.length; i++) cells.push({ kind: 'char', ch: n.text[i], marks: n.marks })
+    } else if (n.type === 'hardBreak') {
+      cells.push({ kind: 'break', node: n })
+    } else {
+      cells.push({ kind: 'opaque', node: n })
+    }
+  }
+  return cells
+}
+
+function markKey(m?: TipTapMark[]): string | null {
+  return m && m.length ? JSON.stringify(m) : null
+}
+
+// Regroup a resolved cell run back into inline nodes, merging adjacent chars
+// that share the same marks into one text node.
+function cellsToNodes(cells: Cell[]): TipTapNode[] {
+  const out: TipTapNode[] = []
+  let buf = ''
+  let bufMarks: TipTapMark[] | undefined
+  let bufKey: string | null = null
+  const flush = () => {
+    if (!buf) return
+    out.push(bufMarks && bufMarks.length ? { type: 'text', text: buf, marks: bufMarks } : { type: 'text', text: buf })
+    buf = ''; bufMarks = undefined; bufKey = null
+  }
+  for (const c of cells) {
+    if (c.kind === 'char') {
+      const k = markKey(c.marks)
+      if (buf && k !== bufKey) flush()
+      if (!buf) { bufKey = k; bufMarks = c.marks }
+      buf += c.ch
+    } else {
+      flush()
+      out.push(c.node)
+    }
+  }
+  flush()
+  return out
+}
+
+function plainCells(text: string, marks?: TipTapMark[]): Cell[] {
+  const cells: Cell[] = []
+  for (let i = 0; i < text.length; i++) cells.push({ kind: 'char', ch: text[i], marks })
+  return cells
+}
+
+const WS = new Set([' ', '\t', '\n', '\r', '\f', '\v'])
+
+// Mirror parseBranch's trim + straight-quote strip, but return the surviving
+// [start, end) offsets so we can slice the ORIGINAL cells (with their marks)
+// rather than a plain string.
+function branchContentRange(s: string, start: number, end: number): [number, number] {
+  while (start < end && WS.has(s[start])) start++
+  while (end > start && WS.has(s[end - 1])) end--
+  if (end - start >= 2) {
+    const f = s[start], l = s[end - 1]
+    if ((f === "'" && l === "'") || (f === '"' && l === '"')) { start++; end-- }
+  }
+  return [start, end]
+}
+
+function resolveOneToCells(m: TemplateMatch, cells: Cell[], T: string, storyState: StoryState): Cell[] | null {
+  if (!m.parsed) return null
+  if (m.parsed.kind === 'var') {
+    if (!(m.parsed.name in storyState)) return null
+    const opener = cells[m.start]
+    const marks = opener?.kind === 'char' ? opener.marks : undefined
+    return plainCells(String(storyState[m.parsed.name]), marks)
+  }
+  const result = evalCondition(m.parsed.cond, storyState)
+  if (result === null) return null
+  // Recompute the chosen branch's offsets within the template the same way
+  // parseInner split it, so the sliced cells line up exactly.
+  const innerStart = m.start + 2
+  const inner = T.slice(innerStart, m.end - 2)
+  const qIdx = findTopLevel(inner, '?')
+  if (qIdx === -1) return null
+  const afterQStart = qIdx + 1
+  const afterQ = inner.slice(afterQStart)
+  const cIdx = findTopLevel(afterQ, ':')
+  if (cIdx === -1) return null
+  const rawStart = result ? afterQStart : afterQStart + cIdx + 1
+  const rawEnd = result ? afterQStart + cIdx : inner.length
+  const [cs, ce] = branchContentRange(inner, rawStart, rawEnd)
+  const branchCells = cells.slice(innerStart + cs, innerStart + ce)
+  return resolveCells(branchCells, storyState) // recurse for nested {{...}}
+}
+
+function resolveCells(cells: Cell[], storyState: StoryState): Cell[] {
+  const T = cells.map(cellChar).join('')
+  const matches = findVarTemplates(T)
+  if (!matches.length) return cells
+  const out: Cell[] = []
+  let cursor = 0
+  for (const m of matches) {
+    out.push(...cells.slice(cursor, m.start))
+    const resolved = resolveOneToCells(m, cells, T, storyState)
+    // Unresolvable (unknown var, malformed) → leave the raw template cells,
+    // exactly like the per-node fallback did.
+    out.push(...(resolved ?? cells.slice(m.start, m.end)))
+    cursor = m.end
+  }
+  out.push(...cells.slice(cursor))
+  return out
+}
+
+// Only rebuild the inline nodes when a template genuinely straddles a text-node
+// boundary. Everything else (no templates, or templates wholly inside one node
+// that textRun already handles) is returned untouched, so this can't perturb
+// the rest of the manuscript.
+function resolveInlineTemplateNodes(nodes: TipTapNode[], storyState: StoryState): TipTapNode[] {
+  const cells = nodesToCells(nodes)
+  const T = cells.map(cellChar).join('')
+  if (!T.includes('{{')) return nodes
+  const bounds = new Set<number>()
+  let off = 0
+  for (const n of nodes) { off += n.type === 'text' && n.text ? n.text.length : 1; bounds.add(off) }
+  const straddles = findVarTemplates(T).some(m => {
+    for (const b of bounds) if (m.start < b && b < m.end) return true
+    return false
+  })
+  if (!straddles) return nodes
+  return cellsToNodes(resolveCells(cells, storyState))
+}
+
 // Serialize the inline content of one paragraph-like node. Footnote marks
 // can be split across several text nodes by overlapping marks — the
 // reference is emitted once, after the last node carrying the same note.
 function serializeInline(nodes: TipTapNode[] | undefined, opts: SerializeOptions, footnotes: FootnoteCollector, suppressColor?: string | null): string {
   if (!nodes?.length) return ''
+  nodes = resolveInlineTemplateNodes(nodes, opts.storyState)
   let out = ''
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i]

@@ -13,7 +13,9 @@
       "WebSearch",
       "Bash(python3 -c ' *)",
       "Skill(claude-api)",
-      "Skill(claude-api:*)"
+      "Skill(claude-api:*)",
+      "Skill(run)",
+      "Skill(run:*)"
     ],
     "deny": [
       "Bash(rm -rf *)"
