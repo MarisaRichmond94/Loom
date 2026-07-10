@@ -3,7 +3,7 @@ import { access, copyFile, mkdir, readdir, rename, rm, writeFile } from 'fs/prom
 import { createHash } from 'crypto'
 import { tmpdir } from 'os'
 import path from 'path'
-import { walkBook } from '@/lib/manuscript/walk'
+import { defaultStoryState, walkBook } from '@/lib/manuscript/walk'
 import { loadManuscriptBook } from '@/lib/manuscript/loadBook'
 import { buildManuscriptDocx } from '@/lib/manuscript/docx'
 import { docxToPages } from '@/lib/manuscript/pagesConvert'
@@ -80,8 +80,8 @@ export async function POST(req: Request, { params }: Params) {
   const dest = await findDestDir(data.bookTitle)
   if ('error' in dest) return NextResponse.json({ error: dest.error }, { status: 422 })
 
-  // Empty target state + no overrides = pure canon walk.
-  const result = walkBook(data.chapters, data.variables, {}, {})
+  // Every variable at its default value + no overrides = pure canon walk.
+  const result = walkBook(data.chapters, data.variables, defaultStoryState(data.variables), {})
   const warnings = [...result.warnings]
   for (const cp of result.choicePoints.filter(c => c.ambiguous)) {
     const picked = cp.choices.find(c => c.id === cp.resolvedChoiceId)
