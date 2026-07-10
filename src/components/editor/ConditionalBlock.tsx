@@ -5,6 +5,7 @@ import { LuSplit, LuX } from 'react-icons/lu'
 import TextBlock from './TextBlock'
 import { ConditionRow, parseCondition } from './conditionUI'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import type { SearchOptions } from '@/lib/searchMatch'
 
 type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
 type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
@@ -13,6 +14,7 @@ type Props = {
   variables: { id: string; name: string; type: string; defaultValue?: string }[]
   characters?: Character[]
   searchQuery?: string
+  searchOptions?: SearchOptions
   onAddOverride: (condition: Record<string, unknown>, content: string) => void
   onUpdateOverride: (overrideId: string, data: Partial<Override>) => void
   onDeleteOverride: (overrideId: string) => void
@@ -20,7 +22,7 @@ type Props = {
 
 const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
 
-export default function ConditionalBlock({ overrides, variables, characters, searchQuery, onAddOverride, onUpdateOverride, onDeleteOverride }: Props) {
+export default function ConditionalBlock({ overrides, variables, characters, searchQuery, searchOptions, onAddOverride, onUpdateOverride, onDeleteOverride }: Props) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   function handleAddOverride() {
@@ -79,6 +81,7 @@ export default function ConditionalBlock({ overrides, variables, characters, sea
               characters={characters}
               variables={variables}
               searchQuery={searchQuery}
+              searchOptions={searchOptions}
             />
 
             <label className="mt-2 flex items-center gap-2 text-xs text-ink-muted cursor-pointer">

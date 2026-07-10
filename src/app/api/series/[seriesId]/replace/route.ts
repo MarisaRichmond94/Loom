@@ -20,10 +20,11 @@ type Params = { params: Promise<{ seriesId: string }> }
 // 1 choice label = 16 total" before committing.
 export async function POST(req: Request, { params }: Params) {
   const { seriesId } = await params
-  const body = await req.json() as { find?: string; replace?: string; bookIds?: string[]; dryRun?: boolean }
+  const body = await req.json() as { find?: string; replace?: string; bookIds?: string[]; dryRun?: boolean; caseSensitive?: boolean; wholeWord?: boolean }
   const find = (body.find ?? '').trim()
   const replace = body.replace ?? ''
   const dryRun = !!body.dryRun
+  const opts = { caseSensitive: !!body.caseSensitive, wholeWord: !!body.wholeWord }
   if (!find) return NextResponse.json({ error: 'find is required' }, { status: 400 })
 
   const bookFilter = body.bookIds && body.bookIds.length > 0 ? new Set(body.bookIds) : null
@@ -58,27 +59,27 @@ export async function POST(req: Request, { params }: Params) {
     for (const chapter of book.chapters) {
       for (const block of chapter.blocks) {
         const blockData: { content?: string; prompt?: string; baseContent?: string } = {}
-        const proseR = replaceInTipTapJson(block.content, find, replace)
+        const proseR = replaceInTipTapJson(block.content, find, replace, opts)
         if (proseR.count > 0) { blockData.content = proseR.json ?? ''; counts.prose += proseR.count }
-        const baseR = replaceInTipTapJson(block.baseContent, find, replace)
+        const baseR = replaceInTipTapJson(block.baseContent, find, replace, opts)
         if (baseR.count > 0) { blockData.baseContent = baseR.json ?? ''; counts.prose += baseR.count }
-        const promptR = replaceInString(block.prompt, find, replace)
+        const promptR = replaceInString(block.prompt, find, replace, opts)
         if (promptR.count > 0) { blockData.prompt = promptR.value ?? ''; counts.prompt += promptR.count }
         if (Object.keys(blockData).length > 0) updates.push({ kind: 'block', id: block.id, data: blockData })
 
         for (const choice of block.choices) {
           const choiceData: { label?: string; endingMessage?: string } = {}
-          const labelR = replaceInString(choice.label, find, replace)
+          const labelR = replaceInString(choice.label, find, replace, opts)
           if (labelR.count > 0) { choiceData.label = labelR.value ?? ''; counts.choice += labelR.count }
-          const endR = replaceInTipTapJson(choice.endingMessage, find, replace)
+          const endR = replaceInTipTapJson(choice.endingMessage, find, replace, opts)
           if (endR.count > 0) { choiceData.endingMessage = endR.json ?? ''; counts.choice += endR.count }
           if (Object.keys(choiceData).length > 0) updates.push({ kind: 'choice', id: choice.id, data: choiceData })
         }
         for (const override of block.overrides) {
           const ovData: { content?: string; endingMessage?: string } = {}
-          const contentR = replaceInTipTapJson(override.content, find, replace)
+          const contentR = replaceInTipTapJson(override.content, find, replace, opts)
           if (contentR.count > 0) { ovData.content = contentR.json ?? ''; counts.override += contentR.count }
-          const endR = replaceInTipTapJson(override.endingMessage, find, replace)
+          const endR = replaceInTipTapJson(override.endingMessage, find, replace, opts)
           if (endR.count > 0) { ovData.endingMessage = endR.json ?? ''; counts.override += endR.count }
           if (Object.keys(ovData).length > 0) updates.push({ kind: 'override', id: override.id, data: ovData })
         }

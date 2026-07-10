@@ -13,7 +13,7 @@ import ChoicePointBlock from './ChoicePointBlock'
 import ConditionalBlock from './ConditionalBlock'
 import SoundtrackBlock from './SoundtrackBlock'
 import { extractTextFromTipTap } from '@/lib/tiptapText'
-import { findBlockMatches } from '@/lib/searchMatch'
+import { findBlockMatches, type SearchOptions } from '@/lib/searchMatch'
 import ConfirmDialog from '@/components/ConfirmDialog'
 
 type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
@@ -54,6 +54,8 @@ type Props = {
   // surface (prose, conditional override prose, choice branch text) so
   // matches highlight after a search-result navigation.
   searchQuery?: string
+  // Match-case / whole-word toggles applied to highlight, jump, and replace.
+  searchOptions?: SearchOptions
   // Ref that receives a replaceAll function once editors mount. The chapter
   // page uses this to drive replace-all from the local chapter search bar.
   replaceAllRef?: React.MutableRefObject<((search: string, replacement: string) => number) | null>
@@ -198,9 +200,8 @@ function SortableBlock({
   )
 }
 
-function escapeRegExp(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
-
-export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', replaceAllRef, jumpToFirstMatchRef, jumpToMatchRef, scrollToCursorRef, currentBlocksRef, onTextBlockBlur }: Props) {
+export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', searchOptions, replaceAllRef, jumpToFirstMatchRef, jumpToMatchRef, scrollToCursorRef, currentBlocksRef, onTextBlockBlur }: Props) {
+  const searchOpts = searchOptions ?? {}
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const [newBlockId, setNewBlockId] = useState<string | null>(null)
@@ -232,26 +233,19 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   const textEditorsRef = useRef<Map<string, Editor>>(new Map())
   if (replaceAllRef) {
     replaceAllRef.current = (search: string, replacement: string) => {
-      if (!search) return 0
-      const regex = new RegExp(escapeRegExp(search), 'gi')
+      if (!search.trim()) return 0
       let total = 0
       textEditorsRef.current.forEach(editor => {
         const { state } = editor
-        const { doc, schema } = state
-        const matches: Array<{ from: number; to: number }> = []
-        doc.descendants((node, pos) => {
-          if (!node.isText || !node.text) return
-          regex.lastIndex = 0
-          let m
-          while ((m = regex.exec(node.text)) !== null) {
-            matches.push({ from: pos + m.index, to: pos + m.index + m[0].length })
-          }
-        })
+        // Same matcher as the highlight/jump so Replace All acts on exactly
+        // the matches the writer sees (honouring case / whole-word, and
+        // matches that straddle a mark boundary).
+        const matches = findBlockMatches(state.doc, search, searchOpts)
         if (!matches.length) return
         let tr = state.tr
         for (const { from, to } of [...matches].reverse()) {
           tr = replacement
-            ? tr.replaceWith(from, to, schema.text(replacement))
+            ? tr.replaceWith(from, to, state.schema.text(replacement))
             : tr.delete(from, to)
         }
         editor.view.dispatch(tr)
@@ -273,7 +267,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
       if (!editor) return
       // Shared matcher so jump targets line up exactly with the yellow
       // highlights, including matches that straddle mark boundaries.
-      for (const { from, to } of findBlockMatches(editor.state.doc, query)) {
+      for (const { from, to } of findBlockMatches(editor.state.doc, query, searchOpts)) {
         matches.push({ idx, editor, from, to })
       }
     })
@@ -557,6 +551,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                     characters={characters}
                     variables={variables}
                     searchQuery={searchQuery}
+                    searchOptions={searchOptions}
                     onEditorReady={editor => textEditorsRef.current.set(block.id, editor)}
                     onBlur={onTextBlockBlur}
                   />
@@ -571,6 +566,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                     variables={variables}
                     characters={characters}
                     searchQuery={searchQuery}
+                    searchOptions={searchOptions}
                     onUpdateBlock={data => updateBlock(block.id, data)}
                     onUpdateChoice={updateChoice}
                     onCreateVariable={onCreateVariable}
@@ -583,6 +579,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                     variables={variables}
                     characters={characters}
                     searchQuery={searchQuery}
+                    searchOptions={searchOptions}
                     onAddOverride={(condition, content) => addOverride(block.id, condition, content)}
                     onUpdateOverride={updateOverride}
                     onDeleteOverride={deleteOverride}

@@ -1,13 +1,14 @@
 import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
-import { findBlockMatches } from '@/lib/searchMatch'
+import { findBlockMatches, type SearchOptions } from '@/lib/searchMatch'
 
 type Options = {
-  // Live getter so we don't recreate the extension every time the writer
+  // Live getters so we don't recreate the extension every time the writer
   // types in the header search bar — TipTap's plugin instance reads the
-  // current query on each render.
+  // current query and match options on each render.
   getQuery: () => string
+  getOptions: () => SearchOptions
 }
 
 // Highlights every occurrence of the active series-search query in this
@@ -18,11 +19,12 @@ export const SearchHighlight = Extension.create<Options>({
   name: 'searchHighlight',
 
   addOptions() {
-    return { getQuery: () => '' }
+    return { getQuery: () => '', getOptions: () => ({}) }
   },
 
   addProseMirrorPlugins() {
     const getQuery = () => this.options.getQuery()
+    const getOptions = () => this.options.getOptions()
     return [
       new Plugin({
         key: new PluginKey('searchHighlight'),
@@ -34,7 +36,7 @@ export const SearchHighlight = Extension.create<Options>({
             // character refs, footnotes) — a per-text-node scan would miss
             // any query straddling a styled span. Decoration.inline happily
             // spans multiple text nodes, so the highlight stays continuous.
-            const decorations = findBlockMatches(state.doc, q).map(({ from, to }) =>
+            const decorations = findBlockMatches(state.doc, q, getOptions()).map(({ from, to }) =>
               Decoration.inline(from, to, {
                 // <mark> wrapper picks up the browser's default yellow even
                 // if our stylesheet got dropped. The class + inline style

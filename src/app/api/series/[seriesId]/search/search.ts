@@ -9,6 +9,7 @@
 // to ~120 chars of context centered on the first match.
 
 import { extractTextFromTipTap } from '@/lib/tiptapText'
+import { matchRanges, type SearchOptions } from '@/lib/searchMatch'
 
 // What kind of text the hit lives in. The UI shows a small chip per hit
 // so the writer can tell "this is the prose" vs "this is the prompt".
@@ -45,18 +46,19 @@ export type SearchHit = {
 
 const SNIPPET_RADIUS = 60
 
-function snippetAround(haystack: string, needle: string): { snippet: string; matchStart: number } | null {
-  const lower = haystack.toLowerCase()
-  const idx = lower.indexOf(needle.toLowerCase())
-  if (idx === -1) return null
+function snippetAround(haystack: string, needle: string, opts: SearchOptions): { snippet: string; matchStart: number } | null {
+  // Same matcher the editor highlight uses, so match-case / whole-word behave
+  // identically in the result list and the in-chapter highlight.
+  const hits = matchRanges(haystack, needle, opts)
+  if (!hits.length) return null
+  const idx = hits[0].index
   const start = Math.max(0, idx - SNIPPET_RADIUS)
-  const end = Math.min(haystack.length, idx + needle.length + SNIPPET_RADIUS)
+  const end = Math.min(haystack.length, idx + hits[0].length + SNIPPET_RADIUS)
   // Collapse internal whitespace so multi-line prose renders as one line.
   const raw = haystack.slice(start, end).replace(/\s+/g, ' ').trim()
-  // Recompute match position inside the collapsed slice. Worst case the
-  // original whitespace shrinkage shifts the index slightly; we re-find
-  // by needle to stay honest.
-  const collapsedIdx = raw.toLowerCase().indexOf(needle.toLowerCase())
+  // Recompute match position inside the collapsed slice (whitespace shrinkage
+  // shifts the index); re-find under the same options to stay honest.
+  const collapsedIdx = matchRanges(raw, needle, opts)[0]?.index ?? -1
   const leading = start > 0 ? '…' : ''
   const trailing = end < haystack.length ? '…' : ''
   return {
@@ -75,9 +77,10 @@ function emit(
   record: { recordKind: RecordKind; recordId: string; field: SearchHitField },
   text: string,
   needle: string,
+  opts: SearchOptions,
 ): void {
   if (!text) return
-  const found = snippetAround(text, needle)
+  const found = snippetAround(text, needle, opts)
   if (!found) return
   out.push({
     ...loc,
@@ -114,7 +117,7 @@ type SeriesShape = {
   }>
 }
 
-export function runSearch(series: SeriesShape, query: string, bookIds: string[] | null): SearchHit[] {
+export function runSearch(series: SeriesShape, query: string, bookIds: string[] | null, opts: SearchOptions = {}): SearchHit[] {
   const needle = query.trim()
   if (!needle) return []
   const out: SearchHit[] = []
@@ -130,7 +133,7 @@ export function runSearch(series: SeriesShape, query: string, bookIds: string[] 
       // Chapter title — common "find every chapter named X" search.
       emit(out, loc, null, 'chapter-title',
         { recordKind: 'chapter', recordId: chapter.id, field: 'title' },
-        chapter.title, needle)
+        chapter.title, needle, opts)
 
       for (const block of chapter.blocks) {
         // Prose splits across two block columns. Emit each separately so
@@ -138,31 +141,31 @@ export function runSearch(series: SeriesShape, query: string, bookIds: string[] 
         // in content; conditional-fragment canon lives in baseContent).
         emit(out, loc, block.id, 'prose',
           { recordKind: 'block', recordId: block.id, field: 'content' },
-          extractTextFromTipTap(block.content), needle)
+          extractTextFromTipTap(block.content), needle, opts)
         emit(out, loc, block.id, 'prose',
           { recordKind: 'block', recordId: block.id, field: 'baseContent' },
-          extractTextFromTipTap(block.baseContent), needle)
+          extractTextFromTipTap(block.baseContent), needle, opts)
 
         // Question prompt — plain string field on choice_point blocks.
         emit(out, loc, block.id, 'prompt',
           { recordKind: 'block', recordId: block.id, field: 'prompt' },
-          block.prompt ?? '', needle)
+          block.prompt ?? '', needle, opts)
 
         for (const choice of block.choices) {
           emit(out, loc, block.id, 'choice',
             { recordKind: 'choice', recordId: choice.id, field: 'label' },
-            choice.label, needle)
+            choice.label, needle, opts)
           emit(out, loc, block.id, 'choice',
             { recordKind: 'choice', recordId: choice.id, field: 'endingMessage' },
-            extractTextFromTipTap(choice.endingMessage), needle)
+            extractTextFromTipTap(choice.endingMessage), needle, opts)
         }
         for (const override of block.overrides) {
           emit(out, loc, block.id, 'override',
             { recordKind: 'override', recordId: override.id, field: 'content' },
-            extractTextFromTipTap(override.content), needle)
+            extractTextFromTipTap(override.content), needle, opts)
           emit(out, loc, block.id, 'override',
             { recordKind: 'override', recordId: override.id, field: 'endingMessage' },
-            extractTextFromTipTap(override.endingMessage), needle)
+            extractTextFromTipTap(override.endingMessage), needle, opts)
         }
       }
     }

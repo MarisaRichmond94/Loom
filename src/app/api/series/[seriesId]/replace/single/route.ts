@@ -24,9 +24,12 @@ export async function POST(req: Request, { params }: Params) {
     recordKind?: 'block' | 'choice' | 'override' | 'chapter'
     recordId?: string
     field?: string
+    caseSensitive?: boolean
+    wholeWord?: boolean
   }
   const find = (body.find ?? '').trim()
   const replace = body.replace ?? ''
+  const opts = { caseSensitive: !!body.caseSensitive, wholeWord: !!body.wholeWord }
   const { recordKind, recordId, field } = body
   if (!find || !recordKind || !recordId || !field) {
     return NextResponse.json({ error: 'find, recordKind, recordId, and field are required' }, { status: 400 })
@@ -44,15 +47,15 @@ export async function POST(req: Request, { params }: Params) {
     const row = await prisma.contentBlock.findUnique({ where: { id: recordId } })
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (field === 'content') {
-      const r = replaceInTipTapJson(row.content, find, replace)
+      const r = replaceInTipTapJson(row.content, find, replace, opts)
       if (r.count > 0) await prisma.contentBlock.update({ where: { id: recordId }, data: { content: r.json ?? '' } })
       count = r.count
     } else if (field === 'baseContent') {
-      const r = replaceInTipTapJson(row.baseContent, find, replace)
+      const r = replaceInTipTapJson(row.baseContent, find, replace, opts)
       if (r.count > 0) await prisma.contentBlock.update({ where: { id: recordId }, data: { baseContent: r.json ?? '' } })
       count = r.count
     } else if (field === 'prompt') {
-      const r = replaceInString(row.prompt, find, replace)
+      const r = replaceInString(row.prompt, find, replace, opts)
       if (r.count > 0) await prisma.contentBlock.update({ where: { id: recordId }, data: { prompt: r.value ?? '' } })
       count = r.count
     } else {
@@ -62,11 +65,11 @@ export async function POST(req: Request, { params }: Params) {
     const row = await prisma.choice.findUnique({ where: { id: recordId } })
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (field === 'label') {
-      const r = replaceInString(row.label, find, replace)
+      const r = replaceInString(row.label, find, replace, opts)
       if (r.count > 0) await prisma.choice.update({ where: { id: recordId }, data: { label: r.value ?? '' } })
       count = r.count
     } else if (field === 'endingMessage') {
-      const r = replaceInTipTapJson(row.endingMessage, find, replace)
+      const r = replaceInTipTapJson(row.endingMessage, find, replace, opts)
       if (r.count > 0) await prisma.choice.update({ where: { id: recordId }, data: { endingMessage: r.json ?? '' } })
       count = r.count
     } else {
@@ -76,11 +79,11 @@ export async function POST(req: Request, { params }: Params) {
     const row = await prisma.conditionalOverride.findUnique({ where: { id: recordId } })
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (field === 'content') {
-      const r = replaceInTipTapJson(row.content, find, replace)
+      const r = replaceInTipTapJson(row.content, find, replace, opts)
       if (r.count > 0) await prisma.conditionalOverride.update({ where: { id: recordId }, data: { content: r.json ?? '' } })
       count = r.count
     } else if (field === 'endingMessage') {
-      const r = replaceInTipTapJson(row.endingMessage, find, replace)
+      const r = replaceInTipTapJson(row.endingMessage, find, replace, opts)
       if (r.count > 0) await prisma.conditionalOverride.update({ where: { id: recordId }, data: { endingMessage: r.json ?? '' } })
       count = r.count
     } else {

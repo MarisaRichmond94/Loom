@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { LuCheck, LuX } from 'react-icons/lu'
 import { ConditionRow, ValueSetter, TYPE_DEFAULT_VALUE } from './conditionUI'
 import TextBlock from './TextBlock'
+import type { SearchOptions } from '@/lib/searchMatch'
 
 type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
 
@@ -63,6 +64,7 @@ type Props = {
   variables: Variable[]
   characters?: Character[]
   searchQuery?: string
+  searchOptions?: SearchOptions
   onUpdateBlock: (data: Partial<{ displayType: string; prompt: string; condition: string | null }>) => void
   onUpdateChoice: (choiceId: string, data: Partial<Choice>) => void
   onCreateVariable: (name: string, type: string, defaultValue?: unknown) => Promise<void>
@@ -84,12 +86,13 @@ function siblingValueFor(type: typeof VAR_TYPES[number], thisBranchValue: unknow
 
 function ChoicePanel({
   choice, slotPlaceholder, labelClass, bgClass, borderClass,
-  variables, characters, hasSibling, focusVarName, searchQuery, onUpdateChoice, onCreateAndPair,
+  variables, characters, hasSibling, focusVarName, searchQuery, searchOptions, onUpdateChoice, onCreateAndPair,
 }: {
   choice: Choice; slotPlaceholder: string; labelClass: string; bgClass: string; borderClass: string
   variables: Variable[]
   characters?: Character[]
   searchQuery?: string
+  searchOptions?: SearchOptions
   hasSibling: boolean
   // When the parent has just paired a newly-created variable onto this
   // panel as the sibling, this carries that variable's name so the
@@ -387,7 +390,7 @@ function ChoicePanel({
           onChange={json => onUpdateChoice(choice.id, { endingMessage: json })}
           characters={characters}
           variables={variables}
-          searchQuery={searchQuery}
+          searchQuery={searchQuery} searchOptions={searchOptions}
           placeholder={choice.isBadEnding
             ? 'What the reader sees on the full-screen overlay…'
             : 'Optional: text shown inline when this choice is picked…'}
@@ -407,7 +410,7 @@ function ChoicePanel({
 }
 
 
-export default function ChoicePointBlock({ prompt, displayType, condition, choices, variables, characters, searchQuery, onUpdateBlock, onUpdateChoice, onCreateVariable }: Props) {
+export default function ChoicePointBlock({ prompt, displayType, condition, choices, variables, characters, searchQuery, searchOptions, onUpdateBlock, onUpdateChoice, onCreateVariable }: Props) {
   // Slot by array order — choices[0] is the green/primary slot,
   // choices[1] is the red/secondary slot. Used to differ from the
   // old label-based matching ('Yes' / 'No') so writers can rename
@@ -476,7 +479,7 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             variables={variables} characters={characters}
             hasSibling={!!secondaryChoice}
             focusVarName={pairedFocus?.choiceId === primaryChoice.id ? pairedFocus.varName : null}
-            searchQuery={searchQuery}
+            searchQuery={searchQuery} searchOptions={searchOptions}
             onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
           />
         )}
@@ -487,7 +490,7 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             variables={variables} characters={characters}
             hasSibling={!!primaryChoice}
             focusVarName={pairedFocus?.choiceId === secondaryChoice.id ? pairedFocus.varName : null}
-            searchQuery={searchQuery}
+            searchQuery={searchQuery} searchOptions={searchOptions}
             onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
           />
         )}

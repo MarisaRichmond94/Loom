@@ -2,10 +2,11 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace } from 'react-icons/lu'
+import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord } from 'react-icons/lu'
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
 import { extractTextFromTipTap } from '@/lib/tiptapText'
+import { matchRanges, type SearchOptions } from '@/lib/searchMatch'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import { ConditionRow } from '@/components/editor/conditionUI'
 import { useAuthor } from '@/lib/authorContext'
@@ -53,6 +54,16 @@ export default function ChapterEditorPage() {
   const [localSearchQuery, setLocalSearchQuery] = useState('')
   const [localSearchReplace, setLocalSearchReplace] = useState('')
   const [localSearchReplaceMode, setLocalSearchReplaceMode] = useState(false)
+  // Match-case / whole-word toggles, shared (via localStorage) with the
+  // series search bar so the preference is one setting across both.
+  const [matchCase, setMatchCase] = useState(false)
+  const [matchWord, setMatchWord] = useState(false)
+  useEffect(() => {
+    setMatchCase(localStorage.getItem('loom-search-case') === 'true')
+    setMatchWord(localStorage.getItem('loom-search-word') === 'true')
+  }, [])
+  function toggleMatchCase() { setMatchCase(v => { const n = !v; localStorage.setItem('loom-search-case', String(n)); return n }) }
+  function toggleMatchWord() { setMatchWord(v => { const n = !v; localStorage.setItem('loom-search-word', String(n)); return n }) }
   const localSearchInputRef = useRef<HTMLInputElement>(null)
   // Live query for the empty-dep global hotkey handler (⌥⇧→ / ⌥⇧←).
   const localSearchQueryRef = useRef(localSearchQuery)
@@ -383,13 +394,12 @@ export default function ChapterEditorPage() {
 
   const localSearchMatchCount = useMemo(() => {
     if (!localSearchQuery.trim() || !chapter) return 0
-    const esc = localSearchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const regex = new RegExp(esc, 'gi')
+    const opts: SearchOptions = { caseSensitive: matchCase, wholeWord: matchWord }
     return chapter.blocks.reduce((n, b) => {
       const text = extractTextFromTipTap(b.content ?? null)
-      return n + (text.match(regex)?.length ?? 0)
+      return n + matchRanges(text, localSearchQuery, opts).length
     }, 0)
-  }, [localSearchQuery, chapter])
+  }, [localSearchQuery, chapter, matchCase, matchWord])
 
   async function createVariable(name: string, type: string, defaultValue?: unknown) {
     // Caller may specify defaultValue (the choice-block create form lets the
@@ -748,7 +758,7 @@ export default function ChapterEditorPage() {
                 }}
                 placeholder="Find in chapter… (⌥⇧F)"
                 title="Find in chapter (⌥⇧F)"
-                className="w-full pl-7 pr-14 py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
+                className="w-full pl-7 pr-[104px] py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
               />
               <div className="absolute right-1.5 flex items-center gap-0.5">
                 {localSearchQuery && localSearchMatchCount > 0 && (
@@ -759,6 +769,22 @@ export default function ChapterEditorPage() {
                     <LuX size={12} />
                   </button>
                 )}
+                <button
+                  onClick={toggleMatchCase}
+                  title="Match case"
+                  aria-pressed={matchCase}
+                  className={`p-0.5 rounded transition ${matchCase ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'}`}
+                >
+                  <LuCaseSensitive size={13} />
+                </button>
+                <button
+                  onClick={toggleMatchWord}
+                  title="Match whole word"
+                  aria-pressed={matchWord}
+                  className={`p-0.5 rounded transition ${matchWord ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'}`}
+                >
+                  <LuWholeWord size={13} />
+                </button>
                 <button
                   onClick={() => setLocalSearchReplaceMode(m => !m)}
                   title={localSearchReplaceMode ? 'Hide replace' : 'Find and replace'}
@@ -821,6 +847,9 @@ export default function ChapterEditorPage() {
           collapsedIds={collapsedIds}
           onCollapsedIdsChange={setCollapsedIds}
           searchQuery={localSearchQuery || (searchParams?.get('q') ?? '')}
+          searchOptions={localSearchQuery
+            ? { caseSensitive: matchCase, wholeWord: matchWord }
+            : { caseSensitive: searchParams?.get('qc') === '1', wholeWord: searchParams?.get('qw') === '1' }}
           replaceAllRef={replaceAllRef}
           jumpToFirstMatchRef={jumpToFirstMatchRef}
           jumpToMatchRef={jumpToMatchRef}

@@ -17,6 +17,10 @@ export async function GET(req: Request, { params }: Params) {
   const q = url.searchParams.get('q') ?? ''
   const bookIdsParam = url.searchParams.get('bookIds')
   const bookIds = bookIdsParam ? bookIdsParam.split(',').filter(Boolean) : null
+  const opts = {
+    caseSensitive: url.searchParams.get('caseSensitive') === '1',
+    wholeWord: url.searchParams.get('wholeWord') === '1',
+  }
 
   if (!q.trim()) return NextResponse.json({ hits: [] })
 
@@ -41,6 +45,6 @@ export async function GET(req: Request, { params }: Params) {
   })
   if (!series) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const hits = runSearch(series, q, bookIds)
+  const hits = runSearch(series, q, bookIds, opts)
   return NextResponse.json({ hits })
 }

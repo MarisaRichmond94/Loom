@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { LuSearch, LuX, LuReplace } from 'react-icons/lu'
+import { LuSearch, LuX, LuReplace, LuCaseSensitive, LuWholeWord } from 'react-icons/lu'
 import { FaBookOpen } from 'react-icons/fa'
 import ConfirmDialog from '@/components/ConfirmDialog'
 
@@ -48,6 +48,16 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
   const [open, setOpen] = useState(false)
   const [bookFilter, setBookFilter] = useState<Set<string>>(new Set())  // empty = all books
   const [showFilter, setShowFilter] = useState(false)
+  // Match-case / whole-word toggles, persisted (shared with the chapter
+  // find bar via the same localStorage keys) so it's one preference.
+  const [matchCase, setMatchCase] = useState(false)
+  const [matchWord, setMatchWord] = useState(false)
+  useEffect(() => {
+    setMatchCase(localStorage.getItem('loom-search-case') === 'true')
+    setMatchWord(localStorage.getItem('loom-search-word') === 'true')
+  }, [])
+  function toggleMatchCase() { setMatchCase(v => { const n = !v; localStorage.setItem('loom-search-case', String(n)); return n }) }
+  function toggleMatchWord() { setMatchWord(v => { const n = !v; localStorage.setItem('loom-search-word', String(n)); return n }) }
   // Replace mode: when on, a second input appears below for the
   // replacement string. Replace All hits the dry-run endpoint to count
   // matches across the book filter, then shows a confirmation modal
@@ -95,11 +105,13 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
   // Debounced fetch. Each keystroke re-arms the timer so we don't fire a
   // request for every character. `cancelled` keeps an in-flight response
   // from stomping on a newer query if the user kept typing.
-  const runFetch = useCallback(async (q: string, bookIds: string[]) => {
+  const runFetch = useCallback(async (q: string, bookIds: string[], caseSensitive: boolean, wholeWord: boolean) => {
     if (!q.trim()) { setHits([]); setLoading(false); return }
     setLoading(true)
     const qs = new URLSearchParams({ q })
     if (bookIds.length > 0) qs.set('bookIds', bookIds.join(','))
+    if (caseSensitive) qs.set('caseSensitive', '1')
+    if (wholeWord) qs.set('wholeWord', '1')
     try {
       const res = await fetch(`/api/series/${seriesId}/search?${qs.toString()}`)
       if (!res.ok) { setHits([]); setLoading(false); return }
@@ -112,9 +124,9 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
 
   useEffect(() => {
     const bookIds = Array.from(bookFilter)
-    const id = setTimeout(() => { runFetch(query, bookIds) }, DEBOUNCE_MS)
+    const id = setTimeout(() => { runFetch(query, bookIds, matchCase, matchWord) }, DEBOUNCE_MS)
     return () => clearTimeout(id)
-  }, [query, bookFilter, runFetch])
+  }, [query, bookFilter, matchCase, matchWord, runFetch])
 
   function toggleBook(id: string) {
     setBookFilter(prev => {
@@ -138,7 +150,7 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
       const res = await fetch(`/api/series/${seriesId}/replace`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ find, replace: replaceWith, bookIds, dryRun: true }),
+        body: JSON.stringify({ find, replace: replaceWith, bookIds, dryRun: true, caseSensitive: matchCase, wholeWord: matchWord }),
       })
       if (!res.ok) { setReplaceError('Could not preview replacements.'); return }
       const data = await res.json()
@@ -162,12 +174,13 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
         body: JSON.stringify({
           find, replace: replaceWith,
           recordKind: h.recordKind, recordId: h.recordId, field: h.field,
+          caseSensitive: matchCase, wholeWord: matchWord,
         }),
       })
       if (!res.ok) { setReplaceError('Replace failed.'); return }
       // Refresh matches so the now-rewritten row drops out of (or
       // updates in) the list.
-      runFetch(query, Array.from(bookFilter))
+      runFetch(query, Array.from(bookFilter), matchCase, matchWord)
     } catch { setReplaceError('Replace failed.') }
   }
 
@@ -183,12 +196,12 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
       const res = await fetch(`/api/series/${seriesId}/replace`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ find, replace: replaceWith, bookIds, dryRun: false }),
+        body: JSON.stringify({ find, replace: replaceWith, bookIds, dryRun: false, caseSensitive: matchCase, wholeWord: matchWord }),
       })
       if (!res.ok) { setReplaceError('Replace failed.'); return }
       setPendingReplace(null)
       // Refresh the match list so the writer sees the new state.
-      runFetch(query, bookIds)
+      runFetch(query, bookIds, matchCase, matchWord)
     } finally { setReplacing(false) }
   }
 
@@ -210,6 +223,10 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
     if (h.blockId) params.set('block', h.blockId)
     const q = query.trim()
     if (q) params.set('q', q)
+    // Carry the match options so the destination chapter highlights exactly
+    // what the series search matched.
+    if (matchCase) params.set('qc', '1')
+    if (matchWord) params.set('qw', '1')
     const suffix = params.toString() ? `?${params.toString()}` : ''
     return `/author/${seriesId}/chapter/${h.chapterId}${suffix}`
   }
@@ -248,7 +265,7 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
           onFocus={() => setOpen(true)}
           placeholder="Search the series…"
           title="Search the series (⌥⇧G)"
-          className="w-full pl-7 pr-14 py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
+          className="w-full pl-7 pr-[92px] py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
         />
         <div className="absolute right-1.5 flex items-center gap-0.5">
           {query && (
@@ -260,6 +277,22 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
               <LuX size={12} />
             </button>
           )}
+          <button
+            onClick={toggleMatchCase}
+            title="Match case"
+            aria-pressed={matchCase}
+            className={`p-0.5 rounded transition ${matchCase ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'}`}
+          >
+            <LuCaseSensitive size={13} />
+          </button>
+          <button
+            onClick={toggleMatchWord}
+            title="Match whole word"
+            aria-pressed={matchWord}
+            className={`p-0.5 rounded transition ${matchWord ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'}`}
+          >
+            <LuWholeWord size={13} />
+          </button>
           <button
             onClick={() => { setReplaceMode(o => !o); setOpen(true) }}
             title={replaceMode ? 'Hide replace input' : 'Find and replace'}
