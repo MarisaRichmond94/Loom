@@ -1,4 +1,3 @@
-import { existsSync } from 'fs'
 import path from 'path'
 
 // Shape of the database row before we apply any book-scoped resolution.
@@ -67,11 +66,14 @@ export function resolveCharacter(opts: {
   firstBookOrder: number | null
   deathBookOrder: number | null
   lastBookOrder: number | null
+  // Filenames in /public/characters, listed once per request by the caller
+  // (publicDirFilenames) — keeps this function pure and avoids a sync fs
+  // stat per character.
+  avatarFiles: Set<string>
 }): ResolvedCharacter {
-  const { character, override, book, firstBookOrder, deathBookOrder, lastBookOrder } = opts
-  const paths = characterAvatarPaths(character.id, book.id)
-  const hasBookAvatar = existsSync(paths.bookSpecific)
-  const hasCanonicalAvatar = existsSync(paths.canonical)
+  const { character, override, book, firstBookOrder, deathBookOrder, lastBookOrder, avatarFiles } = opts
+  const hasBookAvatar = avatarFiles.has(`${character.id}-${book.id}.jpg`)
+  const hasCanonicalAvatar = avatarFiles.has(`${character.id}.jpg`)
   const visible = firstBookOrder == null || book.order >= firstBookOrder
   const deceased = deathBookOrder != null && book.order > deathBookOrder
   const hidden = lastBookOrder != null && book.order > lastBookOrder

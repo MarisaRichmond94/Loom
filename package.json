@@ -30,7 +30,6 @@
     "@tiptap/react": "^3.23.1",
     "@tiptap/starter-kit": "^3.23.1",
     "better-sqlite3": "^12.9.0",
-    "happy-dom": "^20.9.0",
     "jszip": "^3.10.1",
     "next": "16.2.6",
     "node-cron": "^4.2.1",

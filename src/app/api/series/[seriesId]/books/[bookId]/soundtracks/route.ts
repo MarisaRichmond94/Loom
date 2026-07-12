@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
-import { existsSync } from 'fs'
-import path from 'path'
 import { prisma } from '@/lib/prisma'
+import { publicDirFilenames } from '@/lib/publicAssets'
 
 type Params = { params: Promise<{ bookId: string }> }
 
@@ -22,7 +21,7 @@ export async function GET(_: Request, { params }: Params) {
     ],
   })
 
-  const musicDir = path.join(process.cwd(), 'public', 'music')
+  const musicFiles = await publicDirFilenames('music')
   return NextResponse.json(rows.map(b => ({
     id: b.id,
     title: b.prompt,
@@ -32,6 +31,6 @@ export async function GET(_: Request, { params }: Params) {
     chapterId: b.chapter.id,
     chapterTitle: b.chapter.title,
     chapterOrder: b.chapter.order,
-    hasAlbumArt: existsSync(path.join(musicDir, `${b.id}-art.jpg`)),
+    hasAlbumArt: musicFiles.has(`${b.id}-art.jpg`),
   })))
 }

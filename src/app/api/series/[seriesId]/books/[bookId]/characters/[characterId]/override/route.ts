@@ -3,6 +3,7 @@ import { unlink } from 'fs/promises'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@/generated/prisma/client'
 import { characterAvatarPaths, resolveCharacter } from '@/lib/resolveCharacter'
+import { publicDirFilenames } from '@/lib/publicAssets'
 
 type Params = { params: Promise<{ bookId: string; characterId: string }> }
 
@@ -52,6 +53,7 @@ export async function POST(req: Request, { params }: Params) {
     firstBookOrder,
     deathBookOrder,
     lastBookOrder,
+    avatarFiles: await publicDirFilenames('characters'),
   }))
 }
 

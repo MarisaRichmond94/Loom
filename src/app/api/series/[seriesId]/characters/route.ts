@@ -1,16 +1,18 @@
 import { NextResponse } from 'next/server'
-import { existsSync } from 'fs'
-import path from 'path'
 import { prisma } from '@/lib/prisma'
+import { publicDirFilenames } from '@/lib/publicAssets'
 
 type Params = { params: Promise<{ seriesId: string }> }
 
 export async function GET(_: Request, { params }: Params) {
   const { seriesId } = await params
-  const characters = await prisma.character.findMany({ where: { seriesId }, orderBy: { name: 'asc' } })
+  const [characters, avatarFiles] = await Promise.all([
+    prisma.character.findMany({ where: { seriesId }, orderBy: { name: 'asc' } }),
+    publicDirFilenames('characters'),
+  ])
   return NextResponse.json(characters.map(c => ({
     ...c,
-    hasAvatar: existsSync(path.join(process.cwd(), 'public', 'characters', `${c.id}.jpg`)),
+    hasAvatar: avatarFiles.has(`${c.id}.jpg`),
   })))
 }
 

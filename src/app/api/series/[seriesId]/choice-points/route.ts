@@ -61,5 +61,7 @@ export async function GET(_: Request, { params }: Params) {
     }
   }
 
-  return NextResponse.json(choicePoints)
+  // Full-series walk used by the bad-ending rewind picker; cache briefly so
+  // repeated bad endings in one sitting don't re-walk the series each time.
+  return NextResponse.json(choicePoints, { headers: { 'Cache-Control': 'private, max-age=15' } })
 }

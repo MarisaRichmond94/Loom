@@ -74,5 +74,7 @@ export async function GET() {
     // public catalog.
     .filter(s => s.publishedBookCount > 0)
 
-  return NextResponse.json(explorable)
+  // Reader-facing feed recomputed per request; a short browser cache makes
+  // back-and-forth navigation instant. 30s staleness is invisible here.
+  return NextResponse.json(explorable, { headers: { 'Cache-Control': 'private, max-age=30' } })
 }

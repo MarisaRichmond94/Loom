@@ -58,5 +58,7 @@ export async function GET(_: Request, { params }: Params) {
   for (const [k, set] of Object.entries(buckets)) {
     out[k] = Array.from(set).sort((a, b) => a.localeCompare(b))
   }
-  return NextResponse.json(out)
+  // Autocomplete datalist; recomputing per condition-row open is wasteful.
+  // 15s staleness only delays brand-new values appearing in suggestions.
+  return NextResponse.json(out, { headers: { 'Cache-Control': 'private, max-age=15' } })
 }
