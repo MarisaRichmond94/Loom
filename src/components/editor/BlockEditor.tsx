@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { memo, useState, useEffect, useMemo, useRef } from 'react'
 import type { Editor } from '@tiptap/core'
 import { useSearchParams } from 'next/navigation'
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core'
@@ -202,6 +202,102 @@ function SortableBlock({
     </div>
   )
 }
+
+// Everything a row needs to call back into the editor, delivered through a
+// single ref whose identity never changes. The ref's contents are reassigned
+// every BlockEditor render, so rows always invoke the latest closures without
+// their own props ever churning.
+type BlockRowApi = {
+  updateBlock: (blockId: string, data: object) => void
+  updateChoice: (choiceId: string, data: object) => void
+  updateOverride: (overrideId: string, data: object) => void
+  addOverride: (blockId: string, condition: object, content: string) => Promise<void>
+  deleteOverride: (overrideId: string) => Promise<void>
+  onCreateVariable: (name: string, type: string, defaultValue?: unknown) => Promise<void>
+  activate: (blockId: string) => void
+  requestDelete: (block: Block) => void
+  toggleCollapsed: (blockId: string) => void
+  registerEditor: (blockId: string, editor: Editor) => void
+  textBlockBlur: () => void
+}
+
+// One editor row. Memoized so a keystroke — which replaces only the edited
+// block's object in state — re-renders that row alone instead of the whole
+// chapter. All other props are primitives or identity-stable between
+// keystrokes.
+const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocus, variables, characters, searchQuery, searchOptions, api }: {
+  block: Block
+  isActive: boolean
+  isCollapsed: boolean
+  autoFocus: boolean
+  variables: Variable[]
+  characters: Character[]
+  searchQuery: string
+  searchOptions?: SearchOptions
+  api: { current: BlockRowApi }
+}) {
+  return (
+    <SortableBlock
+      block={block}
+      isActive={isActive}
+      onActivate={() => api.current.activate(block.id)}
+      onDelete={() => api.current.requestDelete(block)}
+      isCollapsed={isCollapsed}
+      onToggleCollapse={() => api.current.toggleCollapsed(block.id)}
+    >
+      {block.type === 'text' && (
+        <TextBlock
+          content={block.content ?? null}
+          onChange={content => api.current.updateBlock(block.id, { content })}
+          autoFocus={autoFocus}
+          characters={characters}
+          variables={variables}
+          searchQuery={searchQuery}
+          searchOptions={searchOptions}
+          onEditorReady={editor => api.current.registerEditor(block.id, editor)}
+          onBlur={() => api.current.textBlockBlur()}
+        />
+      )}
+
+      {block.type === 'choice_point' && (
+        <ChoicePointBlock
+          prompt={block.prompt ?? null}
+          displayType={block.displayType ?? 'inline'}
+          condition={block.condition ?? null}
+          choices={block.choices}
+          variables={variables}
+          characters={characters}
+          searchQuery={searchQuery}
+          searchOptions={searchOptions}
+          onUpdateBlock={data => api.current.updateBlock(block.id, data)}
+          onUpdateChoice={(choiceId, data) => api.current.updateChoice(choiceId, data)}
+          onCreateVariable={(name, type, defaultValue) => api.current.onCreateVariable(name, type, defaultValue)}
+        />
+      )}
+
+      {block.type === 'conditional_fragment' && (
+        <ConditionalBlock
+          overrides={block.overrides}
+          variables={variables}
+          characters={characters}
+          searchQuery={searchQuery}
+          searchOptions={searchOptions}
+          onAddOverride={(condition, content) => api.current.addOverride(block.id, condition, content)}
+          onUpdateOverride={(overrideId, data) => api.current.updateOverride(overrideId, data)}
+          onDeleteOverride={overrideId => api.current.deleteOverride(overrideId)}
+        />
+      )}
+
+      {block.type === 'soundtrack' && (
+        <SoundtrackBlock
+          block={block}
+          variables={variables}
+          onUpdateBlock={data => api.current.updateBlock(block.id, data)}
+        />
+      )}
+    </SortableBlock>
+  )
+})
 
 export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', searchOptions, replaceAllRef, jumpToFirstMatchRef, jumpToMatchRef, scrollToCursorRef, currentBlocksRef, onTextBlockBlur }: Props) {
   const searchOpts = searchOptions ?? {}
@@ -623,78 +719,49 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     })
   }
 
+  // Reassigned every render so rows always call the freshest closures; the
+  // ref object itself never changes identity, keeping BlockRow's memo intact.
+  const blockApiRef = useRef<BlockRowApi>(null!)
+  blockApiRef.current = {
+    updateBlock,
+    updateChoice,
+    updateOverride,
+    addOverride,
+    deleteOverride,
+    onCreateVariable,
+    activate: id => setActiveBlockId(id),
+    requestDelete: b => setPendingDelete(b),
+    toggleCollapsed,
+    registerEditor: (id, editor) => textEditorsRef.current.set(id, editor),
+    // Leaving a text editor commits its pending save right away — this also
+    // guarantees content is in flight before the blur-driven canon export
+    // reads the DB.
+    textBlockBlur: () => {
+      flushAllSaves()
+      onTextBlockBlur?.()
+    },
+  }
+
+  const sortableIds = useMemo(() => blocks.map(b => b.id), [blocks])
+
   return (
     <div>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <SortableContext items={blocks.map(b => b.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
           <div ref={blocksContainerRef} className="flex flex-col gap-3">
             {blocks.map(block => (
-              <SortableBlock
+              <BlockRow
                 key={block.id}
                 block={block}
                 isActive={activeBlockId === block.id}
-                onActivate={() => setActiveBlockId(block.id)}
-                onDelete={() => setPendingDelete(block)}
                 isCollapsed={collapsedIds.has(block.id)}
-                onToggleCollapse={() => toggleCollapsed(block.id)}
-              >
-                {block.type === 'text' && (
-                  <TextBlock
-                    content={block.content ?? null}
-                    onChange={content => updateBlock(block.id, { content })}
-                    autoFocus={block.id === newBlockId}
-                    characters={characters}
-                    variables={variables}
-                    searchQuery={searchQuery}
-                    searchOptions={searchOptions}
-                    onEditorReady={editor => textEditorsRef.current.set(block.id, editor)}
-                    onBlur={() => {
-                      // Leaving a text editor commits its pending save right
-                      // away — this also guarantees content is in flight
-                      // before the blur-driven canon export reads the DB.
-                      flushAllSaves()
-                      onTextBlockBlur?.()
-                    }}
-                  />
-                )}
-
-                {block.type === 'choice_point' && (
-                  <ChoicePointBlock
-                    prompt={block.prompt ?? null}
-                    displayType={block.displayType ?? 'inline'}
-                    condition={block.condition ?? null}
-                    choices={block.choices}
-                    variables={variables}
-                    characters={characters}
-                    searchQuery={searchQuery}
-                    searchOptions={searchOptions}
-                    onUpdateBlock={data => updateBlock(block.id, data)}
-                    onUpdateChoice={updateChoice}
-                    onCreateVariable={onCreateVariable}
-                  />
-                )}
-
-                {block.type === 'conditional_fragment' && (
-                  <ConditionalBlock
-                    overrides={block.overrides}
-                    variables={variables}
-                    characters={characters}
-                    searchQuery={searchQuery}
-                    searchOptions={searchOptions}
-                    onAddOverride={(condition, content) => addOverride(block.id, condition, content)}
-                    onUpdateOverride={updateOverride}
-                    onDeleteOverride={deleteOverride}
-                  />
-                )}
-
-                {block.type === 'soundtrack' && (
-                  <SoundtrackBlock
-                    block={block}
-                    variables={variables}
-                    onUpdateBlock={data => updateBlock(block.id, data)}
-                  />
-                )}
-              </SortableBlock>
+                autoFocus={block.id === newBlockId}
+                variables={variables}
+                characters={characters}
+                searchQuery={searchQuery}
+                searchOptions={searchOptions}
+                api={blockApiRef}
+              />
             ))}
 
             {blocks.length === 0 && (
