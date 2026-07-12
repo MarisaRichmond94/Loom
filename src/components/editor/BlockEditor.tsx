@@ -323,11 +323,9 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   // Written every render so the ⌥⇧D handler never reads a stale value
   const activeBlockIdRef = useRef<string | null>(null)
   const blocksRef = useRef<Block[]>(blocks)
-  const onBlocksChangeRef = useRef(onBlocksChange)
   const onChoicesChangedRef = useRef(onChoicesChanged)
   activeBlockIdRef.current = activeBlockId
   blocksRef.current = blocks
-  onBlocksChangeRef.current = onBlocksChange
   onChoicesChangedRef.current = onChoicesChanged
   if (currentBlocksRef) currentBlocksRef.current = blocks
 
@@ -644,13 +642,14 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     ))
     const d = data as Record<string, unknown>
     const url = `/api/blocks/${block.id}/choices/${choiceId}`
-    const after = !('label' in d) ? () => onBlocksChangeRef.current() : undefined
+    // No refetch here: the optimistic update above is the whole change (the
+    // PATCH writes fields verbatim), and nothing page-side reads choice
+    // fields from its own copy — copy/canon flows use currentBlocksRef.
     if (Object.keys(d).every(k => k === 'label' || k === 'endingMessage')) {
-      queueSave(`choice:${choiceId}`, url, d, after)
+      queueSave(`choice:${choiceId}`, url, d)
     } else {
       void flushSave(`choice:${choiceId}`)
-      const done = sendSave(url, d)
-      if (after) void done.then(after)
+      void sendSave(url, d)
     }
   }
 
@@ -661,10 +660,10 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
       body: JSON.stringify({ condition, content }),
     })
     const newOverride = await res.json()
+    // The server row is appended locally — no full-list refetch needed.
     setBlocks(prev => prev.map(b =>
       b.id !== blockId ? b : { ...b, overrides: [...b.overrides, newOverride] }
     ))
-    onBlocksChange()
   }
 
   function updateOverride(overrideId: string, data: object) {
@@ -694,7 +693,6 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
       b.id !== block.id ? b : { ...b, overrides: b.overrides.filter(o => o.id !== overrideId) }
     ))
     await fetch(`/api/blocks/${block.id}/overrides/${overrideId}`, { method: 'DELETE' })
-    onBlocksChange()
   }
 
   function handleDragStart(event: DragStartEvent) {
