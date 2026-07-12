@@ -75,6 +75,9 @@ type Props = {
   onTextBlockBlur?: () => void
 }
 
+// How long after the last keystroke a record's coalesced PATCH fires.
+const SAVE_DEBOUNCE_MS = 600
+
 const BLOCK_BORDER: Record<string, string> = {
   text: 'border-l-accent/30',
   choice_point: 'border-l-[#cc8888]',
@@ -225,9 +228,11 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   const activeBlockIdRef = useRef<string | null>(null)
   const blocksRef = useRef<Block[]>(blocks)
   const onBlocksChangeRef = useRef(onBlocksChange)
+  const onChoicesChangedRef = useRef(onChoicesChanged)
   activeBlockIdRef.current = activeBlockId
   blocksRef.current = blocks
   onBlocksChangeRef.current = onBlocksChange
+  onChoicesChangedRef.current = onChoicesChanged
   if (currentBlocksRef) currentBlocksRef.current = blocks
 
   const textEditorsRef = useRef<Map<string, Editor>>(new Map())
@@ -428,29 +433,111 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chapterId])
 
-  async function updateBlock(blockId: string, data: object) {
-    const existing = blocks.find(b => b.id === blockId)
-    setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, ...data } : b))
-    await fetch(`/api/chapters/${chapterId}/blocks/${blockId}`, {
+  // Debounced write-behind for the per-keystroke save paths (prose content,
+  // override content, choice branch text). Local state still updates on every
+  // keystroke; the PATCH for a given record coalesces into one request that
+  // fires SAVE_DEBOUNCE_MS after the last edit. Pending saves flush on text
+  // blur, unmount, and tab close (keepalive), so nothing is ever left behind.
+  // All PATCHes to the same URL are chained through sendSave so a slow early
+  // save can never land after (and overwrite) a newer one.
+  const pendingSavesRef = useRef<Map<string, { url: string; data: Record<string, unknown>; timer: ReturnType<typeof setTimeout>; after?: () => void }>>(new Map())
+  const saveChainRef = useRef<Map<string, Promise<void>>>(new Map())
+
+  function sendSave(url: string, data: Record<string, unknown>, keepalive = false): Promise<void> {
+    const prev = saveChainRef.current.get(url) ?? Promise.resolve()
+    const next = prev.catch(() => {}).then(() => fetch(url, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
+      keepalive,
+    }).then(() => {}))
+    saveChainRef.current.set(url, next)
+    return next
+  }
+
+  function queueSave(key: string, url: string, data: Record<string, unknown>, after?: () => void) {
+    const prev = pendingSavesRef.current.get(key)
+    if (prev) {
+      clearTimeout(prev.timer)
+      data = { ...prev.data, ...data }
+      after = after ?? prev.after
+    }
+    pendingSavesRef.current.set(key, {
+      url,
+      data,
+      after,
+      timer: setTimeout(() => void flushSave(key), SAVE_DEBOUNCE_MS),
     })
-    // Sidebar choices list keys off choice_point.prompt; nudge a refresh when that
-    // (or the block's existence as a choice_point) could have changed.
-    if (existing?.type === 'choice_point' && 'prompt' in data) {
-      onChoicesChanged?.()
+  }
+
+  function flushSave(key: string, keepalive = false): Promise<void> {
+    const entry = pendingSavesRef.current.get(key)
+    if (!entry) return Promise.resolve()
+    pendingSavesRef.current.delete(key)
+    clearTimeout(entry.timer)
+    const done = sendSave(entry.url, entry.data, keepalive)
+    if (entry.after) void done.then(entry.after)
+    return done
+  }
+
+  function flushAllSaves(keepalive = false) {
+    for (const key of Array.from(pendingSavesRef.current.keys())) void flushSave(key, keepalive)
+  }
+
+  function discardPendingSave(key: string) {
+    const entry = pendingSavesRef.current.get(key)
+    if (!entry) return
+    clearTimeout(entry.timer)
+    pendingSavesRef.current.delete(key)
+  }
+
+  useEffect(() => {
+    const flush = () => flushAllSaves(true)
+    window.addEventListener('pagehide', flush)
+    window.addEventListener('beforeunload', flush)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      window.removeEventListener('beforeunload', flush)
+      flushAllSaves()
+    }
+  // flushAllSaves only touches refs; mount/unmount is the right lifecycle
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function updateBlock(blockId: string, data: object) {
+    const existing = blocks.find(b => b.id === blockId)
+    setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, ...data } : b))
+    const d = data as Record<string, unknown>
+    const url = `/api/chapters/${chapterId}/blocks/${blockId}`
+    // Sidebar choices list keys off choice_point.prompt; nudge a refresh when
+    // that could have changed — after the save lands, so it reads fresh data.
+    const after = existing?.type === 'choice_point' && 'prompt' in d
+      ? () => onChoicesChangedRef.current?.()
+      : undefined
+    if (Object.keys(d).every(k => k === 'content' || k === 'prompt')) {
+      queueSave(`block:${blockId}`, url, d, after)
+    } else {
+      // Structural edits (condition, displayType, pins…) save immediately;
+      // flush any pending typing save first so field updates land in order.
+      void flushSave(`block:${blockId}`)
+      const done = sendSave(url, d)
+      if (after) void done.then(after)
     }
   }
 
   async function deleteBlock(blockId: string) {
     const existing = blocks.find(b => b.id === blockId)
+    // Drop pending saves for anything the delete is about to remove —
+    // flushing them would just race the DELETE.
+    discardPendingSave(`block:${blockId}`)
+    existing?.choices.forEach(c => discardPendingSave(`choice:${c.id}`))
+    existing?.overrides.forEach(o => discardPendingSave(`override:${o.id}`))
     await fetch(`/api/chapters/${chapterId}/blocks/${blockId}`, { method: 'DELETE' })
     onBlocksChange()
     if (existing?.type === 'choice_point') onChoicesChanged?.()
   }
 
-  async function updateChoice(choiceId: string, data: object) {
+  function updateChoice(choiceId: string, data: object) {
     const block = blocks.find(b => b.choices.some(c => c.id === choiceId))
     if (!block) return
     setBlocks(prev => prev.map(b =>
@@ -459,12 +546,16 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
         choices: b.choices.map(c => c.id === choiceId ? { ...c, ...data } : c),
       }
     ))
-    await fetch(`/api/blocks/${block.id}/choices/${choiceId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    })
-    if (!('label' in data)) onBlocksChange()
+    const d = data as Record<string, unknown>
+    const url = `/api/blocks/${block.id}/choices/${choiceId}`
+    const after = !('label' in d) ? () => onBlocksChangeRef.current() : undefined
+    if (Object.keys(d).every(k => k === 'label' || k === 'endingMessage')) {
+      queueSave(`choice:${choiceId}`, url, d, after)
+    } else {
+      void flushSave(`choice:${choiceId}`)
+      const done = sendSave(url, d)
+      if (after) void done.then(after)
+    }
   }
 
   async function addOverride(blockId: string, condition: object, content: string) {
@@ -480,7 +571,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     onBlocksChange()
   }
 
-  async function updateOverride(overrideId: string, data: object) {
+  function updateOverride(overrideId: string, data: object) {
     const block = blocks.find(b => b.overrides.some(o => o.id === overrideId))
     if (!block) return
     setBlocks(prev => prev.map(b =>
@@ -489,16 +580,20 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
         overrides: b.overrides.map(o => o.id === overrideId ? { ...o, ...data } : o),
       }
     ))
-    await fetch(`/api/blocks/${block.id}/overrides/${overrideId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    })
+    const d = data as Record<string, unknown>
+    const url = `/api/blocks/${block.id}/overrides/${overrideId}`
+    if (Object.keys(d).every(k => k === 'content' || k === 'endingMessage')) {
+      queueSave(`override:${overrideId}`, url, d)
+    } else {
+      void flushSave(`override:${overrideId}`)
+      void sendSave(url, d)
+    }
   }
 
   async function deleteOverride(overrideId: string) {
     const block = blocks.find(b => b.overrides.some(o => o.id === overrideId))
     if (!block) return
+    discardPendingSave(`override:${overrideId}`)
     setBlocks(prev => prev.map(b =>
       b.id !== block.id ? b : { ...b, overrides: b.overrides.filter(o => o.id !== overrideId) }
     ))
@@ -553,7 +648,13 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                     searchQuery={searchQuery}
                     searchOptions={searchOptions}
                     onEditorReady={editor => textEditorsRef.current.set(block.id, editor)}
-                    onBlur={onTextBlockBlur}
+                    onBlur={() => {
+                      // Leaving a text editor commits its pending save right
+                      // away — this also guarantees content is in flight
+                      // before the blur-driven canon export reads the DB.
+                      flushAllSaves()
+                      onTextBlockBlur?.()
+                    }}
                   />
                 )}
 
