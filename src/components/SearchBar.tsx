@@ -256,14 +256,14 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
           filter + clear buttons on the right. Keeping every interactive
           element inside the input prevents the surrounding header from
           reflowing when the filter label changes width. */}
-      <div className="relative flex items-center w-52">
+      <div className="relative flex items-center w-72">
         <LuSearch size={12} className="absolute left-2 text-ink-faint pointer-events-none" />
         <input
           ref={inputRef}
           value={query}
           onChange={e => { setQuery(e.target.value); setOpen(true) }}
           onFocus={() => setOpen(true)}
-          placeholder="Search the series…"
+          placeholder="Search the series… (⌥⇧G)"
           title="Search the series (⌥⇧G)"
           className="w-full pl-7 pr-[92px] py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
         />

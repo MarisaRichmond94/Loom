@@ -761,7 +761,7 @@ export default function ChapterEditorPage() {
 
           <div className="ml-auto flex items-center gap-4">
             {/* Chapter-local find bar — always visible, styled like the global series search */}
-            <div className="relative flex items-center w-62">
+            <div className="relative flex items-center w-72">
               <LuSearch size={12} className="absolute left-2 text-ink-faint pointer-events-none" />
               <input
                 ref={localSearchInputRef}
