@@ -45,3 +45,36 @@ describe('matchRanges — match case / whole word', () => {
     expect(matchRanges('café au lait', 'café', { wholeWord: true }).length).toBe(1)
   })
 })
+
+describe('matchRanges — smart-quote folding', () => {
+  it('matches a straight apostrophe against a stored curly one', () => {
+    // Prose is educated to U+2019; the search box gives U+0027.
+    expect(matchRanges('you shouldn’t go', "shouldn't").length).toBe(1)
+  })
+
+  it('matches a curly apostrophe query against straight prose', () => {
+    expect(matchRanges("you shouldn't go", 'shouldn’t').length).toBe(1)
+  })
+
+  it('folds curly double quotes both ways', () => {
+    expect(matchRanges('he said “hi”', '"hi"').length).toBe(1)
+    expect(matchRanges('he said "hi"', '“hi”').length).toBe(1)
+  })
+
+  it('keeps match indices aligned with the original text (length-preserving)', () => {
+    const hay = 'a ‘b’ shouldn’t'
+    const r = matchRanges(hay, "shouldn't")
+    expect(r.length).toBe(1)
+    // index must point at the real "shouldn't" in the ORIGINAL string
+    expect(hay.slice(r[0].index, r[0].index + r[0].length)).toBe('shouldn’t')
+  })
+
+  it('still honours case and whole-word with folded quotes', () => {
+    expect(
+      matchRanges('Don’t say don’t', "don't", { wholeWord: true }).length,
+    ).toBe(2)
+    expect(
+      matchRanges('Don’t say don’t', "don't", { caseSensitive: true }).length,
+    ).toBe(1)
+  })
+})

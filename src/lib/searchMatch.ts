@@ -9,6 +9,22 @@ function isWordChar(ch: string | undefined): boolean {
   return ch !== undefined && WORD.test(ch)
 }
 
+// Fold typographic quotes/apostrophes to their straight ASCII forms so a query
+// typed with a keyboard apostrophe (U+0027) matches prose that stores the curly
+// one. The editor "educates" quotes on paste/type (see educateQuotes), so
+// "shouldn't" is stored as "shouldn't" — without this fold a search for
+// "shouldn't" finds nothing. The map is 1-char → 1-char, i.e. LENGTH-PRESERVING,
+// so match indices computed against folded text still line up with the original
+// (findBlockMatches' posOf mapping and every caller's hay.slice depend on this).
+const QUOTES = /[‘’‚‛′“”„‟″]/g
+function foldQuotes(s: string): string {
+  return s.replace(QUOTES, (c) =>
+    c === '“' || c === '”' || c === '„' || c === '‟' || c === '″'
+      ? '"'
+      : "'",
+  )
+}
+
 // Every occurrence of `rawQuery` in `hay`, honouring caseSensitive / wholeWord.
 // Whole-word tests the characters flanking the match against a Unicode word
 // class, so "cat" doesn't match inside "category" but does inside "the cat.".
@@ -19,10 +35,13 @@ export function matchRanges(
   rawQuery: string,
   opts: SearchOptions = {},
 ): { index: number; length: number }[] {
-  const query = rawQuery.trim()
+  const query = foldQuotes(rawQuery.trim())
   if (!query) return []
+  // Fold is length-preserving, so indices into `folded` map 1:1 onto `hay` —
+  // the word-boundary check below still reads the ORIGINAL flanking chars.
+  const folded = foldQuotes(hay)
   const needle = opts.caseSensitive ? query : query.toLowerCase()
-  const H = opts.caseSensitive ? hay : hay.toLowerCase()
+  const H = opts.caseSensitive ? folded : folded.toLowerCase()
   const len = needle.length
   const out: { index: number; length: number }[] = []
   let from = 0

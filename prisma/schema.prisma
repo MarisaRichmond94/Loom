@@ -64,6 +64,11 @@ model Character {
   deathBook   Book?                   @relation("DiesIn", fields: [deathBookId], references: [id], onDelete: SetNull)
   lastBook    Book?                   @relation("LastAppearsIn", fields: [lastBookId], references: [id], onDelete: SetNull)
   overrides   CharacterBookOverride[]
+
+  @@index([seriesId])
+  @@index([firstBookId])
+  @@index([deathBookId])
+  @@index([lastBookId])
 }
 
 model CharacterBookOverride {
@@ -75,6 +80,7 @@ model CharacterBookOverride {
   book        Book      @relation("CharacterOverrides", fields: [bookId], references: [id], onDelete: Cascade)
 
   @@unique([characterId, bookId])
+  @@index([bookId])
 }
 
 model Book {
@@ -104,6 +110,8 @@ model Book {
   // Inverse of StoryVariable.originBook — set when this book is the
   // origin for a variable.
   originatingVariables         StoryVariable[]
+
+  @@index([seriesId, order])
 }
 
 model Chapter {
@@ -118,6 +126,8 @@ model Chapter {
   book           Book           @relation(fields: [bookId], references: [id], onDelete: Cascade)
   blocks         ContentBlock[]
   inboundChoices Choice[]       @relation("TargetChapter")
+
+  @@index([bookId, order])
 }
 
 model ContentBlock {
@@ -135,6 +145,8 @@ model ContentBlock {
   chapter     Chapter               @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   choices     Choice[]
   overrides   ConditionalOverride[]
+
+  @@index([chapterId, order])
 }
 
 model Choice {
@@ -153,6 +165,9 @@ model Choice {
   isBadEnding     Boolean      @default(false)
   choicePoint     ContentBlock @relation(fields: [choicePointId], references: [id], onDelete: Cascade)
   targetChapter   Chapter?     @relation("TargetChapter", fields: [targetChapterId], references: [id])
+
+  @@index([choicePointId])
+  @@index([targetChapterId])
 }
 
 model ConditionalOverride {
@@ -166,6 +181,8 @@ model ConditionalOverride {
   // several earlier choices aligning, rather than a single fatal choice.
   endingMessage         String?
   conditionalFragment   ContentBlock @relation(fields: [conditionalFragmentId], references: [id], onDelete: Cascade)
+
+  @@index([conditionalFragmentId, order])
 }
 
 model StoryVariable {
@@ -186,6 +203,7 @@ model StoryVariable {
   originBook   Book?  @relation(fields: [originBookId], references: [id], onDelete: SetNull)
 
   @@unique([seriesId, name])
+  @@index([originBookId])
 }
 
 model ReaderSession {
@@ -200,4 +218,7 @@ model ReaderSession {
   storyState     String   @default("{}")
   choiceHistory  String   @default("[]")
   series         Series   @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  @@index([seriesId])
+  @@index([updatedAt])
 }
