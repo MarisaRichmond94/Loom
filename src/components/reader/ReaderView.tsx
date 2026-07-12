@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { LuMoon, LuSun, LuArrowLeft, LuArrowRight, LuMusic, LuUser, LuSlidersHorizontal, LuCopy, LuCheck } from 'react-icons/lu'
@@ -81,10 +81,15 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+// Built once at module load — generateHTML instantiates a ProseMirror schema
+// from this list on every call, so the array itself must not be rebuilt per
+// block per render.
+const RENDER_EXTENSIONS = [StarterKit, TextAlign.configure({ types: ['paragraph', 'heading'] }), TextStyle, Color, Footnote, CharacterMark]
+
 function renderTipTap(json: string | null | undefined, storyState?: StoryState): string {
   if (!json) return ''
   try {
-    const html = generateHTML(JSON.parse(json), [StarterKit, TextAlign.configure({ types: ['paragraph', 'heading'] }), TextStyle, Color, Footnote, CharacterMark])
+    const html = generateHTML(JSON.parse(json), RENDER_EXTENSIONS)
     const stripped = stripEmptyParagraphs(html)
     if (!storyState) return stripped
     return substituteVarTemplates(stripped, storyState, escapeHtml)
@@ -120,7 +125,14 @@ export default function ReaderView({
     setLightMode(localStorage.getItem('loom-light-mode') === 'true')
   }, [])
   const [charCard, setCharCard] = useState<{ character: Character; x: number; y: number; above: boolean } | null>(null)
-  const [scrollProgress, setScrollProgress] = useState(0)
+  // Scroll progress is written straight to the DOM (bar width) instead of
+  // React state — a per-scroll-event setState re-rendered the whole chapter.
+  // Only the coarse "reached the end" flag stays in state, for the
+  // next-chapter button styling; setAtEnd with an unchanged value is a
+  // no-op re-render-wise.
+  const scrollProgressRef = useRef(0)
+  const progressFillRef = useRef<HTMLDivElement>(null)
+  const [atEnd, setAtEnd] = useState(false)
   const [choiceMarkers, setChoiceMarkers] = useState<{ id: string; position: number }[]>([])
   const [showConfig, setShowConfig] = useState(false)
   const [isAuthor, setIsAuthor] = useState(false)
@@ -146,16 +158,23 @@ export default function ReaderView({
     setIsAuthor((localStorage.getItem('loom-author-name') ?? '').trim() !== '')
   }, [])
 
+  function applyScrollProgress(p: number) {
+    scrollProgressRef.current = p
+    if (progressFillRef.current) progressFillRef.current.style.width = `${p * 100}%`
+    setAtEnd(p >= 0.99)
+  }
+
   useEffect(() => {
     const el = mainRef.current
     if (!el) return
     function onScroll() {
       const { scrollTop, scrollHeight, clientHeight } = el!
       const max = scrollHeight - clientHeight
-      setScrollProgress(max > 0 ? scrollTop / max : 0)
+      applyScrollProgress(max > 0 ? scrollTop / max : 0)
     }
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => el.removeEventListener('scroll', onScroll)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -167,12 +186,13 @@ export default function ReaderView({
       const raf = requestAnimationFrame(() => {
         const blockEl = document.getElementById(`block-${target}`)
         if (blockEl) blockEl.scrollIntoView({ block: 'start' })
-        else { el.scrollTop = 0; setScrollProgress(0) }
+        else { el.scrollTop = 0; applyScrollProgress(0) }
       })
       return () => cancelAnimationFrame(raf)
     }
     el.scrollTop = 0
-    setScrollProgress(0)
+    applyScrollProgress(0)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blocks])
 
   useEffect(() => {
@@ -192,9 +212,10 @@ export default function ReaderView({
       // Recompute progress fill: choice expansion / collapse changes scrollHeight,
       // so the cached ratio from the onScroll listener is stale until the user scrolls.
       const max = el.scrollHeight - el.clientHeight
-      setScrollProgress(max > 0 ? el.scrollTop / max : 0)
+      applyScrollProgress(max > 0 ? el.scrollTop / max : 0)
     })
     return () => cancelAnimationFrame(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blocks, choiceHistory])
 
   // Auto-scroll after a choice answer was jumpy in practice — the block
@@ -229,6 +250,60 @@ export default function ReaderView({
     document.addEventListener('mouseover', onOver)
     return () => document.removeEventListener('mouseover', onOver)
   }, [characters])
+
+  // All prose HTML and condition evaluation happens here, once per
+  // (blocks, storyState, choiceHistory) change — never inside the render
+  // loop. renderTipTap parses JSON and runs generateHTML per call, which is
+  // far too expensive to repeat on every hover/scroll-driven re-render.
+  const renderedBlocks = useMemo(() => {
+    const map = new Map<string, {
+      html?: string
+      matched?: ReturnType<typeof resolveConditionalOverride>
+      conditionOk?: boolean
+      branchHtml?: string | null
+    }>()
+    for (const block of blocks) {
+      if (block.type === 'text') {
+        map.set(block.id, { html: renderTipTap(block.content, storyState) })
+      } else if (block.type === 'conditional_fragment') {
+        const matched = resolveConditionalOverride(
+          {
+            overrides: block.overrides.map(o => ({
+              id: o.id,
+              order: o.order,
+              condition: JSON.parse(o.condition),
+              content: o.content,
+              endingMessage: o.endingMessage ?? null,
+            })),
+          },
+          storyState
+        )
+        map.set(block.id, { matched, html: matched ? renderTipTap(matched.content, storyState) : '' })
+      } else if (block.type === 'choice_point') {
+        let conditionOk = true
+        if (block.condition) {
+          try {
+            conditionOk = matchesCondition(JSON.parse(block.condition), storyState)
+          } catch { /* malformed condition: treat as visible */ }
+        }
+        const answered = choiceHistory.find(h => h.choicePointId === block.id)
+        const chosen = answered ? block.choices.find(c => c.id === answered.choiceId) : undefined
+        const branchHtml = chosen?.endingMessage && !chosen.isBadEnding
+          ? tryRenderRichContent(chosen.endingMessage, storyState)
+          : null
+        map.set(block.id, { conditionOk, branchHtml })
+      } else if (block.type === 'soundtrack') {
+        let conditionOk = true
+        if (block.condition) {
+          try {
+            conditionOk = matchesCondition(JSON.parse(block.condition), storyState)
+          } catch { /* malformed condition: ignore and play */ }
+        }
+        map.set(block.id, { conditionOk })
+      }
+    }
+    return map
+  }, [blocks, storyState, choiceHistory])
 
   async function handleChoose(choicePointBlock: Block, choiceId: string) {
     setPendingChoiceBlock(null)
@@ -402,7 +477,7 @@ export default function ReaderView({
                   id={`block-${block.id}`}
                   className="prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_p.no-indent]:indent-0 [&_p[style*='center']]:indent-0 [&_p:empty]:min-h-[1em] [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6"
                   style={pendingChoice ? { filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' } : undefined}
-                  dangerouslySetInnerHTML={{ __html: renderTipTap(block.content, storyState) }}
+                  dangerouslySetInnerHTML={{ __html: renderedBlocks.get(block.id)?.html ?? '' }}
                 />
               )
             }
@@ -410,18 +485,7 @@ export default function ReaderView({
             if (pendingChoice) return null
 
             if (block.type === 'conditional_fragment') {
-              const matched = resolveConditionalOverride(
-                {
-                  overrides: block.overrides.map(o => ({
-                    id: o.id,
-                    order: o.order,
-                    condition: JSON.parse(o.condition),
-                    content: o.content,
-                    endingMessage: o.endingMessage ?? null,
-                  })),
-                },
-                storyState
-              )
+              const matched = renderedBlocks.get(block.id)?.matched
               if (!matched) return null
               // Render the override's prose either way — for bad endings the
               // prose IS the death scene. Flip hitBadEnding so the rest of
@@ -432,7 +496,7 @@ export default function ReaderView({
                   key={block.id}
                   id={`block-${block.id}`}
                   className={`prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_p.no-indent]:indent-0 [&_p[style*='center']]:indent-0 [&_p:empty]:min-h-[1em] [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6 ${HIGHLIGHT_CLASSES}`}
-                  dangerouslySetInnerHTML={{ __html: renderTipTap(matched.content, storyState) }}
+                  dangerouslySetInnerHTML={{ __html: renderedBlocks.get(block.id)?.html ?? '' }}
                 />
               )
             }
@@ -450,7 +514,7 @@ export default function ReaderView({
                 // legacy plain text in a paragraph.
                 const chosen = block.choices.find(c => c.id === answered.choiceId)
                 if (chosen?.endingMessage && !chosen?.isBadEnding) {
-                  const rich = tryRenderRichContent(chosen.endingMessage, storyState)
+                  const rich = renderedBlocks.get(block.id)?.branchHtml ?? null
                   return (
                     <div
                       key={block.id}
@@ -466,10 +530,7 @@ export default function ReaderView({
                 return null
               }
 
-              if (block.condition) {
-                const parsed = JSON.parse(block.condition)
-                if (!matchesCondition(parsed, storyState)) return null
-              }
+              if (!(renderedBlocks.get(block.id)?.conditionOk ?? true)) return null
 
               pendingChoice = true
 
@@ -496,12 +557,7 @@ export default function ReaderView({
             if (block.type === 'soundtrack' && block.content) {
               // Optional conditioning — same shape choice blocks use.
               // No condition → always plays.
-              if (block.condition) {
-                try {
-                  const parsed = JSON.parse(block.condition)
-                  if (!matchesCondition(parsed, storyState)) return null
-                } catch { /* malformed condition: ignore and play */ }
-              }
+              if (!(renderedBlocks.get(block.id)?.conditionOk ?? true)) return null
               const label = pinLabel(block.pinStart, block.pinEnd)
               return (
                 <div key={block.id} id={`block-${block.id}`} className="my-4 px-4 py-3 rounded-lg bg-surface-raised border border-accent/10">
@@ -646,8 +702,9 @@ export default function ReaderView({
           ) : <div />}
           <div className="flex-1 relative h-1 bg-surface-muted rounded-full">
             <div
+              ref={progressFillRef}
               className="h-full bg-accent/60 rounded-full transition-[width] duration-75"
-              style={{ width: `${scrollProgress * 100}%` }}
+              style={{ width: `${scrollProgressRef.current * 100}%` }}
             />
             {choiceMarkers.map(marker => (
               <div
@@ -660,7 +717,7 @@ export default function ReaderView({
           {nextChapter ? (
             <button
               onClick={() => onNavigate(nextChapter.id)}
-              className={`shrink-0 flex items-center gap-1.5 text-xs transition ${scrollProgress >= 0.99 ? 'text-white font-medium' : 'text-ink-muted hover:text-ink'}`}
+              className={`shrink-0 flex items-center gap-1.5 text-xs transition ${atEnd ? 'text-white font-medium' : 'text-ink-muted hover:text-ink'}`}
             >
               {chapterLabels[nextChapter.id]?.readerLabel ?? nextChapter.title} <LuArrowRight size={13} />
             </button>
