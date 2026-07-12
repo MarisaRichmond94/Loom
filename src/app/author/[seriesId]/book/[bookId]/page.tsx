@@ -8,7 +8,11 @@ import type { Area } from 'react-easy-crop'
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import BookSkeleton from '@/components/editor/BookSkeleton'
-import ExportBookModal from '@/components/editor/ExportBookModal'
+import dynamic from 'next/dynamic'
+
+// Only rendered after "Export book…" is clicked — load its chunk then, not
+// with the page.
+const ExportBookModal = dynamic(() => import('@/components/editor/ExportBookModal'), { ssr: false })
 import { useCanonSave } from '@/components/editor/useCanonSave'
 import { pinLabel } from '@/lib/pinLabel'
 import PinnedAudio from '@/components/PinnedAudio'

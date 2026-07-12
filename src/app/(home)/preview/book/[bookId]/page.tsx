@@ -6,7 +6,10 @@ import Image from 'next/image'
 import { LuArrowRight, LuArrowLeft, LuBookOpen, LuChevronDown, LuUser, LuMusic, LuStar } from 'react-icons/lu'
 import PinnedAudio from '@/components/PinnedAudio'
 import { pinLabel } from '@/lib/pinLabel'
-import AuthorModal from '@/components/AuthorModal'
+import dynamic from 'next/dynamic'
+
+// Only rendered after the author byline is clicked — load on first open.
+const AuthorModal = dynamic(() => import('@/components/AuthorModal'), { ssr: false })
 
 type Chapter = { id: string; title: string; order: number }
 type Book = {

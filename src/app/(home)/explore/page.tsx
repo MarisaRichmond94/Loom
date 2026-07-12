@@ -11,7 +11,10 @@ import {
   getActiveReaderSessions,
   forgetReaderSession,
 } from '@/lib/readerProgress'
-import AuthorModal from '@/components/AuthorModal'
+import dynamic from 'next/dynamic'
+
+// Only rendered after an author byline is clicked — load on first open.
+const AuthorModal = dynamic(() => import('@/components/AuthorModal'), { ssr: false })
 
 type ExploreSeries = {
   id: string

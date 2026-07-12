@@ -17,11 +17,15 @@ import { tryRenderRichContent } from '@/lib/renderRichContent'
 import { pinLabel } from '@/lib/pinLabel'
 import type { ChapterLabel } from '@/lib/chapterLabels'
 import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
+import dynamic from 'next/dynamic'
 import InlineChoice from './InlineChoice'
 import ChapterGate from './ChapterGate'
-import ChoiceConfigModal from './ChoiceConfigModal'
-import BadEndingModal from './BadEndingModal'
 import InlineBadEnding from './InlineBadEnding'
+
+// Both only mount on rare events (Configure click / a bad-ending choice) —
+// load their chunks then instead of with every reader page.
+const ChoiceConfigModal = dynamic(() => import('./ChoiceConfigModal'), { ssr: false })
+const BadEndingModal = dynamic(() => import('./BadEndingModal'), { ssr: false })
 import AvatarButton from '@/components/AvatarButton'
 import Greeting from '@/components/Greeting'
 import PinnedAudio from '@/components/PinnedAudio'

@@ -4,7 +4,10 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { LuArrowRight, LuBookOpen } from 'react-icons/lu'
-import AuthorModal from '@/components/AuthorModal'
+import dynamic from 'next/dynamic'
+
+// Only rendered after the author byline is clicked — load on first open.
+const AuthorModal = dynamic(() => import('@/components/AuthorModal'), { ssr: false })
 
 type Book = {
   id: string
