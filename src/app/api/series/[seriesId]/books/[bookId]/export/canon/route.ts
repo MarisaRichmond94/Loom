@@ -12,6 +12,9 @@ import { readProfileSettings } from '@/lib/profileSettings'
 import { readFrontMatterDocx } from '@/lib/frontMatter'
 import { readCanonExportSettings } from '@/lib/canonExportSettings'
 import { loadTemplateStyles, type TemplateStyles } from '@/lib/templateStyles'
+import { extractTextFromTipTap } from '@/lib/tiptapText'
+import { docxToPlainText } from '@/lib/manuscript/docxText'
+import { publishEvent } from '@/lib/eventBus'
 
 // One-shot "save canon to disk" export (the ⌥⇧E hotkey). Unlike the
 // interactive export, nothing is asked of the writer: canon means every
@@ -67,6 +70,12 @@ function canonHashes(): Map<string, string> {
   return g.__loomCanonHashes
 }
 
+async function writeAtomic(dest: string, contents: string | Buffer) {
+  const tmp = `${dest}.loom-tmp`
+  await writeFile(tmp, contents)
+  await rename(tmp, dest)
+}
+
 type Params = { params: Promise<{ seriesId: string; bookId: string }> }
 
 export async function POST(req: Request, { params }: Params) {
@@ -120,19 +129,53 @@ export async function POST(req: Request, { params }: Params) {
 
   const safeTitle = data.bookTitle.replace(/[/\\:]/g, '-').trim() || 'Manuscript'
   const outPath = path.join(dest.dir, `${safeTitle}.${format}`)
+  const docxSidecarPath = path.join(dest.dir, `${safeTitle}.docx`)
+  const txtSidecarPath = path.join(dest.dir, `${safeTitle}.txt`)
+  const manifestPath = path.join(dest.dir, `${safeTitle}.manifest.json`)
 
   // Hash every input that shapes the output file (the docx bytes themselves
   // are nondeterministic — JSZip stamps entry dates). If nothing changed
-  // since the last successful export to this path and the file is still
-  // there, skip the whole build + Pages round-trip.
+  // since the last successful export to this path and every artifact is
+  // still there, skip the whole build + Pages round-trip.
   const hash = createHash('sha256')
   hash.update(JSON.stringify({ chapters: result.chapters, formatting, authorName, templateStyles, format }))
   if (frontMatter) hash.update(frontMatter)
   const contentHash = hash.digest('hex')
   if (canonHashes().get(outPath) === contentHash) {
-    const stillThere = await access(outPath).then(() => true, () => false)
-    if (stillThere) return NextResponse.json({ ok: true, path: outPath, warnings, reviewChapter, skipped: true })
+    const artifacts = format === 'pages'
+      ? [outPath, docxSidecarPath, txtSidecarPath, manifestPath]
+      : [outPath, txtSidecarPath, manifestPath]
+    const allThere = (await Promise.all(artifacts.map(p => access(p).then(() => true, () => false)))).every(Boolean)
+    if (allThere) return NextResponse.json({ ok: true, path: outPath, warnings, reviewChapter, skipped: true })
   }
+
+  // Sidecar manifest for machine consumers (WriteAI's sync reads it to detect
+  // drift without parsing the manuscript): per-chapter identity, canon
+  // numbering — the same mapping the chunker uses, bare number or 0 for the
+  // prologue — plus a content hash and word count per chapter.
+  const manifest = JSON.stringify({
+    manifestVersion: 1,
+    seriesId,
+    bookId,
+    bookTitle: data.bookTitle,
+    exportedAt: new Date().toISOString(),
+    contentHash,
+    chapterCount: result.chapters.length,
+    chapters: result.chapters.map(ch => ({
+      id: ch.id,
+      number: ch.numbered ? Number(ch.label) : (ch.label.trim().toLowerCase() === 'prologue' ? 0 : null),
+      label: ch.label,
+      pov: ch.pov,
+      date: ch.date,
+      wordCount: ch.contents.reduce((n, c) => {
+        const t = extractTextFromTipTap(c).trim()
+        return n + (t ? t.split(/\s+/).length : 0)
+      }, 0),
+      contentHash: createHash('sha256')
+        .update(JSON.stringify({ label: ch.label, pov: ch.pov, date: ch.date, contents: ch.contents }))
+        .digest('hex'),
+    })),
+  }, null, 2)
 
   const docx = await buildManuscriptDocx({
     bookTitle: data.bookTitle,
@@ -143,13 +186,35 @@ export async function POST(req: Request, { params }: Params) {
     templateStyles,
   })
 
+  // The manifest (and, for pages exports, the .docx sidecar WriteAI ingests)
+  // is written only after the manuscript itself lands, so a consumer never
+  // sees a manifest describing an export that failed. A sidecar failure
+  // downgrades to a warning — the writer's .pages save must not fail over it.
+  async function writeSidecars(withDocx: boolean) {
+    try {
+      if (withDocx) await writeAtomic(docxSidecarPath, docx)
+      await writeAtomic(txtSidecarPath, await docxToPlainText(docx))
+      await writeAtomic(manifestPath, manifest)
+    } catch (err) {
+      warnings.push(`Sync sidecar write failed (${err instanceof Error ? err.message : 'unknown error'}) — WriteAI may not see this save.`)
+    }
+  }
+
+  // Emitted only after a real export lands (never on the skip path, which
+  // means nothing changed) — this is the "safe to ingest" signal consumers
+  // key on. Failures are swallowed: events are hints, the export is truth.
+  const announceExport = () => publishEvent('export.completed', {
+    seriesId, bookId, bookTitle: data.bookTitle, contentHash,
+    chapterCount: result.chapters.length, path: outPath,
+  }).catch(() => {})
+
   if (format === 'docx') {
     // Write-then-rename so a failure mid-write never leaves a truncated
     // manuscript at the destination.
-    const tmpPath = `${outPath}.loom-tmp`
-    await writeFile(tmpPath, docx)
-    await rename(tmpPath, outPath)
+    await writeAtomic(outPath, docx)
+    await writeSidecars(false)
     canonHashes().set(outPath, contentHash)
+    await announceExport()
     return NextResponse.json({ ok: true, path: outPath, warnings, reviewChapter })
   }
 
@@ -163,7 +228,9 @@ export async function POST(req: Request, { params }: Params) {
     const tmpPath = `${outPath}.loom-tmp`
     await copyFile(pagesPath, tmpPath)
     await rename(tmpPath, outPath)
+    await writeSidecars(true)
     canonHashes().set(outPath, contentHash)
+    await announceExport()
     return NextResponse.json({ ok: true, path: outPath, warnings, reviewChapter })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Canon export failed'
@@ -171,5 +238,8 @@ export async function POST(req: Request, { params }: Params) {
   } finally {
     await rm(workDir, { recursive: true, force: true }).catch(() => {})
     await rm(`${outPath}.loom-tmp`, { force: true }).catch(() => {})
+    await rm(`${docxSidecarPath}.loom-tmp`, { force: true }).catch(() => {})
+    await rm(`${txtSidecarPath}.loom-tmp`, { force: true }).catch(() => {})
+    await rm(`${manifestPath}.loom-tmp`, { force: true }).catch(() => {})
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@/generated/prisma/client'
+import { publishEvent } from '@/lib/eventBus'
 
 type Params = { params: Promise<{ chapterId: string }> }
 
@@ -68,6 +69,7 @@ export async function DELETE(_: Request, { params }: Params) {
       }),
     ])
 
+    await publishEvent('chapter.deleted', { bookId: target.bookId, chapterId, title: target.title, order: target.order }).catch(() => {})
     return new NextResponse(null, { status: 204 })
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {

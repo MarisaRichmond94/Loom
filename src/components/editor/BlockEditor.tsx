@@ -14,6 +14,7 @@ import ConditionalBlock from './ConditionalBlock'
 import SoundtrackBlock from './SoundtrackBlock'
 import { extractTextFromTipTap } from '@/lib/tiptapText'
 import { findBlockMatches, type SearchOptions } from '@/lib/searchMatch'
+import { notify } from '@/lib/notifications'
 import ConfirmDialog from '@/components/ConfirmDialog'
 
 type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
@@ -533,18 +534,45 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   // fires SAVE_DEBOUNCE_MS after the last edit. Pending saves flush on text
   // blur, unmount, and tab close (keepalive), so nothing is ever left behind.
   // All PATCHes to the same URL are chained through sendSave so a slow early
-  // save can never land after (and overwrite) a newer one.
+  // save can never land after (and overwrite) a newer one. Failed saves retry
+  // with backoff, then surface an error toast — the prose DB is the source of
+  // truth, so its write path must never fail silently.
   const pendingSavesRef = useRef<Map<string, { url: string; data: Record<string, unknown>; timer: ReturnType<typeof setTimeout>; after?: () => void }>>(new Map())
   const saveChainRef = useRef<Map<string, Promise<void>>>(new Map())
 
   function sendSave(url: string, data: Record<string, unknown>, keepalive = false): Promise<void> {
     const prev = saveChainRef.current.get(url) ?? Promise.resolve()
-    const next = prev.catch(() => {}).then(() => fetch(url, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-      keepalive,
-    }).then(() => {}))
+    const next = prev.catch(() => {}).then(async () => {
+      for (let attempt = 0; ; attempt++) {
+        let res: Response | null = null
+        try {
+          res = await fetch(url, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+            keepalive,
+          })
+        } catch {
+          // Network failure — fall through to retry.
+        }
+        if (res?.ok) return
+        // 404 means the record was deleted while a save was in flight —
+        // deleteBlock discards pending saves, so this race is benign.
+        if (res?.status === 404) return
+        // Other 4xx: the server rejected the payload; retrying won't help.
+        if (res && res.status < 500) {
+          notify('error', 'Save failed — your latest edits are not stored. Copy them somewhere safe and reload.')
+          return
+        }
+        // Page is closing; no room to retry or notify.
+        if (keepalive) return
+        if (attempt >= 2) {
+          notify('error', 'Save failed after retrying — your latest edits are not stored. Check that Loom’s server is running.')
+          return
+        }
+        await new Promise(resolve => setTimeout(resolve, 1500 * (attempt + 1)))
+      }
+    })
     saveChainRef.current.set(url, next)
     return next
   }

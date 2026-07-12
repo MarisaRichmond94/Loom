@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@/generated/prisma/client'
+import { publishEvent } from '@/lib/eventBus'
 
 type Params = { params: Promise<{ seriesId: string; bookId: string }> }
 
@@ -43,6 +44,12 @@ export async function PATCH(req: Request, { params }: Params) {
   const { seriesId, bookId } = await params
   const { title, order, synopsis, coverPath, published, inProgress } = await req.json()
   try {
+    // A rename breaks every title-keyed consumer (canon-export folder
+    // matching, WriteAI ingestion) until folders are renamed to match —
+    // announce it so subscribers can react instead of silently drifting.
+    const before = title !== undefined
+      ? await prisma.book.findUnique({ where: { id: bookId }, select: { title: true } })
+      : null
     // When marking a book as in-progress, atomically clear the flag on
     // every other book in the same series so there's never more than one
     // active. Toggling off is a plain single-row update.
@@ -75,6 +82,9 @@ export async function PATCH(req: Request, { params }: Params) {
             ...(inProgress === false && { inProgress: false }),
           },
         })
+    if (before && before.title !== book.title) {
+      await publishEvent('book.renamed', { seriesId, bookId, oldTitle: before.title, newTitle: book.title }).catch(() => {})
+    }
     return NextResponse.json(book)
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {

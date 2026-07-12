@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { publishEvent } from '@/lib/eventBus'
 
 type Params = { params: Promise<{ bookId: string }> }
 
@@ -48,6 +49,7 @@ export async function POST(req: Request, { params }: Params) {
     const chapter = await prisma.chapter.create({
       data: { bookId, title: title.trim(), order: count + 1, ...inheritedMeta },
     })
+    await publishEvent('chapter.created', { bookId, chapterId: chapter.id, title: chapter.title, order: chapter.order }).catch(() => {})
     return NextResponse.json(chapter, { status: 201 })
   }
 
@@ -76,5 +78,6 @@ export async function POST(req: Request, { params }: Params) {
     })
   })
 
+  await publishEvent('chapter.created', { bookId, chapterId: chapter.id, title: chapter.title, order: chapter.order, insertedAtOrder: insertAtOrder }).catch(() => {})
   return NextResponse.json(chapter, { status: 201 })
 }
