@@ -15,7 +15,9 @@
       "Skill(claude-api)",
       "Skill(claude-api:*)",
       "Skill(run)",
-      "Skill(run:*)"
+      "Skill(run:*)",
+      "Skill(schedule)",
+      "Skill(schedule:*)"
     ],
     "deny": [
       "Bash(rm -rf *)"
