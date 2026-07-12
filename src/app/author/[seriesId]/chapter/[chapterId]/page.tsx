@@ -52,6 +52,16 @@ export default function ChapterEditorPage() {
   // of the inner scroller on a full page reload.
   useEffect(() => { document.querySelector('main')?.scrollTo(0, 0) }, [chapter?.id])
   const [localSearchQuery, setLocalSearchQuery] = useState('')
+  // Highlighting and match-counting run against this debounced copy: each
+  // keystroke in the find bar otherwise forces every TipTap editor in the
+  // chapter to rescan its whole document. The input itself stays instant;
+  // clearing un-highlights immediately.
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+  useEffect(() => {
+    if (!localSearchQuery.trim()) { setDebouncedSearchQuery(localSearchQuery); return }
+    const t = setTimeout(() => setDebouncedSearchQuery(localSearchQuery), 250)
+    return () => clearTimeout(t)
+  }, [localSearchQuery])
   const [localSearchReplace, setLocalSearchReplace] = useState('')
   const [localSearchReplaceMode, setLocalSearchReplaceMode] = useState(false)
   // Match-case / whole-word toggles, shared (via localStorage) with the
@@ -392,14 +402,19 @@ export default function ChapterEditorPage() {
     await saveCanon(series.books.find(b => b.chapters.some(c => c.id === chapterId))?.id)
   }
 
+  // Plain text per block, extracted once per chapter load — chapter.blocks
+  // only refreshes on structural changes, so search keystrokes must not pay
+  // a JSON.parse of every block.
+  const blockSearchTexts = useMemo(
+    () => (chapter?.blocks ?? []).map(b => extractTextFromTipTap(b.content ?? null)),
+    [chapter]
+  )
+
   const localSearchMatchCount = useMemo(() => {
-    if (!localSearchQuery.trim() || !chapter) return 0
+    if (!debouncedSearchQuery.trim() || !chapter) return 0
     const opts: SearchOptions = { caseSensitive: matchCase, wholeWord: matchWord }
-    return chapter.blocks.reduce((n, b) => {
-      const text = extractTextFromTipTap(b.content ?? null)
-      return n + matchRanges(text, localSearchQuery, opts).length
-    }, 0)
-  }, [localSearchQuery, chapter, matchCase, matchWord])
+    return blockSearchTexts.reduce((n, text) => n + matchRanges(text, debouncedSearchQuery, opts).length, 0)
+  }, [debouncedSearchQuery, chapter, blockSearchTexts, matchCase, matchWord])
 
   async function createVariable(name: string, type: string, defaultValue?: unknown) {
     // Caller may specify defaultValue (the choice-block create form lets the
@@ -846,8 +861,8 @@ export default function ChapterEditorPage() {
           onActiveBlockChange={setActiveBlockId}
           collapsedIds={collapsedIds}
           onCollapsedIdsChange={setCollapsedIds}
-          searchQuery={localSearchQuery || (searchParams?.get('q') ?? '')}
-          searchOptions={localSearchQuery
+          searchQuery={debouncedSearchQuery || (searchParams?.get('q') ?? '')}
+          searchOptions={debouncedSearchQuery
             ? { caseSensitive: matchCase, wholeWord: matchWord }
             : { caseSensitive: searchParams?.get('qc') === '1', wholeWord: searchParams?.get('qw') === '1' }}
           replaceAllRef={replaceAllRef}

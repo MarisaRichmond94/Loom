@@ -299,9 +299,17 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
   }, [editor, variables])
 
   // Same redraw nudge when the series-search query or its match options
-  // change, so the SearchHighlight plugin re-runs immediately.
+  // change, so the SearchHighlight plugin re-runs. Skipped while the query
+  // stays empty — there's nothing to draw or clear, and every mounted
+  // editor shares this effect, so an unconditional dispatch would rescan
+  // every doc in the chapter (including once per editor at mount).
+  const prevSearchQueryRef = useRef('')
   useEffect(() => {
-    if (editor) editor.view.dispatch(editor.state.tr)
+    if (!editor) return
+    const prev = prevSearchQueryRef.current
+    prevSearchQueryRef.current = searchQuery
+    if (!prev.trim() && !searchQuery.trim()) return
+    editor.view.dispatch(editor.state.tr)
   }, [editor, searchQuery, searchOptions?.caseSensitive, searchOptions?.wholeWord])
 
   // Native Cmd+C / Ctrl+C out of any text block (normal or conditional override)
