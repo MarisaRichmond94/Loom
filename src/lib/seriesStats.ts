@@ -21,12 +21,13 @@ export function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length
 }
 
+// Stats now lean on ContentBlock.wordCount (a persisted cache maintained by
+// the write paths — see src/lib/wordCounts.ts) plus relation counts, so the
+// aggregating endpoints never have to load or parse prose.
 type Block = {
   type: string
-  content: string | null
-  baseContent: string | null
-  choices?: { id: string }[]
-  overrides?: { content: string }[]
+  wordCount: number
+  _count: { choices: number }
 }
 type Chapter = { pov: string | null; blocks: Block[] }
 type Book = { chapters: Chapter[] }
@@ -47,14 +48,7 @@ export function computeSeriesStats(books: Book[]): SeriesAggregateStats {
   const uniquePovs = new Set(allChapters.map(c => c.pov).filter((p): p is string => !!p)).size
   const choiceCount = allBlocks
     .filter(b => b.type === 'choice_point')
-    .reduce((sum, b) => sum + (b.choices?.length ?? 0), 0)
-  const wordCount = allBlocks.reduce((sum, b) => {
-    const texts = [
-      b.content,
-      b.baseContent,
-      ...((b.overrides ?? []).map(o => o.content)),
-    ]
-    return sum + texts.reduce((ws, t) => ws + countWords(extractText(t)), 0)
-  }, 0)
+    .reduce((sum, b) => sum + b._count.choices, 0)
+  const wordCount = allBlocks.reduce((sum, b) => sum + b.wordCount, 0)
   return { bookCount: books.length, uniquePovs, choiceCount, wordCount }
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { refreshBlockWordCounts } from '@/lib/wordCounts'
 
 type Params = { params: Promise<{ blockId: string }> }
 
@@ -19,5 +20,6 @@ export async function POST(req: Request, { params }: Params) {
       endingMessage: endingMessage ?? null,
     },
   })
+  await refreshBlockWordCounts([blockId])
   return NextResponse.json(override, { status: 201 })
 }

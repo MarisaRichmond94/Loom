@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { existsSync } from 'fs'
 import path from 'path'
 import { prisma } from '@/lib/prisma'
+import { blockWordCount } from '@/lib/wordCounts'
 
 type Params = { params: Promise<{ chapterId: string }> }
 
@@ -51,6 +52,7 @@ export async function POST(req: Request, { params }: Params) {
       ...(prompt !== undefined && { prompt }),
       ...(displayType !== undefined && { displayType }),
       ...(baseContent !== undefined && { baseContent }),
+      wordCount: blockWordCount({ content, baseContent }),
     },
   })
 

@@ -3,10 +3,9 @@ import { prisma } from '@/lib/prisma'
 import { computeSeriesStats } from '@/lib/seriesStats'
 
 export async function GET() {
-  // Eager-load every book → chapter → block (with choices + overrides) so we
-  // can compute series-level stats (books, POVs, words, choices) in one query
-  // for the Write list cards. The list is local and small, so the read amp
-  // is acceptable.
+  // Stats for the Write list cards come from tiny per-block fields (type,
+  // cached wordCount, choice counts) — no prose ever leaves the database
+  // for this listing.
   const seriesList = await prisma.series.findMany({
     // Demo seed rows are reader-side only (Explore, AuthorModal, Continue
     // Reading). The Write list represents the author's own work, so hide
@@ -15,11 +14,12 @@ export async function GET() {
     orderBy: { createdAt: 'desc' },
     include: {
       books: {
-        include: {
+        select: {
           chapters: {
-            include: {
+            select: {
+              pov: true,
               blocks: {
-                include: { choices: true, overrides: true },
+                select: { type: true, wordCount: true, _count: { select: { choices: true } } },
               },
             },
           },

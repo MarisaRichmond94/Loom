@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@/generated/prisma/client'
-import { extractText, countWords } from '@/lib/seriesStats'
 
 type Params = { params: Promise<{ seriesId: string; bookId: string }> }
 
@@ -28,15 +27,10 @@ export async function GET(_: Request, { params }: Params) {
       .reduce((s, b) => s + b.choices.length, 0),
     0
   )
+  // wordCount is the persisted per-block cache (see src/lib/wordCounts.ts);
+  // summing it here avoids re-parsing every block's TipTap JSON per request.
   const wordCount = book.chapters.reduce((sum, c) =>
-    sum + c.blocks.reduce((s, b) => {
-      const texts = [
-        b.content,
-        b.baseContent,
-        ...(b.overrides.map(o => o.content)),
-      ]
-      return s + texts.reduce((ws, t) => ws + countWords(extractText(t)), 0)
-    }, 0)
+    sum + c.blocks.reduce((s, b) => s + b.wordCount, 0)
   , 0)
 
   return NextResponse.json({

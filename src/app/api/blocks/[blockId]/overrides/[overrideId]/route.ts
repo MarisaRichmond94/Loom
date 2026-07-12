@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@/generated/prisma/client'
+import { refreshBlockWordCounts } from '@/lib/wordCounts'
 
 type Params = { params: Promise<{ overrideId: string }> }
 
@@ -17,6 +18,7 @@ export async function PATCH(req: Request, { params }: Params) {
         ...(endingMessage !== undefined && { endingMessage }),
       },
     })
+    if (content !== undefined) await refreshBlockWordCounts([override.conditionalFragmentId])
     return NextResponse.json(override)
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
@@ -29,7 +31,8 @@ export async function PATCH(req: Request, { params }: Params) {
 export async function DELETE(_: Request, { params }: Params) {
   const { overrideId } = await params
   try {
-    await prisma.conditionalOverride.delete({ where: { id: overrideId } })
+    const deleted = await prisma.conditionalOverride.delete({ where: { id: overrideId } })
+    await refreshBlockWordCounts([deleted.conditionalFragmentId])
     return new NextResponse(null, { status: 204 })
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {

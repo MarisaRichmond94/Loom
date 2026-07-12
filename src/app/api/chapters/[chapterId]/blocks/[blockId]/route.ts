@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@/generated/prisma/client'
+import { blockWordCount } from '@/lib/wordCounts'
 
 type Params = { params: Promise<{ blockId: string }> }
 
@@ -25,6 +26,15 @@ export async function PATCH(req: Request, { params }: Params) {
         overrides: { orderBy: { order: 'asc' } },
       },
     })
+    // Prose changed → refresh the cached word count (the update above
+    // returned the block with overrides, so everything needed is in hand).
+    if (content !== undefined || baseContent !== undefined) {
+      const wordCount = blockWordCount(block)
+      if (wordCount !== block.wordCount) {
+        await prisma.contentBlock.update({ where: { id: blockId }, data: { wordCount } })
+        block.wordCount = wordCount
+      }
+    }
     return NextResponse.json(block)
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {

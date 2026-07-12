@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { replaceInString, replaceInTipTapJson } from '@/lib/replaceInTipTap'
+import { refreshBlockWordCounts } from '@/lib/wordCounts'
 
 type Params = { params: Promise<{ seriesId: string }> }
 
@@ -53,6 +54,9 @@ export async function POST(req: Request, { params }: Params) {
     | { kind: 'override'; id: string; data: { content?: string; endingMessage?: string } }
   const updates: Update[] = []
   const counts = { prose: 0, prompt: 0, choice: 0, override: 0 }
+  // Blocks whose cached wordCount needs a refresh after the write: any block
+  // whose prose changed, and the parent of any override whose content changed.
+  const touchedBlockIds = new Set<string>()
 
   for (const book of series.books) {
     if (bookFilter && !bookFilter.has(book.id)) continue
@@ -65,7 +69,10 @@ export async function POST(req: Request, { params }: Params) {
         if (baseR.count > 0) { blockData.baseContent = baseR.json ?? ''; counts.prose += baseR.count }
         const promptR = replaceInString(block.prompt, find, replace, opts)
         if (promptR.count > 0) { blockData.prompt = promptR.value ?? ''; counts.prompt += promptR.count }
-        if (Object.keys(blockData).length > 0) updates.push({ kind: 'block', id: block.id, data: blockData })
+        if (Object.keys(blockData).length > 0) {
+          updates.push({ kind: 'block', id: block.id, data: blockData })
+          if (blockData.content !== undefined || blockData.baseContent !== undefined) touchedBlockIds.add(block.id)
+        }
 
         for (const choice of block.choices) {
           const choiceData: { label?: string; endingMessage?: string } = {}
@@ -81,7 +88,10 @@ export async function POST(req: Request, { params }: Params) {
           if (contentR.count > 0) { ovData.content = contentR.json ?? ''; counts.override += contentR.count }
           const endR = replaceInTipTapJson(override.endingMessage, find, replace, opts)
           if (endR.count > 0) { ovData.endingMessage = endR.json ?? ''; counts.override += endR.count }
-          if (Object.keys(ovData).length > 0) updates.push({ kind: 'override', id: override.id, data: ovData })
+          if (Object.keys(ovData).length > 0) {
+            updates.push({ kind: 'override', id: override.id, data: ovData })
+            if (ovData.content !== undefined) touchedBlockIds.add(block.id)
+          }
         }
       }
     }
@@ -100,6 +110,7 @@ export async function POST(req: Request, { params }: Params) {
       return prisma.conditionalOverride.update({ where: { id: u.id }, data: u.data })
     })
   )
+  await refreshBlockWordCounts([...touchedBlockIds])
 
   return NextResponse.json({ total, counts })
 }

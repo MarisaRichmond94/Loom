@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { replaceInString, replaceInTipTapJson } from '@/lib/replaceInTipTap'
+import { refreshBlockWordCounts } from '@/lib/wordCounts'
 
 type Params = { params: Promise<{ seriesId: string }> }
 
@@ -48,11 +49,17 @@ export async function POST(req: Request, { params }: Params) {
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (field === 'content') {
       const r = replaceInTipTapJson(row.content, find, replace, opts)
-      if (r.count > 0) await prisma.contentBlock.update({ where: { id: recordId }, data: { content: r.json ?? '' } })
+      if (r.count > 0) {
+        await prisma.contentBlock.update({ where: { id: recordId }, data: { content: r.json ?? '' } })
+        await refreshBlockWordCounts([recordId])
+      }
       count = r.count
     } else if (field === 'baseContent') {
       const r = replaceInTipTapJson(row.baseContent, find, replace, opts)
-      if (r.count > 0) await prisma.contentBlock.update({ where: { id: recordId }, data: { baseContent: r.json ?? '' } })
+      if (r.count > 0) {
+        await prisma.contentBlock.update({ where: { id: recordId }, data: { baseContent: r.json ?? '' } })
+        await refreshBlockWordCounts([recordId])
+      }
       count = r.count
     } else if (field === 'prompt') {
       const r = replaceInString(row.prompt, find, replace, opts)
@@ -80,7 +87,10 @@ export async function POST(req: Request, { params }: Params) {
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (field === 'content') {
       const r = replaceInTipTapJson(row.content, find, replace, opts)
-      if (r.count > 0) await prisma.conditionalOverride.update({ where: { id: recordId }, data: { content: r.json ?? '' } })
+      if (r.count > 0) {
+        await prisma.conditionalOverride.update({ where: { id: recordId }, data: { content: r.json ?? '' } })
+        await refreshBlockWordCounts([row.conditionalFragmentId])
+      }
       count = r.count
     } else if (field === 'endingMessage') {
       const r = replaceInTipTapJson(row.endingMessage, find, replace, opts)

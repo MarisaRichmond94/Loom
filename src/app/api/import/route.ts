@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { refreshBlockWordCounts } from '@/lib/wordCounts'
 
 export async function POST(req: NextRequest) {
   let payload: ReturnType<typeof JSON.parse>
@@ -211,6 +212,10 @@ export async function POST(req: NextRequest) {
   if (overrideRows.length) {
     await prisma.characterBookOverride.createMany({ data: overrideRows })
   }
+
+  // Stamp the cached word counts for everything the import created
+  // (blocks + their overrides) in one pass at the end.
+  await refreshBlockWordCounts(allNewBlocks.map(b => b.id))
 
   return NextResponse.json({ seriesId: series.id })
 }
