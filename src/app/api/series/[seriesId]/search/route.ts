@@ -28,6 +28,9 @@ export async function GET(req: Request, { params }: Params) {
     where: { id: seriesId },
     include: {
       books: {
+        // Book-scoped searches only load the targeted books; runSearch's own
+        // bookIds filter stays as belt-and-suspenders.
+        ...(bookIds && bookIds.length > 0 ? { where: { id: { in: bookIds } } } : {}),
         orderBy: { order: 'asc' },
         include: {
           chapters: {

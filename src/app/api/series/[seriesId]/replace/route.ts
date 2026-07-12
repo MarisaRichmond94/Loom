@@ -34,6 +34,10 @@ export async function POST(req: Request, { params }: Params) {
     where: { id: seriesId },
     include: {
       books: {
+        // A scoped replace only loads the targeted books instead of the
+        // whole series; the per-book Set check in the loop below stays as
+        // belt-and-suspenders.
+        ...(bookFilter ? { where: { id: { in: [...bookFilter] } } } : {}),
         include: {
           chapters: {
             include: {
