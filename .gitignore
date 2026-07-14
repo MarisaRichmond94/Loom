@@ -51,6 +51,10 @@ next-env.d.ts
 /public/characters
 /public/covers
 /public/music
+/public/narration
 /public/avatar.jpg
 /data
 dev.db.pre-index-backup
+
+# compiled native helpers (built on demand by scripts/ensure-narrate.mjs)
+/scripts/native/bin

@@ -95,6 +95,20 @@ button, a, select, [role="button"] {
 .var-ref-known { color: #10b981; }
 .var-ref-unknown { color: #ef4444; }
 
+/* Read-mode narration (karaoke) highlight. Spans are injected over the rendered
+   prose at runtime (src/lib/narration/wrapWords.ts) and toggled on rAF as the
+   audio plays. The accent tint reads on both themes; a soft ring keeps the
+   active word legible without shifting the line's layout. */
+.narration-word {
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background-color 0.1s linear, box-shadow 0.1s linear;
+}
+.narration-word.is-active {
+  background-color: rgba(var(--color-accent-rgb, 136, 136, 255), 0.32);
+  box-shadow: 0 0 0 1px rgba(var(--color-accent-rgb, 136, 136, 255), 0.3);
+}
+
 /* Highlight for series-search matches across the chapter editor. Pale
    yellow reads clearly on both light and dark themes; a thin shadow
    keeps adjacent matches from blurring together. Applied by the

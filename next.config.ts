@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
     return {
       beforeFiles: [
         { source: '/music/:path*', destination: '/api/media/music/:path*' },
+        { source: '/narration/:path*', destination: '/api/media/narration/:path*' },
         { source: '/characters/:path*', destination: '/api/media/characters/:path*' },
         { source: '/covers/:path*', destination: '/api/media/covers/:path*' },
         { source: '/avatar.jpg', destination: '/api/media/avatar.jpg' },

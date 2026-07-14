@@ -29,6 +29,7 @@ const BadEndingModal = dynamic(() => import('./BadEndingModal'), { ssr: false })
 import AvatarButton from '@/components/AvatarButton'
 import Greeting from '@/components/Greeting'
 import PinnedAudio from '@/components/PinnedAudio'
+import NarrationBar from './NarrationBar'
 import { stripEmptyParagraphs, htmlToPlainText, inlineParagraphStyles, educateHtml, educateQuotes, PASTE_FONT_FAMILY } from '@/lib/clipboardFormatting'
 
 type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
@@ -464,6 +465,7 @@ export default function ReaderView({
             </p>
           )}
         </div>
+        <NarrationBar chapterId={currentChapterId ?? null} scrollRef={mainRef} />
         <div className={`pb-8 pr-6${isAuthor ? ' reader-selectable' : ''}`}>
         {chapterDate && <p className="text-base text-ink-faint mb-2">{chapterDate}</p>}
         {(() => {

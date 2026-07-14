@@ -126,8 +126,28 @@ model Chapter {
   book           Book           @relation(fields: [bookId], references: [id], onDelete: Cascade)
   blocks         ContentBlock[]
   inboundChoices Choice[]       @relation("TargetChapter")
+  narration      ChapterNarration?
 
   @@index([bookId, order])
+}
+
+// Cached text-to-speech narration for a chapter, powering the read-mode audio
+// player + word highlighting. One row per chapter (regenerated in place). The
+// audio bytes live on disk at audioPath; `timing` is the JSON word-timing map
+// from the Swift synthesizer; `contentHash` fingerprints the exact spoken text
+// (see src/lib/narration/text.ts) so a chapter edit marks this stale and both
+// the nightly cron and the Preview click know to regenerate.
+model ChapterNarration {
+  id          String   @id @default(cuid())
+  chapterId   String   @unique
+  voice       String
+  audioPath   String
+  timing      String
+  contentHash String
+  durationMs  Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  chapter     Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 }
 
 model ContentBlock {

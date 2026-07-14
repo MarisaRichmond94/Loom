@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "node scripts/ensure-native.mjs",
+    "predev": "node scripts/ensure-native.mjs && node scripts/ensure-narrate.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/ensure-native.mjs",
+    "prebuild": "node scripts/ensure-native.mjs && node scripts/ensure-narrate.mjs",
     "build": "next build",
-    "prestart": "node scripts/ensure-native.mjs",
+    "prestart": "node scripts/ensure-native.mjs && node scripts/ensure-narrate.mjs",
     "start": "next start",
     "test": "jest",
     "postinstall": "node scripts/ensure-native.mjs"

@@ -4,4 +4,7 @@ export async function register() {
 
   const { scheduleBackup } = await import('@/lib/backupScheduler')
   scheduleBackup()
+
+  const { scheduleNarration } = await import('@/lib/narration/scheduler')
+  scheduleNarration()
 }
