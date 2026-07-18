@@ -54,7 +54,8 @@ next-env.d.ts
 /public/narration
 /public/avatar.jpg
 /data
-dev.db.pre-index-backup
+# local pre-migration database snapshots — never commit (large binaries)
+dev.db.pre-*
 
 # compiled native helpers (built on demand by scripts/ensure-narrate.mjs)
 /scripts/native/bin

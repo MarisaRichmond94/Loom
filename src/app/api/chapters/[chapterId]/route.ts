@@ -13,7 +13,7 @@ export async function GET(_: Request, { params }: Params) {
       blocks: {
         orderBy: { order: 'asc' },
         include: {
-          choices: { orderBy: { id: 'asc' } },
+          choices: { orderBy: { order: 'asc' } },
           overrides: { orderBy: { order: 'asc' } },
         },
       },

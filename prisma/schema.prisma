@@ -178,8 +178,18 @@ model ContentBlock {
 model Choice {
   id              String       @id @default(cuid())
   choicePointId   String
+  // Position within the choice point. Orders 0 and 1 are the two "base"
+  // options every choice point is seeded with: they always render, can't
+  // be gated, and can't be deleted — so a reader is never left with an
+  // empty choice point no matter how the gated extras (order >= 2)
+  // evaluate. Additional options are appended at max(order)+1.
+  order           Int          @default(0)
   label           String
   setsVariables   String       @default("{}")
+  // Optional per-option gate (same JSON grammar as ContentBlock.condition,
+  // read by matchesCondition). Only meaningful for order >= 2 — the base
+  // pair ignores it. Null / "{}" means the option always shows.
+  condition       String?
   targetChapterId String?
   // Per-choice prose shown to the reader after they pick this option.
   // When `isBadEnding` is true, the text drives a Bad Ending modal and

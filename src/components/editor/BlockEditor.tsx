@@ -18,7 +18,7 @@ import { notify } from '@/lib/notifications'
 import ConfirmDialog from '@/components/ConfirmDialog'
 
 type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
-type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null }
+type Choice = { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null; condition?: string | null }
 type Block = {
   id: string
   order: number
@@ -211,6 +211,8 @@ function SortableBlock({
 type BlockRowApi = {
   updateBlock: (blockId: string, data: object) => void
   updateChoice: (choiceId: string, data: object) => void
+  addChoice: (blockId: string) => Promise<void>
+  deleteChoice: (choiceId: string) => Promise<void>
   updateOverride: (overrideId: string, data: object) => void
   addOverride: (blockId: string, condition: object, content: string) => Promise<void>
   deleteOverride: (overrideId: string) => Promise<void>
@@ -272,6 +274,8 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
           searchOptions={searchOptions}
           onUpdateBlock={data => api.current.updateBlock(block.id, data)}
           onUpdateChoice={(choiceId, data) => api.current.updateChoice(choiceId, data)}
+          onAddChoice={() => api.current.addChoice(block.id)}
+          onDeleteChoice={choiceId => api.current.deleteChoice(choiceId)}
           onCreateVariable={(name, type, defaultValue) => api.current.onCreateVariable(name, type, defaultValue)}
         />
       )}
@@ -681,6 +685,32 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     }
   }
 
+  async function addChoice(blockId: string) {
+    const res = await fetch(`/api/blocks/${blockId}/choices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: '' }),
+    })
+    if (!res.ok) return
+    const newChoice = await res.json()
+    // Server assigns order (max+1) and returns the full row — append locally,
+    // no full-list refetch. Sidebar choice list keys off the block prompt, not
+    // per-option data, so no onChoicesChanged nudge needed.
+    setBlocks(prev => prev.map(b =>
+      b.id !== blockId ? b : { ...b, choices: [...b.choices, newChoice] }
+    ))
+  }
+
+  async function deleteChoice(choiceId: string) {
+    const block = blocks.find(b => b.choices.some(c => c.id === choiceId))
+    if (!block) return
+    discardPendingSave(`choice:${choiceId}`)
+    setBlocks(prev => prev.map(b =>
+      b.id !== block.id ? b : { ...b, choices: b.choices.filter(c => c.id !== choiceId) }
+    ))
+    await fetch(`/api/blocks/${block.id}/choices/${choiceId}`, { method: 'DELETE' })
+  }
+
   async function addOverride(blockId: string, condition: object, content: string) {
     const res = await fetch(`/api/blocks/${blockId}/overrides`, {
       method: 'POST',
@@ -751,6 +781,8 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   blockApiRef.current = {
     updateBlock,
     updateChoice,
+    addChoice,
+    deleteChoice,
     updateOverride,
     addOverride,
     deleteOverride,

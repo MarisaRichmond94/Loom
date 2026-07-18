@@ -17,7 +17,7 @@ export async function GET(_: Request, { params }: Params) {
             where: { type: 'choice_point', prompt: { not: null } },
             orderBy: { order: 'asc' },
             include: {
-              choices: { orderBy: { id: 'asc' } },
+              choices: { orderBy: { order: 'asc' } },
             },
           },
         },

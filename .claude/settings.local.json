@@ -17,7 +17,9 @@
       "Skill(run)",
       "Skill(run:*)",
       "Skill(schedule)",
-      "Skill(schedule:*)"
+      "Skill(schedule:*)",
+      "Skill(update-config)",
+      "Skill(update-config:*)"
     ],
     "deny": [
       "Bash(rm -rf *)"

@@ -19,7 +19,7 @@ import { useWriteAiReview } from '@/components/editor/useWriteAiReview'
 type Block = {
   id: string; order: number; type: string
   content?: string | null; prompt?: string | null; displayType?: string | null; baseContent?: string | null
-  choices: { id: string; label: string; setsVariables: string; targetChapterId: string | null }[]
+  choices: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; condition?: string | null }[]
   overrides: { id: string; order: number; condition: string; content: string }[]
 }
 type Chapter = { id: string; title: string; pov: string | null; date: string | null; condition: string | null; numbered: boolean; blocks: Block[] }

@@ -53,7 +53,7 @@ function NumberSetWithOp({ value, onChange, autoFocus }: { value: unknown; onCha
   )
 }
 
-type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null; isBadEnding?: boolean }
+type Choice = { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null; isBadEnding?: boolean; condition?: string | null }
 type Variable = { id: string; name: string; type: string; defaultValue?: string }
 
 type Props = {
@@ -67,6 +67,8 @@ type Props = {
   searchOptions?: SearchOptions
   onUpdateBlock: (data: Partial<{ displayType: string; prompt: string; condition: string | null }>) => void
   onUpdateChoice: (choiceId: string, data: Partial<Choice>) => void
+  onAddChoice: () => void
+  onDeleteChoice: (choiceId: string) => void
   onCreateVariable: (name: string, type: string, defaultValue?: unknown) => Promise<void>
 }
 
@@ -87,6 +89,7 @@ function siblingValueFor(type: typeof VAR_TYPES[number], thisBranchValue: unknow
 function ChoicePanel({
   choice, slotPlaceholder, labelClass, bgClass, borderClass,
   variables, characters, hasSibling, focusVarName, searchQuery, searchOptions, onUpdateChoice, onCreateAndPair,
+  onDelete, onConditionChange,
 }: {
   choice: Choice; slotPlaceholder: string; labelClass: string; bgClass: string; borderClass: string
   variables: Variable[]
@@ -94,6 +97,11 @@ function ChoicePanel({
   searchQuery?: string
   searchOptions?: SearchOptions
   hasSibling: boolean
+  // Present only for gate-eligible extra options (order >= 2): a delete
+  // affordance and a "Show if" condition editor. The base pair passes
+  // neither — they can't be removed or gated.
+  onDelete?: () => void
+  onConditionChange?: (next: string | null) => void
   // When the parent has just paired a newly-created variable onto this
   // panel as the sibling, this carries that variable's name so the
   // panel can autoFocus its input — useful for string vars where the
@@ -223,6 +231,15 @@ function ChoicePanel({
           placeholder={slotPlaceholder}
           className={`flex-1 min-w-0 bg-transparent border-none outline-none text-xs font-semibold ${labelClass} uppercase tracking-widest placeholder:text-ink-faint placeholder:normal-case placeholder:font-normal placeholder:tracking-normal`}
         />
+        {onDelete && (
+          <button
+            onClick={onDelete}
+            title="Remove this option"
+            className="text-ink-faint hover:text-choice-kill transition shrink-0"
+          >
+            <LuX size={14} />
+          </button>
+        )}
         <div ref={menuRef} className="relative">
           <button
             onClick={() => { setMenuOpen(o => !o); setShowCreate(false); setShowAttach(false) }}
@@ -289,6 +306,20 @@ function ChoicePanel({
           })()}
         </div>
       </div>
+
+      {/* Gate for extra options — the reader only sees this option when the
+          condition matches (base pair renders unconditionally, so it passes
+          no onConditionChange). Reuses the same ConditionRow the block-level
+          gate and conditional fragments use. */}
+      {onConditionChange && (
+        <div className="mb-2">
+          <ConditionRow
+            condition={choice.condition ?? null}
+            variables={variables}
+            onChange={onConditionChange}
+          />
+        </div>
+      )}
 
       {/* Attached variables */}
       <div className="flex flex-col gap-2 mb-2">
@@ -410,13 +441,18 @@ function ChoicePanel({
 }
 
 
-export default function ChoicePointBlock({ prompt, displayType, condition, choices, variables, characters, searchQuery, searchOptions, onUpdateBlock, onUpdateChoice, onCreateVariable }: Props) {
-  // Slot by array order — choices[0] is the green/primary slot,
-  // choices[1] is the red/secondary slot. Used to differ from the
-  // old label-based matching ('Yes' / 'No') so writers can rename
-  // their options to anything ("A phone" / "A laptop", etc.).
-  const primaryChoice = choices[0] ?? null
-  const secondaryChoice = choices[1] ?? null
+export default function ChoicePointBlock({ prompt, displayType, condition, choices, variables, characters, searchQuery, searchOptions, onUpdateBlock, onUpdateChoice, onAddChoice, onDeleteChoice, onCreateVariable }: Props) {
+  // Order the options and split into the base pair (orders 0/1) and the
+  // gate-eligible extras (order >= 2). The base pair keeps the green/red
+  // "spare"/"kill" slots — visual differentiation only, not a yes/no
+  // signal, so writers can rename them to anything ("A phone" / "A
+  // laptop"). Extras render below with a "Show if" gate and a remove
+  // affordance.
+  const ordered = [...choices].sort((a, b) => a.order - b.order)
+  const baseChoices = ordered.filter(c => c.order < 2)
+  const extraChoices = ordered.filter(c => c.order >= 2)
+  const primaryChoice = baseChoices[0] ?? null
+  const secondaryChoice = baseChoices[1] ?? null
 
   // After creating a variable from one panel, signal the sibling to
   // autoFocus the freshly-paired row — keyed by { choiceId: varName } so
@@ -429,7 +465,9 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
     fromChoiceId: string; name: string; type: typeof VAR_TYPES[number]; defaultValue: unknown; thisBranchValue: unknown; otherBranchValue: unknown
   }) {
     await onCreateVariable(name, type, defaultValue)
-    const sibling = choices.find(c => c.id !== fromChoiceId)
+    // Auto-pairing is a base-pair convenience ("the two branches flip the
+    // same flag"), so the sibling is the OTHER base option — never an extra.
+    const sibling = baseChoices.find(c => c.id !== fromChoiceId)
     if (!sibling) return
     const siblingVars = JSON.parse(sibling.setsVariables || '{}') as Record<string, unknown>
     onUpdateChoice(sibling.id, {
@@ -494,6 +532,31 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
           />
         )}
+
+        {/* Gate-eligible extras — accent-styled, each with its own "Show if"
+            condition and a remove button. No auto-pair (hasSibling=false):
+            an extra sets its own variables directly. */}
+        {extraChoices.map((choice, i) => (
+          <ChoicePanel
+            key={choice.id}
+            choice={choice} slotPlaceholder={`Option ${i + 3}`} labelClass="text-accent"
+            bgClass="bg-accent/5" borderClass="border-accent/25"
+            variables={variables} characters={characters}
+            hasSibling={false}
+            focusVarName={pairedFocus?.choiceId === choice.id ? pairedFocus.varName : null}
+            searchQuery={searchQuery} searchOptions={searchOptions}
+            onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
+            onDelete={() => onDeleteChoice(choice.id)}
+            onConditionChange={next => onUpdateChoice(choice.id, { condition: next })}
+          />
+        ))}
+
+        <button
+          onClick={onAddChoice}
+          className="self-start mt-1 px-3 py-1.5 rounded border border-accent/25 text-accent text-xs hover:bg-accent/10 transition"
+        >
+          + Add option
+        </button>
       </div>
     </div>
   )

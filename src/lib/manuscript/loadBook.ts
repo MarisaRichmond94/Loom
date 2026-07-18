@@ -29,7 +29,7 @@ export async function loadManuscriptBook(seriesId: string, bookId: string): Prom
           blocks: {
             orderBy: { order: 'asc' },
             include: {
-              choices: { orderBy: { id: 'asc' } },
+              choices: { orderBy: { order: 'asc' } },
               overrides: { orderBy: { order: 'asc' } },
             },
           },

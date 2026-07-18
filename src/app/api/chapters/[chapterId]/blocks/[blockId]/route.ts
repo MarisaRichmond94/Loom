@@ -22,7 +22,7 @@ export async function PATCH(req: Request, { params }: Params) {
         ...(order !== undefined && { order }),
       },
       include: {
-        choices: { orderBy: { id: 'asc' } },
+        choices: { orderBy: { order: 'asc' } },
         overrides: { orderBy: { order: 'asc' } },
       },
     })

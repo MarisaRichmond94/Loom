@@ -11,7 +11,7 @@ export async function GET(_: Request, { params }: Params) {
     where: { chapterId },
     orderBy: { order: 'asc' },
     include: {
-      choices: { orderBy: { id: 'asc' } },
+      choices: { orderBy: { order: 'asc' } },
       overrides: { orderBy: { order: 'asc' } },
     },
   })
@@ -58,15 +58,15 @@ export async function POST(req: Request, { params }: Params) {
   if (type === 'choice_point') {
     await prisma.choice.createMany({
       data: [
-        { choicePointId: block.id, label: 'Yes', setsVariables: '{}' },
-        { choicePointId: block.id, label: 'No',  setsVariables: '{}' },
+        { choicePointId: block.id, order: 0, label: 'Yes', setsVariables: '{}' },
+        { choicePointId: block.id, order: 1, label: 'No',  setsVariables: '{}' },
       ],
     })
   }
 
   const blockWithRelations = await prisma.contentBlock.findUnique({
     where: { id: block.id },
-    include: { choices: { orderBy: { id: 'asc' } }, overrides: { orderBy: { order: 'asc' } } },
+    include: { choices: { orderBy: { order: 'asc' } }, overrides: { orderBy: { order: 'asc' } } },
   })
   return NextResponse.json(blockWithRelations, { status: 201 })
 }

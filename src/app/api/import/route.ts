@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
   // 4. Second pass: create all choices now that chapterRefMap is complete
   // Re-fetch blocks to get their choices data (we stored pending choices on the object above — simpler to re-query structure)
   // Instead, rebuild from payload directly using the block creation order
-  const choiceData: { choicePointId: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage: string | null; isBadEnding: boolean }[] = []
+  const choiceData: { choicePointId: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; endingMessage: string | null; isBadEnding: boolean; condition: string | null }[] = []
 
   // Walk payload again to collect choices with resolved target IDs
   const allNewBlocks = await prisma.contentBlock.findMany({
@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
   })
 
   // Flatten payload blocks in the same order
-  const payloadBlocks: { choices: { label: string; setsVariables: string; targetChapterRef: string | null; endingMessage?: string | null; isBadEnding?: boolean }[] }[] = []
+  const payloadBlocks: { choices: { order?: number; label: string; setsVariables: string; targetChapterRef: string | null; endingMessage?: string | null; isBadEnding?: boolean; condition?: string | null }[] }[] = []
   for (const book of s.books ?? []) {
     for (const chapter of book.chapters ?? []) {
       for (const block of chapter.blocks ?? []) {
@@ -156,9 +156,12 @@ export async function POST(req: NextRequest) {
   for (let i = 0; i < allNewBlocks.length; i++) {
     const pb = payloadBlocks[i]
     if (!pb?.choices?.length) continue
-    for (const c of pb.choices) {
+    for (const [ci, c] of pb.choices.entries()) {
       choiceData.push({
         choicePointId: allNewBlocks[i].id,
+        // Older backups predate per-option order — fall back to payload
+        // position so the first two stay the (ungated) base pair.
+        order: c.order ?? ci,
         label: c.label,
         setsVariables: c.setsVariables,
         targetChapterId: c.targetChapterRef ? (chapterRefMap[c.targetChapterRef] ?? null) : null,
@@ -166,6 +169,7 @@ export async function POST(req: NextRequest) {
         // Backfill rule for older backups (no flag): any non-null
         // endingMessage was historically a bad ending, so default to true.
         isBadEnding: c.isBadEnding ?? (c.endingMessage != null),
+        condition: c.condition ?? null,
       })
     }
   }

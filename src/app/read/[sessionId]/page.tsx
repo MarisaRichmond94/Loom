@@ -11,7 +11,7 @@ type Block = {
   id: string; order: number; type: string
   content?: string | null; prompt?: string | null; displayType?: string | null; baseContent?: string | null
   pinStart?: number | null; pinEnd?: number | null
-  choices: { id: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null; isBadEnding?: boolean }[]
+  choices: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null; isBadEnding?: boolean; condition?: string | null }[]
   overrides: { id: string; order: number; condition: string; content: string }[]
 }
 type SeriesBook = {

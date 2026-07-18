@@ -89,11 +89,13 @@ export async function GET(_: Request, { params }: Params) {
             pinStart: block.pinStart,
             pinEnd: block.pinEnd,
             choices: block.choices.map(c => ({
+              order: c.order,
               label: c.label,
               setsVariables: c.setsVariables,
               targetChapterRef: c.targetChapterId,
               endingMessage: c.endingMessage,
               isBadEnding: c.isBadEnding,
+              condition: c.condition,
             })),
             overrides: block.overrides.map(o => ({
               order: o.order,

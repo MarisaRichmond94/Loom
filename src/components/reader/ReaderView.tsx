@@ -33,7 +33,7 @@ import NarrationBar from './NarrationBar'
 import { stripEmptyParagraphs, htmlToPlainText, inlineParagraphStyles, educateHtml, educateQuotes, PASTE_FONT_FAMILY } from '@/lib/clipboardFormatting'
 
 type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
-type Choice = { id: string; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null; isBadEnding?: boolean }
+type Choice = { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null; isBadEnding?: boolean; condition?: string | null }
 type Block = {
   id: string; order: number; type: string
   content?: string | null; prompt?: string | null; displayType?: string | null; baseContent?: string | null
@@ -80,6 +80,22 @@ type Props = {
   onHighlightConditionalsChange: (next: boolean) => void
   onSessionUpdate: (state: StoryState, history: HistoryEntry[]) => void
   onNavigate: (chapterId: string) => void
+}
+
+// Which options a choice point actually shows the reader. The two base
+// options (order 0/1) always render — that's the guarantee that a choice
+// point is never empty. Extras (order >= 2) render only when their gate
+// matches the current story state; an ungated or malformed-condition extra
+// is treated as always-visible.
+function visibleChoices(choices: Choice[], storyState: StoryState): Choice[] {
+  return [...choices]
+    .sort((a, b) => a.order - b.order)
+    .filter(c => {
+      if (c.order < 2) return true
+      if (!c.condition) return true
+      try { return matchesCondition(JSON.parse(c.condition), storyState) }
+      catch { return true }
+    })
 }
 
 function escapeHtml(s: string): string {
@@ -555,7 +571,7 @@ export default function ReaderView({
 
               return (
                 <div key={block.id} id={`block-${block.id}`} className="mt-6 mb-6">
-                  <InlineChoice prompt={block.prompt ?? null} choices={block.choices} onChoose={id => handleChoose(block, id)} />
+                  <InlineChoice prompt={block.prompt ?? null} choices={visibleChoices(block.choices, storyState)} onChoose={id => handleChoose(block, id)} />
                 </div>
               )
             }
@@ -654,7 +670,7 @@ export default function ReaderView({
       {pendingChoiceBlock && (
         <ChapterGate
           prompt={pendingChoiceBlock.prompt ?? null}
-          choices={pendingChoiceBlock.choices}
+          choices={visibleChoices(pendingChoiceBlock.choices, storyState)}
           onChoose={id => handleChoose(pendingChoiceBlock, id)}
         />
       )}

@@ -31,7 +31,7 @@ function buildBookPayload(
         condition: string | null
         pinStart: number | null
         pinEnd: number | null
-        choices: { label: string; setsVariables: string; targetChapterId: string | null; endingMessage: string | null; isBadEnding: boolean }[]
+        choices: { order: number; label: string; setsVariables: string; targetChapterId: string | null; endingMessage: string | null; isBadEnding: boolean; condition: string | null }[]
         overrides: { order: number; condition: string; content: string; endingMessage: string | null }[]
       }[]
     }[]
@@ -90,11 +90,13 @@ function buildBookPayload(
             pinStart: block.pinStart,
             pinEnd: block.pinEnd,
             choices: block.choices.map(c => ({
+              order: c.order,
               label: c.label,
               setsVariables: c.setsVariables,
               targetChapterRef: c.targetChapterId,
               endingMessage: c.endingMessage,
               isBadEnding: c.isBadEnding,
+              condition: c.condition,
             })),
             overrides: block.overrides.map(o => ({
               order: o.order, condition: o.condition, content: o.content,
@@ -147,7 +149,7 @@ export async function runBackup(): Promise<{ ok: boolean; message: string }> {
               blocks: {
                 orderBy: { order: 'asc' },
                 include: {
-                  choices: true,
+                  choices: { orderBy: { order: 'asc' } },
                   overrides: { orderBy: { order: 'asc' } },
                 },
               },
