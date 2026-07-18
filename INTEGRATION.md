@@ -36,9 +36,19 @@ sidecars to the same folder:
 
 ### 2. Jump links
 
-- **WriteAI → Loom:** `GET <LOOM_URL>/author/by-title/<series title>`
+- **WriteAI → Loom (author):** `GET <LOOM_URL>/author/by-title/<series title>`
   (case-insensitive title match; lands on the series' last-touched chapter).
   WriteAI configures `VITE_LOOM_URL` (default `http://localhost:3000`).
+- **WriteAI → Loom (reader):**
+  `GET <LOOM_URL>/read/by-title/<series title>/<book title>/<chapter number>`
+  — the "Open in Loom" action on an Explore citation. Series and book match
+  by title (case-insensitive, punctuation-normalized); `<chapter number>` is
+  WriteAI's citation chapter number (0 = prologue), the same canon-walk
+  numbering used everywhere else in this contract. Loom re-runs the canon
+  walk to map that number to the chapter's cuid, mints a fresh reader
+  session, and 302-redirects to `/read/<sessionId>?startChapterId=<cuid>` —
+  which seeds state to reveal the chapter even when it's gated. Misses fall
+  back to the book preview (bad chapter) or home (bad series/book).
 - **Loom → WriteAI:** plain link to `NEXT_PUBLIC_WRITEAI_URL`
   (default `http://localhost:5173`), plus the review deep link below.
 
