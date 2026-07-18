@@ -383,8 +383,22 @@ export default function ReaderView({
           }
         }
       } else if (block.type === 'choice_point') {
-        const answered = choiceHistory.some(h => h.choicePointId === block.id)
-        if (answered) continue
+        const answered = choiceHistory.find(h => h.choicePointId === block.id)
+        if (answered) {
+          // Mirror the on-page render: an answered non-bad-ending choice
+          // shows its branch prose inline at the choice's position
+          // (see the render loop), so copy that same prose. Bad endings
+          // aren't repeated inline, so they contribute nothing here.
+          const chosen = block.choices.find(c => c.id === answered.choiceId)
+          if (chosen?.endingMessage && !chosen.isBadEnding) {
+            html = renderedBlocks.get(block.id)?.branchHtml
+              // Fallback matches the display's legacy plain-text path:
+              // wrap the raw message in a paragraph.
+              ?? `<p>${escapeHtml(chosen.endingMessage)}</p>`
+          }
+          if (html) { htmlParts.push(html); textParts.push(htmlToPlainText(html)) }
+          continue
+        }
         if (block.condition) {
           try {
             const parsed = JSON.parse(block.condition)
