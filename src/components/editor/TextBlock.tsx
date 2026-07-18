@@ -123,7 +123,9 @@ type Props = {
   searchQuery?: string
   // Match-case / whole-word toggles that shape what counts as a match.
   searchOptions?: SearchOptions
-  onEditorReady?: (editor: Editor) => void
+  // Called with the editor on mount and with null on unmount, so the parent
+  // can register/unregister this surface for search jump/replace.
+  onEditorReady?: (editor: Editor | null) => void
   onBlur?: () => void
 }
 
@@ -287,7 +289,11 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
   }, [editor, content])
 
   useEffect(() => {
-    if (editor && onEditorReady) onEditorReady(editor)
+    if (!editor || !onEditorReady) return
+    onEditorReady(editor)
+    // Unregister on unmount (collapse, delete, reorder) so search never lands
+    // on a torn-down surface.
+    return () => onEditorReady(null)
   // onEditorReady is stable (passed from a ref setter); editor is stable after mount
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor])

@@ -19,7 +19,7 @@ import { useWriteAiReview } from '@/components/editor/useWriteAiReview'
 type Block = {
   id: string; order: number; type: string
   content?: string | null; prompt?: string | null; displayType?: string | null; baseContent?: string | null
-  choices: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; condition?: string | null }[]
+  choices: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; condition?: string | null; endingMessage?: string | null }[]
   overrides: { id: string; order: number; condition: string; content: string }[]
 }
 type Chapter = { id: string; title: string; pov: string | null; date: string | null; condition: string | null; numbered: boolean; blocks: Block[] }
@@ -402,13 +402,27 @@ export default function ChapterEditorPage() {
     await saveCanon(series.books.find(b => b.chapters.some(c => c.id === chapterId))?.id)
   }
 
-  // Plain text per block, extracted once per chapter load — chapter.blocks
-  // only refreshes on structural changes, so search keystrokes must not pay
-  // a JSON.parse of every block.
-  const blockSearchTexts = useMemo(
-    () => (chapter?.blocks ?? []).map(b => extractTextFromTipTap(b.content ?? null)),
-    [chapter]
-  )
+  // Plain text of every editable prose surface in the chapter, extracted
+  // once per chapter load — chapter.blocks only refreshes on structural
+  // changes, so search keystrokes must not pay a JSON.parse per block. This
+  // must mirror the three highlightable/jumpable TipTap surfaces in
+  // BlockEditor so the count matches what the writer sees and can jump to:
+  // a text block's content, each conditional override's content, and each
+  // choice's branch text (endingMessage). Prompt/label are plain inputs
+  // (not highlighted); baseContent is never an editable surface.
+  const blockSearchTexts = useMemo(() => {
+    const texts: string[] = []
+    for (const b of chapter?.blocks ?? []) {
+      if (b.type === 'text') {
+        texts.push(extractTextFromTipTap(b.content ?? null))
+      } else if (b.type === 'conditional_fragment') {
+        for (const ov of b.overrides ?? []) texts.push(extractTextFromTipTap(ov.content ?? null))
+      } else if (b.type === 'choice_point') {
+        for (const ch of b.choices ?? []) texts.push(extractTextFromTipTap(ch.endingMessage ?? null))
+      }
+    }
+    return texts
+  }, [chapter])
 
   const localSearchMatchCount = useMemo(() => {
     if (!debouncedSearchQuery.trim() || !chapter) return 0

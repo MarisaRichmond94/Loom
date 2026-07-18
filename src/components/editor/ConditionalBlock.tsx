@@ -5,6 +5,7 @@ import { LuSplit, LuX } from 'react-icons/lu'
 import TextBlock from './TextBlock'
 import { ConditionRow, parseCondition } from './conditionUI'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import type { Editor } from '@tiptap/core'
 import type { SearchOptions } from '@/lib/searchMatch'
 
 type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
@@ -15,6 +16,9 @@ type Props = {
   characters?: Character[]
   searchQuery?: string
   searchOptions?: SearchOptions
+  // Registers each override's prose editor for search jump/replace, keyed by
+  // override id (null on unmount).
+  onEditorReady?: (overrideId: string, editor: Editor | null) => void
   onAddOverride: (condition: Record<string, unknown>, content: string) => void
   onUpdateOverride: (overrideId: string, data: Partial<Override>) => void
   onDeleteOverride: (overrideId: string) => void
@@ -22,7 +26,7 @@ type Props = {
 
 const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
 
-export default function ConditionalBlock({ overrides, variables, characters, searchQuery, searchOptions, onAddOverride, onUpdateOverride, onDeleteOverride }: Props) {
+export default function ConditionalBlock({ overrides, variables, characters, searchQuery, searchOptions, onEditorReady, onAddOverride, onUpdateOverride, onDeleteOverride }: Props) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   function handleAddOverride() {
@@ -82,6 +86,7 @@ export default function ConditionalBlock({ overrides, variables, characters, sea
               variables={variables}
               searchQuery={searchQuery}
               searchOptions={searchOptions}
+              onEditorReady={onEditorReady ? editor => onEditorReady(override.id, editor) : undefined}
             />
 
             <label className="mt-2 flex items-center gap-2 text-xs text-ink-muted cursor-pointer">

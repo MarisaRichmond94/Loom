@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { LuCheck, LuX } from 'react-icons/lu'
 import { ConditionRow, ValueSetter, TYPE_DEFAULT_VALUE } from './conditionUI'
 import TextBlock from './TextBlock'
+import type { Editor } from '@tiptap/core'
 import type { SearchOptions } from '@/lib/searchMatch'
 
 type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
@@ -65,6 +66,9 @@ type Props = {
   characters?: Character[]
   searchQuery?: string
   searchOptions?: SearchOptions
+  // Registers each choice's branch-text editor for search jump/replace, keyed
+  // by choice id (null on unmount).
+  onEditorReady?: (choiceId: string, editor: Editor | null) => void
   onUpdateBlock: (data: Partial<{ displayType: string; prompt: string; condition: string | null }>) => void
   onUpdateChoice: (choiceId: string, data: Partial<Choice>) => void
   onAddChoice: () => void
@@ -88,7 +92,7 @@ function siblingValueFor(type: typeof VAR_TYPES[number], thisBranchValue: unknow
 
 function ChoicePanel({
   choice, slotPlaceholder, labelClass, bgClass, borderClass,
-  variables, characters, hasSibling, focusVarName, searchQuery, searchOptions, onUpdateChoice, onCreateAndPair,
+  variables, characters, hasSibling, focusVarName, searchQuery, searchOptions, onEditorReady, onUpdateChoice, onCreateAndPair,
   onDelete, onConditionChange,
 }: {
   choice: Choice; slotPlaceholder: string; labelClass: string; bgClass: string; borderClass: string
@@ -96,6 +100,7 @@ function ChoicePanel({
   characters?: Character[]
   searchQuery?: string
   searchOptions?: SearchOptions
+  onEditorReady?: (choiceId: string, editor: Editor | null) => void
   hasSibling: boolean
   // Present only for gate-eligible extra options (order >= 2): a delete
   // affordance and a "Show if" condition editor. The base pair passes
@@ -422,6 +427,7 @@ function ChoicePanel({
           characters={characters}
           variables={variables}
           searchQuery={searchQuery} searchOptions={searchOptions}
+          onEditorReady={onEditorReady ? editor => onEditorReady(choice.id, editor) : undefined}
           placeholder={choice.isBadEnding
             ? 'What the reader sees on the full-screen overlay…'
             : 'Optional: text shown inline when this choice is picked…'}
@@ -441,7 +447,7 @@ function ChoicePanel({
 }
 
 
-export default function ChoicePointBlock({ prompt, displayType, condition, choices, variables, characters, searchQuery, searchOptions, onUpdateBlock, onUpdateChoice, onAddChoice, onDeleteChoice, onCreateVariable }: Props) {
+export default function ChoicePointBlock({ prompt, displayType, condition, choices, variables, characters, searchQuery, searchOptions, onEditorReady, onUpdateBlock, onUpdateChoice, onAddChoice, onDeleteChoice, onCreateVariable }: Props) {
   // Order the options and split into the base pair (orders 0/1) and the
   // gate-eligible extras (order >= 2). The base pair keeps the green/red
   // "spare"/"kill" slots — visual differentiation only, not a yes/no
@@ -517,7 +523,7 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             variables={variables} characters={characters}
             hasSibling={!!secondaryChoice}
             focusVarName={pairedFocus?.choiceId === primaryChoice.id ? pairedFocus.varName : null}
-            searchQuery={searchQuery} searchOptions={searchOptions}
+            searchQuery={searchQuery} searchOptions={searchOptions} onEditorReady={onEditorReady}
             onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
           />
         )}
@@ -528,7 +534,7 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             variables={variables} characters={characters}
             hasSibling={!!primaryChoice}
             focusVarName={pairedFocus?.choiceId === secondaryChoice.id ? pairedFocus.varName : null}
-            searchQuery={searchQuery} searchOptions={searchOptions}
+            searchQuery={searchQuery} searchOptions={searchOptions} onEditorReady={onEditorReady}
             onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
           />
         )}
@@ -544,7 +550,7 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             variables={variables} characters={characters}
             hasSibling={false}
             focusVarName={pairedFocus?.choiceId === choice.id ? pairedFocus.varName : null}
-            searchQuery={searchQuery} searchOptions={searchOptions}
+            searchQuery={searchQuery} searchOptions={searchOptions} onEditorReady={onEditorReady}
             onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
             onDelete={() => onDeleteChoice(choice.id)}
             onConditionChange={next => onUpdateChoice(choice.id, { condition: next })}

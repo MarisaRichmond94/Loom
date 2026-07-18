@@ -220,7 +220,7 @@ type BlockRowApi = {
   activate: (blockId: string) => void
   requestDelete: (block: Block) => void
   toggleCollapsed: (blockId: string) => void
-  registerEditor: (blockId: string, editor: Editor) => void
+  registerEditor: (key: string, editor: Editor | null) => void
   textBlockBlur: () => void
 }
 
@@ -272,6 +272,7 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
           characters={characters}
           searchQuery={searchQuery}
           searchOptions={searchOptions}
+          onEditorReady={(choiceId, editor) => api.current.registerEditor(`ch:${choiceId}`, editor)}
           onUpdateBlock={data => api.current.updateBlock(block.id, data)}
           onUpdateChoice={(choiceId, data) => api.current.updateChoice(choiceId, data)}
           onAddChoice={() => api.current.addChoice(block.id)}
@@ -287,6 +288,7 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
           characters={characters}
           searchQuery={searchQuery}
           searchOptions={searchOptions}
+          onEditorReady={(overrideId, editor) => api.current.registerEditor(`ov:${overrideId}`, editor)}
           onAddOverride={(condition, content) => api.current.addOverride(block.id, condition, content)}
           onUpdateOverride={(overrideId, data) => api.current.updateOverride(overrideId, data)}
           onDeleteOverride={overrideId => api.current.deleteOverride(overrideId)}
@@ -359,20 +361,47 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     }
   }
 
-  // All occurrences of the query across the text-block editors, in document
-  // (block) order — iterating blocksRef rather than the editor Map so drag
-  // reorders don't scramble the sequence.
-  function collectMatches(query: string): { idx: number; editor: Editor; from: number; to: number }[] {
+  // Composite keys of a block's editable prose surfaces, in the order they
+  // render — must match the keys registered in registerEditor. A text block
+  // has one (its content); a conditional block one per override; a choice
+  // block one per choice's branch text. Overrides/choices are sorted by
+  // `order` so jump follows on-screen order, not array/registration order.
+  function editorKeysForBlock(block: Block): string[] {
+    if (block.type === 'text') return [block.id]
+    if (block.type === 'conditional_fragment') {
+      return [...block.overrides].sort((a, b) => a.order - b.order).map(o => `ov:${o.id}`)
+    }
+    if (block.type === 'choice_point') {
+      return [...block.choices].sort((a, b) => a.order - b.order).map(c => `ch:${c.id}`)
+    }
+    return []
+  }
+
+  // Every registered prose editor in document order — walking blocksRef (and
+  // each block's sub-surfaces) rather than the editor Map so drag reorders
+  // don't scramble the sequence. Collapsed/absent editors are simply skipped.
+  function orderedEditors(): Editor[] {
+    const list: Editor[] = []
+    for (const block of blocksRef.current) {
+      for (const key of editorKeysForBlock(block)) {
+        const editor = textEditorsRef.current.get(key)
+        if (editor) list.push(editor)
+      }
+    }
+    return list
+  }
+
+  // All occurrences of the query across every prose surface, in document
+  // order. `seq` indexes orderedEditors() so next/prev can anchor to the
+  // focused editor even across conditional/choice sub-editors.
+  function collectMatches(query: string): { seq: number; editor: Editor; from: number; to: number }[] {
     if (!query.trim()) return []
-    const matches: { idx: number; editor: Editor; from: number; to: number }[] = []
-    blocksRef.current.forEach((block, idx) => {
-      if (block.type !== 'text') return
-      const editor = textEditorsRef.current.get(block.id)
-      if (!editor) return
+    const matches: { seq: number; editor: Editor; from: number; to: number }[] = []
+    orderedEditors().forEach((editor, seq) => {
       // Shared matcher so jump targets line up exactly with the yellow
       // highlights, including matches that straddle mark boundaries.
       for (const { from, to } of findBlockMatches(editor.state.doc, query, searchOpts)) {
-        matches.push({ idx, editor, from, to })
+        matches.push({ seq, editor, from, to })
       }
     })
     return matches
@@ -409,15 +438,14 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
       // Anchor navigation to the currently focused editor's selection start;
       // with nothing focused, next→first and prev→last.
       let curIdx = -1, curPos = -1
-      blocksRef.current.forEach((block, idx) => {
-        const editor = textEditorsRef.current.get(block.id)
-        if (editor?.view.hasFocus()) { curIdx = idx; curPos = editor.state.selection.from }
+      orderedEditors().forEach((editor, seq) => {
+        if (editor.view.hasFocus()) { curIdx = seq; curPos = editor.state.selection.from }
       })
       let target
       if (dir === 'next') {
-        target = matches.find(m => m.idx > curIdx || (m.idx === curIdx && m.from > curPos)) ?? matches[0]
+        target = matches.find(m => m.seq > curIdx || (m.seq === curIdx && m.from > curPos)) ?? matches[0]
       } else {
-        const before = matches.filter(m => m.idx < curIdx || (m.idx === curIdx && m.from < curPos))
+        const before = matches.filter(m => m.seq < curIdx || (m.seq === curIdx && m.from < curPos))
         target = before.length ? before[before.length - 1] : matches[matches.length - 1]
       }
       landOnMatch(target)
@@ -790,7 +818,15 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     activate: id => setActiveBlockId(id),
     requestDelete: b => setPendingDelete(b),
     toggleCollapsed,
-    registerEditor: (id, editor) => textEditorsRef.current.set(id, editor),
+    // Register on mount, unregister on unmount (editor === null). Keyed by a
+    // composite id — the block id for a text block, `ov:<id>`/`ch:<id>` for
+    // conditional overrides and choice branch text — so a block with several
+    // prose editors keeps them distinct. Unregistering keeps collapsed and
+    // deleted surfaces out of jump/replace instead of leaving stale editors.
+    registerEditor: (key, editor) => {
+      if (editor) textEditorsRef.current.set(key, editor)
+      else textEditorsRef.current.delete(key)
+    },
     // Leaving a text editor commits its pending save right away — this also
     // guarantees content is in flight before the blur-driven canon export
     // reads the DB.
