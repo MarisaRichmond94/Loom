@@ -89,6 +89,7 @@ type Props = {
 // it imperatively (which never get re-added on a hover, so the read-mode
 // highlight would vanish until the chapter reloads). Re-renders only when the
 // html/class/style actually change (e.g. a choice unlocks/reveals new prose).
+const ProseBlock = memo(function ProseBlock({
   blockId,
   className,
   style,
