@@ -59,3 +59,5 @@ dev.db.pre-*
 
 # compiled native helpers (built on demand by scripts/ensure-narrate.mjs)
 /scripts/native/bin
+
+.claude/*
