@@ -17,23 +17,38 @@ export function splitEmDash(token: string): string[] {
 
 type Timed = { word: string; timeMs: number }
 
-// Expand per-word synth timings so each em-dash sub-word gets its own start
-// time, interpolated across the parent token's span by character length. The
-// upper bound is the next word's onset (or the track duration for the last
+// Split a synth timing token into the sub-tokens the DOM (wrapWords) shows as
+// separate highlightable words. The synthesizer's willSpeakRange sometimes
+// reports several whitespace-separated words as ONE range (e.g. "out of" as a
+// single token), and joins em-dashed words too; the DOM splits both. Splitting
+// the timing to match keeps timing index N aligned with DOM word N — otherwise
+// every word after such a merged range drifts, and the highlight falls behind.
+export function splitTimingWord(word: string): string[] {
+  return word.split(/\s+/).filter(Boolean).flatMap(splitEmDash)
+}
+
+// Expand per-word synth timings so each DOM sub-word (em-dash split AND the
+// whitespace inside an engine-merged range) gets its own start time,
+// interpolated across the parent token's span by the sub-word's char offset.
+// The upper bound is the next word's onset (or the track duration for the last
 // word). Produces one entry per sub-token, matching wrapWords' span count.
 export function expandTimes(timing: Timed[], durationMs: number): number[] {
   const out: number[] = []
   for (let i = 0; i < timing.length; i++) {
     const w = timing[i]
-    const parts = splitEmDash(w.word)
-    if (parts.length === 1) { out.push(w.timeMs); continue }
+    const parts = splitTimingWord(w.word)
+    if (parts.length <= 1) { out.push(w.timeMs); continue }
     const startT = w.timeMs
     const endT = Math.max(startT, i + 1 < timing.length ? timing[i + 1].timeMs : durationMs)
     const totalLen = w.word.length || 1
-    let acc = 0
+    // Place each sub-word at its real character offset within the token, so the
+    // dropped whitespace/attached em-dash are accounted for accurately.
+    let searchFrom = 0
     for (const p of parts) {
-      out.push(Math.round(startT + (endT - startT) * (acc / totalLen)))
-      acc += p.length
+      const at = w.word.indexOf(p, searchFrom)
+      const off = at >= 0 ? at : searchFrom
+      out.push(Math.round(startT + (endT - startT) * (off / totalLen)))
+      searchFrom = off + p.length
     }
   }
   return out
