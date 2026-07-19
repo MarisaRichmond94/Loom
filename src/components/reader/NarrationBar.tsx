@@ -132,11 +132,22 @@ export default function NarrationBar({ chapterId, scrollRef, storyState, answere
   const prevChapterRef = useRef<string | null>(null)
   const prevSegCountRef = useRef(0)
   const resumeRef = useRef<{ startMs: number; autoplay: boolean } | null>(null)
+  // Only auto-play the continuation after a choice if the reader was actually
+  // listening — either the audio was still playing when they answered
+  // (playingRef), or it had played all the way to the choice and auto-paused
+  // there (playedToChoiceRef). If they never started (or had paused), answering
+  // must not suddenly start audio.
+  const playingRef = useRef(false)
+  const playedToChoiceRef = useRef(false)
 
   // A stable key over everything the narration request depends on besides the
   // chapter, so the effect re-runs when — and only when — the reader unlocks
   // more text (answers a choice) or flips a variable.
   const stateKey = useMemo(() => JSON.stringify({ s: storyState, a: answered }), [storyState, answered])
+
+  // Mirror `playing` into a ref so the async unlock handler can read the live
+  // value without depending on it (and re-subscribing).
+  useEffect(() => { playingRef.current = playing }, [playing])
 
   // ---- fetch + poll --------------------------------------------------------
   // POST the reader's state to ensure narration for the prose they've unlocked,
@@ -158,6 +169,7 @@ export default function NarrationBar({ chapterId, scrollRef, storyState, answere
       followRef.current = true
       prevSegCountRef.current = 0
       resumeRef.current = null
+      playedToChoiceRef.current = false
     }
 
     const post = async (trigger: boolean): Promise<StatusResponse> => {
@@ -186,12 +198,17 @@ export default function NarrationBar({ chapterId, scrollRef, storyState, answere
           segmentsRef.current = data.segments
           endsAtChoiceRef.current = data.endsAtChoice
           setDurationMs(data.durationMs)
-          // On an unlock, queue a resume into the first newly-unlocked segment
-          // and auto-play it; applied in the audio's onLoadedMetadata once the
-          // new (longer) track is loaded.
+          // On an unlock, queue a resume into the first newly-unlocked segment.
+          // Only auto-play if the reader was actually listening (still playing,
+          // or had played through to the choice) — otherwise just position the
+          // playhead there, ready for when they press play, with no surprise
+          // audio. Applied in the audio's onLoadedMetadata once the new (longer)
+          // track is loaded.
           if (isUnlock && data.segments.length > prevSegCount) {
-            resumeRef.current = { startMs: data.segments[prevSegCount] ?? 0, autoplay: true }
+            const autoplay = playingRef.current || playedToChoiceRef.current
+            resumeRef.current = { startMs: data.segments[prevSegCount] ?? 0, autoplay }
           }
+          playedToChoiceRef.current = false
           prevSegCountRef.current = data.segments.length
           setAudioPath(data.audioPath)
           setPhase('ready')
@@ -514,8 +531,13 @@ export default function NarrationBar({ chapterId, scrollRef, storyState, answere
               setPlaying(false)
               setActiveWord(-1)
               // Narration ends exactly at a pending choice — chime so the reader
-              // knows to make their decision (answering resumes narration).
-              if (endsAtChoiceRef.current) playChoiceChime()
+              // knows to make their decision. onEnded only fires because it was
+              // playing to the end, so remember that they listened all the way to
+              // the choice: answering may then resume playback automatically.
+              if (endsAtChoiceRef.current) {
+                playChoiceChime()
+                playedToChoiceRef.current = true
+              }
             }}
           />
         </>
