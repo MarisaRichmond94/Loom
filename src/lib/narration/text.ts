@@ -12,6 +12,9 @@ export type WordTiming = { charStart: number; charLen: number; timeMs: number; w
 export type NarrationOverride = {
   id: string; order: number; condition: string; content: string; endingMessage?: string | null
 }
+export type NarrationChoice = {
+  id: string; endingMessage?: string | null; isBadEnding?: boolean
+}
 export type NarrationBlock = {
   id: string
   type: string
@@ -19,7 +22,20 @@ export type NarrationBlock = {
   condition?: string | null
   order: number
   overrides?: NarrationOverride[]
+  choices?: NarrationChoice[]
 }
+
+// One run of spoken prose with no gating choice inside it — the unit we cache
+// and synthesize. `blockIds` are the DOM containers (in order) whose words the
+// timing was measured against.
+export type SegmentSpec = { text: string; blockIds: string[] }
+
+// The narration a reader has unlocked so far, split at each answered choice so
+// the shared, branch-independent prefix caches once and answering a choice only
+// synthesizes the next segment. `endsAtChoice` is true when the last segment
+// stops at a visible, still-unanswered choice (as opposed to the chapter's end
+// or a bad ending) — the reader reaches a decision, so the player chimes there.
+export type NarrationPlan = { segments: SegmentSpec[]; endsAtChoice: boolean }
 
 // The macOS system voice used for narration. Matches ~/Scripts/generate_audiobook.sh.
 export const DEFAULT_VOICE = 'Tom (Enhanced)'
@@ -39,21 +55,40 @@ function spokenText(json: string | null | undefined, state: StoryState): string 
   return t ? substituteVarTemplates(t, state, s => s) : t
 }
 
-// Build the narration for a chapter as a fresh reader would experience it under
-// `state`: text blocks and each conditional fragment resolved against that
-// state, in order, stopping where the reader stops — at a bad-ending override
-// (its prose IS the ending) or the first visible, unanswered choice point
-// (everything after is gated). Returns the spoken text plus the ordered ids of
-// the blocks that contributed, so the reader can word-wrap exactly those
-// containers in the same sequence the audio was timed against.
+// Build the narration a reader has unlocked, exactly as they experience it under
+// `state` and the choices they've `answered` (choicePointId -> chosen choiceId).
+// Walks blocks in order — text and conditional fragments resolved against
+// `state` — and splits into segments at each answered choice, because that's
+// where a reader unlocks more prose:
+//   - An unanswered, visible choice gates the rest of the chapter, so the walk
+//     stops there (endsAtChoice = true). A choice whose own condition fails
+//     isn't shown — skip it and keep going.
+//   - An answered choice closes the current segment (keeping the shared,
+//     branch-independent prefix cacheable) and opens the next; the chosen
+//     branch's inline consequence prose, if any, begins that next segment,
+//     mirroring how the reader renders it at the choice's position.
+//   - A bad ending (a matched bad-ending override, or an answered bad-ending
+//     choice) truncates the chapter, so the walk stops.
 //
-// v1 narrates against the default variable state (what the Preview button
-// shows on a fresh session). If the reader later flips variables via Configure,
-// a fragment may resolve to different prose than was narrated.
-export function narrationContent(blocks: NarrationBlock[], state: StoryState): { text: string; blockIds: string[] } {
+// Narration resolves fragments against the reader's current `state` — the same
+// state the reader renders against — so a branch's prose matches what's on screen.
+export function narrationSegments(
+  blocks: NarrationBlock[],
+  state: StoryState,
+  answered: Record<string, string> = {},
+): NarrationPlan {
   const ordered = [...blocks].sort((a, b) => a.order - b.order)
-  const parts: string[] = []
-  const blockIds: string[] = []
+  const segments: SegmentSpec[] = []
+  let parts: string[] = []
+  let blockIds: string[] = []
+  let endsAtChoice = false
+
+  // Close the segment accumulated so far (dropping it if it has no prose).
+  const flush = () => {
+    if (parts.length) segments.push({ text: parts.join('\n\n'), blockIds })
+    parts = []
+    blockIds = []
+  }
 
   for (const b of ordered) {
     if (b.type === 'text') {
@@ -74,27 +109,41 @@ export function narrationContent(blocks: NarrationBlock[], state: StoryState): {
         const t = spokenText(matched.content, state)
         if (t.trim()) { parts.push(t); blockIds.push(b.id) }
         // A matched bad-ending override truncates the chapter for the reader.
-        if (matched.endingMessage != null) break
+        if (matched.endingMessage != null) { flush(); break }
       }
       continue
     }
 
     if (b.type === 'choice_point') {
-      // On a fresh read every choice is unanswered; a visible one gates the
-      // rest of the chapter, so narration ends there too. A choice whose own
-      // condition fails isn't shown — skip it and keep going.
+      const choiceId = answered[b.id]
+      if (choiceId) {
+        const chosen = b.choices?.find(c => c.id === choiceId)
+        // A bad-ending choice sends the reader to a modal and ends the chapter.
+        if (chosen?.isBadEnding) { flush(); break }
+        // Close the pre-choice run, then open the next segment with this
+        // branch's inline consequence prose (rendered at the choice's position,
+        // so its DOM container is the choice-point block id).
+        flush()
+        if (chosen?.endingMessage) {
+          const t = spokenText(chosen.endingMessage, state)
+          if (t.trim()) { parts.push(t); blockIds.push(b.id) }
+        }
+        continue
+      }
+      // Unanswered: a visible one gates the rest; a hidden one is skipped.
       let visible = true
       if (b.condition) {
         const parsed = safeParse(b.condition)
         if (parsed != null) visible = matchesCondition(parsed as never, state)
       }
-      if (visible) break
+      if (visible) { endsAtChoice = true; flush(); break }
       continue
     }
     // soundtrack and any other block types contribute no narration.
   }
 
-  return { text: parts.join('\n\n'), blockIds }
+  flush()
+  return { segments, endsAtChoice }
 }
 
 // Fingerprint of what would be spoken. Any prose edit (or a voice change)

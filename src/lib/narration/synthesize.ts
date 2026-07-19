@@ -46,6 +46,30 @@ function run(cmd: string, args: string[], timeoutMs: number): Promise<void> {
 // helper (offline AVSpeechSynthesizer), converting its lossless CAF to aac
 // with ffmpeg. Retries on a hang or empty output, mirroring the per-segment
 // watchdog in ~/Scripts/generate_audiobook.sh's gen_one.
+// Concatenate several AAC m4a clips into one, in order, without re-encoding.
+// The clips all come from synthesize()'s identical pipeline (same codec, sample
+// rate, channel count), so ffmpeg's concat demuxer with stream copy joins them
+// losslessly and cheaply — this is what lets answering a choice stitch the
+// newly-synthesized segment onto the already-cached ones instead of re-narrating
+// the whole chapter.
+export async function concatM4a(parts: string[], outPath: string): Promise<void> {
+  if (parts.length === 0) throw new Error('concatM4a: no parts')
+  const work = await mkdtemp(path.join(tmpdir(), 'loom-concat-'))
+  const list = path.join(work, 'list.txt')
+  try {
+    // concat demuxer entries: file '<path>' with single quotes escaped.
+    const body = parts.map(p => `file '${p.replace(/'/g, "'\\''")}'`).join('\n')
+    await writeFile(list, body, 'utf-8')
+    await run(
+      'ffmpeg',
+      ['-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-movflags', '+faststart', outPath],
+      FFMPEG_TIMEOUT_MS,
+    )
+  } finally {
+    await rm(work, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
 export async function synthesize(text: string, voice: string): Promise<SynthResult> {
   if (!existsSync(NARRATE_BIN)) {
     throw new NarrateUnavailableError(

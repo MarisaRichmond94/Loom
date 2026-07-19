@@ -62,6 +62,17 @@ function rebuildNode(node: Text, base: number, ranges: Range[]): void {
   node.parentNode?.replaceChild(frag, node)
 }
 
+// Undo a previous wrap: replace every .narration-word span with its plain text
+// and re-merge adjacent text nodes. Needed when a chapter's narration grows (a
+// choice unlocks more prose): blocks that React didn't re-render still hold their
+// old spans, so without stripping first, re-wrapping would skip them (the
+// "already wrapped" guard below) and the continuous index numbering would break.
+export function unwrapWords(root: HTMLElement): void {
+  const spans = root.querySelectorAll('.narration-word')
+  spans.forEach(span => span.replaceWith(document.createTextNode(span.textContent ?? '')))
+  if (spans.length) root.normalize()
+}
+
 // Wrap tokens in `root`, numbering continuously from `startWi`. Returns the next
 // free index so callers can wrap several block containers into one sequence.
 export function wrapWords(root: HTMLElement, startWi: number): number {

@@ -11,7 +11,7 @@ import { TextStyle } from '@tiptap/extension-text-style'
 import Color from '@tiptap/extension-color'
 import { Footnote } from '@/lib/extensions/footnote'
 import { CharacterMark } from '@/lib/extensions/character'
-import { resolveConditionalOverride, matchesCondition } from '@/lib/storyEngine'
+import { resolveConditionalOverride, matchesCondition, applyChoice } from '@/lib/storyEngine'
 import { substituteVarTemplates } from '@/lib/templateVars'
 import { tryRenderRichContent } from '@/lib/renderRichContent'
 import { pinLabel } from '@/lib/pinLabel'
@@ -326,6 +326,42 @@ export default function ReaderView({
     return map
   }, [blocks, storyState, choiceHistory])
 
+  // choicePointId -> chosen choiceId, for the narration bar so it can narrate
+  // past choices the reader has already answered (and only up to the next
+  // unanswered one).
+  const answeredChoices = useMemo(
+    () => Object.fromEntries(choiceHistory.map(h => [h.choicePointId, h.choiceId])),
+    [choiceHistory],
+  )
+
+  // For each in-chapter branch of the next pending choice, the (state, answered)
+  // it would produce — handed to the narration bar to pre-generate so answering
+  // resumes instantly. Mirrors handleChoose's applyChoice, so the pre-warmed
+  // variant is the exact one the answer will request.
+  const narrationPrewarm = useMemo(() => {
+    const pending = blocks.find(b => {
+      if (b.type !== 'choice_point') return false
+      if (choiceHistory.some(h => h.choicePointId === b.id)) return false
+      if (!b.condition) return true
+      try { return matchesCondition(JSON.parse(b.condition), storyState) } catch { return true }
+    })
+    if (!pending) return []
+    const out: { storyState: StoryState; answered: Record<string, string> }[] = []
+    for (const choice of visibleChoices(pending.choices, storyState)) {
+      // Options that jump to another chapter don't unlock in-chapter prose.
+      if (choice.targetChapterId) continue
+      let setsVariables: Record<string, unknown> = {}
+      try { setsVariables = JSON.parse(choice.setsVariables || '{}') } catch { /* treat as no-op */ }
+      const { newState } = applyChoice(storyState, choiceHistory, pending.id, {
+        id: choice.id,
+        setsVariables: setsVariables as Parameters<typeof applyChoice>[3]['setsVariables'],
+        targetChapterId: choice.targetChapterId ?? null,
+      })
+      out.push({ storyState: newState, answered: { ...answeredChoices, [pending.id]: choice.id } })
+    }
+    return out
+  }, [blocks, choiceHistory, storyState, answeredChoices])
+
   async function handleChoose(choicePointBlock: Block, choiceId: string) {
     setPendingChoiceBlock(null)
     const res = await fetch(`/api/sessions/${sessionId}/advance`, {
@@ -495,7 +531,7 @@ export default function ReaderView({
             </p>
           )}
         </div>
-        <NarrationBar chapterId={currentChapterId ?? null} scrollRef={mainRef} />
+        <NarrationBar chapterId={currentChapterId ?? null} scrollRef={mainRef} storyState={storyState} answered={answeredChoices} prewarm={narrationPrewarm} />
         <div className={`pb-8 pr-6${isAuthor ? ' reader-selectable' : ''}`}>
         {chapterDate && <p className="text-base text-ink-faint mb-2">{chapterDate}</p>}
         {(() => {

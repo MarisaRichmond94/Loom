@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback, type RefObject, type ReactNode } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo, type RefObject, type ReactNode } from 'react'
 import { LuPlay, LuPause, LuLoaderCircle, LuAudioLines, LuSkipBack, LuSkipForward } from 'react-icons/lu'
 import type { WordTiming } from '@/lib/narration/text'
-import { wrapWords, nearestBlock } from '@/lib/narration/wrapWords'
+import type { StoryState } from '@/lib/storyEngine'
+import { wrapWords, unwrapWords, nearestBlock } from '@/lib/narration/wrapWords'
 import { expandTimes } from '@/lib/narration/tokens'
 
 type Props = {
@@ -11,15 +12,65 @@ type Props = {
   chapterId: string | null
   // The reader's scroll container, so the active word can be kept in view.
   scrollRef: RefObject<HTMLElement | null>
+  // The reader's current variable state and answered choices (choicePointId ->
+  // choiceId). Narration covers exactly the prose these unlock; when answering a
+  // choice grows them, the bar regenerates and resumes into the new prose.
+  storyState: StoryState
+  answered: Record<string, string>
+  // The (state, answered) each in-chapter branch of the next pending choice would
+  // produce. Once the current narration is ready, we pre-generate these in the
+  // background so that whichever the reader picks resumes instantly.
+  prewarm?: { storyState: StoryState; answered: Record<string, string> }[]
 }
 
 type Phase = 'idle' | 'generating' | 'ready' | 'unavailable'
 type StatusResponse =
-  | { status: 'ready'; audioPath: string; durationMs: number; timing: WordTiming[]; voice: string; blockIds: string[] }
-  | { status: 'generating' | 'stale' | 'none' | 'empty' }
+  | {
+      status: 'ready'
+      audioPath: string
+      durationMs: number
+      timing: WordTiming[]
+      voice: string
+      blockIds: string[]
+      segments: number[]
+      endsAtChoice: boolean
+    }
+  | { status: 'generating' | 'none' | 'empty' | 'error' }
 
 const POLL_MS = 2000
+
+// A short, soft rising two-note chime, synthesized on the fly (no asset) so the
+// reader hears that they've reached a choice when narration pauses there.
+function playChoiceChime() {
+  try {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!Ctx) return
+    const ctx = new Ctx()
+    const t0 = ctx.currentTime
+    for (const [freq, at] of [[587.33, 0], [880, 0.13]] as const) {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      gain.gain.setValueAtTime(0.0001, t0 + at)
+      gain.gain.exponentialRampToValueAtTime(0.18, t0 + at + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.45)
+      osc.start(t0 + at)
+      osc.stop(t0 + at + 0.5)
+    }
+    setTimeout(() => { ctx.close().catch(() => {}) }, 1000)
+  } catch { /* audio unavailable — a missing chime is harmless */ }
+}
 const RATES = [1, 1.25, 1.5, 0.75]
+// Highlight the word slightly before its acoustic onset. The engine's per-word
+// times are accurate word *starts*, but flipping the highlight exactly at onset
+// reads as trailing once render/paint latency is added — a small lead makes the
+// highlight anticipate the word, which is what feels "in sync". Scaled by
+// playback rate since the delay it compensates is wall-clock, not media, time.
+// Tune here if the highlight feels early (lower) or late (raise).
+const HIGHLIGHT_LEAD_MS = 130
 // Pressing "back" within this many ms of the current paragraph's start jumps to
 // the previous paragraph instead of restarting the current one (so repeated
 // presses walk backward), matching how a track "previous" button behaves.
@@ -54,7 +105,7 @@ function TooltipButton({ label, onClick, children }: { label: string; onClick: (
   )
 }
 
-export default function NarrationBar({ chapterId, scrollRef }: Props) {
+export default function NarrationBar({ chapterId, scrollRef, storyState, answered, prewarm }: Props) {
   const [phase, setPhase] = useState<Phase>('idle')
   const [audioPath, setAudioPath] = useState<string | null>(null)
   const [durationMs, setDurationMs] = useState(0)
@@ -66,48 +117,86 @@ export default function NarrationBar({ chapterId, scrollRef }: Props) {
   const timesRef = useRef<number[]>([])       // timeMs per word index, for binary search
   const blockIdsRef = useRef<string[]>([])    // narrated block ids, in order, to word-wrap
   const paraStartsRef = useRef<number[]>([])  // word index that begins each paragraph
+  const segmentsRef = useRef<number[]>([])    // start ms of each unlocked segment
+  const endsAtChoiceRef = useRef(false)       // does the track stop at a pending choice?
   const activeRef = useRef(-1)                 // currently highlighted word index
   const rafRef = useRef<number | null>(null)
   // Auto-scroll follows the spoken word, but yields the moment the reader
   // scrolls away by hand — it re-engages only when the active word is back in
   // view (or after an explicit seek), so the reader is never yanked back.
   const followRef = useRef(true)
+  // Cross-render bookkeeping for the "a choice unlocked more text" flow: the
+  // chapter we last loaded, how many segments that load had, and a pending
+  // resume (seek to the first new segment + auto-play) applied once the new
+  // audio's metadata loads.
+  const prevChapterRef = useRef<string | null>(null)
+  const prevSegCountRef = useRef(0)
+  const resumeRef = useRef<{ startMs: number; autoplay: boolean } | null>(null)
+
+  // A stable key over everything the narration request depends on besides the
+  // chapter, so the effect re-runs when — and only when — the reader unlocks
+  // more text (answers a choice) or flips a variable.
+  const stateKey = useMemo(() => JSON.stringify({ s: storyState, a: answered }), [storyState, answered])
 
   // ---- fetch + poll --------------------------------------------------------
-  // POST triggers regeneration if the chapter's text changed (the Preview
-  // path); then we poll GET until synthesis finishes. Both are idempotent and
-  // deduped server-side, so re-entering a chapter is cheap.
+  // POST the reader's state to ensure narration for the prose they've unlocked,
+  // then poll the same endpoint until synthesis + stitching finish. A new
+  // chapter starts fresh from the top; the same chapter with more unlocked
+  // (stateKey changed) resumes into — and auto-plays — the newly-unlocked
+  // segment. Requests are deduped + cached server-side, so this is cheap.
   useEffect(() => {
-    if (!chapterId) { setPhase('idle'); return }
+    if (!chapterId) { setPhase('idle'); prevChapterRef.current = null; return }
+    const isUnlock = prevChapterRef.current === chapterId
+    prevChapterRef.current = chapterId
     let cancelled = false
-    setPhase('idle')
-    setAudioPath(null)
-    setPlaying(false)
-    activeRef.current = -1
-    followRef.current = true
+
+    if (!isUnlock) {
+      setPhase('idle')
+      setAudioPath(null)
+      setPlaying(false)
+      activeRef.current = -1
+      followRef.current = true
+      prevSegCountRef.current = 0
+      resumeRef.current = null
+    }
+
+    const post = async (trigger: boolean): Promise<StatusResponse> => {
+      const res = await fetch(`/api/chapters/${chapterId}/narration`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storyState, answered, trigger }),
+      })
+      return (await res.json()) as StatusResponse
+    }
 
     ;(async () => {
       try {
-        let res = await fetch(`/api/chapters/${chapterId}/narration`, { method: 'POST' })
-        let data = (await res.json()) as StatusResponse
-        if (data.status === 'generating' || data.status === 'stale' || data.status === 'none') {
-          setPhase('generating')
-        }
-        while (!cancelled && (data.status === 'generating' || data.status === 'stale' || data.status === 'none')) {
+        const prevSegCount = prevSegCountRef.current
+        let data = await post(true)
+        if (data.status === 'generating') setPhase('generating')
+        while (!cancelled && data.status === 'generating') {
           await new Promise(r => setTimeout(r, POLL_MS))
           if (cancelled) return
-          res = await fetch(`/api/chapters/${chapterId}/narration`)
-          data = (await res.json()) as StatusResponse
+          data = await post(false)
         }
         if (cancelled) return
         if (data.status === 'ready') {
           timesRef.current = expandTimes(data.timing, data.durationMs)
           blockIdsRef.current = data.blockIds
+          segmentsRef.current = data.segments
+          endsAtChoiceRef.current = data.endsAtChoice
           setDurationMs(data.durationMs)
+          // On an unlock, queue a resume into the first newly-unlocked segment
+          // and auto-play it; applied in the audio's onLoadedMetadata once the
+          // new (longer) track is loaded.
+          if (isUnlock && data.segments.length > prevSegCount) {
+            resumeRef.current = { startMs: data.segments[prevSegCount] ?? 0, autoplay: true }
+          }
+          prevSegCountRef.current = data.segments.length
           setAudioPath(data.audioPath)
           setPhase('ready')
         } else {
-          // 'empty' → nothing to narrate; anything else here means a failed run.
+          // 'empty' → nothing to narrate; 'error'/'none' → generation failed.
           setPhase(data.status === 'empty' ? 'idle' : 'unavailable')
         }
       } catch {
@@ -116,7 +205,31 @@ export default function NarrationBar({ chapterId, scrollRef }: Props) {
     })()
 
     return () => { cancelled = true }
-  }, [chapterId])
+    // storyState/answered are captured through stateKey.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chapterId, stateKey])
+
+  // ---- pre-warm the pending choice's branches ------------------------------
+  // Once the current narration is ready, kick off (fire-and-forget) generation
+  // of the variant each in-chapter branch would produce, so answering resumes
+  // with no wait. Fired once per distinct branch set; the server dedupes and
+  // caches, so this is cheap and never fights the current track (already ready).
+  const prewarmKey = useMemo(() => JSON.stringify(prewarm ?? []), [prewarm])
+  const prewarmedRef = useRef<string>('')
+  useEffect(() => {
+    if (phase !== 'ready' || !chapterId || !prewarm || prewarm.length === 0) return
+    if (prewarmedRef.current === prewarmKey) return
+    prewarmedRef.current = prewarmKey
+    for (const branch of prewarm) {
+      fetch(`/api/chapters/${chapterId}/narration`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storyState: branch.storyState, answered: branch.answered, trigger: true }),
+      }).catch(() => {})
+    }
+    // prewarm captured via prewarmKey.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, chapterId, prewarmKey])
 
   // ---- word wrapping -------------------------------------------------------
   // Once audio is ready and the prose is in the DOM, wrap each text block's
@@ -135,6 +248,9 @@ export default function NarrationBar({ chapterId, scrollRef }: Props) {
       for (const id of blockIdsRef.current) {
         const el = document.getElementById(`block-${id}`)
         if (!el) continue
+        // Strip any prior wrap first so an unlock (blocks React didn't
+        // re-render still hold old spans) renumbers continuously from 0.
+        unwrapWords(el)
         wi = wrapWords(el, wi)
         el.querySelectorAll<HTMLElement>('.narration-word').forEach(span => {
           const block = nearestBlock(span, el)
@@ -150,7 +266,8 @@ export default function NarrationBar({ chapterId, scrollRef }: Props) {
       }
     })
     return () => cancelAnimationFrame(raf)
-  }, [phase, chapterId])
+    // audioPath changes when the track grows on an unlock — re-wrap then too.
+  }, [phase, chapterId, audioPath])
 
   // ---- highlight loop ------------------------------------------------------
   const setActiveWord = useCallback((idx: number) => {
@@ -195,7 +312,10 @@ export default function NarrationBar({ chapterId, scrollRef }: Props) {
       const a = audioRef.current
       if (a) {
         const ms = a.currentTime * 1000
-        setActiveWord(search(ms))
+        // Lead the highlight slightly (see HIGHLIGHT_LEAD_MS) so it anticipates
+        // the spoken word rather than trailing it; the progress bar still tracks
+        // the true position.
+        setActiveWord(search(ms + HIGHLIGHT_LEAD_MS * a.playbackRate))
         setPosMs(ms)
       }
       rafRef.current = requestAnimationFrame(tick)
@@ -377,7 +497,26 @@ export default function NarrationBar({ chapterId, scrollRef }: Props) {
             ref={audioRef}
             src={audioPath}
             preload="metadata"
-            onEnded={() => { setPlaying(false); setActiveWord(-1) }}
+            onLoadedMetadata={() => {
+              // A choice just unlocked more text: seek to the first newly-added
+              // segment and pick up playback from there automatically.
+              const a = audioRef.current
+              const r = resumeRef.current
+              if (!a || !r) return
+              resumeRef.current = null
+              a.currentTime = r.startMs / 1000
+              followRef.current = true
+              setPosMs(r.startMs)
+              setActiveWord(search(r.startMs))
+              if (r.autoplay) a.play().then(() => setPlaying(true)).catch(() => {})
+            }}
+            onEnded={() => {
+              setPlaying(false)
+              setActiveWord(-1)
+              // Narration ends exactly at a pending choice — chime so the reader
+              // knows to make their decision (answering resumes narration).
+              if (endsAtChoiceRef.current) playChoiceChime()
+            }}
           />
         </>
       )}

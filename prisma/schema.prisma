@@ -126,20 +126,24 @@ model Chapter {
   book           Book           @relation(fields: [bookId], references: [id], onDelete: Cascade)
   blocks         ContentBlock[]
   inboundChoices Choice[]       @relation("TargetChapter")
-  narration      ChapterNarration?
+  narrations     ChapterNarration[]
 
   @@index([bookId, order])
 }
 
-// Cached text-to-speech narration for a chapter, powering the read-mode audio
-// player + word highlighting. One row per chapter (regenerated in place). The
-// audio bytes live on disk at audioPath; `timing` is the JSON word-timing map
-// from the Swift synthesizer; `contentHash` fingerprints the exact spoken text
-// (see src/lib/narration/text.ts) so a chapter edit marks this stale and both
-// the nightly cron and the Preview click know to regenerate.
+// Cached text-to-speech narration for one *variant* of a chapter — a specific
+// sequence of unlocked segments (see NarrationSegment). A chapter has many
+// variants because answering a gating choice unlocks more prose: the default
+// (pre-choice) variant, then a longer one per branch the reader takes. Keyed by
+// (chapterId, contentHash) where contentHash fingerprints that segment sequence
+// + voice, so a chapter edit or a newly-unlocked branch is simply a new row and
+// both the nightly cron and the read-mode trigger know when to regenerate.
+// `audioPath` is the concatenated audio on disk (or, for a single-segment
+// variant, the shared segment clip itself); `timing` is the combined word-timing
+// map; `durationMs` the combined duration.
 model ChapterNarration {
   id          String   @id @default(cuid())
-  chapterId   String   @unique
+  chapterId   String
   voice       String
   audioPath   String
   timing      String
@@ -148,6 +152,24 @@ model ChapterNarration {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   chapter     Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@unique([chapterId, contentHash])
+  @@index([chapterId])
+}
+
+// Content-addressed cache of one narration "segment" — a run of spoken prose
+// between choice points, keyed by the hash of its exact text + voice. A chapter's
+// current audio is the concatenation of its unlocked segments; caching per
+// segment means answering a choice only synthesizes the newly-unlocked chunk,
+// and the shared pre-choice segment is reused across every branch. Not tied to a
+// chapter, so identical text (e.g. the same intro under any branch) dedupes.
+model NarrationSegment {
+  hash       String   @id
+  voice      String
+  audioPath  String
+  timing     String
+  durationMs Int
+  createdAt  DateTime @default(now())
 }
 
 model ContentBlock {
