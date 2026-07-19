@@ -13,17 +13,43 @@ import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import { useCanonSave } from '@/components/editor/useCanonSave'
 import { substituteVarTemplates } from '@/lib/templateVars'
-import { resolveConditionalOverride, type StoryState } from '@/lib/storyEngine'
+import { resolveConditionalOverride, matchesCondition, type StoryState, type Condition, type ChoiceSetValue } from '@/lib/storyEngine'
 import { useWriteAiReview } from '@/components/editor/useWriteAiReview'
 
 type Block = {
   id: string; order: number; type: string
-  content?: string | null; prompt?: string | null; displayType?: string | null; baseContent?: string | null
-  choices: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; condition?: string | null; endingMessage?: string | null }[]
+  content?: string | null; prompt?: string | null; displayType?: string | null; baseContent?: string | null; condition?: string | null
+  choices: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; condition?: string | null; endingMessage?: string | null; isBadEnding?: boolean }[]
   overrides: { id: string; order: number; condition: string; content: string }[]
 }
 type Chapter = { id: string; title: string; pov: string | null; date: string | null; condition: string | null; numbered: boolean; blocks: Block[] }
 type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
+
+function safeCondition(raw: string | null | undefined): Condition | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? (parsed as Condition) : null
+  } catch { return null }
+}
+
+function parseChoiceSets(raw: string): Record<string, ChoiceSetValue> {
+  try { return JSON.parse(raw) } catch { return {} }
+}
+
+// A choice contradicts the canon (default) state when it directly assigns a
+// variable a value different from its default. `+=` / `-=` accumulations
+// can't be compared against a single value, so they never contradict —
+// number targets are handled separately (rule b) anyway.
+function choiceContradicts(sets: Record<string, ChoiceSetValue>, target: StoryState): boolean {
+  return Object.entries(sets).some(([name, instruction]) => {
+    if (!(name in target)) return false
+    const assigned = typeof instruction === 'object' && instruction !== null
+      ? (instruction.op === '=' ? instruction.value : null)
+      : instruction
+    return assigned !== null && assigned !== target[name]
+  })
+}
 
 export default function ChapterEditorPage() {
   const { seriesId, chapterId } = useParams() as { seriesId: string; chapterId: string }
@@ -82,7 +108,7 @@ export default function ChapterEditorPage() {
   const jumpToFirstMatchRef = useRef<((query: string) => void) | null>(null)
   const jumpToMatchRef = useRef<((query: string, dir: 'next' | 'prev') => void) | null>(null)
   const scrollToCursorRef = useRef<(() => void) | null>(null)
-  const currentBlocksRef = useRef<{ id: string; type: string; content?: string | null; baseContent?: string | null; overrides?: { id: string; order: number; condition: string; content: string; endingMessage?: string | null }[] }[] | null>(null)
+  const currentBlocksRef = useRef<{ id: string; order: number; type: string; content?: string | null; baseContent?: string | null; condition?: string | null; choices?: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; condition?: string | null; endingMessage?: string | null; isBadEnding?: boolean }[]; overrides?: { id: string; order: number; condition: string; content: string; endingMessage?: string | null }[] }[] | null>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
   const shortcutsRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -470,10 +496,51 @@ export default function ChapterEditorPage() {
     } catch { return '' }
   }
 
+  // Pick a choice point's canon branch for the canon-text export. The canon
+  // read-through is "every variable at its default", so:
+  //   (a) when the point writes only boolean/string variables, the canon
+  //       branch is the option whose assignments AGREE with the defaults —
+  //       i.e. the one that establishes the canon value (e.g. default
+  //       didJaredShootNoah = true → the "he shoots" branch).
+  //   (b) when any option writes a NUMBER variable, which value is "canon"
+  //       is unclear (accumulators and multi-valued counters have no obvious
+  //       default-matching branch), so fall back to the first option.
+  // Bad-ending branches are never canon; gated extras (order >= 2) only
+  // count when their own condition holds for the default context.
+  function resolveCanonChoice(
+    choices: NonNullable<Block['choices']>,
+    state: StoryState,
+    varType: Record<string, string>,
+  ) {
+    const candidates = choices
+      .filter(c => !c.isBadEnding)
+      .filter(c => {
+        if (c.order < 2) return true // base pair always shows, ignores its gate
+        const gate = safeCondition(c.condition)
+        return !gate || matchesCondition(gate, state)
+      })
+      .sort((a, b) => a.order - b.order)
+    if (candidates.length === 0) return null
+
+    // (b) any number-typed target ⇒ ambiguous ⇒ first option.
+    const setNames = new Set(candidates.flatMap(c => Object.keys(parseChoiceSets(c.setsVariables))))
+    if ([...setNames].some(n => varType[n] === 'number')) return candidates[0]
+
+    // (a) the branch whose assignments don't contradict the defaults. If
+    // exactly one qualifies it's unambiguously canon; otherwise prefer one
+    // that actively sets a variable, falling back to the first option.
+    const consistent = candidates.filter(c => !choiceContradicts(parseChoiceSets(c.setsVariables), state))
+    if (consistent.length === 1) return consistent[0]
+    const setter = consistent.find(c => Object.keys(parseChoiceSets(c.setsVariables)).length > 0)
+    return setter ?? consistent[0] ?? candidates[0]
+  }
+
   async function copyCanonText() {
     if (!chapter) return
     const storyState: StoryState = {}
+    const varType: Record<string, string> = {}
     for (const v of series.variables) {
+      varType[v.name] = v.type
       if (v.type === 'boolean') storyState[v.name] = String(v.defaultValue).toLowerCase() === 'true'
       else if (v.type === 'number') storyState[v.name] = Number(v.defaultValue ?? 0)
       else storyState[v.name] = v.defaultValue ?? ''
@@ -484,8 +551,7 @@ export default function ChapterEditorPage() {
       // (Preview): text blocks render their content; conditional fragments
       // render the matching override for the default variable state — NOT
       // the base editing scaffold — and contribute nothing when no override
-      // matches. Choice points are interactive in Preview (no prose until
-      // answered), so they're skipped here.
+      // matches. Choice points collapse to their canon branch (see below).
       let src: string | null | undefined = null
       if (block.type === 'text') {
         src = block.content
@@ -495,6 +561,16 @@ export default function ChapterEditorPage() {
           storyState,
         )
         src = matched?.content ?? null
+      } else if (block.type === 'choice_point') {
+        // A choice point only belongs in the canon read-through when its own
+        // gate holds for the default context — a block gated by a non-default
+        // variable state isn't on the canon path, so skip it entirely.
+        const blockGate = safeCondition(block.condition)
+        if (blockGate && !matchesCondition(blockGate, storyState)) continue
+        const canon = resolveCanonChoice(block.choices ?? [], storyState, varType)
+        // Canon prose for a branch is its inline consequence (endingMessage),
+        // exactly what the reader/narration emit once a branch is chosen.
+        src = canon?.endingMessage ?? null
       }
       if (!src) continue
       const text = substituteVarTemplates(extractPlainText(src), storyState, s => s)
