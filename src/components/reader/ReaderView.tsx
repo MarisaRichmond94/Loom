@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, memo, type CSSProperties } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { LuMoon, LuSun, LuArrowLeft, LuArrowRight, LuMusic, LuUser, LuSlidersHorizontal, LuCopy, LuCheck } from 'react-icons/lu'
@@ -81,6 +81,33 @@ type Props = {
   onSessionUpdate: (state: StoryState, history: HistoryEntry[]) => void
   onNavigate: (chapterId: string) => void
 }
+
+// A rendered prose block. Memoized so that a ReaderView re-render for an
+// unrelated reason (hovering a character card, copy-button state, …) does NOT
+// reconcile the block's dangerouslySetInnerHTML — otherwise React would rebuild
+// the block's DOM and wipe the word-highlight spans that NarrationBar wraps into
+// it imperatively (which never get re-added on a hover, so the read-mode
+// highlight would vanish until the chapter reloads). Re-renders only when the
+// html/class/style actually change (e.g. a choice unlocks/reveals new prose).
+  blockId,
+  className,
+  style,
+  html,
+}: {
+  blockId: string
+  className: string
+  style?: CSSProperties
+  html: string
+}) {
+  return (
+    <div
+      id={`block-${blockId}`}
+      className={className}
+      style={style}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  )
+})
 
 // Which options a choice point actually shows the reader. The two base
 // options (order 0/1) always render — that's the guarantee that a choice
@@ -544,12 +571,12 @@ export default function ReaderView({
 
             if (block.type === 'text') {
               return (
-                <div
+                <ProseBlock
                   key={block.id}
-                  id={`block-${block.id}`}
+                  blockId={block.id}
                   className="prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_p.no-indent]:indent-0 [&_p[style*='center']]:indent-0 [&_p:empty]:min-h-[1em] [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6"
                   style={pendingChoice ? { filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' } : undefined}
-                  dangerouslySetInnerHTML={{ __html: renderedBlocks.get(block.id)?.html ?? '' }}
+                  html={renderedBlocks.get(block.id)?.html ?? ''}
                 />
               )
             }
@@ -564,11 +591,11 @@ export default function ReaderView({
               // the chapter (and the InlineBadEnding controls below) take over.
               if (matched.endingMessage != null) hitBadEnding = true
               return (
-                <div
+                <ProseBlock
                   key={block.id}
-                  id={`block-${block.id}`}
+                  blockId={block.id}
                   className={`prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_p.no-indent]:indent-0 [&_p[style*='center']]:indent-0 [&_p:empty]:min-h-[1em] [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6 ${HIGHLIGHT_CLASSES}`}
-                  dangerouslySetInnerHTML={{ __html: renderedBlocks.get(block.id)?.html ?? '' }}
+                  html={renderedBlocks.get(block.id)?.html ?? ''}
                 />
               )
             }
@@ -587,15 +614,12 @@ export default function ReaderView({
                 const chosen = block.choices.find(c => c.id === answered.choiceId)
                 if (chosen?.endingMessage && !chosen?.isBadEnding) {
                   const rich = renderedBlocks.get(block.id)?.branchHtml ?? null
-                  return (
-                    <div
-                      key={block.id}
-                      id={`block-${block.id}`}
-                      className={`prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_p.no-indent]:indent-0 [&_p[style*='center']]:indent-0 [&_p:empty]:min-h-[1em] [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6 ${HIGHLIGHT_CLASSES}`}
-                    >
-                      {rich
-                        ? <div dangerouslySetInnerHTML={{ __html: rich }} />
-                        : <p style={{ whiteSpace: 'pre-wrap' }}>{chosen.endingMessage}</p>}
+                  const branchClass = `prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_p.no-indent]:indent-0 [&_p[style*='center']]:indent-0 [&_p:empty]:min-h-[1em] [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6 ${HIGHLIGHT_CLASSES}`
+                  return rich ? (
+                    <ProseBlock key={block.id} blockId={block.id} className={branchClass} html={rich} />
+                  ) : (
+                    <div key={block.id} id={`block-${block.id}`} className={branchClass}>
+                      <p style={{ whiteSpace: 'pre-wrap' }}>{chosen.endingMessage}</p>
                     </div>
                   )
                 }
