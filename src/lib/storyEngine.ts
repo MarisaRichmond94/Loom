@@ -9,13 +9,23 @@ export type HistoryEntry = {
 // Conditions can be stored in two shapes that the engine reads transparently:
 //   1. Legacy: `{ varA: 1, varB: 2 }` — implicit AND of equalities. Continues to be
 //      the on-disk format for single-variable or all-AND conditions (no migration).
-//   2. Compound: `{ op: 'and' | 'or', clauses: [{ var, value }, ...] }` — explicit
-//      operator. The editor only writes this when the writer picks "any of" (OR).
+//   2. Compound: `{ op: 'and' | 'or', clauses: [{ var, value, cmp? }, ...] }` —
+//      explicit operator. The editor writes this whenever the legacy object
+//      can't express the gate: an OR, a hide-if polarity, or any clause using a
+//      comparison operator (cmp other than '='), since `{ var: value }` has no
+//      slot for one.
 export type ConditionLeafValue = boolean | number | string
+// Per-clause comparison operator. Absent (and '=') means strict equality —
+// the only relation legacy data ever implied — so an absent cmp keeps every
+// existing condition evaluating exactly as before. '>' '<' '>=' '<=' are
+// numeric-only (see compareClause) and let a number variable gate on a range
+// rather than an exact value.
+export type ConditionCmp = '=' | '>' | '<' | '>=' | '<='
+export type ConditionClauseShape = { var: string; value: ConditionLeafValue; cmp?: ConditionCmp }
 export type LegacyCondition = Record<string, ConditionLeafValue>
 export type CompoundCondition = {
   op: 'and' | 'or'
-  clauses: Array<{ var: string; value: ConditionLeafValue }>
+  clauses: ConditionClauseShape[]
   // When 'hide', the condition flips polarity: a matching clause set means
   // "hide this chapter" rather than the default "show this chapter". Stored
   // here (not on a sibling column) so the existing condition JSON is the
@@ -80,9 +90,30 @@ function applyVarOp(current: StoryState[string] | undefined, instruction: Choice
   return instruction.value
 }
 
+// Evaluate one clause against state. Absent cmp (and '=') is strict equality —
+// byte-for-byte the pre-comparison behavior, so existing conditions are
+// unaffected. The ordering operators are numeric-only: if either side isn't a
+// real number (the variable was never set, or isn't a number type) the clause
+// fails rather than coercing — matching how equality already fails on unset
+// variables.
+function compareClause(cl: ConditionClauseShape, storyState: StoryState): boolean {
+  const cmp = cl.cmp ?? '='
+  if (cmp === '=') return storyState[cl.var] === cl.value
+  const a = storyState[cl.var]
+  const b = cl.value
+  if (typeof a !== 'number' || typeof b !== 'number') return false
+  switch (cmp) {
+    case '>': return a > b
+    case '<': return a < b
+    case '>=': return a >= b
+    case '<=': return a <= b
+  }
+  return false
+}
+
 export function matchesCondition(condition: Condition, storyState: StoryState): boolean {
   if (isCompoundCondition(condition)) {
-    const test = (cl: { var: string; value: ConditionLeafValue }) => storyState[cl.var] === cl.value
+    const test = (cl: ConditionClauseShape) => compareClause(cl, storyState)
     const matched = condition.op === 'or' ? condition.clauses.some(test) : condition.clauses.every(test)
     // mode='hide' inverts: the chapter is "visible" when the clauses DON'T match.
     // Block overrides never set this mode, so override resolution is unaffected.
@@ -123,16 +154,39 @@ export function solveCondition(
     return null
   }
 
+  // Smallest value that makes one show-if clause pass. Equality wants the exact
+  // value; ordering clauses step one past the threshold (value±1 is > / < the
+  // threshold for any real number, and value itself satisfies >= / <=). A
+  // non-numeric ordering clause can't be seeded, so the whole solve bails to
+  // null (caller redirects) rather than guess.
+  function satisfy(clause: ConditionClauseShape): ConditionLeafValue | null {
+    const cmp = clause.cmp ?? '='
+    if (cmp === '=') return clause.value
+    if (typeof clause.value !== 'number') return null
+    switch (cmp) {
+      case '>': return clause.value + 1
+      case '>=': return clause.value
+      case '<': return clause.value - 1
+      case '<=': return clause.value
+    }
+    return null
+  }
+
   if (isCompoundCondition(condition)) {
     if (condition.clauses.length === 0) return null
     const isHide = condition.mode === 'hide'
     if (!isHide) {
       if (condition.op === 'or') {
         const c = condition.clauses[0]
-        return { [c.var]: c.value }
+        const target = satisfy(c)
+        return target === null ? null : { [c.var]: target }
       }
       const patch: StoryState = {}
-      for (const c of condition.clauses) patch[c.var] = c.value
+      for (const c of condition.clauses) {
+        const target = satisfy(c)
+        if (target === null) return null
+        patch[c.var] = target
+      }
       return patch
     }
     if (condition.op === 'and') {

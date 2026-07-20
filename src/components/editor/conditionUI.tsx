@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { LuX } from 'react-icons/lu'
 import { useAuthor } from '@/lib/authorContext'
+import type { ConditionCmp } from '@/lib/storyEngine'
 
 export type ConditionVariable = { id: string; name: string; type: string; defaultValue?: string }
 
@@ -90,7 +91,37 @@ export function ValueSetter({ v, currentVal, onChange, autoFocus, suggestions }:
 
 export type ConditionOp = 'and' | 'or'
 export type ConditionPolarity = 'show' | 'hide'
-export type ConditionClause = { var: string; value: unknown }
+// `cmp` is absent for equality clauses (the vast majority, and everything
+// legacy). It is only carried for number variables that gate on a range.
+export type ConditionClause = { var: string; value: unknown; cmp?: ConditionCmp }
+
+// Comparison operators offered on number-type clauses. Symbols use ≥/≤ for
+// the compound operators but store the ASCII '>=' / '<=' the engine reads.
+export const CMP_OPTIONS: Array<{ value: ConditionCmp; label: string; title: string }> = [
+  { value: '=', label: '=', title: 'equals' },
+  { value: '>', label: '>', title: 'greater than' },
+  { value: '<', label: '<', title: 'less than' },
+  { value: '>=', label: '≥', title: 'at least' },
+  { value: '<=', label: '≤', title: 'at most' },
+]
+
+function CmpSelect({ value, onChange }: { value: ConditionCmp; onChange: (cmp: ConditionCmp) => void }) {
+  return (
+    <div className="relative shrink-0">
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value as ConditionCmp)}
+        title="Comparison"
+        className="appearance-none bg-black/20 border border-black/20 rounded text-xs text-ink-muted outline-none focus:border-accent/50 pl-1.5 pr-4 py-0.5 cursor-pointer"
+      >
+        {CMP_OPTIONS.map(o => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      <span className="absolute right-1 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none text-[9px]">▾</span>
+    </div>
+  )
+}
 
 type ParsedCondition = { op: ConditionOp; polarity: ConditionPolarity; clauses: ConditionClause[] }
 
@@ -129,12 +160,20 @@ export function parseCondition(raw: string | null): ParsedCondition {
 // emits anything, regardless of polarity (no "hide always" — degenerate).
 export function stringifyCondition(op: ConditionOp, clauses: ConditionClause[], polarity: ConditionPolarity = 'show'): string | null {
   if (clauses.length === 0) return null
-  if (polarity === 'show' && (op === 'and' || clauses.length === 1)) {
+  // Any non-equality clause forces the compound shape — the legacy
+  // `{ var: value }` object has nowhere to put an operator.
+  const hasCmp = clauses.some(c => c.cmp && c.cmp !== '=')
+  if (!hasCmp && polarity === 'show' && (op === 'and' || clauses.length === 1)) {
     const obj: Record<string, unknown> = {}
     for (const c of clauses) obj[c.var] = c.value
     return JSON.stringify(obj)
   }
-  const compound: { op: ConditionOp; clauses: ConditionClause[]; mode?: 'hide' } = { op, clauses }
+  // Emit `cmp` only for real comparisons so equality clauses stay compact and
+  // an absent operator keeps meaning '=' on disk.
+  const compound: { op: ConditionOp; clauses: ConditionClause[]; mode?: 'hide' } = {
+    op,
+    clauses: clauses.map(c => (c.cmp && c.cmp !== '=' ? { var: c.var, value: c.value, cmp: c.cmp } : { var: c.var, value: c.value })),
+  }
   if (polarity === 'hide') compound.mode = 'hide'
   return JSON.stringify(compound)
 }
@@ -204,7 +243,11 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
 
   const { op, polarity, clauses } = parseCondition(condition)
   const valueByName: Record<string, unknown> = {}
-  for (const c of clauses) valueByName[c.var] = c.value
+  const cmpByName: Record<string, ConditionCmp> = {}
+  for (const c of clauses) {
+    valueByName[c.var] = c.value
+    cmpByName[c.var] = c.cmp ?? '='
+  }
   const attachedNames = new Set(clauses.map(c => c.var))
   const attachedVars = variables.filter(v => attachedNames.has(v.name))
   const unattachedVars = variables.filter(v => !attachedNames.has(v.name))
@@ -218,7 +261,14 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
       save(op, clauses.filter(c => c.var !== name))
       return
     }
-    const updated = clauses.map(c => c.var === name ? { var: c.var, value: val } : c)
+    // Spread preserves cmp — editing the value must not silently reset a
+    // comparison operator back to equality.
+    const updated = clauses.map(c => c.var === name ? { ...c, value: val } : c)
+    save(op, updated)
+  }
+
+  function setCmp(name: string, cmp: ConditionCmp) {
+    const updated = clauses.map(c => c.var === name ? { ...c, cmp } : c)
     save(op, updated)
   }
 
@@ -275,7 +325,11 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
           )}
           <div className="flex items-center gap-1 bg-black/20 border border-black/20 rounded px-2 py-0.5">
             <span className="text-xs text-ink-muted">{v.name}</span>
-            <span className="text-xs text-ink-faint">=</span>
+            {v.type === 'number' ? (
+              <CmpSelect value={cmpByName[v.name] ?? '='} onChange={cmp => setCmp(v.name, cmp)} />
+            ) : (
+              <span className="text-xs text-ink-faint">=</span>
+            )}
             <div className="w-24">
               <ValueSetter v={v} currentVal={valueByName[v.name]} onChange={val => setVal(v.name, val)} suggestions={knownStringValues[v.name]} />
             </div>
