@@ -42,12 +42,17 @@ export function renderTipTapJson(json: string | null | undefined, storyState?: S
 export function tryRenderRichContent(content: string | null | undefined, storyState?: StoryState): string | null {
   if (!content) return null
   // TipTap docs always serialize as a JSON object starting with `{`.
-  // Anything else is legacy plain text written before this feature.
+  // Anything else is legacy plain text written before this feature — return
+  // null so the caller wraps it in a paragraph verbatim.
   if (!content.trimStart().startsWith('{')) return null
+  // From here the content IS rich JSON, so always return a string: the
+  // rendered HTML, or '' when the doc has no visible content (e.g. an empty
+  // placeholder paragraph). Never null here — a null would make the caller
+  // mistake empty rich content for legacy plain text and print the raw JSON.
+  // '' tells the caller to render nothing.
   try {
-    const html = renderTipTapJson(content, storyState)
-    return html || null
+    return renderTipTapJson(content, storyState)
   } catch {
-    return null
+    return ''
   }
 }

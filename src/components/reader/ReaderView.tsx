@@ -616,13 +616,21 @@ export default function ReaderView({
                 if (chosen?.endingMessage && !chosen?.isBadEnding) {
                   const rich = renderedBlocks.get(block.id)?.branchHtml ?? null
                   const branchClass = `prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_p.no-indent]:indent-0 [&_p[style*='center']]:indent-0 [&_p:empty]:min-h-[1em] [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6 ${HIGHLIGHT_CLASSES}`
-                  return rich ? (
-                    <ProseBlock key={block.id} blockId={block.id} className={branchClass} html={rich} />
-                  ) : (
-                    <div key={block.id} id={`block-${block.id}`} className={branchClass}>
-                      <p style={{ whiteSpace: 'pre-wrap' }}>{chosen.endingMessage}</p>
-                    </div>
-                  )
+                  // rich: rendered HTML → show it; null → legacy plain text,
+                  // wrap verbatim; '' → rich JSON that rendered to nothing
+                  // (e.g. an empty placeholder), render nothing rather than
+                  // dumping the raw doc JSON.
+                  if (rich) {
+                    return <ProseBlock key={block.id} blockId={block.id} className={branchClass} html={rich} />
+                  }
+                  if (rich === null) {
+                    return (
+                      <div key={block.id} id={`block-${block.id}`} className={branchClass}>
+                        <p style={{ whiteSpace: 'pre-wrap' }}>{chosen.endingMessage}</p>
+                      </div>
+                    )
+                  }
+                  return null
                 }
                 return null
               }

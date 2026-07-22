@@ -23,8 +23,10 @@ export default function BadEndingModal({
   message, storyState, sessionId, seriesId, choiceHistory, variables, chapterLabels, firstChapterId, onApply,
 }: Props) {
   // New bad-ending messages are TipTap JSON; legacy ones are plain text.
-  // tryRenderRichContent returns null for plain text, letting us fall
-  // back to the original whitespace-preserving paragraph rendering.
+  // tryRenderRichContent returns null only for legacy plain text (fall back
+  // to the whitespace-preserving paragraph), a rendered HTML string, or ''
+  // for rich JSON with no visible content (render nothing — never the raw
+  // JSON).
   const rich = tryRenderRichContent(message, storyState)
   const { visibleCps, working, goTo, startOver } = useBadEndingRewind({
     sessionId, seriesId, choiceHistory, variables, chapterLabels, firstChapterId, onApply,
@@ -38,9 +40,9 @@ export default function BadEndingModal({
             className="prose prose-invert max-w-none text-ink leading-relaxed mb-6 [&_p]:text-justify [&_p:empty]:min-h-[1em]"
             dangerouslySetInnerHTML={{ __html: rich }}
           />
-        ) : (
+        ) : rich === null ? (
           <p className="text-base text-ink leading-relaxed mb-6 whitespace-pre-wrap text-center">{message}</p>
-        )}
+        ) : null}
         <div className="text-xs uppercase tracking-widest text-ink-faint mb-2">Go back to</div>
         <div className="flex-1 overflow-y-auto -mx-2 px-2">
           {visibleCps.length === 0 ? (
