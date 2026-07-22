@@ -53,6 +53,11 @@ export type ConditionalOverrideEntry = {
   // rendering content inline. The reader uses this to detect ending triggers
   // from the alignment of several variables.
   endingMessage?: string | null
+  // When true, a matched override cleanly ends the chapter: content renders,
+  // then every block after this fragment is dropped and the reader advances
+  // normally (no death modal, no rewind). If endingMessage is also set, the
+  // bad ending wins.
+  endsChapter?: boolean
 }
 
 export type ConditionalBlock = {

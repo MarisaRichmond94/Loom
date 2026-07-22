@@ -7,7 +7,7 @@ type Params = { params: Promise<{ overrideId: string }> }
 
 export async function PATCH(req: Request, { params }: Params) {
   const { overrideId } = await params
-  const { condition, content, order, endingMessage } = await req.json()
+  const { condition, content, order, endingMessage, endsChapter } = await req.json()
   try {
     const override = await prisma.conditionalOverride.update({
       where: { id: overrideId },
@@ -16,6 +16,7 @@ export async function PATCH(req: Request, { params }: Params) {
         ...(content !== undefined && { content }),
         ...(order !== undefined && { order }),
         ...(endingMessage !== undefined && { endingMessage }),
+        ...(endsChapter !== undefined && { endsChapter }),
       },
     })
     if (content !== undefined) await refreshBlockWordCounts([override.conditionalFragmentId])

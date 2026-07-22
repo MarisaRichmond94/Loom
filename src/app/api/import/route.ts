@@ -105,12 +105,13 @@ export async function POST(req: NextRequest) {
         // Overrides
         if (block.overrides?.length) {
           await prisma.conditionalOverride.createMany({
-            data: block.overrides.map((o: { order: number; condition: string; content: string; endingMessage?: string | null }) => ({
+            data: block.overrides.map((o: { order: number; condition: string; content: string; endingMessage?: string | null; endsChapter?: boolean }) => ({
               conditionalFragmentId: newBlock.id,
               order: o.order,
               condition: o.condition,
               content: o.content,
               endingMessage: o.endingMessage ?? null,
+              endsChapter: o.endsChapter ?? false,
             })),
           })
         }
@@ -135,7 +136,7 @@ export async function POST(req: NextRequest) {
   // 4. Second pass: create all choices now that chapterRefMap is complete
   // Re-fetch blocks to get their choices data (we stored pending choices on the object above — simpler to re-query structure)
   // Instead, rebuild from payload directly using the block creation order
-  const choiceData: { choicePointId: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; endingMessage: string | null; isBadEnding: boolean; condition: string | null }[] = []
+  const choiceData: { choicePointId: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; endingMessage: string | null; isBadEnding: boolean; endsChapter: boolean; condition: string | null }[] = []
 
   // Walk payload again to collect choices with resolved target IDs
   const allNewBlocks = await prisma.contentBlock.findMany({
@@ -144,7 +145,7 @@ export async function POST(req: NextRequest) {
   })
 
   // Flatten payload blocks in the same order
-  const payloadBlocks: { choices: { order?: number; label: string; setsVariables: string; targetChapterRef: string | null; endingMessage?: string | null; isBadEnding?: boolean; condition?: string | null }[] }[] = []
+  const payloadBlocks: { choices: { order?: number; label: string; setsVariables: string; targetChapterRef: string | null; endingMessage?: string | null; isBadEnding?: boolean; endsChapter?: boolean; condition?: string | null }[] }[] = []
   for (const book of s.books ?? []) {
     for (const chapter of book.chapters ?? []) {
       for (const block of chapter.blocks ?? []) {
@@ -169,6 +170,8 @@ export async function POST(req: NextRequest) {
         // Backfill rule for older backups (no flag): any non-null
         // endingMessage was historically a bad ending, so default to true.
         isBadEnding: c.isBadEnding ?? (c.endingMessage != null),
+        // New field with no historical equivalent — older backups default off.
+        endsChapter: c.endsChapter ?? false,
         condition: c.condition ?? null,
       })
     }

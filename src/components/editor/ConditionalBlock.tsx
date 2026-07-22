@@ -8,7 +8,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import type { Editor } from '@tiptap/core'
 import type { SearchOptions } from '@/lib/searchMatch'
 
-type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
+type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null; endsChapter?: boolean }
 type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
 type Props = {
   overrides: Override[]
@@ -89,18 +89,40 @@ export default function ConditionalBlock({ overrides, variables, characters, sea
               onEditorReady={onEditorReady ? editor => onEditorReady(override.id, editor) : undefined}
             />
 
-            <label className="mt-2 flex items-center gap-2 text-xs text-ink-muted cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isEnding}
-                onChange={e => onUpdateOverride(override.id, { endingMessage: e.target.checked ? '' : null })}
-                className="accent-choice-kill"
-              />
-              <span>Bad ending</span>
-              {isEnding && (
-                <span className="text-[10px] uppercase tracking-widest text-choice-kill/80 ml-1">truncates the rest of the chapter</span>
-              )}
-            </label>
+            {/* Side by side, each label only as wide as its own checkbox +
+                text so clicking elsewhere on the row never toggles them. The
+                "Ends chapter" flag cleanly ends the chapter when this condition
+                matches (content renders, later blocks drop, reader advances via
+                the footer — no overlay, no rewind); a bad ending already ends
+                the chapter, so it's disabled while that's checked. */}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <label className="inline-flex items-center gap-2 text-xs text-ink-muted cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isEnding}
+                  onChange={e => onUpdateOverride(override.id, { endingMessage: e.target.checked ? '' : null })}
+                  className="accent-choice-kill"
+                />
+                <span>Bad ending</span>
+                {isEnding && (
+                  <span className="text-[10px] uppercase tracking-widest text-choice-kill/80 ml-1">truncates the rest of the chapter</span>
+                )}
+              </label>
+
+              <label className={`inline-flex items-center gap-2 text-xs cursor-pointer ${isEnding ? 'text-ink-faint cursor-not-allowed' : 'text-ink-muted'}`}>
+                <input
+                  type="checkbox"
+                  checked={(override.endsChapter ?? false) && !isEnding}
+                  disabled={isEnding}
+                  onChange={e => onUpdateOverride(override.id, { endsChapter: e.target.checked })}
+                  className="accent-accent"
+                />
+                <span>Ends chapter</span>
+                {override.endsChapter && !isEnding && (
+                  <span className="text-[10px] uppercase tracking-widest text-accent/80 ml-1">stops the chapter here</span>
+                )}
+              </label>
+            </div>
           </div>
         )
       })}

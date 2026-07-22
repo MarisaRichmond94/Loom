@@ -32,8 +32,8 @@ import PinnedAudio from '@/components/PinnedAudio'
 import NarrationBar from './NarrationBar'
 import { stripEmptyParagraphs, htmlToPlainText, inlineParagraphStyles, educateHtml, educateQuotes, PASTE_FONT_FAMILY } from '@/lib/clipboardFormatting'
 
-type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
-type Choice = { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null; isBadEnding?: boolean; condition?: string | null }
+type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null; endsChapter?: boolean }
+type Choice = { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null; isBadEnding?: boolean; endsChapter?: boolean; condition?: string | null }
 type Block = {
   id: string; order: number; type: string
   content?: string | null; prompt?: string | null; displayType?: string | null; baseContent?: string | null
@@ -323,6 +323,7 @@ export default function ReaderView({
               condition: JSON.parse(o.condition),
               content: o.content,
               endingMessage: o.endingMessage ?? null,
+              endsChapter: o.endsChapter ?? false,
             })),
           },
           storyState
@@ -433,6 +434,7 @@ export default function ReaderView({
               condition: JSON.parse(o.condition),
               content: o.content,
               endingMessage: o.endingMessage ?? null,
+              endsChapter: o.endsChapter ?? false,
             })),
           },
           storyState,
@@ -442,6 +444,12 @@ export default function ReaderView({
           // Bad-ending override: copy its prose (the death scene IS the
           // ending), then stop — everything after is hidden in the chapter.
           if (matched.endingMessage != null) {
+            if (html) { htmlParts.push(html); textParts.push(htmlToPlainText(html)) }
+            break
+          }
+          // Clean "ends chapter" override: copy its prose, then stop — later
+          // blocks are hidden in the chapter, mirroring the on-page render.
+          if (matched.endsChapter) {
             if (html) { htmlParts.push(html); textParts.push(htmlToPlainText(html)) }
             break
           }
@@ -461,6 +469,9 @@ export default function ReaderView({
               ?? `<p>${escapeHtml(chosen.endingMessage)}</p>`
           }
           if (html) { htmlParts.push(html); textParts.push(htmlToPlainText(html)) }
+          // A clean "ends chapter" branch stops the copy here — later blocks
+          // are hidden in the chapter, mirroring the on-page render.
+          if (chosen?.endsChapter && !chosen.isBadEnding) break
           continue
         }
         if (block.condition) {
@@ -565,10 +576,15 @@ export default function ReaderView({
         {(() => {
           let pendingChoice = false
           let hitBadEnding = false
+          // A matched "ends chapter" conditional or answered "ends chapter"
+          // choice cleanly closes the chapter early: like hitBadEnding, every
+          // block after it is hidden — but there's no death overlay, and the
+          // reader advances with the normal chapter footer.
+          let chapterEnded = false
           const elements = blocks.map(block => {
             // A conditional bad-ending earlier in the chapter ends the run;
             // every block after it is hidden (not blurred — the story is over).
-            if (hitBadEnding) return null
+            if (hitBadEnding || chapterEnded) return null
 
             if (block.type === 'text') {
               return (
@@ -591,6 +607,9 @@ export default function ReaderView({
               // prose IS the death scene. Flip hitBadEnding so the rest of
               // the chapter (and the InlineBadEnding controls below) take over.
               if (matched.endingMessage != null) hitBadEnding = true
+              // A clean "ends chapter" override closes the chapter after its
+              // prose — no overlay, the reader continues via the footer.
+              else if (matched.endsChapter) chapterEnded = true
               return (
                 <ProseBlock
                   key={block.id}
@@ -613,6 +632,12 @@ export default function ReaderView({
                 // data; tryRenderRichContent falls back to wrapping
                 // legacy plain text in a paragraph.
                 const chosen = block.choices.find(c => c.id === answered.choiceId)
+                // A clean "ends chapter" branch closes the chapter after this
+                // point: its inline consequence prose (if any) still renders
+                // below, but every later block is hidden and the reader
+                // advances via the footer. Bad endings take the modal path and
+                // never set this.
+                if (chosen?.endsChapter && !chosen?.isBadEnding) chapterEnded = true
                 if (chosen?.endingMessage && !chosen?.isBadEnding) {
                   const rich = renderedBlocks.get(block.id)?.branchHtml ?? null
                   const branchClass = `prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_p.no-indent]:indent-0 [&_p[style*='center']]:indent-0 [&_p:empty]:min-h-[1em] [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6 ${HIGHLIGHT_CLASSES}`

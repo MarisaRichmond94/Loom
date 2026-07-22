@@ -6,7 +6,7 @@ type Params = { params: Promise<{ choiceId: string }> }
 
 export async function PATCH(req: Request, { params }: Params) {
   const { choiceId } = await params
-  const { label, setsVariables, targetChapterId, endingMessage, isBadEnding, condition } = await req.json()
+  const { label, setsVariables, targetChapterId, endingMessage, isBadEnding, endsChapter, condition } = await req.json()
   try {
     // A condition may only be attached to a gate-eligible extra option
     // (order >= 2). The two base options always render, so gating one
@@ -29,6 +29,7 @@ export async function PATCH(req: Request, { params }: Params) {
         ...(targetChapterId !== undefined && { targetChapterId }),
         ...(endingMessage !== undefined && { endingMessage }),
         ...(isBadEnding !== undefined && { isBadEnding }),
+        ...(endsChapter !== undefined && { endsChapter }),
         ...(condition !== undefined && { condition }),
       },
     })

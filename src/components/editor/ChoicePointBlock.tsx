@@ -54,7 +54,7 @@ function NumberSetWithOp({ value, onChange, autoFocus }: { value: unknown; onCha
   )
 }
 
-type Choice = { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null; isBadEnding?: boolean; condition?: string | null }
+type Choice = { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null; isBadEnding?: boolean; endsChapter?: boolean; condition?: string | null }
 type Variable = { id: string; name: string; type: string; defaultValue?: string }
 
 type Props = {
@@ -432,15 +432,36 @@ function ChoicePanel({
             ? 'What the reader sees on the full-screen overlay…'
             : 'Optional: text shown inline when this choice is picked…'}
         />
-        <label className="mt-2 flex items-center gap-2 text-xs text-ink-muted cursor-pointer">
-          <input
-            type="checkbox"
-            checked={choice.isBadEnding ?? false}
-            onChange={e => onUpdateChoice(choice.id, { isBadEnding: e.target.checked })}
-            className="accent-choice-kill"
-          />
-          <span>Bad ending</span>
-        </label>
+        {/* Side by side, each label only as wide as its own checkbox + text
+            so clicking elsewhere on the row never toggles them. The "Ends
+            chapter" flag cleanly ends the chapter when this branch is picked
+            (later blocks drop, reader advances via the footer — no overlay, no
+            rewind); a bad ending already ends the chapter its own way, so it's
+            disabled while that's checked. */}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-2 text-xs text-ink-muted cursor-pointer">
+            <input
+              type="checkbox"
+              checked={choice.isBadEnding ?? false}
+              onChange={e => onUpdateChoice(choice.id, { isBadEnding: e.target.checked })}
+              className="accent-choice-kill"
+            />
+            <span>Bad ending</span>
+          </label>
+          <label className={`inline-flex items-center gap-2 text-xs cursor-pointer ${choice.isBadEnding ? 'text-ink-faint cursor-not-allowed' : 'text-ink-muted'}`}>
+            <input
+              type="checkbox"
+              checked={(choice.endsChapter ?? false) && !choice.isBadEnding}
+              disabled={choice.isBadEnding ?? false}
+              onChange={e => onUpdateChoice(choice.id, { endsChapter: e.target.checked })}
+              className="accent-accent"
+            />
+            <span>Ends chapter</span>
+            {choice.endsChapter && !choice.isBadEnding && (
+              <span className="text-[10px] uppercase tracking-widest text-accent/80 ml-1">stops the chapter here</span>
+            )}
+          </label>
+        </div>
       </div>
     </div>
   )

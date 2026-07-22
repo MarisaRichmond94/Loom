@@ -66,6 +66,7 @@ type BlockIn = {
     targetChapterId: string | null
     endingMessage: string | null
     isBadEnding: boolean
+    endsChapter: boolean
   }>
   overrides: Array<{
     id: string
@@ -73,6 +74,7 @@ type BlockIn = {
     condition: string
     content: string
     endingMessage: string | null
+    endsChapter: boolean
   }>
 }
 
@@ -176,6 +178,7 @@ export function walkBook(
             condition: safeParseCondition(o.condition),
             content: o.content,
             endingMessage: o.endingMessage,
+            endsChapter: o.endsChapter,
           })),
         }, state)
         if (!matched) continue
@@ -189,6 +192,11 @@ export function walkBook(
           out.contents.push(matched.content)
           out.stateByContent.push({ ...state })
         }
+        // A matched "ends chapter" override cleanly closes the chapter here:
+        // its content is the last thing shown and the walk resumes at the next
+        // chapter in book order. Distinct from a bad ending, which is skipped
+        // in canon (above) — this IS the canon end of the chapter.
+        if (matched.endsChapter) break
         continue
       }
       if (block.type !== 'choice_point') continue
@@ -251,6 +259,10 @@ export function walkBook(
         jumpToChapterId = resolved.targetChapterId
         break
       }
+      // A no-target "ends chapter" branch closes the chapter here; the walk
+      // resumes at the next chapter in book order (the reader gets there via
+      // the footer). A targeted branch already jumped above.
+      if (resolved.endsChapter) break
     }
 
     result.chapters.push(out)

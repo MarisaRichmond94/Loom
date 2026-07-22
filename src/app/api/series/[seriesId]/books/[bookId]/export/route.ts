@@ -95,6 +95,7 @@ export async function GET(_: Request, { params }: Params) {
               targetChapterRef: c.targetChapterId,
               endingMessage: c.endingMessage,
               isBadEnding: c.isBadEnding,
+              endsChapter: c.endsChapter,
               condition: c.condition,
             })),
             overrides: block.overrides.map(o => ({
@@ -102,6 +103,7 @@ export async function GET(_: Request, { params }: Params) {
               condition: o.condition,
               content: o.content,
               endingMessage: o.endingMessage,
+              endsChapter: o.endsChapter,
             })),
           })),
         })),

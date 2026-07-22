@@ -10,10 +10,10 @@ import { resolveConditionalOverride, matchesCondition, type StoryState } from '@
 export type WordTiming = { charStart: number; charLen: number; timeMs: number; word: string }
 
 export type NarrationOverride = {
-  id: string; order: number; condition: string; content: string; endingMessage?: string | null
+  id: string; order: number; condition: string; content: string; endingMessage?: string | null; endsChapter?: boolean
 }
 export type NarrationChoice = {
-  id: string; endingMessage?: string | null; isBadEnding?: boolean
+  id: string; endingMessage?: string | null; isBadEnding?: boolean; endsChapter?: boolean
 }
 export type NarrationBlock = {
   id: string
@@ -101,7 +101,7 @@ export function narrationSegments(
       const overrides = (b.overrides ?? [])
         .map(o => {
           const cond = safeParse(o.condition)
-          return cond == null ? null : { id: o.id, order: o.order, condition: cond as never, content: o.content, endingMessage: o.endingMessage ?? null }
+          return cond == null ? null : { id: o.id, order: o.order, condition: cond as never, content: o.content, endingMessage: o.endingMessage ?? null, endsChapter: o.endsChapter ?? false }
         })
         .filter((o): o is NonNullable<typeof o> => o !== null)
       const matched = resolveConditionalOverride({ overrides }, state)
@@ -110,6 +110,9 @@ export function narrationSegments(
         if (t.trim()) { parts.push(t); blockIds.push(b.id) }
         // A matched bad-ending override truncates the chapter for the reader.
         if (matched.endingMessage != null) { flush(); break }
+        // A matched "ends chapter" override cleanly ends the chapter after its
+        // narrated prose — nothing further in the chapter is spoken.
+        if (matched.endsChapter) { flush(); break }
       }
       continue
     }
@@ -128,6 +131,9 @@ export function narrationSegments(
           const t = spokenText(chosen.endingMessage, state)
           if (t.trim()) { parts.push(t); blockIds.push(b.id) }
         }
+        // A clean "ends chapter" branch ends the chapter after its inline
+        // prose — nothing further in the chapter is spoken.
+        if (chosen?.endsChapter) { flush(); break }
         continue
       }
       // Unanswered: a visible one gates the rest; a hidden one is skipped.

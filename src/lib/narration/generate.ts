@@ -59,8 +59,8 @@ async function chapterPlan(
       blocks: {
         select: {
           id: true, type: true, content: true, condition: true, order: true,
-          overrides: { select: { id: true, order: true, condition: true, content: true, endingMessage: true } },
-          choices: { select: { id: true, endingMessage: true, isBadEnding: true } },
+          overrides: { select: { id: true, order: true, condition: true, content: true, endingMessage: true, endsChapter: true } },
+          choices: { select: { id: true, endingMessage: true, isBadEnding: true, endsChapter: true } },
         },
         orderBy: { order: 'asc' },
       },

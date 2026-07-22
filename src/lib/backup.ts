@@ -31,8 +31,8 @@ function buildBookPayload(
         condition: string | null
         pinStart: number | null
         pinEnd: number | null
-        choices: { order: number; label: string; setsVariables: string; targetChapterId: string | null; endingMessage: string | null; isBadEnding: boolean; condition: string | null }[]
-        overrides: { order: number; condition: string; content: string; endingMessage: string | null }[]
+        choices: { order: number; label: string; setsVariables: string; targetChapterId: string | null; endingMessage: string | null; isBadEnding: boolean; endsChapter: boolean; condition: string | null }[]
+        overrides: { order: number; condition: string; content: string; endingMessage: string | null; endsChapter: boolean }[]
       }[]
     }[]
   },
@@ -96,11 +96,12 @@ function buildBookPayload(
               targetChapterRef: c.targetChapterId,
               endingMessage: c.endingMessage,
               isBadEnding: c.isBadEnding,
+              endsChapter: c.endsChapter,
               condition: c.condition,
             })),
             overrides: block.overrides.map(o => ({
               order: o.order, condition: o.condition, content: o.content,
-              endingMessage: o.endingMessage,
+              endingMessage: o.endingMessage, endsChapter: o.endsChapter,
             })),
           })),
         })),

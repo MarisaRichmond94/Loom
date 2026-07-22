@@ -85,6 +85,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ser
               targetChapterRef: c.targetChapterId,
               endingMessage: c.endingMessage,
               isBadEnding: c.isBadEnding,
+              endsChapter: c.endsChapter,
               condition: c.condition,
             })),
             overrides: block.overrides.map(o => ({
@@ -92,6 +93,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ser
               condition: o.condition,
               content: o.content,
               endingMessage: o.endingMessage,
+              endsChapter: o.endsChapter,
             })),
           })),
         })),

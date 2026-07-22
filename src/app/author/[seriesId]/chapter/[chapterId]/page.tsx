@@ -19,8 +19,8 @@ import { useWriteAiReview } from '@/components/editor/useWriteAiReview'
 type Block = {
   id: string; order: number; type: string
   content?: string | null; prompt?: string | null; displayType?: string | null; baseContent?: string | null; condition?: string | null
-  choices: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; condition?: string | null; endingMessage?: string | null; isBadEnding?: boolean }[]
-  overrides: { id: string; order: number; condition: string; content: string }[]
+  choices: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; condition?: string | null; endingMessage?: string | null; isBadEnding?: boolean; endsChapter?: boolean }[]
+  overrides: { id: string; order: number; condition: string; content: string; endingMessage?: string | null; endsChapter?: boolean }[]
 }
 type Chapter = { id: string; title: string; pov: string | null; date: string | null; condition: string | null; numbered: boolean; blocks: Block[] }
 type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
@@ -108,7 +108,7 @@ export default function ChapterEditorPage() {
   const jumpToFirstMatchRef = useRef<((query: string) => void) | null>(null)
   const jumpToMatchRef = useRef<((query: string, dir: 'next' | 'prev') => void) | null>(null)
   const scrollToCursorRef = useRef<(() => void) | null>(null)
-  const currentBlocksRef = useRef<{ id: string; order: number; type: string; content?: string | null; baseContent?: string | null; condition?: string | null; choices?: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; condition?: string | null; endingMessage?: string | null; isBadEnding?: boolean }[]; overrides?: { id: string; order: number; condition: string; content: string; endingMessage?: string | null }[] }[] | null>(null)
+  const currentBlocksRef = useRef<{ id: string; order: number; type: string; content?: string | null; baseContent?: string | null; condition?: string | null; choices?: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; condition?: string | null; endingMessage?: string | null; isBadEnding?: boolean; endsChapter?: boolean }[]; overrides?: { id: string; order: number; condition: string; content: string; endingMessage?: string | null; endsChapter?: boolean }[] }[] | null>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
   const shortcutsRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -553,14 +553,18 @@ export default function ChapterEditorPage() {
       // the base editing scaffold — and contribute nothing when no override
       // matches. Choice points collapse to their canon branch (see below).
       let src: string | null | undefined = null
+      // Set when the resolved block cleanly ends the chapter: its prose is the
+      // last thing copied, mirroring the canon walk / reader truncation.
+      let endsChapterHere = false
       if (block.type === 'text') {
         src = block.content
       } else if (block.type === 'conditional_fragment') {
         const matched = resolveConditionalOverride(
-          { overrides: (block.overrides ?? []).map(o => ({ id: o.id, order: o.order, condition: JSON.parse(o.condition), content: o.content, endingMessage: null })) },
+          { overrides: (block.overrides ?? []).map(o => ({ id: o.id, order: o.order, condition: JSON.parse(o.condition), content: o.content, endingMessage: null, endsChapter: o.endsChapter ?? false })) },
           storyState,
         )
         src = matched?.content ?? null
+        if (matched?.endsChapter) endsChapterHere = true
       } else if (block.type === 'choice_point') {
         // A choice point only belongs in the canon read-through when its own
         // gate holds for the default context — a block gated by a non-default
@@ -571,10 +575,14 @@ export default function ChapterEditorPage() {
         // Canon prose for a branch is its inline consequence (endingMessage),
         // exactly what the reader/narration emit once a branch is chosen.
         src = canon?.endingMessage ?? null
+        if (canon?.endsChapter) endsChapterHere = true
       }
-      if (!src) continue
-      const text = substituteVarTemplates(extractPlainText(src), storyState, s => s)
-      if (text) parts.push(text)
+      if (src) {
+        const text = substituteVarTemplates(extractPlainText(src), storyState, s => s)
+        if (text) parts.push(text)
+      }
+      // Once the canon chapter ends, nothing after it is part of the chapter.
+      if (endsChapterHere) break
     }
     try {
       await navigator.clipboard.writeText(parts.join('\n\n'))

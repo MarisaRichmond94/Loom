@@ -64,6 +64,7 @@ export async function loadManuscriptBook(seriesId: string, bookId: string): Prom
           targetChapterId: ch.targetChapterId,
           endingMessage: ch.endingMessage,
           isBadEnding: ch.isBadEnding,
+          endsChapter: ch.endsChapter,
         })),
         overrides: b.overrides.map(o => ({
           id: o.id,
@@ -71,6 +72,7 @@ export async function loadManuscriptBook(seriesId: string, bookId: string): Prom
           condition: o.condition,
           content: o.content,
           endingMessage: o.endingMessage,
+          endsChapter: o.endsChapter,
         })),
       })),
     })),
