@@ -4,9 +4,10 @@ import { substituteVarTemplates } from '@/lib/templateVars'
 import { resolveConditionalOverride, matchesCondition, type StoryState } from '@/lib/storyEngine'
 
 // One spoken word with the character range it occupies in the narration text
-// and its start offset in the audio — emitted verbatim by the Swift helper's
-// willSpeakRange callbacks. `word` is persisted so the reader can resync the
-// highlight by exact token match if the DOM token sequence ever drifts.
+// and its start offset in the audio. Stored rows hold the Swift helper's raw
+// willSpeakRange callbacks verbatim (messy: blobs, duplicates, silent skips);
+// what's served to the reader is the reconciled form (reconcileTiming in
+// tokens.ts) — exactly one entry per /\S+/ token sub-split at em dashes.
 export type WordTiming = { charStart: number; charLen: number; timeMs: number; word: string }
 
 export type NarrationOverride = {

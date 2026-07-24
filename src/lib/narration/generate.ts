@@ -3,6 +3,7 @@ import { existsSync } from 'fs'
 import path from 'path'
 import { prisma } from '@/lib/prisma'
 import { narrationHash, narrationSegments, DEFAULT_VOICE, type NarrationPlan, type WordTiming } from './text'
+import { reconcileTiming } from './tokens'
 import type { StoryState } from '@/lib/storyEngine'
 import { synthesize, concatM4a } from './synthesize'
 
@@ -182,6 +183,13 @@ function startGeneration(variantHash: string, work: () => Promise<void>): Promis
 // Build the ready payload for an existing variant row: the combined track plus
 // the per-segment start offsets (from the cached segment durations) and the
 // block ids / endsAtChoice recomputed from the plan.
+//
+// The stored timing is the engine's raw willSpeakRange output, which contains
+// spurious blob/duplicate ranges and misses silent tokens (see reconcileTiming)
+// — served as-is it drifts the reader's highlight. Reconcile it here, at serve
+// time, against the combined narration text (the segment texts joined exactly
+// as buildVariant offsets them), so every cached variant — including ones
+// generated before this fix — serves one clean timing entry per DOM sub-token.
 async function readyPayload(
   row: { audioPath: string; durationMs: number; timing: string; voice: string },
   plan: NarrationPlan,
@@ -195,11 +203,12 @@ async function readyPayload(
   const segments: number[] = []
   let cum = 0
   for (const h of segHashes) { segments.push(cum); cum += durByHash.get(h) ?? 0 }
+  const combinedText = plan.segments.map(s => s.text).join('\n\n')
   return {
     status: 'ready',
     audioPath: row.audioPath,
     durationMs: row.durationMs,
-    timing: JSON.parse(row.timing),
+    timing: reconcileTiming(combinedText, JSON.parse(row.timing), row.durationMs),
     voice: row.voice,
     blockIds: plan.segments.flatMap(s => s.blockIds),
     segments,

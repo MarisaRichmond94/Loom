@@ -2,14 +2,18 @@
 // <span class="narration-word" data-wi="N"> so the read-mode player can toggle
 // a highlight on the word currently being spoken.
 //
-// The synthesizer's willSpeakRange callbacks tokenize on whitespace (verified:
-// its tokens match /\S+/ splitting of the same text exactly, punctuation and
-// quotes included), so token index N here lines up 1:1 with timing[N]. A token
-// that straddles an inline element boundary (e.g. <em>glass</em>.) produces two
+// The synthesizer's raw willSpeakRange callbacks do NOT tokenize cleanly on
+// whitespace (they emit spurious multi-word blobs, backward duplicates, split
+// punctuation, and skip silent tokens like "* * *"), so the server reconciles
+// them against /\S+/ tokenization of the narration text before the client sees
+// them (reconcileTiming in tokens.ts). The timing the reader receives therefore
+// has exactly one entry per /\S+/ token sub-split at em dashes — the same rule
+// used here — so token index N lines up 1:1 with timing[N]. A token that
+// straddles an inline element boundary (e.g. <em>glass</em>.) produces two
 // spans sharing the same data-wi — highlighting selects by index, so both light.
 // Each whitespace token is further split at em dashes (splitEmDash) so
-// "shoulder—hard—shaking" highlights word-by-word; the parallel expandTimes in
-// NarrationBar splits the timings the same way, keeping the two 1:1.
+// "shoulder—hard—shaking" highlights word-by-word, matching the reconciled
+// timing's sub-token granularity.
 //
 // Crucial subtlety: the narration text joins paragraphs/blocks with blank lines,
 // so the synthesizer treats a paragraph break as a word boundary. The DOM has no
