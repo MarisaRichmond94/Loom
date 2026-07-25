@@ -74,6 +74,10 @@ type Props = {
   // (which only refreshes on structural changes, not on per-keystroke PATCHes).
   currentBlocksRef?: React.MutableRefObject<{ id: string; order: number; type: string; content?: string | null; baseContent?: string | null; condition?: string | null; choices?: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; condition?: string | null; endingMessage?: string | null; isBadEnding?: boolean; endsChapter?: boolean }[]; overrides?: { id: string; order: number; condition: string; content: string; endingMessage?: string | null; endsChapter?: boolean }[] }[] | null>
   onTextBlockBlur?: () => void
+  // Pins a snapshot of a single prose unit (text block, conditional override,
+  // or choice branch) to the reference panel. The page owns the pinned list;
+  // the editor forwards the prose JSON as it is at pin time.
+  onPinText?: (content: string) => void
 }
 
 // How long after the last keystroke a record's coalesced PATCH fires.
@@ -219,6 +223,7 @@ type BlockRowApi = {
   onCreateVariable: (name: string, type: string, defaultValue?: unknown) => Promise<void>
   activate: (blockId: string) => void
   requestDelete: (block: Block) => void
+  pinText: (content: string) => void
   toggleCollapsed: (blockId: string) => void
   registerEditor: (key: string, editor: Editor | null) => void
   textBlockBlur: () => void
@@ -273,6 +278,7 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
           searchQuery={searchQuery}
           searchOptions={searchOptions}
           onEditorReady={(choiceId, editor) => api.current.registerEditor(`ch:${choiceId}`, editor)}
+          onPinText={content => api.current.pinText(content)}
           onUpdateBlock={data => api.current.updateBlock(block.id, data)}
           onUpdateChoice={(choiceId, data) => api.current.updateChoice(choiceId, data)}
           onAddChoice={() => api.current.addChoice(block.id)}
@@ -289,6 +295,7 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
           searchQuery={searchQuery}
           searchOptions={searchOptions}
           onEditorReady={(overrideId, editor) => api.current.registerEditor(`ov:${overrideId}`, editor)}
+          onPinText={content => api.current.pinText(content)}
           onAddOverride={(condition, content) => api.current.addOverride(block.id, condition, content)}
           onUpdateOverride={(overrideId, data) => api.current.updateOverride(overrideId, data)}
           onDeleteOverride={overrideId => api.current.deleteOverride(overrideId)}
@@ -306,7 +313,7 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
   )
 })
 
-export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', searchOptions, replaceAllRef, jumpToFirstMatchRef, jumpToMatchRef, scrollToCursorRef, currentBlocksRef, onTextBlockBlur }: Props) {
+export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', searchOptions, replaceAllRef, jumpToFirstMatchRef, jumpToMatchRef, scrollToCursorRef, currentBlocksRef, onTextBlockBlur, onPinText }: Props) {
   const searchOpts = searchOptions ?? {}
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
@@ -817,6 +824,9 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     onCreateVariable,
     activate: id => setActiveBlockId(id),
     requestDelete: b => setPendingDelete(b),
+    // Freezes the passed prose JSON (already the freshest per-keystroke value
+    // from the block/override/choice in state) into the reference panel.
+    pinText: content => onPinText?.(content),
     toggleCollapsed,
     // Register on mount, unregister on unmount (editor === null). Keyed by a
     // composite id — the block id for a text block, `ov:<id>`/`ch:<id>` for

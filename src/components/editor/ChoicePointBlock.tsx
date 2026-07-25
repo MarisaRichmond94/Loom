@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { LuCheck, LuX } from 'react-icons/lu'
+import { LuCheck, LuX, LuPin } from 'react-icons/lu'
 import { ConditionRow, ValueSetter, TYPE_DEFAULT_VALUE } from './conditionUI'
 import TextBlock from './TextBlock'
 import type { Editor } from '@tiptap/core'
@@ -69,6 +69,7 @@ type Props = {
   // Registers each choice's branch-text editor for search jump/replace, keyed
   // by choice id (null on unmount).
   onEditorReady?: (choiceId: string, editor: Editor | null) => void
+  onPinText?: (content: string) => void
   onUpdateBlock: (data: Partial<{ displayType: string; prompt: string; condition: string | null }>) => void
   onUpdateChoice: (choiceId: string, data: Partial<Choice>) => void
   onAddChoice: () => void
@@ -93,7 +94,7 @@ function siblingValueFor(type: typeof VAR_TYPES[number], thisBranchValue: unknow
 function ChoicePanel({
   choice, slotPlaceholder, labelClass, bgClass, borderClass,
   variables, characters, hasSibling, focusVarName, searchQuery, searchOptions, onEditorReady, onUpdateChoice, onCreateAndPair,
-  onDelete, onConditionChange,
+  onDelete, onConditionChange, onPin,
 }: {
   choice: Choice; slotPlaceholder: string; labelClass: string; bgClass: string; borderClass: string
   variables: Variable[]
@@ -107,6 +108,8 @@ function ChoicePanel({
   // neither — they can't be removed or gated.
   onDelete?: () => void
   onConditionChange?: (next: string | null) => void
+  // Pins this branch's text to the reference panel.
+  onPin?: () => void
   // When the parent has just paired a newly-created variable onto this
   // panel as the sibling, this carries that variable's name so the
   // panel can autoFocus its input — useful for string vars where the
@@ -236,6 +239,15 @@ function ChoicePanel({
           placeholder={slotPlaceholder}
           className={`flex-1 min-w-0 bg-transparent border-none outline-none text-xs font-semibold ${labelClass} uppercase tracking-widest placeholder:text-ink-faint placeholder:normal-case placeholder:font-normal placeholder:tracking-normal`}
         />
+        {onPin && (
+          <button
+            onClick={onPin}
+            title="Pin to reference panel"
+            className="text-ink-faint hover:text-accent transition shrink-0"
+          >
+            <LuPin size={13} />
+          </button>
+        )}
         {onDelete && (
           <button
             onClick={onDelete}
@@ -468,7 +480,7 @@ function ChoicePanel({
 }
 
 
-export default function ChoicePointBlock({ prompt, displayType, condition, choices, variables, characters, searchQuery, searchOptions, onEditorReady, onUpdateBlock, onUpdateChoice, onAddChoice, onDeleteChoice, onCreateVariable }: Props) {
+export default function ChoicePointBlock({ prompt, displayType, condition, choices, variables, characters, searchQuery, searchOptions, onEditorReady, onPinText, onUpdateBlock, onUpdateChoice, onAddChoice, onDeleteChoice, onCreateVariable }: Props) {
   // Order the options and split into the base pair (orders 0/1) and the
   // gate-eligible extras (order >= 2). The base pair keeps the green/red
   // "spare"/"kill" slots — visual differentiation only, not a yes/no
@@ -546,6 +558,7 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             focusVarName={pairedFocus?.choiceId === primaryChoice.id ? pairedFocus.varName : null}
             searchQuery={searchQuery} searchOptions={searchOptions} onEditorReady={onEditorReady}
             onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
+            onPin={onPinText ? () => onPinText(primaryChoice.endingMessage ?? '') : undefined}
           />
         )}
         {secondaryChoice && (
@@ -557,6 +570,7 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             focusVarName={pairedFocus?.choiceId === secondaryChoice.id ? pairedFocus.varName : null}
             searchQuery={searchQuery} searchOptions={searchOptions} onEditorReady={onEditorReady}
             onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
+            onPin={onPinText ? () => onPinText(secondaryChoice.endingMessage ?? '') : undefined}
           />
         )}
 
@@ -575,6 +589,7 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
             onDelete={() => onDeleteChoice(choice.id)}
             onConditionChange={next => onUpdateChoice(choice.id, { condition: next })}
+            onPin={onPinText ? () => onPinText(choice.endingMessage ?? '') : undefined}
           />
         ))}
 

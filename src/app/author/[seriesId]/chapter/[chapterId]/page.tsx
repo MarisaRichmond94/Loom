@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord } from 'react-icons/lu'
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
+import ReferencePanel, { type PinnedText } from '@/components/editor/ReferencePanel'
 import { extractTextFromTipTap } from '@/lib/tiptapText'
 import { matchRanges, type SearchOptions } from '@/lib/searchMatch'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
@@ -65,6 +66,19 @@ export default function ChapterEditorPage() {
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [showIfTooltip, setShowIfTooltip] = useState(false)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
+  // Frozen prose snapshots pinned to the right-hand reference panel. In-memory
+  // only — pinning captures the text as it is now so later edits don't shift it.
+  const [pins, setPins] = useState<PinnedText[]>([])
+  // Reference-panel width, adjustable via its drag handle. Lifted here so the
+  // floating add-block button can offset by it and stay over the writing column.
+  const [panelWidth, setPanelWidth] = useState(360)
+  // Whether the writer has hidden the panel via ⌥⇧2. Only meaningful while
+  // something is pinned; a new pin clears it so the panel reappears.
+  const [panelHidden, setPanelHidden] = useState(false)
+  const panelOpen = pins.length > 0 && !panelHidden
+  // Live pin count for the ⌥⇧2 handler, whose effect closes over mount-time state.
+  const pinsCountRef = useRef(0)
+  pinsCountRef.current = pins.length
   // Lifted from BlockEditor so the date-row toggle can flip every block at
   // once. Resets to empty on chapter switch (chapterId is in the dep list
   // below), matching the "all uncollapsed on initial load" rule.
@@ -132,6 +146,20 @@ export default function ChapterEditorPage() {
   const currentBookIdRef = useRef<string | undefined>(undefined)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const footerRef = useRef<HTMLElement>(null)
+
+  // Publish the footer's height as --loom-footer-h so the reference panel can
+  // stop exactly at the footer's top (the full-width footer sits beneath it).
+  useEffect(() => {
+    const el = footerRef.current
+    if (!el) return
+    const publish = () => document.documentElement.style.setProperty('--loom-footer-h', `${el.offsetHeight}px`)
+    publish()
+    const ro = new ResizeObserver(publish)
+    ro.observe(el)
+    return () => ro.disconnect()
+  // Re-bind when the chapter mounts (the footer isn't in the DOM until then);
+  // the observer handles size changes after that.
+  }, [chapter?.id])
 
   // Visual text-block zoom (⌥⇧+ / ⌥⇧-). Drives --loom-prose-scale on <html>,
   // which every TextBlock's font size reads; persisted so it survives reloads.
@@ -414,6 +442,8 @@ export default function ChapterEditorPage() {
         case 'ArrowLeft': if (localSearchQueryRef.current.trim()) { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'prev') } break
         case 'Equal': case 'NumpadAdd': e.preventDefault(); adjustProseScale(0.1); break
         case 'Minus': case 'NumpadSubtract': e.preventDefault(); adjustProseScale(-0.1); break
+        // Toggle the reference panel — no-op unless something is pinned.
+        case 'Digit2': case 'Numpad2': if (pinsCountRef.current > 0) { e.preventDefault(); setPanelHidden(h => !h) } break
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -533,6 +563,14 @@ export default function ChapterEditorPage() {
     if (consistent.length === 1) return consistent[0]
     const setter = consistent.find(c => Object.keys(parseChoiceSets(c.setsVariables)).length > 0)
     return setter ?? consistent[0] ?? candidates[0]
+  }
+
+  function handlePinText(content: string) {
+    // content is already the freshest per-keystroke prose JSON from the
+    // originating text/override/choice; freeze it as its own reference card.
+    setPins(prev => [...prev, { pinId: crypto.randomUUID(), content }])
+    // A fresh pin always reveals the panel, even if it was hidden via ⌥⇧2.
+    setPanelHidden(false)
   }
 
   async function copyCanonText() {
@@ -672,11 +710,11 @@ export default function ChapterEditorPage() {
   const nextChapter = currentIdx >= 0 && currentIdx < bookChapters.length - 1 ? bookChapters[currentIdx + 1] : null
 
   return (
-    // flex column that fills the layout's <main> scroll container so the
-    // sticky footer always lands at the viewport bottom — even when the
-    // chapter content is shorter than the viewport (e.g. a freshly-created
-    // chapter). pb-8 / mt-auto pair pushes the footer to the bottom edge.
-    <div className="px-8 min-h-full flex flex-col">
+    // flex row: the writing column fills the layout's <main> scroll container;
+    // an optional reference panel docks to its right. min-w-0 on the column
+    // lets it shrink (rather than overflow) when the panel takes its width.
+    <div className="flex min-h-full">
+    <div className="flex-1 min-w-0 px-8 min-h-full flex flex-col">
       {/* Sticky action row — pr-6 matches the invisible hover-delete column
           on block rows so the rightmost button aligns with the block card edge. */}
       <div className="flex justify-end items-center gap-2 py-3 pr-6">
@@ -727,6 +765,7 @@ export default function ChapterEditorPage() {
                     { keys: '⌥⇧+ / -', label: 'Enlarge / shrink text' },
                     { keys: '⌥⇧R', label: 'Read aloud from cursor' },
                     { keys: '⌥⇧B', label: 'Insert scene break' },
+                    { keys: '⌥⇧2', label: 'Toggle reference panel' },
                   ],
                 },
                 {
@@ -791,7 +830,11 @@ export default function ChapterEditorPage() {
 
       {/* Floating add-block button — bottom-right of viewport, lifted above
           the chapter-nav footer (which sits sticky at the bottom). */}
-      <div ref={addMenuRef} className="fixed bottom-16 right-3 z-50">
+      <div
+        ref={addMenuRef}
+        className="fixed bottom-16 z-50 transition-[right] duration-200"
+        style={{ right: panelOpen ? panelWidth + 12 : 12 }}
+      >
         {addMenuOpen && (
           <div className="absolute right-0 bottom-full mb-2 bg-surface-raised border border-accent/20 rounded-lg shadow-xl overflow-hidden min-w-[180px]">
             {([
@@ -969,6 +1012,7 @@ export default function ChapterEditorPage() {
           scrollToCursorRef={scrollToCursorRef}
           currentBlocksRef={currentBlocksRef}
           onTextBlockBlur={handleTextBlockBlur}
+          onPinText={handlePinText}
         />
       </div>
 
@@ -989,8 +1033,12 @@ export default function ChapterEditorPage() {
           '--color-ink': '#e0d9c8',
           '--color-ink-muted': '#aaa',
           '--color-ink-faint': '#666',
+          // When the reference panel is open, stretch the bar back out to the
+          // full width so it looks identical to its closed state — the panel
+          // ends at the footer's top, so the buttons never collide with it.
+          marginRight: panelOpen ? `calc(-2rem - ${panelWidth}px)` : undefined,
         } as React.CSSProperties}
-        className="sticky bottom-0 z-20 -mx-8 px-4 py-4 bg-surface-raised border-t border-accent/10 flex items-center justify-between gap-4"
+        className="sticky bottom-0 z-40 -mx-8 px-4 py-4 bg-surface-raised border-t border-accent/10 flex items-center justify-between gap-4"
       >
         {prevChapter ? (
           <button
@@ -1118,6 +1166,16 @@ export default function ChapterEditorPage() {
         </div>
       )}
 
+    </div>
+
+    {panelOpen && (
+      <ReferencePanel
+        pins={pins}
+        width={panelWidth}
+        onWidthChange={setPanelWidth}
+        onCloseAll={() => setPins([])}
+      />
+    )}
     </div>
   )
 }
