@@ -16,9 +16,11 @@ import { extractTextFromTipTap } from '@/lib/tiptapText'
 import { findBlockMatches, type SearchOptions } from '@/lib/searchMatch'
 import { notify } from '@/lib/notifications'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import { resolveChapter, buildStoryState, varTypeMap } from '@/lib/chapterResolve'
+import type { StoryState } from '@/lib/storyEngine'
 
-type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null }
-type Choice = { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null; condition?: string | null }
+type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null; endsChapter?: boolean }
+type Choice = { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null; condition?: string | null; isBadEnding?: boolean; endsChapter?: boolean }
 type Block = {
   id: string
   order: number
@@ -78,6 +80,12 @@ type Props = {
   // or choice branch) to the reference panel. The page owns the pinned list;
   // the editor forwards the prose JSON as it is at pin time.
   onPinText?: (content: string) => void
+  // The path lens's configured StoryState, or null when no path is active.
+  // When set, every block is resolved against it and the off-path ones (plus
+  // off-path overrides / choice branches) are dimmed so the writer sees which
+  // text is included at a glance. Null leaves the editor in its normal
+  // all-branches-visible state.
+  lensState?: StoryState | null
 }
 
 // How long after the last keystroke a record's coalesced PATCH fires.
@@ -130,6 +138,7 @@ function SortableBlock({
   onActivate,
   isCollapsed,
   onToggleCollapse,
+  dimmed,
 }: {
   block: Block
   children: React.ReactNode
@@ -138,6 +147,9 @@ function SortableBlock({
   onActivate: () => void
   isCollapsed: boolean
   onToggleCollapse: () => void
+  // True when a path lens is active and this whole block is off-path — the
+  // card fades back (but stays fully editable) so on-path blocks stand out.
+  dimmed: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id })
 
@@ -159,8 +171,8 @@ function SortableBlock({
     <div
       ref={setNodeRef}
       data-block-id={block.id}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.3 : 1 }}
-      className="flex items-start group"
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.3 : dimmed ? 0.4 : 1 }}
+      className="flex items-start group transition-opacity duration-200"
       onClick={onActivate}
       onDoubleClick={handleDoubleClick}
     >
@@ -233,7 +245,7 @@ type BlockRowApi = {
 // block's object in state — re-renders that row alone instead of the whole
 // chapter. All other props are primitives or identity-stable between
 // keystrokes.
-const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocus, variables, characters, searchQuery, searchOptions, api }: {
+const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocus, variables, characters, searchQuery, searchOptions, api, lensActive, dimmed, activeOverrideId, activeChoiceId }: {
   block: Block
   isActive: boolean
   isCollapsed: boolean
@@ -243,6 +255,15 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
   searchQuery: string
   searchOptions?: SearchOptions
   api: { current: BlockRowApi }
+  // Path-lens hints, passed as primitives (not the resolution object) so an
+  // unchanged row keeps its memo across keystrokes while a lens is active.
+  // lensActive: is any lens on. dimmed: this whole block is off-path. The
+  // active ids tell the conditional / choice sub-components which override or
+  // branch is on-path so they highlight it and dim the rest.
+  lensActive: boolean
+  dimmed: boolean
+  activeOverrideId: string | null
+  activeChoiceId: string | null
 }) {
   return (
     <SortableBlock
@@ -252,6 +273,7 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
       onDelete={() => api.current.requestDelete(block)}
       isCollapsed={isCollapsed}
       onToggleCollapse={() => api.current.toggleCollapsed(block.id)}
+      dimmed={dimmed}
     >
       {block.type === 'text' && (
         <TextBlock
@@ -275,6 +297,8 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
           choices={block.choices}
           variables={variables}
           characters={characters}
+          lensActive={lensActive}
+          activeChoiceId={activeChoiceId}
           searchQuery={searchQuery}
           searchOptions={searchOptions}
           onEditorReady={(choiceId, editor) => api.current.registerEditor(`ch:${choiceId}`, editor)}
@@ -292,6 +316,8 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
           overrides={block.overrides}
           variables={variables}
           characters={characters}
+          lensActive={lensActive}
+          activeOverrideId={activeOverrideId}
           searchQuery={searchQuery}
           searchOptions={searchOptions}
           onEditorReady={(overrideId, editor) => api.current.registerEditor(`ov:${overrideId}`, editor)}
@@ -313,7 +339,7 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
   )
 })
 
-export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', searchOptions, replaceAllRef, jumpToFirstMatchRef, jumpToMatchRef, scrollToCursorRef, currentBlocksRef, onTextBlockBlur, onPinText }: Props) {
+export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', searchOptions, replaceAllRef, jumpToFirstMatchRef, jumpToMatchRef, scrollToCursorRef, currentBlocksRef, onTextBlockBlur, onPinText, lensState }: Props) {
   const searchOpts = searchOptions ?? {}
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
@@ -848,12 +874,23 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
 
   const sortableIds = useMemo(() => blocks.map(b => b.id), [blocks])
 
+  // Resolve every block against the path lens once per relevant change, so the
+  // rows can dim the off-path ones and highlight the active override / branch.
+  // Same walk Copy uses, so what's highlighted is exactly what Copy emits.
+  const lensActive = !!lensState
+  const lensResolution = useMemo(() => {
+    if (!lensState) return null
+    return resolveChapter(blocks, buildStoryState(variables, lensState), varTypeMap(variables))
+  }, [lensState, blocks, variables])
+
   return (
     <div>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
           <div ref={blocksContainerRef} className="flex flex-col gap-3">
-            {blocks.map(block => (
+            {blocks.map(block => {
+              const r = lensResolution?.get(block.id)
+              return (
               <BlockRow
                 key={block.id}
                 block={block}
@@ -865,8 +902,13 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                 searchQuery={searchQuery}
                 searchOptions={searchOptions}
                 api={blockApiRef}
+                lensActive={lensActive}
+                dimmed={lensActive && !!r && !r.included}
+                activeOverrideId={r?.activeOverrideId ?? null}
+                activeChoiceId={r?.activeChoiceId ?? null}
               />
-            ))}
+              )
+            })}
 
             {blocks.length === 0 && (
               <p className="text-ink-faint text-sm text-center py-8">Add your first block above to start writing.</p>

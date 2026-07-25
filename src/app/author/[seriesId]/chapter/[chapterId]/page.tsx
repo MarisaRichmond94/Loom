@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord } from 'react-icons/lu'
+import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute } from 'react-icons/lu'
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
 import ReferencePanel, { type PinnedText } from '@/components/editor/ReferencePanel'
@@ -14,7 +14,9 @@ import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import { useCanonSave } from '@/components/editor/useCanonSave'
 import { substituteVarTemplates } from '@/lib/templateVars'
-import { resolveConditionalOverride, matchesCondition, type StoryState, type Condition, type ChoiceSetValue } from '@/lib/storyEngine'
+import { matchesCondition, type StoryState, type Condition } from '@/lib/storyEngine'
+import { resolveChapter, buildStoryState, varTypeMap } from '@/lib/chapterResolve'
+import PathConfigModal from '@/components/editor/PathConfigModal'
 import { useWriteAiReview } from '@/components/editor/useWriteAiReview'
 
 type Block = {
@@ -34,24 +36,6 @@ function safeCondition(raw: string | null | undefined): Condition | null {
   } catch { return null }
 }
 
-function parseChoiceSets(raw: string): Record<string, ChoiceSetValue> {
-  try { return JSON.parse(raw) } catch { return {} }
-}
-
-// A choice contradicts the canon (default) state when it directly assigns a
-// variable a value different from its default. `+=` / `-=` accumulations
-// can't be compared against a single value, so they never contradict —
-// number targets are handled separately (rule b) anyway.
-function choiceContradicts(sets: Record<string, ChoiceSetValue>, target: StoryState): boolean {
-  return Object.entries(sets).some(([name, instruction]) => {
-    if (!(name in target)) return false
-    const assigned = typeof instruction === 'object' && instruction !== null
-      ? (instruction.op === '=' ? instruction.value : null)
-      : instruction
-    return assigned !== null && assigned !== target[name]
-  })
-}
-
 export default function ChapterEditorPage() {
   const { seriesId, chapterId } = useParams() as { seriesId: string; chapterId: string }
   const router = useRouter()
@@ -64,6 +48,14 @@ export default function ChapterEditorPage() {
   const [showChapterSettings, setShowChapterSettings] = useState(false)
   const [copyDone, setCopyDone] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
+  // Path lens — a configured StoryState that dims off-path blocks in the
+  // editor and drives what Copy emits. Null means no lens (normal editing,
+  // canon Copy). lensSelections is the raw per-question answer map, kept so
+  // the config panel can restore the writer's picks when reopened. Both are
+  // persisted per-chapter in localStorage (see effects below).
+  const [lensState, setLensState] = useState<StoryState | null>(null)
+  const [lensSelections, setLensSelections] = useState<Record<string, string | null>>({})
+  const [showPathConfig, setShowPathConfig] = useState(false)
   const [showIfTooltip, setShowIfTooltip] = useState(false)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   // Frozen prose snapshots pinned to the right-hand reference panel. In-memory
@@ -84,6 +76,35 @@ export default function ChapterEditorPage() {
   // below), matching the "all uncollapsed on initial load" rule.
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
   useEffect(() => { setCollapsedIds(new Set()) }, [chapterId])
+
+  // Restore this chapter's saved path lens on navigation; reset when the
+  // chapter has none so a path from a previous chapter never carries over.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`loom-path-lens:${chapterId}`)
+      if (raw) {
+        const parsed = JSON.parse(raw) as { state?: StoryState | null; selections?: Record<string, string | null> }
+        setLensState(parsed.state ?? null)
+        setLensSelections(parsed.selections ?? {})
+        return
+      }
+    } catch { /* malformed — fall through to a clean slate */ }
+    setLensState(null)
+    setLensSelections({})
+  }, [chapterId])
+
+  // Set (or clear, with state=null) the path lens and persist it per chapter.
+  function applyLens(state: StoryState | null, selections: Record<string, string | null>) {
+    setLensState(state)
+    setLensSelections(selections)
+    try {
+      if (state) localStorage.setItem(`loom-path-lens:${chapterId}`, JSON.stringify({ state, selections }))
+      else localStorage.removeItem(`loom-path-lens:${chapterId}`)
+    } catch { /* quota / disabled storage — the in-memory lens still works */ }
+  }
+  // Latest clearer for the ⌥⇧W hotkey, whose listener closes over mount state.
+  const clearLensRef = useRef<() => void>(() => {})
+  clearLensRef.current = () => applyLens(null, {})
   // The layout's <main> scroller stays mounted across chapter navigation,
   // so the old scroll position (e.g. the footer, after clicking next
   // chapter) would otherwise carry over to the new chapter. Keyed on the
@@ -438,6 +459,7 @@ export default function ChapterEditorPage() {
         case 'KeyF': e.preventDefault(); setTimeout(() => { localSearchInputRef.current?.focus(); localSearchInputRef.current?.select() }, 0); break
         case 'KeyJ': e.preventDefault(); scrollToCursorRef.current?.(); break
         case 'KeyK': e.preventDefault(); setLocalSearchQuery(''); setLocalSearchReplaceMode(false); break
+        case 'KeyW': e.preventDefault(); clearLensRef.current(); break
         case 'ArrowRight': if (localSearchQueryRef.current.trim()) { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'next') } break
         case 'ArrowLeft': if (localSearchQueryRef.current.trim()) { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'prev') } break
         case 'Equal': case 'NumpadAdd': e.preventDefault(); adjustProseScale(0.1); break
@@ -526,45 +548,6 @@ export default function ChapterEditorPage() {
     } catch { return '' }
   }
 
-  // Pick a choice point's canon branch for the canon-text export. The canon
-  // read-through is "every variable at its default", so:
-  //   (a) when the point writes only boolean/string variables, the canon
-  //       branch is the option whose assignments AGREE with the defaults —
-  //       i.e. the one that establishes the canon value (e.g. default
-  //       didJaredShootNoah = true → the "he shoots" branch).
-  //   (b) when any option writes a NUMBER variable, which value is "canon"
-  //       is unclear (accumulators and multi-valued counters have no obvious
-  //       default-matching branch), so fall back to the first option.
-  // Bad-ending branches are never canon; gated extras (order >= 2) only
-  // count when their own condition holds for the default context.
-  function resolveCanonChoice(
-    choices: NonNullable<Block['choices']>,
-    state: StoryState,
-    varType: Record<string, string>,
-  ) {
-    const candidates = choices
-      .filter(c => !c.isBadEnding)
-      .filter(c => {
-        if (c.order < 2) return true // base pair always shows, ignores its gate
-        const gate = safeCondition(c.condition)
-        return !gate || matchesCondition(gate, state)
-      })
-      .sort((a, b) => a.order - b.order)
-    if (candidates.length === 0) return null
-
-    // (b) any number-typed target ⇒ ambiguous ⇒ first option.
-    const setNames = new Set(candidates.flatMap(c => Object.keys(parseChoiceSets(c.setsVariables))))
-    if ([...setNames].some(n => varType[n] === 'number')) return candidates[0]
-
-    // (a) the branch whose assignments don't contradict the defaults. If
-    // exactly one qualifies it's unambiguously canon; otherwise prefer one
-    // that actively sets a variable, falling back to the first option.
-    const consistent = candidates.filter(c => !choiceContradicts(parseChoiceSets(c.setsVariables), state))
-    if (consistent.length === 1) return consistent[0]
-    const setter = consistent.find(c => Object.keys(parseChoiceSets(c.setsVariables)).length > 0)
-    return setter ?? consistent[0] ?? candidates[0]
-  }
-
   function handlePinText(content: string) {
     // content is already the freshest per-keystroke prose JSON from the
     // originating text/override/choice; freeze it as its own reference card.
@@ -575,52 +558,22 @@ export default function ChapterEditorPage() {
 
   async function copyCanonText() {
     if (!chapter) return
-    const storyState: StoryState = {}
-    const varType: Record<string, string> = {}
-    for (const v of series.variables) {
-      varType[v.name] = v.type
-      if (v.type === 'boolean') storyState[v.name] = String(v.defaultValue).toLowerCase() === 'true'
-      else if (v.type === 'number') storyState[v.name] = Number(v.defaultValue ?? 0)
-      else storyState[v.name] = v.defaultValue ?? ''
-    }
+    const blocks = currentBlocksRef.current ?? chapter.blocks
+    // Resolve the chapter with the exact same walk the path lens uses — so
+    // what Copy emits is precisely the text the editor highlights (and what
+    // Preview renders) for the active path. With no lens, buildStoryState
+    // returns the pure variable defaults, giving the unchanged canon copy.
+    const storyState = buildStoryState(series.variables, lensState)
+    const resolutions = resolveChapter(blocks, storyState, varTypeMap(series.variables))
     const parts: string[] = []
-    for (const block of (currentBlocksRef.current ?? chapter.blocks)) {
-      // Resolve each block to its canon source exactly like the reader
-      // (Preview): text blocks render their content; conditional fragments
-      // render the matching override for the default variable state — NOT
-      // the base editing scaffold — and contribute nothing when no override
-      // matches. Choice points collapse to their canon branch (see below).
-      let src: string | null | undefined = null
-      // Set when the resolved block cleanly ends the chapter: its prose is the
-      // last thing copied, mirroring the canon walk / reader truncation.
-      let endsChapterHere = false
-      if (block.type === 'text') {
-        src = block.content
-      } else if (block.type === 'conditional_fragment') {
-        const matched = resolveConditionalOverride(
-          { overrides: (block.overrides ?? []).map(o => ({ id: o.id, order: o.order, condition: JSON.parse(o.condition), content: o.content, endingMessage: null, endsChapter: o.endsChapter ?? false })) },
-          storyState,
-        )
-        src = matched?.content ?? null
-        if (matched?.endsChapter) endsChapterHere = true
-      } else if (block.type === 'choice_point') {
-        // A choice point only belongs in the canon read-through when its own
-        // gate holds for the default context — a block gated by a non-default
-        // variable state isn't on the canon path, so skip it entirely.
-        const blockGate = safeCondition(block.condition)
-        if (blockGate && !matchesCondition(blockGate, storyState)) continue
-        const canon = resolveCanonChoice(block.choices ?? [], storyState, varType)
-        // Canon prose for a branch is its inline consequence (endingMessage),
-        // exactly what the reader/narration emit once a branch is chosen.
-        src = canon?.endingMessage ?? null
-        if (canon?.endsChapter) endsChapterHere = true
-      }
-      if (src) {
-        const text = substituteVarTemplates(extractPlainText(src), storyState, s => s)
-        if (text) parts.push(text)
-      }
-      // Once the canon chapter ends, nothing after it is part of the chapter.
-      if (endsChapterHere) break
+    for (const block of blocks) {
+      // resolveChapter already handles gating, override/branch selection, and
+      // chapter-ending truncation (post-ending blocks come back not-included),
+      // so here we just emit the resolved source of every included block.
+      const r = resolutions.get(block.id)
+      if (!r?.included || !r.source) continue
+      const text = substituteVarTemplates(extractPlainText(r.source), storyState, s => s)
+      if (text) parts.push(text)
     }
     try {
       await navigator.clipboard.writeText(parts.join('\n\n'))
@@ -699,6 +652,17 @@ export default function ChapterEditorPage() {
   addBlockRef.current = addBlock
   addChoiceBlockRef.current = addChoiceBlock
 
+  // Number of questions the active path answers — shown on the Path chip.
+  const lensAnsweredCount = Object.values(lensSelections).filter(Boolean).length
+  // Under the active path, does this chapter's own visibility gate fail? If so
+  // the reader wouldn't see it at all on this path — surface that up top.
+  const chapterHiddenOnPath = useMemo(() => {
+    if (!lensState || !chapter?.condition) return false
+    const cond = safeCondition(chapter.condition)
+    if (!cond) return false
+    return !matchesCondition(cond, buildStoryState(series.variables, lensState))
+  }, [lensState, chapter?.condition, series.variables])
+
   if (!chapter) return <ChapterSkeleton />
 
   // Prev/next within the same book — chapters are already ordered by `order`
@@ -754,6 +718,7 @@ export default function ChapterEditorPage() {
                     { keys: '⌥⇧F', label: 'Find in chapter' },
                     { keys: '⌥⇧→ / ←', label: 'Next / previous match' },
                     { keys: '⌥⇧K', label: 'Clear chapter search' },
+                    { keys: '⌥⇧W', label: 'Clear path lens' },
                     { keys: '⌥⇧D', label: 'Delete active block' },
                   ],
                 },
@@ -791,6 +756,29 @@ export default function ChapterEditorPage() {
             </div>
           )}
         </div>
+        {/* Path lens — configure a context and the editor dims off-path text
+            (Copy and Preview follow the same path). When active, an inline ✕
+            clears it (⌥⇧W does the same from the keyboard). */}
+        <div className="relative group/pathbtn flex items-center">
+          <button
+            onClick={() => setShowPathConfig(true)}
+            className={`py-1.5 rounded-l text-xs border font-medium transition flex items-center gap-1.5 ${lensState ? 'pl-3 pr-2 border-accent/50 text-accent bg-accent/10' : 'px-3 rounded-r border-accent/20 text-ink-muted hover:border-accent/40 hover:text-ink'}`}
+          >
+            <LuRoute size={13} /> {lensState ? `Path · ${lensAnsweredCount}` : 'Path'}
+          </button>
+          {lensState && (
+            <button
+              onClick={clearLensRef.current}
+              title="Clear path (⌥⇧W)"
+              className="py-1.5 px-1.5 rounded-r text-xs border border-l-0 border-accent/50 text-accent bg-accent/10 hover:bg-accent/20 transition flex items-center"
+            >
+              <LuX size={12} />
+            </button>
+          )}
+          <div className="pointer-events-none absolute right-0 top-full mt-1.5 z-50 w-60 rounded border border-accent/20 bg-surface-overlay px-3 py-2 text-xs leading-snug text-ink-muted shadow-lg opacity-0 transition-opacity group-hover/pathbtn:opacity-100">
+            Configure a context path — the editor highlights the blocks and branches on that path and dims the rest. Copy and Preview follow the same path. Clear with ⌥⇧W.
+          </div>
+        </div>
         <div className="relative group/copybtn">
           <button
             onClick={copyCanonText}
@@ -801,7 +789,9 @@ export default function ChapterEditorPage() {
             </span>
           </button>
           <div className="pointer-events-none absolute right-0 top-full mt-1.5 z-50 w-56 rounded border border-accent/20 bg-surface-overlay px-3 py-2 text-xs leading-snug text-ink-muted shadow-lg opacity-0 transition-opacity group-hover/copybtn:opacity-100">
-            Copies this chapter's canon story text to your clipboard — the rendered text as it would appear in the published book.
+            {lensState
+              ? "Copies this chapter's story text for the active path — the same text Preview renders with that context."
+              : "Copies this chapter's canon story text to your clipboard — the rendered text as it would appear in the published book."}
           </div>
         </div>
         <div className="relative group/reviewbtn">
@@ -990,11 +980,20 @@ export default function ChapterEditorPage() {
           </div>
         </div>
 
+        {chapterHiddenOnPath && (
+          <div className="mb-3 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-ink-muted">
+            <LuRoute size={13} className="text-accent shrink-0" />
+            <span>The reader wouldn&apos;t see this chapter on the active path — its visibility gate doesn&apos;t match.</span>
+            <button onClick={clearLensRef.current} className="ml-auto shrink-0 text-accent hover:underline">Clear path</button>
+          </div>
+        )}
+
         <BlockEditor
           key={chapter.id}
           chapterId={chapterId}
           blocks={chapter.blocks}
           variables={series.variables}
+          lensState={lensState}
           characters={characters}
           onBlocksChange={reloadBlocks}
           onChoicesChanged={loadChoices}
@@ -1164,6 +1163,17 @@ export default function ChapterEditorPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showPathConfig && (
+        <PathConfigModal
+          seriesId={seriesId}
+          currentChapterId={chapterId}
+          variables={series.variables}
+          initialSelections={lensSelections}
+          onApply={(state, selections) => { applyLens(state, selections); setShowPathConfig(false) }}
+          onClose={() => setShowPathConfig(false)}
+        />
       )}
 
     </div>

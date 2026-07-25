@@ -14,6 +14,10 @@ type Props = {
   overrides: Override[]
   variables: { id: string; name: string; type: string; defaultValue?: string }[]
   characters?: Character[]
+  // Path lens: when active, the override matching the current path is
+  // highlighted and the rest fade back so the writer sees which branch renders.
+  lensActive?: boolean
+  activeOverrideId?: string | null
   searchQuery?: string
   searchOptions?: SearchOptions
   // Registers each override's prose editor for search jump/replace, keyed by
@@ -27,7 +31,7 @@ type Props = {
 
 const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
 
-export default function ConditionalBlock({ overrides, variables, characters, searchQuery, searchOptions, onEditorReady, onPinText, onAddOverride, onUpdateOverride, onDeleteOverride }: Props) {
+export default function ConditionalBlock({ overrides, variables, characters, lensActive, activeOverrideId, searchQuery, searchOptions, onEditorReady, onPinText, onAddOverride, onUpdateOverride, onDeleteOverride }: Props) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   function handleAddOverride() {
@@ -57,10 +61,15 @@ export default function ConditionalBlock({ overrides, variables, characters, sea
 
       {overrides.map(override => {
         const isEnding = override.endingMessage != null
+        // Lens: the matched override reads normally with an accent ring; the
+        // others fade. When nothing matches (activeOverrideId null) they all
+        // fade, signalling this conditional adds nothing on the current path.
+        const lensHighlight = lensActive && activeOverrideId === override.id
+        const lensDim = lensActive && activeOverrideId !== override.id
         return (
           <div
             key={override.id}
-            className={`border rounded p-3 mb-2 ${isEnding ? 'border-choice-kill/40 bg-choice-kill/5' : 'border-accent/20 bg-surface-overlay'}`}
+            className={`border rounded p-3 mb-2 transition-opacity ${isEnding ? 'border-choice-kill/40 bg-choice-kill/5' : 'border-accent/20 bg-surface-overlay'} ${lensHighlight ? 'ring-1 ring-accent/50' : ''} ${lensDim ? 'opacity-40' : ''}`}
           >
             <div className="flex items-start gap-2 mb-2">
               <div className="flex-1 min-w-0">

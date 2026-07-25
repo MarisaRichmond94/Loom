@@ -64,6 +64,10 @@ type Props = {
   choices: Choice[]
   variables: Variable[]
   characters?: Character[]
+  // Path lens: when active, the branch on the current path is highlighted and
+  // the others fade. activeChoiceId is null when the whole block is off-path.
+  lensActive?: boolean
+  activeChoiceId?: string | null
   searchQuery?: string
   searchOptions?: SearchOptions
   // Registers each choice's branch-text editor for search jump/replace, keyed
@@ -94,7 +98,7 @@ function siblingValueFor(type: typeof VAR_TYPES[number], thisBranchValue: unknow
 function ChoicePanel({
   choice, slotPlaceholder, labelClass, bgClass, borderClass,
   variables, characters, hasSibling, focusVarName, searchQuery, searchOptions, onEditorReady, onUpdateChoice, onCreateAndPair,
-  onDelete, onConditionChange, onPin,
+  onDelete, onConditionChange, onPin, lensHighlight, lensDim,
 }: {
   choice: Choice; slotPlaceholder: string; labelClass: string; bgClass: string; borderClass: string
   variables: Variable[]
@@ -103,6 +107,9 @@ function ChoicePanel({
   searchOptions?: SearchOptions
   onEditorReady?: (choiceId: string, editor: Editor | null) => void
   hasSibling: boolean
+  // Path lens: this branch is on-path (highlight) or off-path (dim).
+  lensHighlight?: boolean
+  lensDim?: boolean
   // Present only for gate-eligible extra options (order >= 2): a delete
   // affordance and a "Show if" condition editor. The base pair passes
   // neither — they can't be removed or gated.
@@ -228,7 +235,7 @@ function ChoicePanel({
   }
 
   return (
-    <div className={`flex-1 ${bgClass} border ${borderClass} rounded-lg p-3`}>
+    <div className={`flex-1 ${bgClass} border ${borderClass} rounded-lg p-3 transition-opacity ${lensHighlight ? 'ring-1 ring-accent/50' : ''} ${lensDim ? 'opacity-40' : ''}`}>
       {/* Header — the choice's label is editable in-place. Whatever the
           writer types here is what the reader sees on the button. */}
       <div className="flex items-center justify-between mb-3 gap-2">
@@ -480,7 +487,13 @@ function ChoicePanel({
 }
 
 
-export default function ChoicePointBlock({ prompt, displayType, condition, choices, variables, characters, searchQuery, searchOptions, onEditorReady, onPinText, onUpdateBlock, onUpdateChoice, onAddChoice, onDeleteChoice, onCreateVariable }: Props) {
+export default function ChoicePointBlock({ prompt, displayType, condition, choices, variables, characters, lensActive, activeChoiceId, searchQuery, searchOptions, onEditorReady, onPinText, onUpdateBlock, onUpdateChoice, onAddChoice, onDeleteChoice, onCreateVariable }: Props) {
+  // Per-branch lens state: highlight the on-path branch, dim the rest. When
+  // activeChoiceId is null (block gated off the path) every branch dims.
+  const lensFor = (choiceId: string) => ({
+    lensHighlight: lensActive === true && activeChoiceId === choiceId,
+    lensDim: lensActive === true && activeChoiceId !== choiceId,
+  })
   // Order the options and split into the base pair (orders 0/1) and the
   // gate-eligible extras (order >= 2). The base pair keeps the green/red
   // "spare"/"kill" slots — visual differentiation only, not a yes/no
@@ -559,6 +572,7 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             searchQuery={searchQuery} searchOptions={searchOptions} onEditorReady={onEditorReady}
             onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
             onPin={onPinText ? () => onPinText(primaryChoice.endingMessage ?? '') : undefined}
+            {...lensFor(primaryChoice.id)}
           />
         )}
         {secondaryChoice && (
@@ -571,6 +585,7 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             searchQuery={searchQuery} searchOptions={searchOptions} onEditorReady={onEditorReady}
             onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
             onPin={onPinText ? () => onPinText(secondaryChoice.endingMessage ?? '') : undefined}
+            {...lensFor(secondaryChoice.id)}
           />
         )}
 
@@ -590,6 +605,7 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             onDelete={() => onDeleteChoice(choice.id)}
             onConditionChange={next => onUpdateChoice(choice.id, { condition: next })}
             onPin={onPinText ? () => onPinText(choice.endingMessage ?? '') : undefined}
+            {...lensFor(choice.id)}
           />
         ))}
 
