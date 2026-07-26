@@ -8,7 +8,13 @@ export default function ToastLayer() {
   if (!toasts.length && !saving) return null
 
   return (
-    <div className="fixed right-3 z-[200] flex flex-col gap-2 pointer-events-none" style={{ bottom: 'calc(var(--loom-footer-h, 0px) + 57px)' }}>
+    <div
+      className="fixed z-[200] flex flex-col gap-2 pointer-events-none"
+      style={{
+        right: 'var(--loom-toast-right, 0.75rem)',
+        bottom: 'var(--loom-toast-bottom, calc(var(--loom-footer-h, 0px) + 57px))',
+      }}
+    >
       {toasts.map(t => (
         <div
           key={t.id}

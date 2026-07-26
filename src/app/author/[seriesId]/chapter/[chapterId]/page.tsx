@@ -524,6 +524,18 @@ export default function ChapterEditorPage() {
     return () => { obs.disconnect(); document.documentElement.style.removeProperty('--loom-footer-h') }
   }, [])
 
+  // Keep ToastLayer positioned to the left of the floating add-block button
+  // (rather than stacked above it) and at the same height above the footer.
+  useEffect(() => {
+    const addBlockRight = (panelOpen ? panelWidth + 12 : 12) + 48
+    document.documentElement.style.setProperty('--loom-toast-right', `${addBlockRight}px`)
+    document.documentElement.style.setProperty('--loom-toast-bottom', '4rem')
+    return () => {
+      document.documentElement.style.removeProperty('--loom-toast-right')
+      document.documentElement.style.removeProperty('--loom-toast-bottom')
+    }
+  }, [panelOpen, panelWidth])
+
   // Keep stable refs so the hotkey listener never goes stale
   const addBlockRef = useRef<(type: string) => Promise<void>>(async () => {})
   const addChoiceBlockRef = useRef<() => Promise<void>>(async () => {})
