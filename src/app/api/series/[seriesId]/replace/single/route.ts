@@ -43,10 +43,15 @@ export async function POST(req: Request, { params }: Params) {
   // field switch keeps types tight and rules out any sketchy dynamic
   // column writes.
   let count = 0
+  // The chapter this row belongs to, reported back so the client can reload
+  // an editor that has it open — otherwise that editor still holds the
+  // pre-replace prose and PATCHes it back on the next keystroke.
+  let chapterId: string | null = null
 
   if (recordKind === 'block') {
     const row = await prisma.contentBlock.findUnique({ where: { id: recordId } })
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    chapterId = row.chapterId
     if (field === 'content') {
       const r = replaceInTipTapJson(row.content, find, replace, opts)
       if (r.count > 0) {
@@ -69,8 +74,12 @@ export async function POST(req: Request, { params }: Params) {
       return NextResponse.json({ error: `Unsupported field for block: ${field}` }, { status: 400 })
     }
   } else if (recordKind === 'choice') {
-    const row = await prisma.choice.findUnique({ where: { id: recordId } })
+    const row = await prisma.choice.findUnique({
+      where: { id: recordId },
+      include: { choicePoint: { select: { chapterId: true } } },
+    })
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    chapterId = row.choicePoint.chapterId
     if (field === 'label') {
       const r = replaceInString(row.label, find, replace, opts)
       if (r.count > 0) await prisma.choice.update({ where: { id: recordId }, data: { label: r.value ?? '' } })
@@ -83,8 +92,12 @@ export async function POST(req: Request, { params }: Params) {
       return NextResponse.json({ error: `Unsupported field for choice: ${field}` }, { status: 400 })
     }
   } else {
-    const row = await prisma.conditionalOverride.findUnique({ where: { id: recordId } })
+    const row = await prisma.conditionalOverride.findUnique({
+      where: { id: recordId },
+      include: { conditionalFragment: { select: { chapterId: true } } },
+    })
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    chapterId = row.conditionalFragment.chapterId
     if (field === 'content') {
       const r = replaceInTipTapJson(row.content, find, replace, opts)
       if (r.count > 0) {
@@ -101,5 +114,7 @@ export async function POST(req: Request, { params }: Params) {
     }
   }
 
-  return NextResponse.json({ count })
+  // Only report the chapter when something actually changed — a no-op
+  // replace shouldn't make an open editor reload.
+  return NextResponse.json({ count, chapterIds: count > 0 && chapterId ? [chapterId] : [] })
 }

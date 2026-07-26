@@ -73,6 +73,11 @@ type Props = {
   // Owned here (not by the page) because the editors are the only source
   // that reflects an edit the instant it happens.
   onMatchCountChange?: (count: number) => void
+  // Ref that receives handles on the write-behind save queue. Find-and-replace
+  // needs both: flushAll so the server reads prose the writer has actually
+  // finished typing, and discardAll so a post-replace reload can drop queued
+  // pre-replace content instead of letting it PATCH back over the result.
+  savesRef?: React.MutableRefObject<{ flushAll: () => Promise<void>; discardAll: () => void } | null>
   // Ref that receives a scrollToCursor function — refocuses the active text
   // editor and scrolls the cursor position into the centre of the viewport.
   scrollToCursorRef?: React.MutableRefObject<(() => void) | null>
@@ -344,7 +349,7 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
   )
 })
 
-export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', searchOptions, replaceAllRef, jumpToFirstMatchRef, jumpToMatchRef, scrollToCursorRef, currentBlocksRef, onTextBlockBlur, onPinText, lensState, onMatchCountChange }: Props) {
+export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', searchOptions, replaceAllRef, jumpToFirstMatchRef, jumpToMatchRef, scrollToCursorRef, currentBlocksRef, onTextBlockBlur, onPinText, lensState, onMatchCountChange, savesRef }: Props) {
   const searchOpts = searchOptions ?? {}
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
@@ -695,8 +700,14 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     return done
   }
 
-  function flushAllSaves(keepalive = false) {
-    for (const key of Array.from(pendingSavesRef.current.keys())) void flushSave(key, keepalive)
+  // Resolves once every queued PATCH has landed. Callers that just want the
+  // queue drained (blur, unmount, tab close) ignore the promise; find-and-
+  // replace awaits it so the server can't read prose the writer has already
+  // superseded.
+  function flushAllSaves(keepalive = false): Promise<void> {
+    return Promise.all(
+      Array.from(pendingSavesRef.current.keys()).map(key => flushSave(key, keepalive)),
+    ).then(() => {}, () => {})
   }
 
   function discardPendingSave(key: string) {
@@ -705,6 +716,16 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     clearTimeout(entry.timer)
     pendingSavesRef.current.delete(key)
   }
+
+  // Drop every queued PATCH without sending it. Only safe when the database
+  // is known to hold something better than what's queued — after a replace,
+  // where the queue holds pre-replace prose and the reload is about to
+  // rebuild the editors from the rewritten rows.
+  function discardAllSaves() {
+    for (const key of Array.from(pendingSavesRef.current.keys())) discardPendingSave(key)
+  }
+
+  if (savesRef) savesRef.current = { flushAll: () => flushAllSaves(), discardAll: discardAllSaves }
 
   useEffect(() => {
     const flush = () => flushAllSaves(true)

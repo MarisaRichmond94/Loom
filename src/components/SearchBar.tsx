@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { LuSearch, LuX, LuReplace, LuCaseSensitive, LuWholeWord } from 'react-icons/lu'
 import { FaBookOpen } from 'react-icons/fa'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import { flushPendingProse, publishProseReplaced } from '@/lib/proseSync'
 
 type Hit = {
   bookId: string
@@ -146,6 +147,9 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
     setReplaceError(null)
     setReplacing(true)
     try {
+      // Settle the open editor's write-behind saves first, or the count comes
+      // back measured against prose the writer has already changed.
+      await flushPendingProse()
       const bookIds = Array.from(bookFilter)
       const res = await fetch(`/api/series/${seriesId}/replace`, {
         method: 'POST',
@@ -168,6 +172,7 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
     if (h.recordKind === 'chapter') return
     setReplaceError(null)
     try {
+      await flushPendingProse()
       const res = await fetch(`/api/series/${seriesId}/replace/single`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -178,6 +183,10 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
         }),
       })
       if (!res.ok) { setReplaceError('Replace failed.'); return }
+      const data = await res.json()
+      // Tell any editor holding this chapter to rebuild from the rewritten
+      // row, before its stale copy can be PATCHed back over the replacement.
+      publishProseReplaced({ seriesId, chapterIds: data.chapterIds ?? [] })
       // Refresh matches so the now-rewritten row drops out of (or
       // updates in) the list.
       runFetch(query, Array.from(bookFilter), matchCase, matchWord)
@@ -192,6 +201,9 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
     setReplaceError(null)
     setReplacing(true)
     try {
+      // Same flush as the preview: the writer may have kept typing between
+      // opening the confirm dialog and accepting it.
+      await flushPendingProse()
       const bookIds = Array.from(bookFilter)
       const res = await fetch(`/api/series/${seriesId}/replace`, {
         method: 'POST',
@@ -199,7 +211,11 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
         body: JSON.stringify({ find, replace: replaceWith, bookIds, dryRun: false, caseSensitive: matchCase, wholeWord: matchWord }),
       })
       if (!res.ok) { setReplaceError('Replace failed.'); return }
+      const data = await res.json()
       setPendingReplace(null)
+      // Any editor open on a rewritten chapter still holds pre-replace prose;
+      // tell it to rebuild before a keystroke PATCHes that copy back.
+      publishProseReplaced({ seriesId, chapterIds: data.chapterIds ?? [] })
       // Refresh the match list so the writer sees the new state.
       runFetch(query, bookIds, matchCase, matchWord)
     } finally { setReplacing(false) }

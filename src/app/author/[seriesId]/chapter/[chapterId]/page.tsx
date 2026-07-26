@@ -7,6 +7,8 @@ import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
 import ReferencePanel, { type PinnedText } from '@/components/editor/ReferencePanel'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
+import { notify } from '@/lib/notifications'
+import { registerProseFlush, subscribeProseReplaced } from '@/lib/proseSync'
 import { ConditionRow } from '@/components/editor/conditionUI'
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
@@ -141,6 +143,7 @@ export default function ChapterEditorPage() {
   const jumpToFirstMatchRef = useRef<((query: string) => void) | null>(null)
   const jumpToMatchRef = useRef<((query: string, dir: 'next' | 'prev') => void) | null>(null)
   const scrollToCursorRef = useRef<(() => void) | null>(null)
+  const savesRef = useRef<{ flushAll: () => Promise<void>; discardAll: () => void } | null>(null)
   const currentBlocksRef = useRef<{ id: string; order: number; type: string; content?: string | null; baseContent?: string | null; condition?: string | null; choices?: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; condition?: string | null; endingMessage?: string | null; isBadEnding?: boolean; endsChapter?: boolean }[]; overrides?: { id: string; order: number; condition: string; content: string; endingMessage?: string | null; endsChapter?: boolean }[] }[] | null>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
   const shortcutsRef = useRef<HTMLDivElement>(null)
@@ -406,6 +409,41 @@ export default function ChapterEditorPage() {
   }, [chapterId])
 
   useEffect(() => { loadChapter() }, [loadChapter])
+
+  // Find-and-replace writes straight to the database, behind this editor's
+  // back. Everything mounted below still holds the pre-replace prose, and the
+  // next keystroke in any of those blocks would PATCH that whole stale
+  // document back — silently undoing the replacement. So rebuild from the
+  // rewritten rows whenever a replace reports touching this chapter.
+  //
+  // The remount (via the key below) is deliberate: it rebuilds every TipTap
+  // document from the new JSON with no per-surface sync guards to get wrong.
+  // The writer pays a lost caret and scroll position for an operation they
+  // explicitly confirmed. Their own words are safe either way — the search
+  // bar flushes this editor's queue before the server reads.
+  const [editorRevision, setEditorRevision] = useState(0)
+  useEffect(() => {
+    return subscribeProseReplaced(payload => {
+      if (payload.seriesId !== seriesId) return
+      if (!payload.chapterIds.includes(chapterId)) return
+      // Drop anything still queued before reloading. It holds pre-replace
+      // prose, and BlockEditor's unmount flushes its queue — so without this
+      // the remount itself would push the stale copy over the replacement.
+      savesRef.current?.discardAll()
+      void loadChapter().then(() => {
+        // Again after the fetch: a keystroke landing mid-round-trip would
+        // have queued a fresh save built on pre-replace prose, and the
+        // unmount below flushes whatever is still queued.
+        savesRef.current?.discardAll()
+        setEditorRevision(r => r + 1)
+        notify('ok', 'This chapter was updated by find & replace — the editor reloaded.')
+      })
+    })
+  }, [seriesId, chapterId, loadChapter])
+
+  // Let the search bar settle this editor's write-behind queue before it asks
+  // the server to read or rewrite prose.
+  useEffect(() => registerProseFlush(async () => { await savesRef.current?.flushAll() }), [])
 
   // The sidebar's insert/delete flow auto-renumbers neighbouring chapters
   // in the DB and refetches `series` for the outline tree, but this page's
@@ -968,7 +1006,7 @@ export default function ChapterEditorPage() {
         )}
 
         <BlockEditor
-          key={chapter.id}
+          key={`${chapter.id}:${editorRevision}`}
           chapterId={chapterId}
           blocks={chapter.blocks}
           variables={series.variables}
@@ -988,6 +1026,7 @@ export default function ChapterEditorPage() {
           jumpToFirstMatchRef={jumpToFirstMatchRef}
           jumpToMatchRef={jumpToMatchRef}
           onMatchCountChange={setLocalSearchMatchCount}
+          savesRef={savesRef}
           scrollToCursorRef={scrollToCursorRef}
           currentBlocksRef={currentBlocksRef}
           onTextBlockBlur={handleTextBlockBlur}

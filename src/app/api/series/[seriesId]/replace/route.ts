@@ -61,6 +61,10 @@ export async function POST(req: Request, { params }: Params) {
   // Blocks whose cached wordCount needs a refresh after the write: any block
   // whose prose changed, and the parent of any override whose content changed.
   const touchedBlockIds = new Set<string>()
+  // Chapters this replace writes to. Returned so the client can reload any
+  // editor that has one of them open — an open editor holds pre-replace prose
+  // and would otherwise PATCH it back over the result on the next keystroke.
+  const touchedChapterIds = new Set<string>()
 
   for (const book of series.books) {
     if (bookFilter && !bookFilter.has(book.id)) continue
@@ -75,6 +79,7 @@ export async function POST(req: Request, { params }: Params) {
         if (promptR.count > 0) { blockData.prompt = promptR.value ?? ''; counts.prompt += promptR.count }
         if (Object.keys(blockData).length > 0) {
           updates.push({ kind: 'block', id: block.id, data: blockData })
+          touchedChapterIds.add(chapter.id)
           if (blockData.content !== undefined || blockData.baseContent !== undefined) touchedBlockIds.add(block.id)
         }
 
@@ -84,7 +89,10 @@ export async function POST(req: Request, { params }: Params) {
           if (labelR.count > 0) { choiceData.label = labelR.value ?? ''; counts.choice += labelR.count }
           const endR = replaceInTipTapJson(choice.endingMessage, find, replace, opts)
           if (endR.count > 0) { choiceData.endingMessage = endR.json ?? ''; counts.choice += endR.count }
-          if (Object.keys(choiceData).length > 0) updates.push({ kind: 'choice', id: choice.id, data: choiceData })
+          if (Object.keys(choiceData).length > 0) {
+            updates.push({ kind: 'choice', id: choice.id, data: choiceData })
+            touchedChapterIds.add(chapter.id)
+          }
         }
         for (const override of block.overrides) {
           const ovData: { content?: string; endingMessage?: string } = {}
@@ -94,6 +102,7 @@ export async function POST(req: Request, { params }: Params) {
           if (endR.count > 0) { ovData.endingMessage = endR.json ?? ''; counts.override += endR.count }
           if (Object.keys(ovData).length > 0) {
             updates.push({ kind: 'override', id: override.id, data: ovData })
+            touchedChapterIds.add(chapter.id)
             if (ovData.content !== undefined) touchedBlockIds.add(block.id)
           }
         }
@@ -102,9 +111,9 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const total = counts.prose + counts.prompt + counts.choice + counts.override
-  if (dryRun) return NextResponse.json({ total, counts })
+  if (dryRun) return NextResponse.json({ total, counts, chapterIds: [] })
 
-  if (updates.length === 0) return NextResponse.json({ total: 0, counts })
+  if (updates.length === 0) return NextResponse.json({ total: 0, counts, chapterIds: [] })
 
   // One transaction so a mid-write failure leaves the series untouched.
   await prisma.$transaction(
@@ -116,5 +125,5 @@ export async function POST(req: Request, { params }: Params) {
   )
   await refreshBlockWordCounts([...touchedBlockIds])
 
-  return NextResponse.json({ total, counts })
+  return NextResponse.json({ total, counts, chapterIds: [...touchedChapterIds] })
 }
