@@ -143,7 +143,11 @@ export default function ChapterEditorPage() {
   const jumpToFirstMatchRef = useRef<((query: string) => void) | null>(null)
   const jumpToMatchRef = useRef<((query: string, dir: 'next' | 'prev') => void) | null>(null)
   const scrollToCursorRef = useRef<(() => void) | null>(null)
-  const savesRef = useRef<{ flushAll: () => Promise<void>; discardAll: () => void } | null>(null)
+  const savesRef = useRef<{
+    flushAll: () => Promise<void>
+    discardAll: () => number
+    armDiscardOnUnmount: () => void
+  } | null>(null)
   const currentBlocksRef = useRef<{ id: string; order: number; type: string; content?: string | null; baseContent?: string | null; condition?: string | null; choices?: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; condition?: string | null; endingMessage?: string | null; isBadEnding?: boolean; endsChapter?: boolean }[]; overrides?: { id: string; order: number; condition: string; content: string; endingMessage?: string | null; endsChapter?: boolean }[] }[] | null>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
   const shortcutsRef = useRef<HTMLDivElement>(null)
@@ -380,24 +384,44 @@ export default function ChapterEditorPage() {
   }
 
   const isInitialChapterLoadRef = useRef(true)
-  const loadChapter = useCallback(async () => {
+  // Monotonic tag on each in-flight load. Two reloads can overlap (two quick
+  // per-hit replaces on this chapter), and responses can arrive out of order —
+  // without this the older payload could win and leave the editor rebuilt on
+  // prose that's missing the newer replace.
+  const chapterLoadSeqRef = useRef(0)
+  // 'stale' = a newer load superseded this one and owns whatever happens next.
+  const loadChapter = useCallback(async (): Promise<'ok' | 'stale' | 'error'> => {
+    const seq = ++chapterLoadSeqRef.current
     const start = Date.now()
-    const res = await fetch(`/api/chapters/${chapterId}`)
-    if (!res.ok) return
+    let res: Response
+    try {
+      res = await fetch(`/api/chapters/${chapterId}`)
+    } catch {
+      return 'error'
+    }
+    if (!res.ok) return 'error'
     const data = await res.json()
     if (isInitialChapterLoadRef.current) {
       await ensureMinDuration(start)
       isInitialChapterLoadRef.current = false
     }
+    if (seq !== chapterLoadSeqRef.current) return 'stale'
     setChapter(data)
-    setTitleDraft(data.title)
+    // Don't stomp a draft the writer is actively editing. A reload can now be
+    // triggered by a replace in another tab, at any moment — including with
+    // the cursor sitting in one of these inputs, whose value only commits on
+    // blur. Mirrors the guard the series-title sync already uses.
+    if (document.activeElement !== titleInputRef.current) setTitleDraft(data.title)
     // Reset POV draft + autocomplete bookkeeping every time we land on a
     // new chapter so the previous chapter's typed/rejected state doesn't
     // bleed across navigation.
-    setPovDraft(data.pov ?? '')
-    typedPrefixRef.current = data.pov ?? ''
-    rejectedPrefixRef.current = null
-    povSyncedChapterRef.current = data.id
+    if (document.activeElement !== povInputRef.current) {
+      setPovDraft(data.pov ?? '')
+      typedPrefixRef.current = data.pov ?? ''
+      rejectedPrefixRef.current = null
+      povSyncedChapterRef.current = data.id
+    }
+    return 'ok'
   }, [chapterId])
 
   const reloadBlocks = useCallback(async () => {
@@ -419,24 +443,48 @@ export default function ChapterEditorPage() {
   // The remount (via the key below) is deliberate: it rebuilds every TipTap
   // document from the new JSON with no per-surface sync guards to get wrong.
   // The writer pays a lost caret and scroll position for an operation they
-  // explicitly confirmed. Their own words are safe either way — the search
-  // bar flushes this editor's queue before the server reads.
+  // explicitly confirmed.
+  //
+  // Whose words are at risk depends on where the replace came from. Same tab:
+  // none — the search bar flushed this editor's queue before the server read,
+  // so the discards below find nothing. Another tab: flushPendingProse is a
+  // per-tab registry and cannot reach this editor, so anything still queued
+  // here is unflushed typing that the reload is about to overwrite. That's
+  // why the discard count is reported rather than swallowed.
   const [editorRevision, setEditorRevision] = useState(0)
   useEffect(() => {
     return subscribeProseReplaced(payload => {
       if (payload.seriesId !== seriesId) return
       if (!payload.chapterIds.includes(chapterId)) return
-      // Drop anything still queued before reloading. It holds pre-replace
-      // prose, and BlockEditor's unmount flushes its queue — so without this
-      // the remount itself would push the stale copy over the replacement.
-      savesRef.current?.discardAll()
-      void loadChapter().then(() => {
-        // Again after the fetch: a keystroke landing mid-round-trip would
-        // have queued a fresh save built on pre-replace prose, and the
-        // unmount below flushes whatever is still queued.
-        savesRef.current?.discardAll()
+      // Drop anything still queued before reloading — it holds pre-replace
+      // prose that would otherwise be PATCHed back over the replacement.
+      let discarded = savesRef.current?.discardAll() ?? 0
+      void loadChapter().then(result => {
+        // A newer reload for this same chapter is already in flight; let it
+        // own the rebuild rather than remounting twice on older prose.
+        if (result === 'stale') return
+        if (result === 'error') {
+          // The rows changed but we couldn't re-read them, so this editor is
+          // still showing superseded prose. Say so loudly: 'error' also
+          // raises a toast, and the next keystroke here would push the old
+          // text back over the replacement.
+          notify('error', 'Find & replace changed this chapter, but reloading it failed. Reload the page before editing — the text on screen is out of date.')
+          return
+        }
+        // Again after the fetch, then arm the unmount: a keystroke landing
+        // mid-round-trip, or in the gap before React commits the remount,
+        // queues a save built on pre-replace prose, and BlockEditor's unmount
+        // would otherwise flush exactly that.
+        discarded += savesRef.current?.discardAll() ?? 0
+        savesRef.current?.armDiscardOnUnmount()
         setEditorRevision(r => r + 1)
-        notify('ok', 'This chapter was updated by find & replace — the editor reloaded.')
+        if (discarded > 0) {
+          notify('warn', 'Find & replace rewrote this chapter and the editor reloaded. Unsaved edits made here while it ran were discarded — check the last thing you typed.')
+        } else {
+          notify('ok', 'This chapter was updated by find & replace — the editor reloaded.')
+        }
+      }).catch(() => {
+        notify('error', 'Find & replace changed this chapter, but reloading it failed. Reload the page before editing — the text on screen is out of date.')
       })
     })
   }, [seriesId, chapterId, loadChapter])

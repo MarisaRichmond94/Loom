@@ -64,7 +64,11 @@ export function dismissToast(id: number) {
 export function notify(kind: AppNotification['kind'], message: string) {
   const id = nextId++
   notifications = [{ id, kind, message, at: Date.now(), read: false }, ...notifications].slice(0, 50)
-  if (kind === 'error') {
+  // Warnings toast alongside errors: the only thing raising one is losing the
+  // writer's unsaved edits to a replace from another tab, which they have to
+  // see now, not next time they open the bell. AppToast has always typed
+  // 'warn' — this just wires it up.
+  if (kind === 'error' || kind === 'warn') {
     toasts = [...toasts, { id, kind, message }]
     setTimeout(() => { toasts = toasts.filter(t => t.id !== id); emit() }, 5000)
   }

@@ -73,11 +73,17 @@ type Props = {
   // Owned here (not by the page) because the editors are the only source
   // that reflects an edit the instant it happens.
   onMatchCountChange?: (count: number) => void
-  // Ref that receives handles on the write-behind save queue. Find-and-replace
-  // needs both: flushAll so the server reads prose the writer has actually
-  // finished typing, and discardAll so a post-replace reload can drop queued
-  // pre-replace content instead of letting it PATCH back over the result.
-  savesRef?: React.MutableRefObject<{ flushAll: () => Promise<void>; discardAll: () => void } | null>
+  // Ref that receives handles on the write-behind save queue, all three needed
+  // by find-and-replace: flushAll so the server reads prose the writer has
+  // actually finished typing, discardAll so a post-replace reload can drop
+  // queued pre-replace content instead of letting it PATCH back over the
+  // result, and armDiscardOnUnmount so the same is true of anything queued in
+  // the gap before the rebuild's unmount commits.
+  savesRef?: React.MutableRefObject<{
+    flushAll: () => Promise<void>
+    discardAll: () => number
+    armDiscardOnUnmount: () => void
+  } | null>
   // Ref that receives a scrollToCursor function — refocuses the active text
   // editor and scrolls the cursor position into the centre of the viewport.
   scrollToCursorRef?: React.MutableRefObject<(() => void) | null>
@@ -700,14 +706,25 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     return done
   }
 
-  // Resolves once every queued PATCH has landed. Callers that just want the
-  // queue drained (blur, unmount, tab close) ignore the promise; find-and-
-  // replace awaits it so the server can't read prose the writer has already
-  // superseded.
+  // Resolves once every PATCH this editor owes the server has landed. Callers
+  // that just want the queue drained (blur, unmount, tab close) ignore the
+  // promise; find-and-replace awaits it so the server can't read prose the
+  // writer has already superseded.
+  //
+  // Draining pendingSavesRef is not enough on its own: flushSave removes an
+  // entry the moment it STARTS its fetch, so a debounce that fired a moment
+  // ago lives only in saveChainRef. Awaiting just the queue would resolve
+  // while that PATCH is still in flight, and the replace would read
+  // pre-keystroke prose and write it back over the writer's sentence. The
+  // gap widens to seconds when sendSave is retrying a 5xx with backoff —
+  // exactly when a save is most likely to be outstanding.
   function flushAllSaves(keepalive = false): Promise<void> {
-    return Promise.all(
-      Array.from(pendingSavesRef.current.keys()).map(key => flushSave(key, keepalive)),
-    ).then(() => {}, () => {})
+    const queued = Array.from(pendingSavesRef.current.keys()).map(key => flushSave(key, keepalive))
+    // Read the chains AFTER flushing — flushSave→sendSave registers the newly
+    // started requests there, so this captures both those and any older ones
+    // still retrying.
+    const inFlight = Array.from(saveChainRef.current.values())
+    return Promise.all([...queued, ...inFlight]).then(() => {}, () => {})
   }
 
   function discardPendingSave(key: string) {
@@ -717,15 +734,31 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     pendingSavesRef.current.delete(key)
   }
 
-  // Drop every queued PATCH without sending it. Only safe when the database
-  // is known to hold something better than what's queued — after a replace,
-  // where the queue holds pre-replace prose and the reload is about to
-  // rebuild the editors from the rewritten rows.
-  function discardAllSaves() {
-    for (const key of Array.from(pendingSavesRef.current.keys())) discardPendingSave(key)
+  // Drop every queued PATCH without sending it, returning how many were
+  // dropped so the caller can tell the writer if any of their words went with
+  // them. Only safe when the database is known to hold something better than
+  // what's queued — after a replace, where the queue holds pre-replace prose
+  // and a reload is about to rebuild the editors from the rewritten rows.
+  function discardAllSaves(): number {
+    const keys = Array.from(pendingSavesRef.current.keys())
+    for (const key of keys) discardPendingSave(key)
+    return keys.length
   }
 
-  if (savesRef) savesRef.current = { flushAll: () => flushAllSaves(), discardAll: discardAllSaves }
+  // Set when this instance is being torn down *because* its rows were
+  // rewritten underneath it. The unmount below normally flushes, which would
+  // push pre-replace prose over the replacement — the very bug the reload
+  // exists to prevent. Anything queued between arming this and the unmount
+  // commit is prose the database already supersedes.
+  const discardOnUnmountRef = useRef(false)
+
+  if (savesRef) {
+    savesRef.current = {
+      flushAll: () => flushAllSaves(),
+      discardAll: discardAllSaves,
+      armDiscardOnUnmount: () => { discardOnUnmountRef.current = true },
+    }
+  }
 
   useEffect(() => {
     const flush = () => flushAllSaves(true)
@@ -734,7 +767,8 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     return () => {
       window.removeEventListener('pagehide', flush)
       window.removeEventListener('beforeunload', flush)
-      flushAllSaves()
+      if (discardOnUnmountRef.current) discardAllSaves()
+      else void flushAllSaves()
     }
   // flushAllSaves only touches refs; mount/unmount is the right lifecycle
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -20,10 +20,17 @@
 //      subscribes here and reloads any chapter the replace touched.
 //
 // BroadcastChannel carries (2) to other tabs, which matter because search
-// results open with target="_blank". Cross-tab is best-effort: a background
-// tab's own unsaved keystrokes are not flushed before the replace reads, so
-// that narrow race stays open — see the editor's subscriber for how it
-// resolves in favour of the replacement.
+// results open with target="_blank".
+//
+// The two halves are deliberately asymmetric, and it matters: the flush
+// registry is per-tab (module state), so flushPendingProse can only settle
+// editors in the tab that hosts the search bar, while the replaced signal
+// reaches every tab. So hazard (1) is closed only for the tab the writer ran
+// the replace from. A background tab holding unflushed keystrokes on a
+// rewritten chapter loses them — the reload resolves in favour of the
+// replacement, and the editor reports the discard rather than hiding it.
+// Closing that properly needs a cross-tab flush handshake, which is more
+// machinery than a single-writer local app earns.
 
 export type ProseReplacedPayload = {
   seriesId: string
