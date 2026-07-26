@@ -6,8 +6,6 @@ import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuScanText, Lu
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
 import ReferencePanel, { type PinnedText } from '@/components/editor/ReferencePanel'
-import { extractTextFromTipTap } from '@/lib/tiptapText'
-import { matchRanges, type SearchOptions } from '@/lib/searchMatch'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import { ConditionRow } from '@/components/editor/conditionUI'
 import { useAuthor } from '@/lib/authorContext'
@@ -480,33 +478,14 @@ export default function ChapterEditorPage() {
     await saveCanon(series.books.find(b => b.chapters.some(c => c.id === chapterId))?.id)
   }
 
-  // Plain text of every editable prose surface in the chapter, extracted
-  // once per chapter load — chapter.blocks only refreshes on structural
-  // changes, so search keystrokes must not pay a JSON.parse per block. This
-  // must mirror the three highlightable/jumpable TipTap surfaces in
-  // BlockEditor so the count matches what the writer sees and can jump to:
-  // a text block's content, each conditional override's content, and each
-  // choice's branch text (endingMessage). Prompt/label are plain inputs
-  // (not highlighted); baseContent is never an editable surface.
-  const blockSearchTexts = useMemo(() => {
-    const texts: string[] = []
-    for (const b of chapter?.blocks ?? []) {
-      if (b.type === 'text') {
-        texts.push(extractTextFromTipTap(b.content ?? null))
-      } else if (b.type === 'conditional_fragment') {
-        for (const ov of b.overrides ?? []) texts.push(extractTextFromTipTap(ov.content ?? null))
-      } else if (b.type === 'choice_point') {
-        for (const ch of b.choices ?? []) texts.push(extractTextFromTipTap(ch.endingMessage ?? null))
-      }
-    }
-    return texts
-  }, [chapter])
-
-  const localSearchMatchCount = useMemo(() => {
-    if (!debouncedSearchQuery.trim() || !chapter) return 0
-    const opts: SearchOptions = { caseSensitive: matchCase, wholeWord: matchWord }
-    return blockSearchTexts.reduce((n, text) => n + matchRanges(text, debouncedSearchQuery, opts).length, 0)
-  }, [debouncedSearchQuery, chapter, blockSearchTexts, matchCase, matchWord])
+  // Match count for the find bar, reported up by BlockEditor from the live
+  // TipTap editors. It has to come from there: chapter.blocks is only
+  // refetched on structural changes, so counting that snapshot kept
+  // searching pre-edit prose — after replacing "cat" with "dog" the bar
+  // still reported matches for "cat". Sourcing it from the editors also
+  // makes the number agree with the highlights and with what ⌥⇧→ / ⌥⇧←
+  // and Replace All actually operate on.
+  const [localSearchMatchCount, setLocalSearchMatchCount] = useState(0)
 
   async function createVariable(name: string, type: string, defaultValue?: unknown) {
     // Caller may specify defaultValue (the choice-block create form lets the
@@ -1008,6 +987,7 @@ export default function ChapterEditorPage() {
           replaceAllRef={replaceAllRef}
           jumpToFirstMatchRef={jumpToFirstMatchRef}
           jumpToMatchRef={jumpToMatchRef}
+          onMatchCountChange={setLocalSearchMatchCount}
           scrollToCursorRef={scrollToCursorRef}
           currentBlocksRef={currentBlocksRef}
           onTextBlockBlur={handleTextBlockBlur}

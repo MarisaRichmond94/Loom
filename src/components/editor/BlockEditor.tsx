@@ -68,6 +68,11 @@ type Props = {
   // Jump to the next/previous search match relative to the caret, wrapping
   // around at the ends. Drives ⌥⇧→ / ⌥⇧← from the chapter search bar.
   jumpToMatchRef?: React.MutableRefObject<((query: string, dir: 'next' | 'prev') => void) | null>
+  // Reports how many matches `searchQuery` currently has across the mounted
+  // prose editors, so the find bar can show a count that tracks live edits.
+  // Owned here (not by the page) because the editors are the only source
+  // that reflects an edit the instant it happens.
+  onMatchCountChange?: (count: number) => void
   // Ref that receives a scrollToCursor function — refocuses the active text
   // editor and scrolls the cursor position into the centre of the viewport.
   scrollToCursorRef?: React.MutableRefObject<(() => void) | null>
@@ -339,7 +344,7 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
   )
 })
 
-export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', searchOptions, replaceAllRef, jumpToFirstMatchRef, jumpToMatchRef, scrollToCursorRef, currentBlocksRef, onTextBlockBlur, onPinText, lensState }: Props) {
+export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', searchOptions, replaceAllRef, jumpToFirstMatchRef, jumpToMatchRef, scrollToCursorRef, currentBlocksRef, onTextBlockBlur, onPinText, lensState, onMatchCountChange }: Props) {
   const searchOpts = searchOptions ?? {}
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
@@ -370,6 +375,12 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   if (currentBlocksRef) currentBlocksRef.current = blocks
 
   const textEditorsRef = useRef<Map<string, Editor>>(new Map())
+  // Bumped every time a prose editor registers or unregisters. TipTap's
+  // useEditor resolves asynchronously (immediatelyRender: false), so the
+  // editors don't exist yet on the render that mounts them — without this
+  // signal the match count below would settle on whatever it saw before
+  // the first editor was ready.
+  const [editorsVersion, setEditorsVersion] = useState(0)
   if (replaceAllRef) {
     replaceAllRef.current = (search: string, replacement: string) => {
       if (!search.trim()) return 0
@@ -484,6 +495,23 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
       landOnMatch(target)
     }
   }
+
+  // Match count for the chapter find bar, taken from the same registered
+  // editors that highlight, jump, and Replace All go through — so the number
+  // can never disagree with what the writer sees. It re-runs on every signal
+  // that can change the answer: the query/options, a doc edit (each keystroke
+  // and each Replace All lands in `blocks` via updateBlock), an editor
+  // mounting or unmounting, and collapse/expand.
+  //
+  // Counting the page's chapter.blocks instead was the old approach and the
+  // reason the count went stale: that snapshot is only refetched on
+  // structural changes, so replacing "cat" with "dog" left the bar still
+  // reporting matches for "cat" against pre-edit prose.
+  useEffect(() => {
+    onMatchCountChange?.(collectMatches(searchQuery).length)
+  // collectMatches reads live refs; these are the inputs that change its result.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, searchOpts.caseSensitive, searchOpts.wholeWord, blocks, collapsedIds, editorsVersion, onMatchCountChange])
 
   if (scrollToCursorRef) {
     scrollToCursorRef.current = () => {
@@ -862,6 +890,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     registerEditor: (key, editor) => {
       if (editor) textEditorsRef.current.set(key, editor)
       else textEditorsRef.current.delete(key)
+      setEditorsVersion(v => v + 1)
     },
     // Leaving a text editor commits its pending save right away — this also
     // guarantees content is in flight before the blur-driven canon export
