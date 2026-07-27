@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, usePathname, useRouter } from 'next/navigation'
 import { LuSearch, LuX, LuReplace, LuCaseSensitive, LuWholeWord } from 'react-icons/lu'
 import { FaBookOpen } from 'react-icons/fa'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -42,7 +42,10 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
   // Seed from the URL so navigating from a previous search result lands
   // here with the same query already populated. Pure read of the initial
   // value — subsequent typing owns the state.
-  const initialQuery = useSearchParams()?.get('q') ?? ''
+  const urlSearchParams = useSearchParams()
+  const pathname = usePathname()
+  const router = useRouter()
+  const initialQuery = urlSearchParams?.get('q') ?? ''
   const [query, setQuery] = useState(initialQuery)
   const [hits, setHits] = useState<Hit[]>([])
   const [loading, setLoading] = useState(false)
@@ -136,6 +139,23 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
       else next.add(id)
       return next
     })
+  }
+
+  // Clearing the box only resets this component's own state; the chapter
+  // page's on-page highlight reads q/qc/qw straight off the URL (that's how
+  // it survives the navigation from a search hit), so it keeps glowing
+  // unless we strip those params here too.
+  function clearQuery() {
+    setQuery('')
+    setHits([])
+    setOpen(false)
+    if (!urlSearchParams?.has('q')) return
+    const params = new URLSearchParams(urlSearchParams.toString())
+    params.delete('q')
+    params.delete('qc')
+    params.delete('qw')
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : (pathname ?? '/'), { scroll: false })
   }
 
   // Step 1 of Replace All: dry-run the endpoint to count matches under
@@ -286,7 +306,7 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
         <div className="absolute right-1.5 flex items-center gap-0.5">
           {query && (
             <button
-              onClick={() => { setQuery(''); setHits([]); setOpen(false) }}
+              onClick={clearQuery}
               className="text-ink-faint hover:text-ink p-0.5"
               title="Clear"
             >
