@@ -70,10 +70,6 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
   },
 ]
 
-// Remembered across chapters and reloads — whether the dock is open is a
-// working habit, not a property of any one chapter.
-const PANEL_OPEN_KEY = 'loom-side-panel-open'
-
 function safeCondition(raw: string | null | undefined): Condition | null {
   if (!raw) return null
   try {
@@ -114,9 +110,6 @@ export default function ChapterEditorPage() {
   // an empty pin list no longer means "nothing to show".
   const [panelOpen, setPanelOpen] = useState(false)
   const [panelTab, setPanelTab] = useState<PanelTab>('notes')
-  useEffect(() => {
-    setPanelOpen(localStorage.getItem(PANEL_OPEN_KEY) === 'true')
-  }, [])
   // Live values for the hotkey handler, whose effect closes over mount-time state.
   const pinsCountRef = useRef(0)
   pinsCountRef.current = pins.length
@@ -131,11 +124,9 @@ export default function ChapterEditorPage() {
   function openPanel(tab: PanelTab) {
     setPanelTab(tab)
     setPanelOpen(true)
-    try { localStorage.setItem(PANEL_OPEN_KEY, 'true') } catch { /* quota / disabled storage */ }
   }
   function closePanel() {
     setPanelOpen(false)
-    try { localStorage.setItem(PANEL_OPEN_KEY, 'false') } catch { /* quota / disabled storage */ }
   }
   // One rule for both ⌥⇧2 and ⌥⇧3: closed → open on my tab; open on the other
   // tab → switch to mine; open on my tab → close.
