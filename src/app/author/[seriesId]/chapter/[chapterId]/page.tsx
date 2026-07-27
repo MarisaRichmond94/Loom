@@ -5,7 +5,10 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute } from 'react-icons/lu'
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
-import ReferencePanel, { type PinnedText } from '@/components/editor/ReferencePanel'
+import SidePanel, { type PanelTab } from '@/components/editor/SidePanel'
+import { type PinnedText } from '@/components/editor/ReferencePanel'
+import { useChapterNotes } from '@/components/editor/useChapterNotes'
+import { useRegisterShortcuts, type ShortcutGroup } from '@/lib/shortcuts'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import { notify } from '@/lib/notifications'
 import { registerProseFlush, subscribeProseReplaced } from '@/lib/proseSync'
@@ -28,6 +31,49 @@ type Block = {
 type Chapter = { id: string; title: string; pov: string | null; date: string | null; condition: string | null; numbered: boolean; blocks: Block[] }
 type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
 
+// Published to the header's shortcut menu while this page is mounted. Module
+// level so the identity is stable across renders (it's an effect dependency).
+// Adding a shortcut below means adding its handler in the keydown switch too.
+const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
+  {
+    group: 'Add Blocks',
+    items: [
+      { keys: '⌥⇧T', label: 'Text block' },
+      { keys: '⌥⇧Q', label: 'Choice block' },
+      { keys: '⌥⇧C', label: 'Conditional block' },
+      { keys: '⌥⇧S', label: 'Soundtrack block' },
+    ],
+  },
+  {
+    group: 'Chapter',
+    items: [
+      { keys: '⌥⇧N', label: 'Create next chapter' },
+      { keys: '⌥⇧E', label: 'Export canon' },
+      { keys: '⌥⇧F', label: 'Find in chapter' },
+      { keys: '⌥⇧→ / ←', label: 'Next / previous match' },
+      { keys: '⌥⇧K', label: 'Clear chapter search' },
+      { keys: '⌥⇧W', label: 'Clear path lens' },
+      { keys: '⌥⇧D', label: 'Delete active block' },
+    ],
+  },
+  {
+    group: 'While Writing',
+    items: [
+      { keys: '⌥⇧J', label: 'Jump to cursor' },
+      { keys: '⌥⇧I', label: 'Toggle paragraph indent' },
+      { keys: '⌥⇧+ / -', label: 'Enlarge / shrink text' },
+      { keys: '⌥⇧R', label: 'Read aloud from cursor' },
+      { keys: '⌥⇧B', label: 'Insert scene break' },
+      { keys: '⌥⇧2', label: 'Toggle reference panel' },
+      { keys: '⌥⇧3', label: 'Toggle chapter notes' },
+    ],
+  },
+]
+
+// Remembered across chapters and reloads — whether the dock is open is a
+// working habit, not a property of any one chapter.
+const PANEL_OPEN_KEY = 'loom-side-panel-open'
+
 function safeCondition(raw: string | null | undefined): Condition | null {
   if (!raw) return null
   try {
@@ -47,7 +93,6 @@ export default function ChapterEditorPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showChapterSettings, setShowChapterSettings] = useState(false)
   const [copyDone, setCopyDone] = useState(false)
-  const [showShortcuts, setShowShortcuts] = useState(false)
   // Path lens — a configured StoryState that dims off-path blocks in the
   // editor and drives what Copy emits. Null means no lens (normal editing,
   // canon Copy). lensSelections is the raw per-question answer map, kept so
@@ -61,16 +106,52 @@ export default function ChapterEditorPage() {
   // Frozen prose snapshots pinned to the right-hand reference panel. In-memory
   // only — pinning captures the text as it is now so later edits don't shift it.
   const [pins, setPins] = useState<PinnedText[]>([])
-  // Reference-panel width, adjustable via its drag handle. Lifted here so the
+  // Side-panel width, adjustable via its drag handle. Lifted here so the
   // floating add-block button can offset by it and stay over the writing column.
   const [panelWidth, setPanelWidth] = useState(360)
-  // Whether the writer has hidden the panel via ⌥⇧2. Only meaningful while
-  // something is pinned; a new pin clears it so the panel reappears.
-  const [panelHidden, setPanelHidden] = useState(false)
-  const panelOpen = pins.length > 0 && !panelHidden
-  // Live pin count for the ⌥⇧2 handler, whose effect closes over mount-time state.
+  // The right-hand dock. Open state is explicit (and persisted) rather than
+  // derived from the pin count, because notes live here too and always exist —
+  // an empty pin list no longer means "nothing to show".
+  const [panelOpen, setPanelOpen] = useState(false)
+  const [panelTab, setPanelTab] = useState<PanelTab>('notes')
+  useEffect(() => {
+    setPanelOpen(localStorage.getItem(PANEL_OPEN_KEY) === 'true')
+  }, [])
+  // Live values for the hotkey handler, whose effect closes over mount-time state.
   const pinsCountRef = useRef(0)
   pinsCountRef.current = pins.length
+  const panelOpenRef = useRef(panelOpen)
+  panelOpenRef.current = panelOpen
+  const panelTabRef = useRef(panelTab)
+  panelTabRef.current = panelTab
+
+  const { notes, setNotes, saving: notesSaving, hasNotes } = useChapterNotes(chapterId)
+  useRegisterShortcuts('chapter', CHAPTER_SHORTCUTS)
+
+  function openPanel(tab: PanelTab) {
+    setPanelTab(tab)
+    setPanelOpen(true)
+    try { localStorage.setItem(PANEL_OPEN_KEY, 'true') } catch { /* quota / disabled storage */ }
+  }
+  function closePanel() {
+    setPanelOpen(false)
+    try { localStorage.setItem(PANEL_OPEN_KEY, 'false') } catch { /* quota / disabled storage */ }
+  }
+  // One rule for both ⌥⇧2 and ⌥⇧3: closed → open on my tab; open on the other
+  // tab → switch to mine; open on my tab → close.
+  function togglePanelTab(tab: PanelTab) {
+    if (!panelOpenRef.current) { openPanel(tab); return }
+    if (panelTabRef.current !== tab) { setPanelTab(tab); return }
+    closePanel()
+  }
+  const togglePanelTabRef = useRef(togglePanelTab)
+  togglePanelTabRef.current = togglePanelTab
+
+  // Clearing every pin retires the reference tab, so fall back to notes rather
+  // than leaving the panel showing a tab that no longer has a strip.
+  useEffect(() => {
+    if (pins.length === 0 && panelTab === 'refs') setPanelTab('notes')
+  }, [pins.length, panelTab])
   // Lifted from BlockEditor so the date-row toggle can flip every block at
   // once. Resets to empty on chapter switch (chapterId is in the dep list
   // below), matching the "all uncollapsed on initial load" rule.
@@ -150,7 +231,6 @@ export default function ChapterEditorPage() {
   } | null>(null)
   const currentBlocksRef = useRef<{ id: string; order: number; type: string; content?: string | null; baseContent?: string | null; condition?: string | null; choices?: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; condition?: string | null; endingMessage?: string | null; isBadEnding?: boolean; endsChapter?: boolean }[]; overrides?: { id: string; order: number; condition: string; content: string; endingMessage?: string | null; endsChapter?: boolean }[] }[] | null>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
-  const shortcutsRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const povInputRef = useRef<HTMLInputElement>(null)
   const focusedPovRef = useRef<string | null>(null)
@@ -234,9 +314,6 @@ export default function ChapterEditorPage() {
     function handleClick(e: MouseEvent) {
       if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
         setAddMenuOpen(false)
-      }
-      if (shortcutsRef.current && !shortcutsRef.current.contains(e.target as Node)) {
-        setShowShortcuts(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
@@ -560,8 +637,10 @@ export default function ChapterEditorPage() {
         case 'ArrowLeft': if (localSearchQueryRef.current.trim()) { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'prev') } break
         case 'Equal': case 'NumpadAdd': e.preventDefault(); adjustProseScale(0.1); break
         case 'Minus': case 'NumpadSubtract': e.preventDefault(); adjustProseScale(-0.1); break
-        // Toggle the reference panel — no-op unless something is pinned.
-        case 'Digit2': case 'Numpad2': if (pinsCountRef.current > 0) { e.preventDefault(); setPanelHidden(h => !h) } break
+        // Toggle the reference tab — no-op unless something is pinned.
+        case 'Digit2': case 'Numpad2': if (pinsCountRef.current > 0) { e.preventDefault(); togglePanelTabRef.current('refs') } break
+        // Toggle the notes tab — always available; every chapter can have notes.
+        case 'Digit3': case 'Numpad3': e.preventDefault(); togglePanelTabRef.current('notes'); break
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -629,8 +708,9 @@ export default function ChapterEditorPage() {
     // content is already the freshest per-keystroke prose JSON from the
     // originating text/override/choice; freeze it as its own reference card.
     setPins(prev => [...prev, { pinId: crypto.randomUUID(), content }])
-    // A fresh pin always reveals the panel, even if it was hidden via ⌥⇧2.
-    setPanelHidden(false)
+    // Pinning is explicit intent to look at the thing, so it always reveals the
+    // panel and claims the tab — even over notes the writer was mid-sentence in.
+    openPanel('refs')
   }
 
   async function copyCanonText() {
@@ -766,73 +846,20 @@ export default function ChapterEditorPage() {
         >
           <LuSettings size={20} />
         </button>
-        <div ref={shortcutsRef} className="relative">
-          <button
-            onClick={() => setShowShortcuts(o => !o)}
-            title="Keyboard shortcuts"
-            className="text-ink-faint hover:text-ink transition flex items-center"
-          >
-            <PiNotebookThin size={20} />
-          </button>
-          {showShortcuts && (
-            <div className="absolute right-0 top-full mt-2 z-50 w-72 bg-surface-raised border border-accent/20 rounded-xl shadow-xl p-4">
-              <p className="text-[10px] uppercase tracking-widest text-ink-faint font-semibold mb-3">Keyboard Shortcuts</p>
-              {([
-                {
-                  group: 'Add Blocks',
-                  items: [
-                    { keys: '⌥⇧T', label: 'Text block' },
-                    { keys: '⌥⇧Q', label: 'Choice block' },
-                    { keys: '⌥⇧C', label: 'Conditional block' },
-                    { keys: '⌥⇧S', label: 'Soundtrack block' },
-                  ],
-                },
-                {
-                  group: 'Chapter',
-                  items: [
-                    { keys: '⌥⇧N', label: 'Create next chapter' },
-                    { keys: '⌥⇧E', label: 'Export canon' },
-                    { keys: '⌥⇧F', label: 'Find in chapter' },
-                    { keys: '⌥⇧→ / ←', label: 'Next / previous match' },
-                    { keys: '⌥⇧K', label: 'Clear chapter search' },
-                    { keys: '⌥⇧W', label: 'Clear path lens' },
-                    { keys: '⌥⇧D', label: 'Delete active block' },
-                  ],
-                },
-                {
-                  group: 'While Writing',
-                  items: [
-                    { keys: '⌥⇧J', label: 'Jump to cursor' },
-                    { keys: '⌥⇧I', label: 'Toggle paragraph indent' },
-                    { keys: '⌥⇧+ / -', label: 'Enlarge / shrink text' },
-                    { keys: '⌥⇧R', label: 'Read aloud from cursor' },
-                    { keys: '⌥⇧B', label: 'Insert scene break' },
-                    { keys: '⌥⇧2', label: 'Toggle reference panel' },
-                  ],
-                },
-                {
-                  group: 'Series',
-                  items: [
-                    { keys: '⌥⇧G', label: 'Find in series (global)' },
-                    { keys: '⌥⇧1', label: 'Toggle sidebar' },
-                  ],
-                },
-              ] as { group: string; items: { keys: string; label: string }[] }[]).map(({ group, items }) => (
-                <div key={group} className="mb-3 last:mb-0">
-                  <p className="text-[9px] uppercase tracking-widest text-ink-faint mb-1.5">{group}</p>
-                  <div className="flex flex-col gap-1">
-                    {items.map(({ keys, label }) => (
-                      <div key={keys} className="flex items-center justify-between gap-3">
-                        <span className="text-xs text-ink-muted">{label}</span>
-                        <span className="font-mono text-[10px] bg-surface-overlay border border-accent/20 rounded px-1.5 py-0.5 text-ink-muted tracking-wider shrink-0">{keys}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+        {/* Chapter notes. The dot means this chapter has notes you can't
+            currently see — it clears once the panel is showing them. */}
+        <button
+          onClick={() => togglePanelTab('notes')}
+          title="Chapter notes (⌥⇧3)"
+          aria-label="Chapter notes"
+          aria-pressed={panelOpen && panelTab === 'notes'}
+          className={`relative transition flex items-center ${panelOpen && panelTab === 'notes' ? 'text-ink' : 'text-ink-faint hover:text-ink'}`}
+        >
+          <PiNotebookThin size={20} />
+          {hasNotes && !(panelOpen && panelTab === 'notes') && (
+            <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-accent" />
           )}
-        </div>
+        </button>
         {/* Path lens — configure a context and the editor dims off-path text
             (Copy and Preview follow the same path). When active, an inline ✕
             clears it (⌥⇧W does the same from the keyboard). */}
@@ -1258,11 +1285,17 @@ export default function ChapterEditorPage() {
     </div>
 
     {panelOpen && (
-      <ReferencePanel
+      <SidePanel
+        tab={panelTab}
+        onTabChange={setPanelTab}
         pins={pins}
+        onClearPins={() => setPins([])}
+        notes={notes}
+        onNotesChange={setNotes}
+        notesSaving={notesSaving}
         width={panelWidth}
         onWidthChange={setPanelWidth}
-        onCloseAll={() => setPins([])}
+        onClose={closePanel}
       />
     )}
     </div>

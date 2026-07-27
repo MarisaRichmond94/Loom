@@ -127,8 +127,27 @@ model Chapter {
   blocks         ContentBlock[]
   inboundChoices Choice[]       @relation("TargetChapter")
   narrations     ChapterNarration[]
+  note           ChapterNote?
 
   @@index([bookId, order])
+}
+
+// The writer's private scratchpad for one chapter — continuity reminders,
+// threads to fix, questions to answer. Deliberately plain text, not prose: it
+// never renders to readers, never exports, and find & replace never touches it
+// (that pipeline only walks ContentBlock).
+//
+// A separate table rather than a column on Chapter because chapter rows are
+// fetched in bulk for the outline tree and the book page, and Prisma selects
+// every scalar by default — a note body on Chapter would ride along in each of
+// those list queries for no reason.
+model ChapterNote {
+  id        String   @id @default(cuid())
+  chapterId String   @unique
+  body      String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 }
 
 // Cached text-to-speech narration for one *variant* of a chapter — a specific

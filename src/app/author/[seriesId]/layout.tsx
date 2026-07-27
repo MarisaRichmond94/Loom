@@ -12,6 +12,8 @@ import NotificationBell from '@/components/NotificationBell'
 import ToastLayer from '@/components/ToastLayer'
 import Greeting from '@/components/Greeting'
 import SearchBar from '@/components/SearchBar'
+import ShortcutsMenu from '@/components/ShortcutsMenu'
+import { ShortcutsProvider } from '@/lib/shortcuts'
 import { AuthorProvider, type AuthorSeries } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
@@ -218,6 +220,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
 
   return (
     <AuthorProvider value={{ series, loadSeries, loadChoices, lightMode, knownStringValues }}>
+      <ShortcutsProvider>
       <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
         {/* Header collapses progressively as width shrinks so the breadcrumbs
             and right-side controls never wrap onto a second line:
@@ -262,10 +265,16 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
             <LuSparkles size={14} />
           </a>
           <div className="ml-auto flex items-center gap-3 shrink-0">
-            <SearchBar
-              seriesId={seriesId}
-              books={series.books.map(b => ({ id: b.id, title: b.title }))}
-            />
+            {/* Shortcuts sits 8px from the search bar rather than the header's
+                usual 12px — the tighter seam reads as one "find things" cluster
+                and keeps the menu visually owned by the bar it documents. */}
+            <div className="flex items-center gap-2">
+              <ShortcutsMenu />
+              <SearchBar
+                seriesId={seriesId}
+                books={series.books.map(b => ({ id: b.id, title: b.title }))}
+              />
+            </div>
             <div className="hidden lg:block">
               <Greeting />
             </div>
@@ -345,6 +354,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
           </main>
         </div>
       </div>
+      </ShortcutsProvider>
     </AuthorProvider>
   )
 }

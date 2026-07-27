@@ -1,11 +1,10 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { generateHTML } from '@tiptap/html'
 import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
 import { Mark, mergeAttributes, type JSONContent } from '@tiptap/core'
-import { LuPin, LuX } from 'react-icons/lu'
 import { Footnote } from '@/lib/extensions/footnote'
 import { CharacterMark } from '@/lib/extensions/character'
 import { ParagraphIndent } from '@/lib/extensions/paragraphIndent'
@@ -91,79 +90,17 @@ export type PinnedText = {
   content: string
 }
 
-const MIN_WIDTH = 280
-
-export default function ReferencePanel({
-  pins,
-  width,
-  onWidthChange,
-  onCloseAll,
-}: {
-  pins: PinnedText[]
-  width: number
-  onWidthChange: (width: number) => void
-  onCloseAll: () => void
-}) {
-  const [dragging, setDragging] = useState(false)
-  const draggingRef = useRef(false)
-
-  function onPointerMove(e: React.PointerEvent) {
-    if (!draggingRef.current) return
-    // Panel is docked to the viewport's right edge, so its width is the gap
-    // between the pointer and that edge. Clamp to a sane band.
-    const max = Math.min(720, Math.round(window.innerWidth * 0.6))
-    onWidthChange(Math.min(Math.max(window.innerWidth - e.clientX, MIN_WIDTH), max))
-  }
-
+// The stack of pinned snapshots. Content only — the panel frame (width, drag
+// handle, tab strip, close) belongs to SidePanel, which this shares with the
+// chapter notes tab.
+export function ReferenceList({ pins }: { pins: PinnedText[] }) {
   return (
-    <aside
-      style={{ width }}
-      className="relative z-30 shrink-0 border-l border-accent/10 bg-surface-raised"
-    >
-      {/* Drag handle on the left edge — pointer capture keeps the drag alive
-          even when the cursor moves off the thin strip. */}
-      <div
-        onPointerDown={e => {
-          e.preventDefault()
-          e.currentTarget.setPointerCapture(e.pointerId)
-          draggingRef.current = true
-          setDragging(true)
-        }}
-        onPointerMove={onPointerMove}
-        onPointerUp={e => {
-          e.currentTarget.releasePointerCapture(e.pointerId)
-          draggingRef.current = false
-          setDragging(false)
-        }}
-        style={{ touchAction: 'none' }}
-        title="Drag to resize"
-        className="absolute left-0 top-0 z-20 h-full w-2 -translate-x-1/2 cursor-col-resize group/resize"
-      >
-        <span className={`absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 transition-colors ${dragging ? 'bg-accent' : 'bg-transparent group-hover/resize:bg-accent/40'}`} />
-      </div>
-
-      <div className="sticky top-0 h-[calc(100vh-3.75rem-var(--loom-footer-h,0px))] overflow-y-auto flex flex-col">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-accent/10 shrink-0">
-          <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-ink-muted">
-            <LuPin size={13} /> Reference
-          </span>
-          <button
-            onClick={onCloseAll}
-            title="Close all"
-            className="ml-auto text-ink-faint hover:text-ink transition shrink-0"
-          >
-            <LuX size={15} />
-          </button>
+    <div className="flex-1 p-4 space-y-4">
+      {pins.map(pin => (
+        <div key={pin.pinId} className="border-b border-accent/10 pb-4 last:border-0 last:pb-0">
+          <RefProse content={pin.content} />
         </div>
-
-        <div className="flex-1 p-4 space-y-4">
-          {pins.map(pin => (
-            <div key={pin.pinId} className="border-b border-accent/10 pb-4 last:border-0 last:pb-0">
-              <RefProse content={pin.content} />
-            </div>
-          ))}
-        </div>
-      </div>
-    </aside>
+      ))}
+    </div>
   )
 }
