@@ -14,8 +14,13 @@ import Greeting from '@/components/Greeting'
 export default function HomeLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? '/'
   const [lightMode, setLightMode] = useState(false)
+  // Greeting/toggle/avatar all read from localStorage or fetch after mount;
+  // gating them behind `mounted` swaps a pulsing placeholder in for that gap
+  // instead of letting the greeting text and toggle position pop in late.
+  const [mounted, setMounted] = useState(false)
   useEffect(() => {
     setLightMode(localStorage.getItem('loom-light-mode') === 'true')
+    setMounted(true)
   }, [])
 
   function toggleLightMode() {
@@ -54,21 +59,31 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
           </Link>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <Greeting />
-          <button
-            role="switch"
-            aria-checked={lightMode}
-            onClick={toggleLightMode}
-            title={lightMode ? 'Switch to dark mode' : 'Switch to light mode'}
-            className="flex items-center gap-1.5 text-ink-faint hover:text-ink transition"
-          >
-            <LuMoon size={13} />
-            <span className={`relative inline-flex w-9 h-5 rounded-full transition-colors duration-200 ${lightMode ? 'bg-accent' : 'bg-surface-muted'}`}>
-              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${lightMode ? 'left-4' : 'left-0.5'}`} />
-            </span>
-            <LuSun size={13} />
-          </button>
-          <AvatarButton />
+          {mounted ? (
+            <>
+              <Greeting />
+              <button
+                role="switch"
+                aria-checked={lightMode}
+                onClick={toggleLightMode}
+                title={lightMode ? 'Switch to dark mode' : 'Switch to light mode'}
+                className="flex items-center gap-1.5 text-ink-faint hover:text-ink transition"
+              >
+                <LuMoon size={13} />
+                <span className={`relative inline-flex w-9 h-5 rounded-full transition-colors duration-200 ${lightMode ? 'bg-accent' : 'bg-surface-muted'}`}>
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${lightMode ? 'left-4' : 'left-0.5'}`} />
+                </span>
+                <LuSun size={13} />
+              </button>
+              <AvatarButton />
+            </>
+          ) : (
+            <div className="flex items-center gap-2 animate-pulse">
+              <div className="h-4 w-28 bg-surface-muted rounded" />
+              <div className="w-9 h-5 rounded-full bg-surface-muted" />
+              <div className="w-10 h-10 rounded-full bg-surface-muted" />
+            </div>
+          )}
         </div>
       </nav>
 

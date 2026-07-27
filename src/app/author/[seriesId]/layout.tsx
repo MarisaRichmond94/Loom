@@ -165,18 +165,46 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
   if (!series) {
     return (
       <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
-        {/* Top nav — logo stays static, dynamic bits become pulsing placeholders. */}
+        {/* Top nav skeleton — mirrors the loaded nav below element-for-element
+            (same breakpoints, same right-side cluster) so there's no layout
+            jump when `series` resolves. bookId/chapterId come from route
+            params, which are known before the fetch finishes, so the
+            breadcrumb chain already has the right number of segments. */}
         <nav className="bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2 shrink-0">
             <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
-            <span className="text-accent font-bold tracking-wider text-2xl leading-none">LOOM</span>
+            <span className="hidden xl:inline text-accent font-bold tracking-wider text-2xl leading-none">LOOM</span>
           </Link>
-          <span className="text-ink-faint self-center">›</span>
-          <div className="h-4 w-40 bg-surface-muted rounded animate-pulse" />
-          <div className="ml-auto flex items-center gap-2 animate-pulse">
-            <div className="h-4 w-28 bg-surface-muted rounded" />
-            <div className="w-9 h-5 rounded-full bg-surface-muted" />
-            <div className="w-8 h-8 rounded-full bg-surface-muted" />
+          <span className="text-ink-faint self-center shrink-0">›</span>
+          <div className="h-4 w-32 max-w-[200px] bg-surface-muted rounded animate-pulse" />
+          {bookId && (
+            <>
+              <span className="text-ink-faint self-center shrink-0">›</span>
+              <div className="h-4 w-24 max-w-[180px] bg-surface-muted rounded animate-pulse" />
+            </>
+          )}
+          {chapterId && (
+            <>
+              <span className="text-ink-faint self-center shrink-0">›</span>
+              <div className="h-4 w-24 max-w-[180px] bg-surface-muted rounded animate-pulse" />
+            </>
+          )}
+          <div className="self-center shrink-0 ml-1 p-1">
+            <div className="w-3.5 h-3.5 rounded bg-surface-muted animate-pulse" />
+          </div>
+          <div className="ml-auto flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-2 animate-pulse">
+              <div className="w-4 h-4 rounded bg-surface-muted" />
+              <div className="h-7 w-72 rounded-lg bg-surface-muted" />
+            </div>
+            <div className="hidden lg:block h-4 w-28 bg-surface-muted rounded animate-pulse" />
+            <div className="flex items-center gap-1.5 animate-pulse">
+              <div className="w-3.5 h-3.5 rounded-full bg-surface-muted" />
+              <div className="w-9 h-5 rounded-full bg-surface-muted" />
+              <div className="w-3.5 h-3.5 rounded-full bg-surface-muted" />
+            </div>
+            <div className="w-4 h-4 rounded bg-surface-muted animate-pulse" />
+            <div className="w-10 h-10 rounded-full bg-surface-muted animate-pulse" />
           </div>
         </nav>
 
