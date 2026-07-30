@@ -2,18 +2,16 @@
 
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { LuChevronLeft, LuChevronRight, LuMoon, LuSparkles, LuSun } from 'react-icons/lu'
+import { LuChevronLeft, LuChevronRight } from 'react-icons/lu'
 import OutlineTree from '@/components/sidebar/OutlineTree'
 import VariablesPanel from '@/components/sidebar/VariablesPanel'
 import ChoicesPanel from '@/components/sidebar/ChoicesPanel'
-import AvatarButton from '@/components/AvatarButton'
-import NotificationBell from '@/components/NotificationBell'
+import AppHeader from '@/components/AppHeader'
 import ToastLayer from '@/components/ToastLayer'
-import Greeting from '@/components/Greeting'
 import SearchBar from '@/components/SearchBar'
 import ShortcutsMenu from '@/components/ShortcutsMenu'
 import { ShortcutsProvider } from '@/lib/shortcuts'
+import { useLightMode } from '@/lib/useLightMode'
 import { AuthorProvider, type AuthorSeries } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
@@ -30,22 +28,13 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
   const [series, setSeries] = useState<AuthorSeries | null>(null)
   const [choiceQuestions, setChoiceQuestions] = useState<ChoiceQuestion[]>([])
   const [knownStringValues, setKnownStringValues] = useState<Record<string, string[]>>({})
-  const [lightMode, setLightMode] = useState(false)
+  const { lightMode, toggleLightMode } = useLightMode()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [edgeHovered, setEdgeHovered] = useState(false)
   const edgeLeaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
-    setLightMode(localStorage.getItem('loom-light-mode') === 'true')
     setSidebarCollapsed(localStorage.getItem('loom-sidebar-collapsed') === 'true')
   }, [])
-
-  function toggleLightMode() {
-    setLightMode(prev => {
-      const next = !prev
-      localStorage.setItem('loom-light-mode', String(next))
-      return next
-    })
-  }
 
   function onEdgeEnter() {
     if (edgeLeaveTimer.current) clearTimeout(edgeLeaveTimer.current)
@@ -165,48 +154,27 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
   if (!series) {
     return (
       <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
-        {/* Top nav skeleton — mirrors the loaded nav below element-for-element
-            (same breakpoints, same right-side cluster) so there's no layout
-            jump when `series` resolves. bookId/chapterId come from route
-            params, which are known before the fetch finishes, so the
-            breadcrumb chain already has the right number of segments. */}
-        <nav className="bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
-          <Link href="/" className="flex items-center gap-2 shrink-0">
-            <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
-            <span className="hidden xl:inline text-accent font-bold tracking-wider text-2xl leading-none">LOOM</span>
-          </Link>
-          <span className="text-ink-faint self-center shrink-0">›</span>
-          <div className="h-4 w-32 max-w-[200px] bg-surface-muted rounded animate-pulse" />
-          {bookId && (
-            <>
-              <span className="text-ink-faint self-center shrink-0">›</span>
-              <div className="h-4 w-24 max-w-[180px] bg-surface-muted rounded animate-pulse" />
-            </>
-          )}
-          {chapterId && (
-            <>
-              <span className="text-ink-faint self-center shrink-0">›</span>
-              <div className="h-4 w-24 max-w-[180px] bg-surface-muted rounded animate-pulse" />
-            </>
-          )}
-          <div className="self-center shrink-0 ml-1 p-1">
-            <div className="w-3.5 h-3.5 rounded bg-surface-muted animate-pulse" />
-          </div>
-          <div className="ml-auto flex items-center gap-3 shrink-0">
-            <div className="flex items-center gap-2 animate-pulse">
-              <div className="w-4 h-4 rounded bg-surface-muted" />
-              <div className="h-7 w-72 rounded-lg bg-surface-muted" />
-            </div>
-            <div className="hidden lg:block h-4 w-28 bg-surface-muted rounded animate-pulse" />
-            <div className="flex items-center gap-1.5 animate-pulse">
-              <div className="w-3.5 h-3.5 rounded-full bg-surface-muted" />
-              <div className="w-9 h-5 rounded-full bg-surface-muted" />
-              <div className="w-3.5 h-3.5 rounded-full bg-surface-muted" />
-            </div>
-            <div className="w-4 h-4 rounded bg-surface-muted animate-pulse" />
-            <div className="w-10 h-10 rounded-full bg-surface-muted animate-pulse" />
-          </div>
-        </nav>
+        {/* Same component as the loaded state, in its loading form — no longer
+            a hand-maintained copy of the nav. crumbCount comes from route
+            params, which are known before the fetch resolves, so the breadcrumb
+            chain already has the right number of segments and nothing reflows
+            when the titles arrive. */}
+        <AppHeader
+          // series › book › chapter. A chapter route has no bookId param — the
+          // book is derived from the chapter once data lands — so chapterId
+          // implies THREE segments, not two. Counting params directly (what the
+          // old skeleton did) under-counted by one on every chapter page, and
+          // the header jumped sideways when the titles arrived.
+          crumbCount={chapterId ? 3 : bookId ? 2 : 1}
+          hasTools
+          showBell
+          showAppSwitch
+          compactWordmark
+          compactGreeting
+          lightMode={lightMode}
+          onToggleLightMode={toggleLightMode}
+          loading
+        />
 
         <div className="flex flex-1 overflow-hidden">
           {/* Sidebar — outline / choices / variables panels mocked. */}
@@ -250,52 +218,32 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
     <AuthorProvider value={{ series, loadSeries, loadChoices, lightMode, knownStringValues }}>
       <ShortcutsProvider>
       <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
-        {/* Header collapses progressively as width shrinks so the breadcrumbs
-            and right-side controls never wrap onto a second line:
-              - below xl (1280px): hide the "LOOM" wordmark, logo stays
-              - below lg (1024px): hide the greeting
-              - always: cap breadcrumb segments and truncate with a title
-                attribute so the full label is one hover away */}
-        <nav className="bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
-          <Link href="/" className="flex items-center gap-2 shrink-0">
-            <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
-            <span className="hidden xl:inline text-accent font-bold tracking-wider text-2xl leading-none">LOOM</span>
-          </Link>
-          <span className="text-ink-faint self-center shrink-0">›</span>
-          {activeBook || activeChapter ? (
-            <Link href={`/author/${seriesId}`} title={series.title} className="text-ink-muted hover:text-ink self-center truncate max-w-[200px]">{series.title}</Link>
-          ) : (
-            <span title={series.title} className="text-ink self-center truncate max-w-[200px]">{series.title}</span>
-          )}
-          {activeBook && (
-            <>
-              <span className="text-ink-faint self-center shrink-0">›</span>
-              {activeChapter ? (
-                <Link href={`/author/${seriesId}/book/${activeBook.id}`} title={activeBook.title} className="text-ink-muted hover:text-ink self-center truncate max-w-[180px]">{activeBook.title}</Link>
-              ) : (
-                <span title={activeBook.title} className="text-ink self-center truncate max-w-[180px]">{activeBook.title}</span>
-              )}
-            </>
-          )}
-          {activeChapter && (
-            <>
-              <span className="text-ink-faint self-center shrink-0">›</span>
-              <span title={activeChapter.title} className="text-ink self-center truncate max-w-[180px]">{activeChapter.title}</span>
-            </>
-          )}
-          {/* Jump to the companion WriteAI app (same tab — the browser's
-              back button is the return trip). */}
-          <a
-            href={process.env.NEXT_PUBLIC_WRITEAI_URL ?? 'http://localhost:5173'}
-            title="Open WriteAI"
-            className="self-center shrink-0 ml-1 p-1 rounded text-ink-faint hover:text-accent hover:bg-accent/10 transition"
-          >
-            <LuSparkles size={14} />
-          </a>
-          <div className="ml-auto flex items-center gap-3 shrink-0">
-            {/* Shortcuts sits 8px from the search bar rather than the header's
-                usual 12px — the tighter seam reads as one "find things" cluster
-                and keeps the menu visually owned by the bar it documents. */}
+        {/* Progressive collapse lives in AppHeader: below xl the wordmark
+            hides (logo stays), below lg the greeting hides, and breadcrumb
+            segments cap + truncate with a title attribute so the full label is
+            one hover away. Together they keep the header on one line. */}
+        <AppHeader
+          crumbs={[
+            {
+              label: series.title,
+              href: activeBook || activeChapter ? `/author/${seriesId}` : undefined,
+              maxWidth: 'max-w-[200px]',
+            },
+            ...(activeBook
+              ? [{
+                  label: activeBook.title,
+                  href: activeChapter ? `/author/${seriesId}/book/${activeBook.id}` : undefined,
+                  maxWidth: 'max-w-[180px]',
+                }]
+              : []),
+            ...(activeChapter
+              ? [{ label: activeChapter.title, maxWidth: 'max-w-[180px]' }]
+              : []),
+          ]}
+          tools={
+            /* Shortcuts sits 8px from the search bar rather than the header's
+               usual 12px — the tighter seam reads as one "find things" cluster
+               and keeps the menu visually owned by the bar it documents. */
             <div className="flex items-center gap-2">
               <ShortcutsMenu />
               <SearchBar
@@ -303,26 +251,14 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
                 books={series.books.map(b => ({ id: b.id, title: b.title }))}
               />
             </div>
-            <div className="hidden lg:block">
-              <Greeting />
-            </div>
-            <button
-              role="switch"
-              aria-checked={lightMode}
-              onClick={toggleLightMode}
-              title={lightMode ? 'Switch to dark mode' : 'Switch to light mode'}
-              className="flex items-center gap-1.5 text-ink-faint hover:text-ink transition"
-            >
-              <LuMoon size={13} />
-              <span className={`relative inline-flex w-9 h-5 rounded-full transition-colors duration-200 ${lightMode ? 'bg-accent' : 'bg-surface-muted'}`}>
-                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${lightMode ? 'left-4' : 'left-0.5'}`} />
-              </span>
-              <LuSun size={13} />
-            </button>
-            <NotificationBell />
-            <AvatarButton />
-          </div>
-        </nav>
+          }
+          showBell
+          showAppSwitch
+          compactWordmark
+          compactGreeting
+          lightMode={lightMode}
+          onToggleLightMode={toggleLightMode}
+        />
 
         <ToastLayer />
         <div className="flex flex-1 overflow-hidden">

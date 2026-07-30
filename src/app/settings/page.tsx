@@ -1,13 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { LuMoon, LuSun, LuShield, LuPlay, LuFolderOpen, LuUser, LuX, LuCheck, LuArrowLeft } from 'react-icons/lu'
+import { LuShield, LuPlay, LuFolderOpen, LuUser, LuX, LuCheck, LuArrowLeft } from 'react-icons/lu'
 import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
-import Greeting from '@/components/Greeting'
-import AvatarButton from '@/components/AvatarButton'
+import AppHeader from '@/components/AppHeader'
+import { useLightMode } from '@/lib/useLightMode'
 import ExportFormattingSection from '@/components/ExportFormattingSection'
 import CanonSaveLocationSection from '@/components/CanonSaveLocationSection'
 import ManuscriptTemplateSection from '@/components/ManuscriptTemplateSection'
@@ -39,10 +38,7 @@ type BackupSettings = {
 
 export default function SettingsPage() {
   const router = useRouter()
-  const [lightMode, setLightMode] = useState(false)
-  useEffect(() => {
-    setLightMode(localStorage.getItem('loom-light-mode') === 'true')
-  }, [])
+  const { lightMode, toggleLightMode } = useLightMode()
   const [authorName, setAuthorName] = useState('')
   const [backup, setBackup] = useState<BackupSettings>({
     enabled: false,
@@ -140,14 +136,6 @@ export default function SettingsPage() {
     setImageSrc(null)
     setZoom(1)
     setCrop({ x: 0, y: 0 })
-  }
-
-  function toggleLightMode() {
-    setLightMode(prev => {
-      const next = !prev
-      localStorage.setItem('loom-light-mode', String(next))
-      return next
-    })
   }
 
   async function handleAuthorNameBlur() {
@@ -257,31 +245,11 @@ export default function SettingsPage() {
 
   return (
     <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
-      <nav className="sticky top-0 z-10 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
-        <Link href="/" className="flex items-center gap-2">
-          <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
-          <span className="text-accent font-bold tracking-wider text-2xl leading-none">LOOM</span>
-        </Link>
-        <span className="text-ink-faint self-center">›</span>
-        <span className="text-ink self-center">Settings</span>
-        <div className="ml-auto flex items-center gap-2">
-          <Greeting />
-          <button
-            role="switch"
-            aria-checked={lightMode}
-            onClick={toggleLightMode}
-            title={lightMode ? 'Switch to dark mode' : 'Switch to light mode'}
-            className="flex items-center gap-1.5 text-ink-faint hover:text-ink transition"
-          >
-            <LuMoon size={13} />
-            <span className={`relative inline-flex w-9 h-5 rounded-full transition-colors duration-200 ${lightMode ? 'bg-accent' : 'bg-surface-muted'}`}>
-              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${lightMode ? 'left-4' : 'left-0.5'}`} />
-            </span>
-            <LuSun size={13} />
-          </button>
-          <AvatarButton />
-        </div>
-      </nav>
+      <AppHeader
+        crumbs={[{ label: 'Settings' }]}
+        lightMode={lightMode}
+        onToggleLightMode={toggleLightMode}
+      />
 
       <main className={`flex-1 overflow-y-auto${lightMode ? ' light-body' : ''}`}>
         <div className="px-8 py-10">

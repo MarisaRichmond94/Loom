@@ -1,9 +1,8 @@
 'use client'
 
 import { useState, useEffect, useMemo, useRef, memo, type CSSProperties } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { LuMoon, LuSun, LuArrowLeft, LuArrowRight, LuMusic, LuUser, LuSlidersHorizontal, LuCopy, LuCheck } from 'react-icons/lu'
+import { LuArrowLeft, LuArrowRight, LuMusic, LuUser, LuSlidersHorizontal, LuCopy, LuCheck } from 'react-icons/lu'
 import { generateHTML } from '@tiptap/html'
 import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
@@ -26,8 +25,8 @@ import InlineBadEnding from './InlineBadEnding'
 // load their chunks then instead of with every reader page.
 const ChoiceConfigModal = dynamic(() => import('./ChoiceConfigModal'), { ssr: false })
 const BadEndingModal = dynamic(() => import('./BadEndingModal'), { ssr: false })
-import AvatarButton from '@/components/AvatarButton'
-import Greeting from '@/components/Greeting'
+import AppHeader from '@/components/AppHeader'
+import { useLightMode } from '@/lib/useLightMode'
 import PinnedAudio from '@/components/PinnedAudio'
 import NarrationBar from './NarrationBar'
 import { stripEmptyParagraphs, htmlToPlainText, inlineParagraphStyles, educateHtml, educateQuotes, PASTE_FONT_FAMILY } from '@/lib/clipboardFormatting'
@@ -169,10 +168,7 @@ export default function ReaderView({
   const router = useRouter()
   const mainRef = useRef<HTMLElement>(null)
   const [pendingChoiceBlock, setPendingChoiceBlock] = useState<Block | null>(null)
-  const [lightMode, setLightMode] = useState(false)
-  useEffect(() => {
-    setLightMode(localStorage.getItem('loom-light-mode') === 'true')
-  }, [])
+  const { lightMode, toggleLightMode } = useLightMode()
   const [charCard, setCharCard] = useState<{ character: Character; x: number; y: number; above: boolean } | null>(null)
   // Scroll progress is written straight to the DOM (bar width) instead of
   // React state — a per-scroll-event setState re-rendered the whole chapter.
@@ -272,13 +268,6 @@ export default function ReaderView({
   // made the reveal feel disorienting. Choices now just reveal the next
   // text in place; the reader scrolls themselves when ready.
 
-  function toggleLightMode() {
-    setLightMode(m => {
-      const next = !m
-      localStorage.setItem('loom-light-mode', String(next))
-      return next
-    })
-  }
 
   useEffect(() => {
     if (characters.length === 0) return
@@ -514,29 +503,7 @@ export default function ReaderView({
 
   return (
     <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
-      <nav className="bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center justify-between z-30">
-        <Link href="/" className="flex items-center gap-2">
-          <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
-          <span className="text-accent font-bold tracking-wider text-2xl leading-none">LOOM</span>
-        </Link>
-        <div className="flex items-center gap-2">
-          <Greeting />
-          <button
-            role="switch"
-            aria-checked={lightMode}
-            onClick={toggleLightMode}
-            title={lightMode ? 'Switch to dark mode' : 'Switch to light mode'}
-            className="flex items-center gap-1.5 text-ink-faint hover:text-ink transition"
-          >
-            <LuMoon size={13} />
-            <span className={`relative inline-flex w-9 h-5 rounded-full transition-colors duration-200 ${lightMode ? 'bg-accent' : 'bg-surface-muted'}`}>
-              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${lightMode ? 'left-4' : 'left-0.5'}`} />
-            </span>
-            <LuSun size={13} />
-          </button>
-          <AvatarButton />
-        </div>
-      </nav>
+      <AppHeader lightMode={lightMode} onToggleLightMode={toggleLightMode} />
 
       <main ref={mainRef} className={`flex-1 overflow-y-auto px-8${lightMode ? ' light-body' : ''}`}>
         {/* Sticky action row */}
