@@ -30,6 +30,16 @@ export function useWriteAiReview(seriesId: string) {
     // at WriteAI when the export lands, or closed if the export fails.
     const tab = window.open('', '_blank')
     if (tab) {
+      // This splash is a SEPARATE document, so Loom's CSS variables cannot
+      // reach it — the background was hardcoded and stayed on the old palette
+      // under UNIFIED_CHROME (KAN-17). Resolve the token here and interpolate
+      // it in. The fallback is a deliberately neutral dark rather than a copy
+      // of a palette value — a stale token literal here would be exactly the
+      // bug this fixes.
+      const splashBg =
+        getComputedStyle(document.documentElement)
+          .getPropertyValue('--color-surface-raised')
+          .trim() || '#111'
       tab.document.open()
       tab.document.write(`<!doctype html>
 <html data-mode="dark">
@@ -37,7 +47,7 @@ export function useWriteAiReview(seriesId: string) {
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
-body{display:flex;flex-direction:column;align-items:center;justify-content:center;background:#12121e;font:13px/1.5 system-ui,sans-serif}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;background:${splashBg};font:13px/1.5 system-ui,sans-serif}
 canvas{width:260px;aspect-ratio:420/380;display:block}
 p{margin-top:-8px;color:#9ca3af;letter-spacing:.01em}
 </style>

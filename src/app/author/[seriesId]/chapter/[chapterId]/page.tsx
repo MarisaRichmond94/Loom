@@ -1118,23 +1118,20 @@ export default function ChapterEditorPage() {
             (the layout's only scroll container).
           - -mx-8 px-8 stretches the top border edge-to-edge while keeping
             the button column lined up with the rest of the page.
-          - The inline style overrides surface/ink CSS variables back to
-            the dark theme so the footer stays dark in light mode too —
-            matches the reader, which gets that for free by living
-            outside the light-body wrapper. */}
+          - .chrome-dark keeps the footer dark in light mode too — matching
+            the reader, which gets that for free by living outside the
+            light-body wrapper. It used to hardcode the dark hexes inline,
+            which pinned the bar to the old palette no matter what
+            UNIFIED_CHROME said (KAN-17). */}
       <footer
         ref={footerRef}
         style={{
-          '--color-surface-raised': '#12121e',
-          '--color-ink': '#e0d9c8',
-          '--color-ink-muted': '#aaa',
-          '--color-ink-faint': '#666',
           // When the reference panel is open, stretch the bar back out to the
           // full width so it looks identical to its closed state — the panel
           // ends at the footer's top, so the buttons never collide with it.
           marginRight: panelOpen ? `calc(-2rem - ${panelWidth}px)` : undefined,
         } as React.CSSProperties}
-        className="sticky bottom-0 z-40 -mx-8 px-4 py-4 bg-surface-raised border-t border-accent/10 flex items-center justify-between gap-4"
+        className="chrome-dark sticky bottom-0 z-40 -mx-8 px-4 py-4 bg-surface-raised border-t border-accent/10 flex items-center justify-between gap-4"
       >
         {prevChapter ? (
           <button

@@ -52,15 +52,10 @@ export default function ChapterSkeleton() {
       </div>
 
       {/* Footer placeholder — three slots match the prev / scroll / next
-          layout the real page renders. Forces the dark theme via the same
-          CSS-variable overrides so the bar stays dark in light mode. */}
-      <div
-        style={{
-          '--color-surface-raised': '#12121e',
-          '--color-surface-muted': '#1e1e3a',
-        } as React.CSSProperties}
-        className="sticky bottom-0 z-20 -mx-8 px-8 py-4 bg-surface-raised border-t border-accent/10 flex items-center justify-between gap-4"
-      >
+          layout the real page renders. .chrome-dark keeps the bar dark inside
+          light mode; it previously hardcoded the dark hexes inline, which
+          pinned it to the old palette regardless of the flag (KAN-17). */}
+      <div className="chrome-dark sticky bottom-0 z-20 -mx-8 px-8 py-4 bg-surface-raised border-t border-accent/10 flex items-center justify-between gap-4">
         <div className="h-4 w-24 bg-surface-muted rounded" />
         <div className="h-4 w-32 bg-surface-muted rounded" />
         <div className="h-4 w-24 bg-surface-muted rounded" />

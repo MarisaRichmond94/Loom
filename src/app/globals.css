@@ -60,6 +60,45 @@
   --color-ink-faint: #5c627a;
   /* accent unchanged — Loom's #8888ff is the canonical accent. */
   --color-accent-muted: #4a4a7a;
+
+  /* Keep in step with the --color-* values directly above. */
+  --dark-surface-raised: #1a1d27;
+  --dark-surface-muted: #2a2d3a;
+  --dark-ink: #e8eaf0;
+  --dark-ink-muted: #9da3b4;
+  --dark-ink-faint: #5c627a;
+}
+
+/* ---------------------------------------------------------------------------
+   Always-dark chrome (KAN-17).
+
+   Some chrome must stay dark even inside .light-body — the chapter editor's
+   sticky footer and its skeleton, which mirror the reader's bars. The reader
+   gets this for free by living outside the light-body wrapper; these do not,
+   so they need dark values that survive it.
+
+   .light-body redefines --color-*, so var(--color-ink) inside it resolves
+   LIGHT. --dark-* is a parallel reference light mode never touches, and
+   .chrome-dark maps the theme tokens back onto it. Descendants then use
+   ordinary bg-surface-raised / text-ink utilities.
+
+   These were previously hardcoded hexes in inline styles, which pinned that
+   chrome to the old palette regardless of the flag.
+   --------------------------------------------------------------------------- */
+:root {
+  --dark-surface-raised: #12121e;
+  --dark-surface-muted: #1e1e3a;
+  --dark-ink: #e0d9c8;
+  --dark-ink-muted: #aaa;
+  --dark-ink-faint: #666;
+}
+
+.chrome-dark {
+  --color-surface-raised: var(--dark-surface-raised);
+  --color-surface-muted: var(--dark-surface-muted);
+  --color-ink: var(--dark-ink);
+  --color-ink-muted: var(--dark-ink-muted);
+  --color-ink-faint: var(--dark-ink-faint);
 }
 
 body {

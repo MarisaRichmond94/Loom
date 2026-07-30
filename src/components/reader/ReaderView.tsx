@@ -711,14 +711,29 @@ export default function ReaderView({
             left: charCard.x,
             top: charCard.above ? charCard.y - 8 : charCard.y + 8,
             transform: charCard.above ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
-            background: lightMode ? '#ffffff' : '#1a1a2e',
-            border: lightMode ? '1px solid #d4d0c8' : '1px solid rgba(136,136,255,0.25)',
+            // The card renders OUTSIDE the light-body wrapper, so it cannot
+            // inherit the page theme and has to branch by hand. The dark side
+            // now reads the tokens — it used to hardcode the old palette and
+            // so ignored UNIFIED_CHROME entirely (KAN-17). The light side keeps
+            // its own literals: this card has a bespoke light palette that the
+            // token set does not cover, and light mode is unchanged by the flag.
+            background: lightMode ? '#ffffff' : 'var(--color-surface-overlay)',
+            border: lightMode
+              ? '1px solid #d4d0c8'
+              : '1px solid color-mix(in srgb, var(--color-accent) 25%, transparent)',
             whiteSpace: 'nowrap',
           }}
         >
           <div
             className="rounded-full overflow-hidden flex items-center justify-center shrink-0"
-            style={{ width: 64, height: 64, border: lightMode ? '2px solid #d4d0c8' : '2px solid rgba(136,136,255,0.3)', background: lightMode ? '#ede9e0' : '#12121e' }}
+            style={{
+              width: 64,
+              height: 64,
+              border: lightMode
+                ? '2px solid #d4d0c8'
+                : '2px solid color-mix(in srgb, var(--color-accent) 30%, transparent)',
+              background: lightMode ? '#ede9e0' : 'var(--color-surface-raised)',
+            }}
           >
             {charCard.character.hasAvatar
               ? <img
@@ -730,14 +745,14 @@ export default function ReaderView({
                   alt={charCard.character.name}
                   className="w-full h-full object-cover"
                 />
-              : <LuUser size={28} style={{ color: lightMode ? '#888' : '#666' }} />
+              : <LuUser size={28} style={{ color: lightMode ? '#888' : 'var(--color-ink-faint)' }} />
             }
           </div>
           <div>
-            <p className="text-sm font-semibold" style={{ color: lightMode ? '#1a1a2a' : '#e0d9c8' }}>{charCard.character.name}</p>
+            <p className="text-sm font-semibold" style={{ color: lightMode ? '#1a1a2a' : 'var(--color-ink)' }}>{charCard.character.name}</p>
             {charCard.character.deceased
-              ? <p className="text-xs mt-0.5 italic uppercase tracking-widest" style={{ color: lightMode ? '#888' : '#888' }}>Deceased</p>
-              : charCard.character.age != null && <p className="text-xs mt-0.5" style={{ color: lightMode ? '#666' : '#aaa' }}>Age {charCard.character.age}</p>}
+              ? <p className="text-xs mt-0.5 italic uppercase tracking-widest" style={{ color: '#888' }}>Deceased</p>
+              : charCard.character.age != null && <p className="text-xs mt-0.5" style={{ color: lightMode ? '#666' : 'var(--color-ink-muted)' }}>Age {charCard.character.age}</p>}
           </div>
         </div>
       )}
