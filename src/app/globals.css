@@ -30,9 +30,44 @@
   --color-choice-teal-border: #205040;
 }
 
+/* ---------------------------------------------------------------------------
+   UNIFIED_CHROME (KAN-6) — the shared palette with WriteAI.
+
+   Redefining the @theme variables under a selector is exactly how .light-body
+   already works below; this is the same technique, not new machinery. Flag off
+   means the @theme block above applies untouched, so the old look is preserved
+   byte-for-byte as the comparison baseline.
+
+   Values are canonical and documented in TOKENS.md (mirrored in both repos).
+   Decisions: accent stays Loom's #8888ff; surfaces and ink adopt WriteAI's
+   cooler ramp. Token NAMES deliberately stay per-app — only values are shared,
+   which buys the whole visual result without renaming ~94 files.
+
+   Surfaces map by position so Loom's existing light-to-dark hierarchy is
+   preserved while the hue shifts from violet to neutral:
+     base -> surface, raised -> card, overlay -> hover, muted -> border.
+
+   Retirement: delete this block and the [data-chrome] plumbing when KAN-8
+   closes, promoting these values into @theme above.
+   --------------------------------------------------------------------------- */
+[data-chrome="v2"] {
+  --color-surface-base: #0f1117;
+  --color-surface-raised: #1a1d27;
+  --color-surface-overlay: #21253a;
+  --color-surface-muted: #2a2d3a;
+  --color-ink: #e8eaf0;
+  --color-ink-muted: #9da3b4;
+  --color-ink-faint: #5c627a;
+  /* accent unchanged — Loom's #8888ff is the canonical accent. */
+  --color-accent-muted: #4a4a7a;
+}
+
 body {
-  background-color: #0d0d18;
-  color: #e0d9c8;
+  /* var() rather than literals so both .light-body and [data-chrome] reach the
+     page background. These were hardcoded, which would have left the body dark
+     violet no matter what the flag said. */
+  background-color: var(--color-surface-base);
+  color: var(--color-ink);
   cursor: default;
 }
 
@@ -63,9 +98,11 @@ button, a, select, [role="button"] {
   bottom: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
-  background: #1a1a2e;
-  color: #e0d9c8;
-  border: 1px solid rgba(136, 136, 255, 0.2);
+  /* Tokenised (KAN-6): the footnote tooltip used to hardcode the old violet
+     overlay and cream ink, so it stayed on the old palette under the flag. */
+  background: var(--color-surface-overlay);
+  color: var(--color-ink);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 20%, transparent);
   border-radius: 6px;
   padding: 6px 10px;
   font-size: 0.75rem;
@@ -85,10 +122,15 @@ button, a, select, [role="button"] {
 }
 
 .character-ref {
-  color: rgba(var(--color-accent-rgb, 136, 136, 255), 0.85);
+  /* Was rgba(var(--color-accent-rgb, 136, 136, 255), …) — but
+     --color-accent-rgb is defined nowhere, so the literal fallback was always
+     what rendered. A dead var reference reads as tokenised while behaving like
+     a hardcode, which is worse than an honest literal. color-mix works
+     directly off the hex token (KAN-6). */
+  color: color-mix(in srgb, var(--color-accent) 85%, transparent);
   text-decoration: underline;
   text-decoration-style: dotted;
-  text-decoration-color: rgba(var(--color-accent-rgb, 136, 136, 255), 0.4);
+  text-decoration-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
   cursor: default;
 }
 
@@ -105,8 +147,9 @@ button, a, select, [role="button"] {
   transition: background-color 0.1s linear, box-shadow 0.1s linear;
 }
 .narration-word.is-active {
-  background-color: rgba(var(--color-accent-rgb, 136, 136, 255), 0.32);
-  box-shadow: 0 0 0 1px rgba(var(--color-accent-rgb, 136, 136, 255), 0.3);
+  /* Same dead --color-accent-rgb reference as .character-ref had (KAN-6). */
+  background-color: color-mix(in srgb, var(--color-accent) 32%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
 
 /* Highlight for series-search matches across the chapter editor. Pale
@@ -185,5 +228,7 @@ mark.search-match,
 
 .light-body .ProseMirror,
 .light-body .ProseMirror * {
-  color: #1a1a2a;
+  /* var() rather than the literal (KAN-6) — same value, but it now tracks
+     --color-ink instead of silently drifting if the light palette changes. */
+  color: var(--color-ink);
 }
