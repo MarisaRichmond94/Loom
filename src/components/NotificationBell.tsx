@@ -39,7 +39,7 @@ export default function NotificationBell() {
         title="Notifications"
         className="relative p-1 rounded text-ink-faint hover:text-ink transition"
       >
-        <LuBell size={15} />
+        <LuBell size={16} />
         {busy && (
           <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-accent animate-pulse" />
         )}

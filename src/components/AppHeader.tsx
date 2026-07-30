@@ -79,7 +79,7 @@ export default function AppHeader({
   loading = false,
 }: Props) {
   return (
-    <nav className="sticky top-0 z-30 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
+    <nav className="font-chrome sticky top-0 z-30 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
       <Link href="/" className="shrink-0" aria-label="Loom">
         <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
       </Link>
@@ -148,7 +148,7 @@ export default function AppHeader({
               title={lightMode ? 'Switch to dark mode' : 'Switch to light mode'}
               className="flex items-center gap-1.5 text-ink-faint hover:text-ink transition"
             >
-              <LuMoon size={13} />
+              <LuMoon size={14} />
               <span
                 className={`relative inline-flex w-9 h-5 rounded-full transition-colors duration-200 ${
                   lightMode ? 'bg-accent' : 'bg-surface-muted'
@@ -160,7 +160,7 @@ export default function AppHeader({
                   }`}
                 />
               </span>
-              <LuSun size={13} />
+              <LuSun size={14} />
             </button>
             {showBell && <NotificationBell />}
             <AvatarButton />
