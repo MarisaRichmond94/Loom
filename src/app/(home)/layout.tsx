@@ -2,17 +2,18 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
 import { LuMoon, LuSun } from 'react-icons/lu'
 import AvatarButton from '@/components/AvatarButton'
 import Greeting from '@/components/Greeting'
 
-// Top-level shell for the marketing/home routes (Write + Explore). Provides
-// the logo, the Write | Explore tab pair, and the right-side greeting +
-// light-mode toggle + avatar. Author pages, reader pages, and preview pages
-// each have their own chrome and don't sit under this layout.
+// Top-level shell for the home routes. Provides the logo and the right-side
+// greeting + light-mode toggle + avatar. Author pages, reader pages, and
+// preview pages each have their own chrome and don't sit under this layout.
+//
+// The Write | Explore tab pair was removed with KAN-9: /explore became /read
+// and is orphaned pending a decision about the reader-facing browse, so the
+// pair had one destination left and nothing to switch between.
 export default function HomeLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname() ?? '/'
   const [lightMode, setLightMode] = useState(false)
   // Greeting/toggle/avatar all read from localStorage or fetch after mount;
   // gating them behind `mounted` swaps a pulsing placeholder in for that gap
@@ -31,11 +32,6 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
     })
   }
 
-  // Write is the root index; Explore lives at /explore (and future
-  // explore-rooted routes still light up the tab).
-  const isExplore = pathname.startsWith('/explore')
-  const isWrite = !isExplore
-
   return (
     <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
       <nav className="sticky top-0 z-10 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-6 text-sm">
@@ -43,21 +39,6 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
           <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
           <span className="text-accent font-bold tracking-wider text-2xl leading-none">LOOM</span>
         </Link>
-        <div className="flex items-center gap-3 text-sm">
-          <Link
-            href="/"
-            className={`transition ${isWrite ? 'text-accent font-medium' : 'text-ink-muted hover:text-ink'}`}
-          >
-            Write
-          </Link>
-          <span className="text-ink-faint">|</span>
-          <Link
-            href="/explore"
-            className={`transition ${isExplore ? 'text-accent font-medium' : 'text-ink-muted hover:text-ink'}`}
-          >
-            Explore
-          </Link>
-        </div>
         <div className="ml-auto flex items-center gap-2">
           {mounted ? (
             <>
