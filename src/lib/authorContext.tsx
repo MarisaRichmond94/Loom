@@ -9,6 +9,10 @@ export type AuthorSeries = {
   id: string
   title: string
   description?: string
+  // A stand-alone book is a Series with standalone:true and exactly one Book
+  // (see POST /api/series). Decides whether the UI says "book" or "series",
+  // and where the project switcher's name link points.
+  standalone: boolean
   // Stored on the server as JSON strings; the layout parses them once when
   // fetching the series so consumers get plain arrays. Empty arrays are
   // the unset sentinel.

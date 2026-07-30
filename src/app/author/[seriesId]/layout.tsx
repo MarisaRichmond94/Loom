@@ -155,21 +155,14 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
     return (
       <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
         {/* Same component as the loaded state, in its loading form — no longer
-            a hand-maintained copy of the nav. crumbCount comes from route
-            params, which are known before the fetch resolves, so the breadcrumb
-            chain already has the right number of segments and nothing reflows
-            when the titles arrive. */}
+            a hand-maintained copy of the nav. The switcher is one control at a
+            fixed position, so the placeholder is a single bar; the old
+            breadcrumb needed a per-route segment count to avoid reflowing. */}
         <AppHeader
-          // series › book › chapter. A chapter route has no bookId param — the
-          // book is derived from the chapter once data lands — so chapterId
-          // implies THREE segments, not two. Counting params directly (what the
-          // old skeleton did) under-counted by one on every chapter page, and
-          // the header jumped sideways when the titles arrived.
-          crumbCount={chapterId ? 3 : bookId ? 2 : 1}
+          hasProject
           hasTools
           showBell
           showAppSwitch
-          compactWordmark
           compactGreeting
           lightMode={lightMode}
           onToggleLightMode={toggleLightMode}
@@ -218,28 +211,23 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
     <AuthorProvider value={{ series, loadSeries, loadChoices, lightMode, knownStringValues }}>
       <ShortcutsProvider>
       <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
-        {/* Progressive collapse lives in AppHeader: below xl the wordmark
-            hides (logo stays), below lg the greeting hides, and breadcrumb
-            segments cap + truncate with a title attribute so the full label is
-            one hover away. Together they keep the header on one line. */}
+        {/* Book and chapter are no longer in the header — the sidebar's
+            OutlineTree already lists them and marks the active one, which a
+            breadcrumb only duplicated. What's left is the project itself, and
+            the switcher owns that (KAN-18).
+
+            Progressive collapse still lives in AppHeader: the wordmark hides
+            below xl and the greeting below lg. Both existed because the trail,
+            the search bar and the identity cluster fought for one line — with
+            the trail gone that pressure is much lower, so these breakpoints
+            are worth re-checking once this has been used at narrow widths. */}
         <AppHeader
-          crumbs={[
-            {
-              label: series.title,
-              href: activeBook || activeChapter ? `/author/${seriesId}` : undefined,
-              maxWidth: 'max-w-[200px]',
-            },
-            ...(activeBook
-              ? [{
-                  label: activeBook.title,
-                  href: activeChapter ? `/author/${seriesId}/book/${activeBook.id}` : undefined,
-                  maxWidth: 'max-w-[180px]',
-                }]
-              : []),
-            ...(activeChapter
-              ? [{ label: activeChapter.title, maxWidth: 'max-w-[180px]' }]
-              : []),
-          ]}
+          project={{
+            id: series.id,
+            title: series.title,
+            standalone: series.standalone,
+            firstBookId: series.standalone ? (series.books[0]?.id ?? null) : null,
+          }}
           tools={
             /* Shortcuts sits 8px from the search bar rather than the header's
                usual 12px — the tighter seam reads as one "find things" cluster
@@ -254,7 +242,6 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
           }
           showBell
           showAppSwitch
-          compactWordmark
           compactGreeting
           lightMode={lightMode}
           onToggleLightMode={toggleLightMode}

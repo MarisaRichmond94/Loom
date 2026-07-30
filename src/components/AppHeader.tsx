@@ -6,6 +6,7 @@ import { LuMoon, LuSparkles, LuSun } from 'react-icons/lu'
 import AvatarButton from '@/components/AvatarButton'
 import NotificationBell from '@/components/NotificationBell'
 import Greeting from '@/components/Greeting'
+import ProjectSwitcher, { type SwitcherProject } from '@/components/ProjectSwitcher'
 
 /**
  * The single Loom header (KAN-2).
@@ -18,27 +19,30 @@ import Greeting from '@/components/Greeting'
  *
  * Anatomy, in order. WriteAI mirrors this in KAN-7:
  *
- *   [ brand ] › [ context crumbs ] [ app switch ]  ...  [ tools ] [ identity ]
+ *   [ logo ] [ project ▾ | LOOM ] [ app switch ]  ...  [ tools ] [ identity ]
  *
  * The identity cluster is greeting → light toggle → bell → avatar.
+ *
+ * The breadcrumb chain that used to sit after the brand is gone (KAN-18). The
+ * project switcher took over the only job it uniquely did — reaching the series
+ * page — and the sidebar's OutlineTree already covered book and chapter better
+ * than a trail did. The switcher occupies the wordmark's slot and styling, so
+ * the header reads as "what am I working on" rather than "where am I".
  */
 
-export type Crumb = {
-  label: string
-  /** Omit for the current page — it renders as plain text, not a link. */
-  href?: string
-  /** Tailwind max-width; long titles truncate with the full text on hover. */
-  maxWidth?: string
-}
-
 type Props = {
-  crumbs?: Crumb[]
   /**
-   * Placeholder crumb count while loading. Route params are known before the
-   * data fetch resolves, so the skeleton can render the right NUMBER of
-   * segments and the header doesn't reflow when the titles arrive.
+   * The active project, rendered as a switcher beside the brand (KAN-18).
+   * Absent on surfaces with no project context — settings, home, the reader.
    */
-  crumbCount?: number
+  project?: SwitcherProject
+  /**
+   * Reserve space for the switcher while loading. Separate from `project` for
+   * the same reason as `hasTools`: the caller cannot supply it yet. Without it,
+   * project-less surfaces that also use `loading` — home gates its identity
+   * cluster behind `mounted` — would flash a stray separator and placeholder.
+   */
+  hasProject?: boolean
   /** Surface-specific controls, e.g. the author header's shortcuts + search. */
   tools?: ReactNode
   /**
@@ -50,8 +54,6 @@ type Props = {
   hasTools?: boolean
   showBell?: boolean
   showAppSwitch?: boolean
-  /** Hide the wordmark below xl — the author header needs the width. */
-  compactWordmark?: boolean
   /** Hide the greeting below lg — same reason. */
   compactGreeting?: boolean
   lightMode: boolean
@@ -64,68 +66,43 @@ function Bar({ className }: { className: string }) {
   return <div className={`bg-surface-muted rounded animate-pulse ${className}`} />
 }
 
-function Sep() {
-  return <span className="text-ink-faint self-center shrink-0">›</span>
-}
-
 export default function AppHeader({
-  crumbs,
-  crumbCount,
+  project,
+  hasProject = false,
   tools,
   hasTools = false,
   showBell = false,
   showAppSwitch = false,
-  compactWordmark = false,
   compactGreeting = false,
   lightMode,
   onToggleLightMode,
   loading = false,
 }: Props) {
-  // While loading, fall back to crumbCount so the segment count is stable
-  // across the skeleton→loaded transition.
-  const placeholderCrumbs = loading ? (crumbCount ?? crumbs?.length ?? 0) : 0
-
   return (
     <nav className="sticky top-0 z-30 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
-      <Link href="/" className="flex items-center gap-2 shrink-0">
+      <Link href="/" className="shrink-0" aria-label="Loom">
         <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
-        <span
-          className={`text-accent font-bold tracking-wider text-2xl leading-none${
-            compactWordmark ? ' hidden xl:inline' : ''
-          }`}
-        >
-          LOOM
-        </span>
       </Link>
 
-      {loading
-        ? Array.from({ length: placeholderCrumbs }, (_, i) => (
-            <span key={i} className="contents">
-              <Sep />
-              <Bar className={`h-4 ${i === 0 ? 'w-32' : 'w-24'}`} />
-            </span>
-          ))
-        : crumbs?.map((c, i) => (
-            <span key={i} className="contents">
-              <Sep />
-              {c.href ? (
-                <Link
-                  href={c.href}
-                  title={c.label}
-                  className={`text-ink-muted hover:text-ink self-center truncate ${c.maxWidth ?? ''}`}
-                >
-                  {c.label}
-                </Link>
-              ) : (
-                <span
-                  title={c.label}
-                  className={`text-ink self-center truncate ${c.maxWidth ?? ''}`}
-                >
-                  {c.label}
-                </span>
-              )}
-            </span>
-          ))}
+      {/* The wordmark slot shows the PROJECT when there is one, in the same
+          treatment LOOM used to have (KAN-18). The logo carries the brand; this
+          slot says what you're working on. Surfaces with no project context —
+          home, settings, the reader — fall back to the wordmark, so the brand
+          is never absent entirely.
+
+          No separator: the switcher replaces the wordmark rather than trailing
+          from it, which is what let the breadcrumb row go away. */}
+      {loading && hasProject ? (
+        // h-5 matches the project title's text-xl line box — a mismatch here
+        // reintroduces the vertical jump on skeleton → loaded.
+        <Bar className="h-5 w-56" />
+      ) : project ? (
+        <ProjectSwitcher active={project} />
+      ) : (
+        <span className="text-accent font-bold tracking-wider text-2xl leading-none shrink-0">
+          LOOM
+        </span>
+      )}
 
       {showAppSwitch && (
         /* Jump to the companion WriteAI app (same tab — the browser's back

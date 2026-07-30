@@ -14,7 +14,12 @@ export async function GET() {
     orderBy: { createdAt: 'desc' },
     include: {
       books: {
+        // id/order feed firstBookId below — a standalone project's landing
+        // page is its single book, not the series outline (KAN-18).
+        orderBy: { order: 'asc' },
         select: {
+          id: true,
+          order: true,
           chapters: {
             select: {
               pov: true,
@@ -30,7 +35,13 @@ export async function GET() {
 
   return NextResponse.json(seriesList.map(s => {
     const { books: _books, ...rest } = s
-    return { ...rest, stats: computeSeriesStats(s.books) }
+    return {
+      ...rest,
+      // The project switcher sends a standalone straight to its one book;
+      // null for a series, whose landing page is the outline.
+      firstBookId: s.standalone ? (s.books[0]?.id ?? null) : null,
+      stats: computeSeriesStats(s.books),
+    }
   }))
 }
 

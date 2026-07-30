@@ -245,11 +245,9 @@ export default function SettingsPage() {
 
   return (
     <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
-      <AppHeader
-        crumbs={[{ label: 'Settings' }]}
-        lightMode={lightMode}
-        onToggleLightMode={toggleLightMode}
-      />
+      {/* No project context here, so no switcher — and the crumb that used to
+          read "› Settings" is redundant with the page's own <h1>. */}
+      <AppHeader lightMode={lightMode} onToggleLightMode={toggleLightMode} />
 
       <main className={`flex-1 overflow-y-auto${lightMode ? ' light-body' : ''}`}>
         <div className="px-8 py-10">
