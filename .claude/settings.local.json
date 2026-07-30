@@ -21,7 +21,13 @@
       "Skill(update-config)",
       "Skill(update-config:*)",
       "Skill(dataviz)",
-      "Skill(dataviz:*)"
+      "Skill(dataviz:*)",
+      "mcp__atlassian__getJiraIssue",
+      "mcp__atlassian__searchJiraIssuesUsingJql",
+      "mcp__atlassian__editJiraIssue",
+      "mcp__atlassian__createJiraIssue",
+      "mcp__atlassian__addCommentToJiraIssue",
+      "mcp__atlassian__createIssueLink"
     ],
     "deny": [
       "Bash(rm -rf *)"
