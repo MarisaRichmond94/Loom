@@ -134,11 +134,14 @@ export default function ExportBookModal({ seriesId, bookId, bookTitle, onClose }
           <button onClick={onClose} className="absolute top-4 right-4 text-ink-faint hover:text-ink transition">
             <LuX size={16} />
           </button>
-          <h2 className="text-base font-bold text-ink">Export &ldquo;{bookTitle}&rdquo;</h2>
+          {/* "Download" throughout, matching the button that opens this. Export
+              is reserved for .loom.json data dumps — see the note on the book
+              page (KAN-19). */}
+          <h2 className="text-base font-bold text-ink">Download &ldquo;{bookTitle}&rdquo;</h2>
           <p className="text-xs text-ink-faint mt-1.5 leading-relaxed">
-            Flattens the book into a single manuscript using the context below.
-            The defaults are your canon values — change them to export an
-            alternate version.
+            Flattens the book into a single Pages manuscript using the context
+            below. The defaults are your canon values — change them to produce
+            an alternate version.
           </p>
         </div>
 
@@ -253,7 +256,7 @@ export default function ExportBookModal({ seriesId, bookId, bookTitle, onClose }
               title={unresolvedCount > 0 ? 'Pick a branch for the highlighted choice points first' : undefined}
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50"
             >
-              <LuDownload size={14} /> {exporting ? 'Exporting…' : 'Export'}
+              <LuDownload size={14} /> {exporting ? 'Downloading…' : 'Download'}
             </button>
           </div>
         </div>

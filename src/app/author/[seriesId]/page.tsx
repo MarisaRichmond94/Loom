@@ -92,15 +92,34 @@ export default function AuthorSeriesPage() {
 
   return (
     <>
-      <div className="max-w-3xl mx-auto px-8 py-8 relative">
-        <a
-          href={`/preview/series/${seriesId}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="absolute top-8 right-8 px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition flex items-center gap-1.5"
-        >
-          <LuEye size={12} /> Preview
-        </a>
+      <div className="max-w-3xl mx-auto px-8 py-8">
+        {/* Action row rather than an absolutely-positioned Preview (KAN-19).
+            Export used to live only on `/`, which the project switcher has
+            replaced as the series list — this is the missing tier, since
+            per-book export already sits further down this page.
+
+            A row, not a second absolute button: the old Preview floated over
+            the centred title below, and stacking another beside it would
+            collide with long titles at narrow widths. Preview stays rightmost
+            as the accent-filled primary action. */}
+        <div className="flex justify-end items-center gap-2 mb-2">
+          <a
+            href={`/api/series/${seriesId}/export`}
+            download
+            title="Export the whole series as a .loom.json — a data backup you can re-import. For a readable manuscript, open a book and use Download."
+            className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition flex items-center gap-1.5"
+          >
+            <LuDownload size={11} /> Export
+          </a>
+          <a
+            href={`/preview/series/${seriesId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition flex items-center gap-1.5"
+          >
+            <LuEye size={12} /> Preview
+          </a>
+        </div>
         <div className="flex flex-col items-center mb-8">
           <input
             value={titleDraft}
@@ -199,6 +218,7 @@ export default function AuthorSeriesPage() {
                       <a
                         href={`/api/series/${seriesId}/books/${book.id}/export`}
                         download
+                        title="Export this book as a .loom.json — a data backup you can re-import. For a readable manuscript, open the book and use Download."
                         className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition flex items-center gap-1.5"
                       >
                         <LuDownload size={11} /> Export

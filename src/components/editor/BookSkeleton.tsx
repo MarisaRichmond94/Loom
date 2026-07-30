@@ -3,9 +3,20 @@
 export default function BookSkeleton() {
   return (
     <div className="max-w-3xl mx-auto px-8 py-8 animate-pulse">
+      {/* Action row — Published/Draft, Download, Preview. This was missing
+          entirely, so the cover and everything under it jumped up by the row's
+          height plus its margin the moment data landed (KAN-19). */}
+      <div className="flex items-center justify-end gap-2 mb-6">
+        <div className="h-7 w-24 bg-surface-overlay rounded" />
+        <div className="h-7 w-28 bg-surface-overlay rounded" />
+        <div className="h-7 w-24 bg-accent/30 rounded" />
+      </div>
+
       {/* Cover + title/synopsis row */}
       <div className="flex gap-8 mb-8 items-stretch">
-        <div className="w-44 rounded-lg border-2 border-dashed border-accent/20 bg-surface-muted self-stretch" style={{ minHeight: '264px' }} />
+        {/* surface-raised, matching the real cover well — it was surface-muted,
+            a tier lighter than anything on the loaded page. */}
+        <div className="w-44 rounded-lg border-2 border-dashed border-accent/20 bg-surface-raised self-stretch" style={{ minHeight: '264px' }} />
         <div className="flex-1 flex flex-col gap-4">
           <div className="w-full h-12 bg-surface-raised border border-accent/20 rounded-lg" />
           <div className="w-full flex-1 bg-surface-raised border border-accent/20 rounded-lg" style={{ minHeight: '200px' }} />

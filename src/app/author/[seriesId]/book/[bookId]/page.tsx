@@ -472,12 +472,16 @@ export default function BookDetailPage() {
             <span className={`inline-block w-1.5 h-1.5 rounded-full ${book.published ? 'bg-accent' : 'bg-ink-faint'}`} />
             {book.published ? 'Published' : 'Draft'}
           </button>
+          {/* "Download", not "Export" (KAN-19). Elsewhere in Loom, Export means
+              a .loom.json data dump for backup and re-import; this produces a
+              flattened Pages manuscript. One word for two formats was genuinely
+              confusing, so the manuscript flow took a distinct verb. */}
           <button
             onClick={() => setShowExportModal(true)}
-            title="Export this book as a Pages manuscript"
+            title="Download this book as a Pages manuscript"
             className="px-3 py-1.5 rounded text-xs bg-surface-overlay text-ink-muted border border-accent/20 font-medium hover:text-ink transition flex items-center gap-1.5"
           >
-            <LuDownload size={12} /> Export
+            <LuDownload size={12} /> Download
           </button>
           <a
             href={`/preview/book/${bookId}`}
