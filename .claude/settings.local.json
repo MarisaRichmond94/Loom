@@ -27,7 +27,9 @@
       "mcp__atlassian__editJiraIssue",
       "mcp__atlassian__createJiraIssue",
       "mcp__atlassian__addCommentToJiraIssue",
-      "mcp__atlassian__createIssueLink"
+      "mcp__atlassian__createIssueLink",
+      "mcp__atlassian__getTransitionsForJiraIssue",
+      "mcp__atlassian__transitionJiraIssue"
     ],
     "deny": [
       "Bash(rm -rf *)"
