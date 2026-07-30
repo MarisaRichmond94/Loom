@@ -6,13 +6,16 @@
   --font-sans: var(--font-inter), system-ui, sans-serif;
   --font-chrome: system-ui, -apple-system, sans-serif;
 
-  --color-surface-base: #0d0d18;
-  --color-surface-raised: #12121e;
-  --color-surface-overlay: #1a1a2e;
-  --color-surface-muted: #1e1e3a;
-  --color-ink: #e0d9c8;
-  --color-ink-muted: #aaa;
-  --color-ink-faint: #666;
+  /* The shared palette (KAN-6), promoted out of the UNIFIED_CHROME flag when
+     KAN-8 retired it. Surfaces and ink are WriteAI's cooler ramp; the accent is
+     Loom's. Canonical values live in TOKENS.md, mirrored in both repos. */
+  --color-surface-base: #0f1117;
+  --color-surface-raised: #1a1d27;
+  --color-surface-overlay: #21253a;
+  --color-surface-muted: #2a2d3a;
+  --color-ink: #e8eaf0;
+  --color-ink-muted: #9da3b4;
+  --color-ink-faint: #5c627a;
   --color-accent: #8888ff;
   --color-accent-muted: #4a4a7a;
   --color-choice-spare: #88cc88;
@@ -36,45 +39,6 @@
 }
 
 /* ---------------------------------------------------------------------------
-   UNIFIED_CHROME (KAN-6) — the shared palette with WriteAI.
-
-   Redefining the @theme variables under a selector is exactly how .light-body
-   already works below; this is the same technique, not new machinery. Flag off
-   means the @theme block above applies untouched, so the old look is preserved
-   byte-for-byte as the comparison baseline.
-
-   Values are canonical and documented in TOKENS.md (mirrored in both repos).
-   Decisions: accent stays Loom's #8888ff; surfaces and ink adopt WriteAI's
-   cooler ramp. Token NAMES deliberately stay per-app — only values are shared,
-   which buys the whole visual result without renaming ~94 files.
-
-   Surfaces map by position so Loom's existing light-to-dark hierarchy is
-   preserved while the hue shifts from violet to neutral:
-     base -> surface, raised -> card, overlay -> hover, muted -> border.
-
-   Retirement: delete this block and the [data-chrome] plumbing when KAN-8
-   closes, promoting these values into @theme above.
-   --------------------------------------------------------------------------- */
-[data-chrome="v2"] {
-  --color-surface-base: #0f1117;
-  --color-surface-raised: #1a1d27;
-  --color-surface-overlay: #21253a;
-  --color-surface-muted: #2a2d3a;
-  --color-ink: #e8eaf0;
-  --color-ink-muted: #9da3b4;
-  --color-ink-faint: #5c627a;
-  /* accent unchanged — Loom's #8888ff is the canonical accent. */
-  --color-accent-muted: #4a4a7a;
-
-  /* Keep in step with the --color-* values directly above. */
-  --dark-surface-raised: #1a1d27;
-  --dark-surface-muted: #2a2d3a;
-  --dark-ink: #e8eaf0;
-  --dark-ink-muted: #9da3b4;
-  --dark-ink-faint: #5c627a;
-}
-
-/* ---------------------------------------------------------------------------
    Always-dark chrome (KAN-17).
 
    Some chrome must stay dark even inside .light-body — the chapter editor's
@@ -87,15 +51,16 @@
    .chrome-dark maps the theme tokens back onto it. Descendants then use
    ordinary bg-surface-raised / text-ink utilities.
 
-   These were previously hardcoded hexes in inline styles, which pinned that
-   chrome to the old palette regardless of the flag.
+   These were previously hardcoded hexes in inline styles (KAN-17), which
+   pinned that chrome to the old palette. Keep --dark-* in step with the
+   --color-* values in @theme.
    --------------------------------------------------------------------------- */
 :root {
-  --dark-surface-raised: #12121e;
-  --dark-surface-muted: #1e1e3a;
-  --dark-ink: #e0d9c8;
-  --dark-ink-muted: #aaa;
-  --dark-ink-faint: #666;
+  --dark-surface-raised: #1a1d27;
+  --dark-surface-muted: #2a2d3a;
+  --dark-ink: #e8eaf0;
+  --dark-ink-muted: #9da3b4;
+  --dark-ink-faint: #5c627a;
 }
 
 .chrome-dark {
@@ -107,9 +72,9 @@
 }
 
 body {
-  /* var() rather than literals so both .light-body and [data-chrome] reach the
-     page background. These were hardcoded, which would have left the body dark
-     violet no matter what the flag said. */
+  /* var() rather than literals so .light-body reaches the page background.
+     These were hardcoded, which pinned the body to the old dark violet
+     regardless of theme (KAN-6). */
   background-color: var(--color-surface-base);
   color: var(--color-ink);
   cursor: default;

@@ -247,7 +247,10 @@ export default function SettingsPage() {
     <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
       {/* No project context here, so no switcher — and the crumb that used to
           read "› Settings" is redundant with the page's own <h1>. */}
-      <AppHeader lightMode={lightMode} onToggleLightMode={toggleLightMode} />
+      {/* No project context here, so no switcher. The app switch is present on
+          every Loom surface except the reader (KAN-8) — it used to sit only on
+          author pages, which read as incidental rather than chosen. */}
+      <AppHeader showAppSwitch lightMode={lightMode} onToggleLightMode={toggleLightMode} />
 
       <main className={`flex-1 overflow-y-auto${lightMode ? ' light-body' : ''}`}>
         <div className="px-8 py-10">

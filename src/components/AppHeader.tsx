@@ -106,8 +106,16 @@ export default function AppHeader({
 
       {showAppSwitch && (
         /* Jump to the companion WriteAI app (same tab — the browser's back
-           button is the return trip). KAN-8 decides its final form and whether
-           it belongs on every surface rather than just this one. */
+           button is the return trip).
+
+           Present on every Loom surface EXCEPT the reader (KAN-8). It used to
+           sit only on author pages, which read as incidental. The reader is
+           excluded deliberately: read mode is for reading, and a jump to the
+           analysis tool mid-chapter is a different mode of attention.
+
+           Icon + tooltip rather than a label — the header already carries a
+           project switcher, search, greeting, toggle, bell and avatar. WriteAI
+           mirrors this exactly. */
         <a
           href={process.env.NEXT_PUBLIC_WRITEAI_URL ?? 'http://localhost:5173'}
           title="Open WriteAI"
