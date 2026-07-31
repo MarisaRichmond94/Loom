@@ -472,6 +472,28 @@ export default function BookDetailPage() {
             <span className={`inline-block w-1.5 h-1.5 rounded-full ${book.published ? 'bg-accent' : 'bg-ink-faint'}`} />
             {book.published ? 'Published' : 'Draft'}
           </button>
+          {/* Export (.loom.json) sits beside Download deliberately (KAN-20).
+              A standalone project's landing page IS its book page — the
+              switcher routes name-clicks straight here, because a standalone
+              author has no series outline to see. Series-level export lives on
+              the series page, which nothing links to for a standalone, so
+              before this button the ONLY reachable data backup for those
+              projects was the root Write page. That is what blocked orphaning
+              `/`: the manuscript was downloadable, the data was not.
+
+              Safe to sit next to Download only because KAN-19 split the
+              vocabulary — Export means .loom.json (re-importable data),
+              Download means a Pages manuscript. Two buttons both saying
+              "Export" for different formats would have been worse than the gap.
+              Same endpoint and wording as the series page's per-book control. */}
+          <a
+            href={`/api/series/${seriesId}/books/${bookId}/export`}
+            download
+            title="Export this book as a .loom.json — a data backup you can re-import. For a readable manuscript, use Download."
+            className="px-3 py-1.5 rounded text-xs bg-surface-overlay text-ink-muted border border-accent/20 font-medium hover:text-ink transition flex items-center gap-1.5"
+          >
+            <LuDownload size={12} /> Export
+          </a>
           {/* "Download", not "Export" (KAN-19). Elsewhere in Loom, Export means
               a .loom.json data dump for backup and re-import; this produces a
               flattened Pages manuscript. One word for two formats was genuinely
