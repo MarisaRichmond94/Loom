@@ -2,18 +2,14 @@ import path from 'node:path'
 import os from 'node:os'
 import { realpath } from 'node:fs/promises'
 
-// Shared by the on-demand snapshot routes (KAN-26).
+// Backup path resolution for the on-demand snapshot (KAN-26).
 //
-// These must agree with ops/loom_db_snapshot.sh, which reads the same two
-// environment variables with the same defaults. If they drift, the snapshot
-// lands somewhere the "Show in Finder" action refuses to open.
+// BACKUP_ROOT must agree with ops/loom_db_snapshot.sh, which reads the same
+// variable with the same default. If they drift, the snapshot lands somewhere
+// the "Show in Finder" action refuses to open.
 
 export function backupRoot(): string {
   return process.env.BACKUP_ROOT || path.join(os.homedir(), 'Backups')
-}
-
-export function gdriveRoot(): string {
-  return process.env.GDRIVE_ROOT || 'gdrive:Backups'
 }
 
 /**

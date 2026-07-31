@@ -88,9 +88,6 @@ export async function POST() {
     words: Number(words),
     path: dest,
     file: path.basename(dest),
-    // The snapshot lands in <BACKUP_ROOT>/<date>/, and Drive mirrors that
-    // layout, so the parent directory name is the date the Drive link needs.
-    date: path.basename(path.dirname(dest)),
     uploaded: /Upload complete/.test(result.out),
   })
 }

@@ -256,15 +256,6 @@ export default function SettingsPage() {
     }
   }
 
-  async function openInDrive(date: string) {
-    // Resolved on click rather than up front: the snapshot must not wait on
-    // Drive, and a Drive hiccup must not make a good backup look failed.
-    const res = await fetch(`/api/backup/drive-link?date=${encodeURIComponent(date)}`)
-    const body = await res.json().catch(() => ({}))
-    if (res.ok && body.url) window.open(body.url, '_blank', 'noopener,noreferrer')
-    else showToast({ kind: 'error', message: body.error ?? 'Could not open Google Drive.' })
-  }
-
   async function runBackupNow() {
     setSnapshotting(true)
     try {
@@ -285,18 +276,14 @@ export default function SettingsPage() {
         return
       }
       setSnapshotting(false)
-      const actions = [{ label: 'Show in Finder', onClick: () => revealBackup(result.path) }]
-      // Only offer Drive when the upload actually succeeded — a link to a
-      // folder the file never reached is worse than no link.
-      if (result.uploaded) {
-        actions.push({ label: 'Open in Drive', onClick: () => openInDrive(result.date) })
-      }
       showToast({
         kind: 'ok',
         // Lead with what was verified, not that it finished.
         message: `Backed up ${result.chapters.toLocaleString()} chapters, ${result.words.toLocaleString()} words.`,
+        // Drive still gets a mention — knowing the off-machine copy happened is
+        // the point of it — it just isn't a link.
         detail: `${result.size}${result.uploaded ? ' · copied to Google Drive' : ' · not uploaded'}`,
-        actions,
+        actions: [{ label: 'Show in Finder', onClick: () => revealBackup(result.path) }],
       })
     } catch (err) {
       setSnapshotting(false)
