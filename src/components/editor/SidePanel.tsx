@@ -23,14 +23,15 @@ export function minWidthForTab(tab: PanelTab, viewport: number): number {
 }
 
 /**
- * The right-hand dock: chapter notes, plus pinned reference snapshots when
- * there are any. Docked rather than overlaid — it's a flex sibling of the
- * writing column, which shrinks to make room.
+ * The right-hand dock: the chapter's review, its notes, and pinned reference
+ * snapshots. Docked rather than overlaid — it's a flex sibling of the writing
+ * column, which shrinks to make room.
  *
- * The two tabs have deliberately different lifetimes. Notes are persistent and
- * always exist, so they're the default tab and the panel's reason to be open.
- * Pins are in-memory and disposable, so the tab strip only appears once
- * something is pinned; with nothing pinned this is simply the notes panel.
+ * The three tabs have deliberately different lifetimes: a review is stored in
+ * WriteAI, notes are stored per chapter, pins are in-memory and vanish with the
+ * chapter. That difference is what each tab's empty state explains — it is not
+ * a reason to hide any of them. Pins used to appear only once something was
+ * pinned, which left the way to discover pinning to be already doing it.
  */
 export default function SidePanel({
   tab,
@@ -82,29 +83,29 @@ export default function SidePanel({
     onWidthChange(Math.min(Math.max(window.innerWidth - e.clientX, min), Math.max(max, min)))
   }
 
-  function tabButton(value: PanelTab, icon: ReactNode, label: string) {
+  // Labelled, not icon-only. Three destinations is past the point where icons
+  // alone are guessable — a pin and a notebook read as the same kind of thing
+  // until you have opened both.
+  function tabButton(value: PanelTab, icon: ReactNode, label: string, hint: string) {
     const active = tab === value
     return (
       <button
         role="tab"
         aria-selected={active}
-        aria-label={label}
-        title={label}
+        aria-label={`${label} (${hint})`}
+        title={`${label} (${hint})`}
         onClick={() => onTabChange(value)}
-        className={`flex items-center justify-center w-7 h-7 rounded-md transition ${
+        className={`flex items-center gap-1.5 h-7 rounded-md px-2 text-[11px] font-medium transition ${
           active ? 'bg-accent/15 text-accent' : 'text-ink-faint hover:text-ink hover:bg-surface-overlay'
         }`}
       >
         {icon}
+        {label}
       </button>
     )
   }
 
   const hasPins = pins.length > 0
-  // The tab strip appeared only once something was pinned, because notes were
-  // the sole alternative. Review is always addressable, so the strip is now
-  // shown whenever there is more than one place to go.
-  const hasTabs = hasPins || tab === 'review' || !!review
 
   return (
     <aside
@@ -145,23 +146,22 @@ export default function SidePanel({
           behind. Two nested scrollers made that easy to hit. */}
       <div className="sticky top-0 h-[calc(100vh-3.75rem-var(--loom-footer-h,0px))] overflow-y-auto overscroll-contain flex flex-col">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-accent/10 shrink-0">
-          {hasTabs ? (
-            <div role="tablist" className="flex items-center gap-1">
-              {tabButton('notes', <PiNotebookThin size={16} />, 'Notes (⌥⇧3)')}
-              {hasPins && tabButton('refs', <LuPin size={13} />, 'Reference (⌥⇧2)')}
-              {tabButton('review', <LuScanText size={14} />, 'Review')}
-            </div>
-          ) : (
-            <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-ink-muted">
-              <PiNotebookThin size={15} /> Notes
-            </span>
-          )}
+          {/* All three, always, in the order they are reached for: the review
+              is the reason the panel is usually open, notes are constant
+              company, pins are occasional. Pins used to appear only when
+              something was pinned, which meant the way to discover pinning was
+              to already be doing it. */}
+          <div role="tablist" className="flex items-center gap-0.5">
+            {tabButton('review', <LuScanText size={13} />, 'Reviews', '⌥⇧2')}
+            {tabButton('notes', <PiNotebookThin size={14} />, 'Notes', '⌥⇧3')}
+            {tabButton('refs', <LuPin size={12} />, 'Pins', '⌥⇧4')}
+          </div>
 
           <div className="ml-auto flex items-center gap-2 shrink-0">
             {tab === 'notes' && notesSaving && (
               <span className="text-[10px] text-ink-faint italic">Saving…</span>
             )}
-            {tab === 'refs' && (
+            {tab === 'refs' && hasPins && (
               <button
                 onClick={onClearPins}
                 title="Remove every pinned snapshot"

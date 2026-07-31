@@ -8,6 +8,8 @@ import { Mark, mergeAttributes, type JSONContent } from '@tiptap/core'
 import { Footnote } from '@/lib/extensions/footnote'
 import { CharacterMark } from '@/lib/extensions/character'
 import { ParagraphIndent } from '@/lib/extensions/paragraphIndent'
+import { LuPin } from 'react-icons/lu'
+import { PanelEmpty, PanelEmptyState } from './PanelEmptyState'
 
 // Read-only twin of the custom colour mark used in TextBlock — mirrored here
 // so a pinned snapshot renders inline colour exactly as the live editor does
@@ -94,6 +96,22 @@ export type PinnedText = {
 // handle, tab strip, close) belongs to SidePanel, which this shares with the
 // chapter notes tab.
 export function ReferenceList({ pins }: { pins: PinnedText[] }) {
+  // The tab used to appear only once something was pinned, so it never had to
+  // explain itself. Now that it is always present, empty is its normal resting
+  // state — pins are in-memory and start empty every session — so it says what
+  // it is for rather than showing a blank panel.
+  if (pins.length === 0) {
+    return (
+      <PanelEmpty>
+        <PanelEmptyState icon={<LuPin size={26} />} title="Nothing pinned yet">
+          Pin a passage to keep it in view while you write elsewhere — useful
+          for a detail you need to stay consistent with. Pins last until you
+          leave the chapter.
+        </PanelEmptyState>
+      </PanelEmpty>
+    )
+  }
+
   return (
     <div className="flex-1 p-4 space-y-4">
       {pins.map(pin => (
