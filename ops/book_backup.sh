@@ -31,6 +31,13 @@ KEEP_LOCAL_DAYS=30
 LOOM_DB="$HOME/Documents/GitHub/Loom/dev.db"
 LOOM_SNAPSHOT_DIR="$HOME/Backups/Loom"
 
+# WriteAI's writer-authored state (KAN-27). Small and IRREPLACEABLE: timeline
+# events, character-name decisions, writer characters, and every review and
+# explore conversation. Its sibling data/ is ~11GB but derived — a corrupted
+# index is a re-ingest, never a loss — so only this directory is backed up.
+# It is gitignored, so before this nothing covered it at all.
+WRITER_DATA_DIR="$HOME/Documents/GitHub/WriteAi/writer_data"
+
 # Output validation (KAN-14). Exit codes only prove a step ran; these prove
 # what it produced is usable.
 VERIFY_LIB="$HOME/Scripts/lib/backup_verify.sh"
@@ -250,6 +257,67 @@ if [[ -d "$LOOM_SNAPSHOT_DIR" ]]; then
     VALIDATION_OK=0
     log "WARNING: no Loom .loom.json snapshots found under ${LOOM_SNAPSHOT_DIR} (Loom's 22:00 backup may not have run)."
   fi
+fi
+
+###############################################################################
+# 1c) WriteAI writer-authored state (KAN-27)                                  #
+#                                                                             #
+#     Nothing covered this before: writer_data/ is gitignored, so it was in   #
+#     neither the repo nor any backup. It holds the writer's timeline events, #
+#     character-name decisions, writer characters, and every review and       #
+#     explore conversation — ~12MB, none of it regenerable.                   #
+#                                                                             #
+#     Its sibling data/ (~11GB: Chroma, extracted text) is deliberately NOT   #
+#     backed up. That store is derived; a corrupted index is a re-ingest.     #
+#                                                                             #
+#     Lands in RUN_DIR_LOCAL so it rides the Google Drive upload. Non-fatal,  #
+#     like every other step here.                                             #
+###############################################################################
+if [[ -d "$WRITER_DATA_DIR" ]]; then
+  log "Copying WriteAI writer_data..."
+  WD_DEST="$RUN_DIR_LOCAL/writeai-writer_data"
+  mkdir -p "$WD_DEST"
+  wd_count=0
+  for f in "$WRITER_DATA_DIR"/*.json; do
+    [[ -e "$f" ]] || continue
+    if /usr/bin/ditto "$f" "$WD_DEST/$(basename "$f")" 2>>"$LOG_FILE"; then
+      wd_count=$((wd_count + 1))
+    else
+      log "WARNING: failed to copy $(basename "$f")"
+    fi
+  done
+
+  if [[ "$wd_count" -gt 0 ]]; then
+    log "Copied $wd_count writer_data file(s)."
+    # Parse what was copied. Counting files proves ditto ran; it says nothing
+    # about whether the JSON survived. Structural damage fails; entry counts
+    # are reported but never asserted — writer_events.json can legitimately be
+    # empty, and a floor that trips on a legitimate state becomes the nightly
+    # noise KAN-13 exists to remove.
+    if [[ "$VERIFY_AVAILABLE" == 1 ]]; then
+      if wd_out="$(verify_writer_data "$WD_DEST")"; then
+        wd_ok=1
+      else
+        wd_ok=0
+      fi
+      while IFS= read -r vline; do
+        if [[ -n "$vline" ]]; then log "  writer_data: $vline"; fi
+      done <<< "$wd_out"
+      if [[ "$wd_ok" == 1 ]]; then
+        log "WriteAI writer_data verified."
+      else
+        VALIDATION_OK=0
+        log "WARNING: writer_data FAILED VALIDATION — this is the only backup of the writer's events, character decisions and review history."
+      fi
+    else
+      log "  writer_data: NOT VERIFIED — validator library missing at $VERIFY_LIB"
+    fi
+  else
+    VALIDATION_OK=0
+    log "WARNING: no writer_data files found under ${WRITER_DATA_DIR}."
+  fi
+else
+  log "WriteAI writer_data not found at ${WRITER_DATA_DIR} — skipping."
 fi
 
 #############################################################################################

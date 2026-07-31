@@ -93,3 +93,69 @@ verify_loom_json() {
   [[ -n "$out" ]] && echo "$out"
   return $rc
 }
+
+# verify_writer_data <copied-writer_data-dir>
+#
+# WriteAI's writer_data/ is small and IRREPLACEABLE — writer-authored timeline
+# events, character-name decisions, writer characters, and every review and
+# explore conversation. Its sibling data/ is ~11GB but derived: a corrupted
+# index is a re-ingest, never a loss. This one has no such fallback, and until
+# KAN-27 nothing backed it up at all.
+#
+# Fails on structural damage only — unparseable JSON, an empty file, a missing
+# directory. Entry counts are REPORTED, never asserted: writer_events.json can
+# legitimately be empty, and a floor that trips on a legitimate state becomes
+# the nightly noise KAN-13 exists to remove.
+verify_writer_data() {
+  local dir="$1"
+  local py out rc
+
+  [[ -d "$dir" ]] || { echo "no writer_data directory at $dir"; return 1; }
+
+  py="$(command -v python3 2>/dev/null || true)"
+  [[ -n "$py" ]] || { echo "python3 not found — cannot validate writer_data"; return 1; }
+
+  out="$("$py" - "$dir" <<'PY' 2>&1
+import glob, json, os, sys
+
+root = sys.argv[1]
+files = sorted(glob.glob(os.path.join(root, "*.json")))
+if not files:
+    sys.exit("no .json files found under " + root)
+
+failures = 0
+for path in files:
+    name = os.path.basename(path)
+    size = os.path.getsize(path)
+    if size == 0:
+        print(f"FAIL  {name}: file is empty")
+        failures += 1
+        continue
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except Exception as exc:  # noqa: BLE001 — the reason matters more than a trace
+        print(f"FAIL  {name}: {exc}")
+        failures += 1
+        continue
+    # Entry count is descriptive, not a gate. A silent emptying shows up as a
+    # count dropping to 0 in the log without failing a legitimately empty file.
+    if isinstance(doc, dict):
+        shape = f"{len(doc)} key(s)"
+        if all(isinstance(v, list) for v in doc.values()) and doc:
+            shape += f", {sum(len(v) for v in doc.values())} item(s)"
+    elif isinstance(doc, list):
+        shape = f"{len(doc)} item(s)"
+    else:
+        shape = type(doc).__name__
+    print(f"ok    {name[:34]:36} {size:>9,} bytes  {shape}")
+
+print()
+print(f"{len(files)} file(s), {failures} problem(s)")
+sys.exit(1 if failures else 0)
+PY
+)"
+  rc=$?
+  [[ -n "$out" ]] && echo "$out"
+  return $rc
+}

@@ -15,10 +15,11 @@ only swap it in deliberately, at the end, if you decide to.
 | `loom-dev.db.gz` | `~/Backups/<date>/` **and** `gdrive:Backups/<date>/` | The whole database, gzipped (~24 MB) |
 | `*.loom.json` | `~/Backups/<date>/loom-json/<book>/` | Per-book prose **plus CYOA choices** |
 | `*.pages` / `.txt` / `.docx` | `~/Writing/`, iCloud Books | Linear manuscript only, no branches |
+| `writeai-writer_data/*.json` | `~/Backups/<date>/` **and** `gdrive:Backups/<date>/` | WriteAI's **writer-authored** state (KAN-27) |
 
-Backups run nightly at **22:30** (`~/Scripts/book_backup.sh`,
-`com.marisarichmond.bookbackup.plist`). Worst case you lose the writing done
-since the last run.
+Backups run nightly at **22:30** (`~/Scripts/book_backup.sh` →
+`ops/book_backup.sh`, `com.marisarichmond.bookbackup.plist`). Worst case you
+lose the writing done since the last run.
 
 `dev.db` is `journal_mode=delete` with no `-wal`/`-shm` sidecars, so the
 gzipped `sqlite3 .backup` is a complete, consistent database. There is no
@@ -106,6 +107,43 @@ Open <http://localhost:3000> and confirm your books are there.
 older than you thought, that file is the only copy of whatever was in the
 broken database. `dev.db.pre-*` is gitignored; `dev.db.before-restore-*` is
 not — do not commit it.
+
+---
+
+## 4b. Restoring WriteAI's writer_data
+
+Separate from Loom, and separately irreplaceable. `writer_data/` holds the
+writer's timeline events, character-name decisions, writer characters, and
+every review and explore conversation. It is gitignored, so the nightly backup
+is the **only** copy.
+
+```sh
+# stop WriteAI first — it writes this directory
+launchctl bootout gui/$(id -u)/com.marisarichmond.writeai
+
+# inspect before overwriting anything
+python3 - ~/Backups/<date>/writeai-writer_data <<'EOF'
+import glob, json, os, sys
+for p in sorted(glob.glob(os.path.join(sys.argv[1], "*.json"))):
+    d = json.load(open(p))
+    n = len(d) if isinstance(d, (list, dict)) else "?"
+    print(f"{os.path.basename(p):32} {os.path.getsize(p):>9,} bytes  {n} entries")
+EOF
+
+# then copy back
+cp ~/Backups/<date>/writeai-writer_data/*.json \
+   ~/Documents/GitHub/WriteAi/writer_data/
+
+launchctl bootstrap gui/$(id -u) \
+  ~/Library/LaunchAgents/com.marisarichmond.writeai.plist
+```
+
+**Do not restore `data/`** — the ~11 GB Chroma index and extracted text are
+derived and deliberately not backed up. If that store is damaged, re-ingest
+from `~/Writing` rather than hunting for a copy that does not exist.
+
+`plan_outline.json` is machine-generated (verified 2026-07-30) and rebuilds
+from the index, so it is the one file here you can afford to lose.
 
 ---
 
