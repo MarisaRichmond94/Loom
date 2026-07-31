@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { LuScanText, LuTrash2, LuPlus, LuSend } from 'react-icons/lu'
+import { LuScanText, LuTrash2, LuPlus, LuSend, LuUnplug, LuCircleSlash } from 'react-icons/lu'
 import { ReviewMarkdown } from './reviewMarkdown'
+import ReviewAnimation from './ReviewAnimation'
 import { DEFAULT_FOCUS, useReviewRunner } from './useReviewRunner'
 
 // The chapter's WriteAI review, in Loom's right dock (KAN-22).
@@ -166,16 +167,30 @@ export default function ReviewPanel({
     }
   }
 
-  if (loading && !data) return <Empty>Loading review…</Empty>
+  if (loading && !data) {
+    return (
+      <Empty>
+        <EmptyState icon={<LuScanText size={28} />} title="Loading review…" />
+      </Empty>
+    )
+  }
 
   if (data?.reason === 'writeai-unavailable') {
-    return <Empty>WriteAI isn&rsquo;t reachable, so reviews can&rsquo;t be shown or run. The chapter is unaffected.</Empty>
+    return (
+      <Empty>
+        <EmptyState icon={<LuUnplug size={28} />} title="WriteAI isn’t reachable">
+          Reviews can’t be shown or run until it’s back. Your chapter is unaffected.
+        </EmptyState>
+      </Empty>
+    )
   }
   if (data?.reason === 'chapter-not-addressable') {
     return (
       <Empty>
-        This chapter has no canon number, so WriteAI has no way to address it.
-        Unnumbered chapters and ones the canon walk skips can&rsquo;t be reviewed.
+        <EmptyState icon={<LuCircleSlash size={28} />} title="This chapter can’t be reviewed">
+          It has no canon number, so WriteAI has no way to address it. Unnumbered
+          chapters, and ones the canon walk skips, aren’t reachable.
+        </EmptyState>
       </Empty>
     )
   }
@@ -187,11 +202,14 @@ export default function ReviewPanel({
       {/* This scroller sits inside SidePanel's, so it needs its own
           overscroll-contain: hitting the top or bottom of a review would
           otherwise hand the gesture to the dock and then to the page. */}
-      <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 text-xs text-ink-muted">
+      {/* `flex flex-col` so the empty state can claim the full height and
+          centre itself; with content present the children simply stack as
+          before. */}
+      <div className="flex-1 flex flex-col overflow-y-auto overscroll-contain px-4 py-3 text-xs text-ink-muted">
         {/* Pre-populated header: which book, which chapter, which persona —
             the same three things the old Review button filled in before
             handing off to WriteAI. */}
-        <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-accent/10 pb-2">
+        <div className="mb-3 shrink-0 flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-accent/10 pb-2">
           <span className="inline-flex items-center gap-1.5 rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent">
             <LuScanText size={11} /> {review?.focus ?? DEFAULT_FOCUS}
           </span>
@@ -244,7 +262,18 @@ export default function ReviewPanel({
           )
         })}
 
-        {runner.streaming && (
+        {/* The first pass is the slow, expensive one — it includes the Ideal
+            Version rewrite and reads the chapter cold. The animation carries
+            that wait; follow-ups are quick enough that a line of text is
+            honest and a spinning graphic would be theatre. Either way it
+            gives way the moment real text arrives. */}
+        {runner.streaming && !runner.streamText && !review && (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 py-8 text-center">
+            <ReviewAnimation />
+            <p className="text-[11px] text-ink-faint">Reading the chapter…</p>
+          </div>
+        )}
+        {runner.streaming && (runner.streamText || review) && (
           <div className="mb-4">
             <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
               {review?.focus ?? DEFAULT_FOCUS}
@@ -256,10 +285,13 @@ export default function ReviewPanel({
         )}
 
         {!review && !runner.streaming && (
-          <p className="py-2 text-ink-faint leading-relaxed">
-            No review yet for this chapter. It will be read exactly as it stands
-            in the editor right now — nothing is exported or synced first.
-          </p>
+          <EmptyState
+            icon={<LuScanText size={28} />}
+            title="This chapter has never been reviewed"
+          >
+            It will be read exactly as it stands in the editor right now —
+            nothing is exported or synced first.
+          </EmptyState>
         )}
 
         {runner.error && (
@@ -324,10 +356,36 @@ export default function ReviewPanel({
   )
 }
 
+/**
+ * The panel's "nothing here" view — centred on both axes.
+ *
+ * This is the DOMINANT state, not an edge case: 92% of chapters have no
+ * review. Left-aligned body text in the corner of a third-of-the-viewport
+ * panel read like a stray sentence; centred with an icon it reads as a
+ * deliberate state.
+ */
+function EmptyState({
+  icon,
+  title,
+  children,
+}: {
+  icon: React.ReactNode
+  title: string
+  children?: React.ReactNode
+}) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-2 px-6 py-8 text-center">
+      <div className="text-ink-faint/50">{icon}</div>
+      <p className="text-xs font-semibold text-ink-muted">{title}</p>
+      {children && (
+        <p className="max-w-[34ch] text-[11px] leading-relaxed text-ink-faint">{children}</p>
+      )}
+    </div>
+  )
+}
+
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-6 text-xs leading-relaxed text-ink-faint">
-      {children}
-    </div>
+    <div className="flex-1 overflow-y-auto overscroll-contain">{children}</div>
   )
 }
