@@ -84,7 +84,10 @@ export function ReviewMarkdown({ text }: { text: string }) {
     if (heading) {
       flushPara()
       const level = heading[1].length
-      const size = level === 1 ? 'text-sm' : level === 2 ? 'text-[13px]' : 'text-xs'
+      // Relative to the body, not absolute. The panel's text scales with
+      // ⌥⇧+/-, and fixed heading sizes would stay put while the prose grew
+      // past them — headings ending up SMALLER than the paragraphs under them.
+      const size = level === 1 ? 'text-[1.15em]' : level === 2 ? 'text-[1.07em]' : 'text-[1em]'
       blocks.push(
         <p key={`h${key++}`} className={`${size} font-bold text-ink mt-4 mb-1.5 first:mt-0`}>
           {inline(heading[2], `h${key}`)}

@@ -360,7 +360,18 @@ export default function ReviewPanel({
   const chapterLabel = chapter === 0 ? 'Prologue' : `Chapter ${chapter}`
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col text-xs text-ink-muted">
+    // A review is prose to be read, not a caption, and 12px was too small for
+    // it. Base is 14px, and it scales with ⌥⇧+/- off the same
+    // --loom-prose-scale the editor and the pins panel use — one control for
+    // "make the words bigger", wherever the words are.
+    //
+    // Only the conversation inherits this. The header chips, cost line and
+    // buttons carry their own sizes and stay put: they are chrome, and chrome
+    // growing with the prose just costs reading room.
+    <div
+      className="flex-1 min-h-0 flex flex-col text-ink-muted"
+      style={{ fontSize: 'calc(var(--loom-prose-scale, 1) * 0.875rem)' }}
+    >
       {/* Pre-populated header: which book, which chapter, which persona — the
           same three things the old Review button filled in before handing off
           to WriteAI.
@@ -562,7 +573,10 @@ export default function ReviewPanel({
             onChange={e => setReply(e.target.value)}
             rows={2}
             placeholder="Reply, or leave blank to re-review the revised chapter…"
-            className="mb-1.5 w-full resize-y rounded border border-accent/20 bg-surface-overlay px-2 py-1.5 text-xs text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
+            // No size class, so it inherits the panel's scaled body size.
+            // Reading a review at 16px and typing the reply at 12px would be
+            // an odd seam in what is one conversation.
+            className="mb-1.5 w-full resize-y rounded border border-accent/20 bg-surface-overlay px-2 py-1.5 text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
           />
         )}
         <div className="flex items-center gap-2">
