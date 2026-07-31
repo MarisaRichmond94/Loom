@@ -36,19 +36,36 @@ sidecars to the same folder:
 
 ### 2. Jump links
 
-- **WriteAI → Loom (author):** `GET <LOOM_URL>/author/by-title/<series title>`
-  (case-insensitive title match; lands on the series' last-touched chapter).
-  WriteAI configures `VITE_LOOM_URL` (default `http://localhost:3000`).
+Each direction has an **id-addressed** form (preferred) and a **title-addressed**
+form (fallback, retained indefinitely). WriteAI configures `VITE_LOOM_URL`
+(default `http://localhost:3000`).
+
+- **WriteAI → Loom (author):**
+  - `GET <LOOM_URL>/author/by-id/<seriesId>` — preferred.
+  - `GET <LOOM_URL>/author/by-title/<series title>` — fallback.
+
+  Both land on the series' last-touched chapter, falling through to the Write
+  page on a miss. They share one implementation (`src/lib/crossAppJump.ts`) so
+  they cannot drift.
 - **WriteAI → Loom (reader):**
-  `GET <LOOM_URL>/read/by-title/<series title>/<book title>/<chapter number>`
-  — the "Open in Loom" action on an Explore citation. Series and book match
-  by title (case-insensitive, punctuation-normalized); `<chapter number>` is
+  - `GET <LOOM_URL>/read/by-id/<seriesId>/<bookId>/<chapter number>` — preferred.
+  - `GET <LOOM_URL>/read/by-title/<series title>/<book title>/<chapter number>`
+    — fallback.
+
+  The "Open in Loom" action on an Explore citation. `<chapter number>` is
   WriteAI's citation chapter number (0 = prologue), the same canon-walk
-  numbering used everywhere else in this contract. Loom re-runs the canon
-  walk to map that number to the chapter's cuid, mints a fresh reader
-  session, and 302-redirects to `/read/<sessionId>?startChapterId=<cuid>` —
-  which seeds state to reveal the chapter even when it's gated. Misses fall
-  back to the book preview (bad chapter) or home (bad series/book).
+  numbering used everywhere else in this contract — **the chapter is addressed
+  by number in both forms**, because that is what the reader sees and what
+  WriteAI ingested. Loom re-runs the canon walk to map it to the chapter's cuid,
+  mints a fresh reader session, and 302-redirects to
+  `/read/<sessionId>?startChapterId=<cuid>`, which seeds state to reveal the
+  chapter even when it's gated. Misses fall back to the book preview (bad
+  chapter) or home (bad series/book). The by-id form additionally verifies the
+  book belongs to the series, so a valid book id from another series cannot
+  deep-link across series boundaries.
+
+  Title matching is case-insensitive and punctuation-normalized (NFC, curly
+  apostrophes folded) on **both** routes.
 - **Loom → WriteAI:** plain link to `NEXT_PUBLIC_WRITEAI_URL`
   (default `http://localhost:5173`), plus the review deep link below.
 
@@ -93,8 +110,37 @@ incremental ingest of a book once its exports have been quiet for 10
 minutes. The nightly scheduler (Settings → Sync) remains the
 reconciliation safety net when either app was closed.
 
-## Identity caveat
+## Identity
 
-Series/book identity across the apps is **title-based** (punctuation-loose).
-Renaming a series or book in Loom breaks the jump links and folder matching
-until the WriteAI-side folder/series name is updated to match.
+**Loom's cuids are the identity of a series and a book across both apps.**
+Loom mints them; WriteAI reads them from the manifest sidecar and stores them.
+They are stable across renaming, reordering, and re-ingestion.
+
+Resolved by KAN-12. The former caveat — *"identity is title-based, so renaming
+breaks the jump links and folder matching"* — no longer describes the contract.
+
+**What each app holds**
+
+- Loom: `Series.id`, `Book.id`, `Chapter.id` (all cuids, already stable).
+- Manifest sidecar: `seriesId`, `bookId`, and per-chapter `id`. Present since
+  `manifestVersion: 1`.
+- WriteAI: `loom_book_id` / `loom_series_id` columns on `chunks`, `events`,
+  `chapter_timeline`, `chapter_summaries`, `location_map_v2`, populated on
+  write from the manifests. `Book.loom_book_id` on discovered books.
+
+**Three things are still positional or title-derived, deliberately:**
+
+1. **Locating** a book folder and its manifest — `<number>. <title>/`. This is
+   the last title-dependent step; once the manifest is open, identity is
+   stable. A rename is invisible to everything downstream.
+2. **The chapter number** in reader deep links (0 = prologue). Citations are
+   anchored to what the reader sees. Loom maps it to a chapter cuid by walking
+   canon exactly as the export did.
+3. **`site_name`** is display only. It is *not* identity and must never be used
+   as such again — doing so is what made renaming the site break every jump
+   link.
+
+**Degradation contract.** A book that has never been canon-exported has no
+manifest and therefore no cuid. Every consumer treats a missing id as *unknown
+identity* and falls back to number or title matching — never as *no match*. So
+the pre-KAN-12 behaviour remains the worst case, never a regression.
