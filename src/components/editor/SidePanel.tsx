@@ -1,14 +1,26 @@
 'use client'
 
 import { useRef, useState, type ReactNode } from 'react'
-import { LuPin, LuX } from 'react-icons/lu'
+import { LuPin, LuScanText, LuX } from 'react-icons/lu'
 import { PiNotebookThin } from 'react-icons/pi'
 import { ReferenceList, type PinnedText } from './ReferencePanel'
 import NotesPanel from './NotesPanel'
+import ReviewPanel, { type ReviewSession } from './ReviewPanel'
 
-export type PanelTab = 'notes' | 'refs'
+export type PanelTab = 'notes' | 'refs' | 'review'
 
 const MIN_WIDTH = 280
+
+/** Review needs materially more room than notes — it is a document, not a
+ *  margin. A third of the viewport is the floor below which it stops being
+ *  readable (KAN-22); the panel widens to meet it and stays there. */
+export const REVIEW_MIN_FRACTION = 1 / 3
+
+export function minWidthForTab(tab: PanelTab, viewport: number): number {
+  return tab === 'review'
+    ? Math.max(MIN_WIDTH, Math.round(viewport * REVIEW_MIN_FRACTION))
+    : MIN_WIDTH
+}
 
 /**
  * The right-hand dock: chapter notes, plus pinned reference snapshots when
@@ -28,6 +40,8 @@ export default function SidePanel({
   notes,
   onNotesChange,
   notesSaving,
+  review,
+  reviewLoading,
   width,
   onWidthChange,
   onClose,
@@ -39,6 +53,8 @@ export default function SidePanel({
   notes: string
   onNotesChange: (value: string) => void
   notesSaving: boolean
+  review: { review: ReviewSession | null; reason?: string; total?: number } | null
+  reviewLoading: boolean
   width: number
   onWidthChange: (width: number) => void
   onClose: () => void
@@ -49,9 +65,11 @@ export default function SidePanel({
   function onPointerMove(e: React.PointerEvent) {
     if (!draggingRef.current) return
     // Panel is docked to the viewport's right edge, so its width is the gap
-    // between the pointer and that edge. Clamp to a sane band.
+    // between the pointer and that edge. Clamp to a sane band — the floor
+    // depends on the tab, since review needs a third of the viewport.
     const max = Math.min(720, Math.round(window.innerWidth * 0.6))
-    onWidthChange(Math.min(Math.max(window.innerWidth - e.clientX, MIN_WIDTH), max))
+    const min = minWidthForTab(tab, window.innerWidth)
+    onWidthChange(Math.min(Math.max(window.innerWidth - e.clientX, min), Math.max(max, min)))
   }
 
   function tabButton(value: PanelTab, icon: ReactNode, label: string) {
@@ -73,11 +91,20 @@ export default function SidePanel({
   }
 
   const hasPins = pins.length > 0
+  // The tab strip appeared only once something was pinned, because notes were
+  // the sole alternative. Review is always addressable, so the strip is now
+  // shown whenever there is more than one place to go.
+  const hasTabs = hasPins || tab === 'review' || !!review
 
   return (
     <aside
       style={{ width }}
-      className="relative z-30 shrink-0 border-l border-accent/10 bg-surface-raised"
+      // Width animates so switching to Review — which jumps to a third of the
+      // viewport — reads as the panel growing rather than the editor lurching.
+      // Suppressed mid-drag: transitioning every pointermove fights the cursor.
+      className={`relative z-30 shrink-0 border-l border-accent/10 bg-surface-raised${
+        dragging ? '' : ' transition-[width] duration-200 ease-out'
+      }`}
     >
       {/* Drag handle on the left edge — pointer capture keeps the drag alive
           even when the cursor moves off the thin strip. */}
@@ -103,10 +130,11 @@ export default function SidePanel({
 
       <div className="sticky top-0 h-[calc(100vh-3.75rem-var(--loom-footer-h,0px))] overflow-y-auto flex flex-col">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-accent/10 shrink-0">
-          {hasPins ? (
+          {hasTabs ? (
             <div role="tablist" className="flex items-center gap-1">
               {tabButton('notes', <PiNotebookThin size={16} />, 'Notes (⌥⇧3)')}
-              {tabButton('refs', <LuPin size={13} />, 'Reference (⌥⇧2)')}
+              {hasPins && tabButton('refs', <LuPin size={13} />, 'Reference (⌥⇧2)')}
+              {tabButton('review', <LuScanText size={14} />, 'Review')}
             </div>
           ) : (
             <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-ink-muted">
@@ -140,7 +168,9 @@ export default function SidePanel({
 
         {tab === 'refs'
           ? <ReferenceList pins={pins} />
-          : <NotesPanel value={notes} onChange={onNotesChange} />}
+          : tab === 'review'
+            ? <ReviewPanel data={review} loading={reviewLoading} />
+            : <NotesPanel value={notes} onChange={onNotesChange} />}
       </div>
     </aside>
   )

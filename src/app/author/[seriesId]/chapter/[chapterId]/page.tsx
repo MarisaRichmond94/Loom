@@ -5,7 +5,8 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute } from 'react-icons/lu'
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
-import SidePanel, { type PanelTab } from '@/components/editor/SidePanel'
+import SidePanel, { minWidthForTab, type PanelTab } from '@/components/editor/SidePanel'
+import { useChapterReview } from '@/components/editor/ReviewPanel'
 import { type PinnedText } from '@/components/editor/ReferencePanel'
 import { useChapterNotes } from '@/components/editor/useChapterNotes'
 import { useRegisterShortcuts, type ShortcutGroup } from '@/lib/shortcuts'
@@ -20,7 +21,6 @@ import { substituteVarTemplates } from '@/lib/templateVars'
 import { matchesCondition, type StoryState, type Condition } from '@/lib/storyEngine'
 import { resolveChapter, buildStoryState, varTypeMap } from '@/lib/chapterResolve'
 import PathConfigModal from '@/components/editor/PathConfigModal'
-import { useWriteAiReview } from '@/components/editor/useWriteAiReview'
 
 type Block = {
   id: string; order: number; type: string
@@ -119,11 +119,26 @@ export default function ChapterEditorPage() {
   panelTabRef.current = panelTab
 
   const { notes, setNotes, saving: notesSaving, hasNotes } = useChapterNotes(chapterId)
+  // The same book lookup as `currentBook` further down, but that one sits
+  // after `if (!chapter) return <ChapterSkeleton />` — a hook cannot live past
+  // an early return. Optional-chained so it is simply undefined until the
+  // series loads, which useChapterReview treats as "nothing to fetch yet".
+  const reviewBookId = series?.books.find(b => b.chapters.some(c => c.id === chapterId))?.id
+  const {
+    data: reviewData,
+    loading: reviewLoading,
+    hasReview,
+  } = useChapterReview(seriesId, reviewBookId, chapterId)
   useRegisterShortcuts('chapter', CHAPTER_SHORTCUTS)
 
   function openPanel(tab: PanelTab) {
     setPanelTab(tab)
     setPanelOpen(true)
+    // Review needs a third of the viewport to be readable, and the panel
+    // remembers whatever width notes last used. Widen on the way in rather
+    // than leaving the writer to drag it open every time (KAN-22). Never
+    // narrows — a deliberately wide panel stays wide switching back.
+    setPanelWidth(w => Math.max(w, minWidthForTab(tab, window.innerWidth)))
   }
   function closePanel() {
     setPanelOpen(false)
@@ -641,7 +656,6 @@ export default function ChapterEditorPage() {
   // ⌥⇧E — render the canon manuscript and save it to the book's folder on
   // disk (Settings → Export configures where).
   const { saveCanon } = useCanonSave(seriesId)
-  const { reviewInWriteAi, reviewing } = useWriteAiReview(seriesId)
   saveCanonRef.current = async () => {
     await saveCanon(series.books.find(b => b.chapters.some(c => c.id === chapterId))?.id)
   }
@@ -889,16 +903,31 @@ export default function ChapterEditorPage() {
               : "Copies this chapter's canon story text to your clipboard — the rendered text as it would appear in the published book."}
           </div>
         </div>
+        {/* Review opens the dock, it no longer opens WriteAI (KAN-22). The
+            round trip through a second tab was the whole painpoint; the
+            sparkle in the header remains the deliberate way over there, for
+            the things that genuinely live in WriteAI.
+
+            The dot marks a stored review for this chapter, so it is visible
+            without opening the panel. Increment 1 is read-only — running a
+            review from here is Increment 2. */}
         <div className="relative group/reviewbtn">
           <button
-            onClick={() => reviewInWriteAi(currentBook, chapterId)}
-            disabled={reviewing}
-            className="px-3 py-1.5 rounded text-xs border border-accent/40 text-accent font-medium hover:bg-accent/10 transition disabled:opacity-60"
+            onClick={() => togglePanelTab('review')}
+            className="relative px-3 py-1.5 rounded text-xs border border-accent/40 text-accent font-medium hover:bg-accent/10 transition"
           >
-            <span className="flex items-center gap-1.5"><LuScanText size={12} /> {reviewing ? 'Syncing…' : 'Review'}</span>
+            <span className="flex items-center gap-1.5"><LuScanText size={12} /> Review</span>
+            {hasReview && (
+              <span
+                aria-hidden
+                className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-accent ring-2 ring-surface-base"
+              />
+            )}
           </button>
           <div className="pointer-events-none absolute right-0 top-full mt-1.5 z-50 w-64 rounded border border-accent/20 bg-surface-overlay px-3 py-2 text-xs leading-snug text-ink-muted shadow-lg opacity-0 transition-opacity group-hover/reviewbtn:opacity-100">
-            Exports this book's canon manuscript, then opens WriteAI to review this chapter. The AI reads the rendered story text — choices and conditions resolved — grounded in the full series canon.
+            {hasReview
+              ? 'Shows this chapter’s latest WriteAI review beside the editor, so you can revise against it without leaving Loom.'
+              : 'Opens the review panel. No review is stored for this chapter yet — start one in WriteAI via the sparkle in the header.'}
           </div>
         </div>
         <button
@@ -1275,12 +1304,14 @@ export default function ChapterEditorPage() {
     {panelOpen && (
       <SidePanel
         tab={panelTab}
-        onTabChange={setPanelTab}
+        onTabChange={openPanel}
         pins={pins}
         onClearPins={() => setPins([])}
         notes={notes}
         onNotesChange={setNotes}
         notesSaving={notesSaving}
+        review={reviewData}
+        reviewLoading={reviewLoading}
         width={panelWidth}
         onWidthChange={setPanelWidth}
         onClose={closePanel}

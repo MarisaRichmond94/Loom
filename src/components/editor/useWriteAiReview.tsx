@@ -3,6 +3,21 @@
 import { useRef, useState } from 'react'
 import { notify, setNotificationBusy } from '@/lib/notifications'
 
+// ORPHANED as of KAN-22 — nothing calls this.
+//
+// The chapter header's Review button now opens Loom's own review panel instead
+// of a second tab; the round trip through WriteAI was the painpoint that ticket
+// exists to remove. The sparkle in the header remains the deliberate route to
+// WriteAI, for the panes that genuinely live there.
+//
+// Kept rather than deleted, matching KAN-9's treatment of /explore: the
+// WriteAI-side route (`?pane=review&book=…`) is still documented in
+// INTEGRATION.md §3 and still works for links already saved, so the handoff is
+// worth being able to restore cheaply. Note it is title-addressed, which
+// KAN-12 exists to move away from — do not extend it without revisiting that.
+//
+// Original behaviour follows.
+//
 // "Review in WriteAI" — the chapter header's Review button. Saves the book's
 // canon manuscript to disk (the same export WriteAI ingests from), then hands
 // off to WriteAI's review page with the book, chapter, and reviewer persona

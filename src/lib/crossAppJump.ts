@@ -61,6 +61,34 @@ export async function authorJumpTarget(seriesId: string): Promise<string> {
 }
 
 /**
+ * The chapter's canon display number — the address WriteAI knows it by.
+ *
+ * Mirrors the mapping the canon export returns as `reviewChapter`: a numbered
+ * chapter is its number, a literal "Prologue" is 0, and anything else — an
+ * unnumbered chapter, or one the canon walk skips — has no address there.
+ *
+ * Deliberately READ-ONLY. The export endpoint returns the same number, but
+ * getting it that way writes the manuscript to ~/Writing; looking up an
+ * existing review must not have side effects (KAN-22).
+ *
+ * Kept beside readerJumpPath because both depend on the walk producing the
+ * same numbering the export wrote into the manifest. If one changes, both do.
+ */
+export async function reviewNumberForChapter(
+  seriesId: string,
+  bookId: string,
+  chapterId: string,
+): Promise<number | null> {
+  const data = await loadManuscriptBook(seriesId, bookId)
+  if (!data) return null
+  const walk = walkBook(data.chapters, data.variables, defaultStoryState(data.variables), {})
+  const walked = walk.chapters.find(ch => ch.id === chapterId)
+  if (!walked) return null
+  if (walked.numbered) return Number(walked.label)
+  return walked.label.trim().toLowerCase() === 'prologue' ? 0 : null
+}
+
+/**
  * Resolve a *display* chapter number to the reader deep link for it.
  *
  * The number is the counter that skips unnumbered chapters (prologue = 0), NOT
