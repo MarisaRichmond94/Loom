@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { access, copyFile, mkdir, readdir, rename, rm, writeFile } from 'fs/promises'
+import { access, copyFile, mkdir, rename, rm, writeFile } from 'fs/promises'
 import { createHash } from 'crypto'
 import { tmpdir } from 'os'
 import path from 'path'
@@ -10,8 +10,8 @@ import { docxToPages } from '@/lib/manuscript/pagesConvert'
 import { readExportFormatting } from '@/lib/exportFormatting'
 import { readProfileSettings } from '@/lib/profileSettings'
 import { readFrontMatterDocx } from '@/lib/frontMatter'
-import { readCanonExportSettings } from '@/lib/canonExportSettings'
 import { loadTemplateStyles, type TemplateStyles } from '@/lib/templateStyles'
+import { chapterContentHash, findCanonDestDir, safeManuscriptTitle } from '@/lib/manuscript/canonManifest'
 import { extractTextFromTipTap } from '@/lib/tiptapText'
 import { docxToPlainText } from '@/lib/manuscript/docxText'
 import { publishEvent } from '@/lib/eventBus'
@@ -30,34 +30,12 @@ import { publishEvent } from '@/lib/eventBus'
 // each save overwrites the last — it's the book's current canon, not an
 // archive.
 
-// Apostrophes and unicode composition are the realistic ways a folder name
-// and a DB title can drift apart while still "being" the same title.
-function normalizeTitle(s: string): string {
-  return s.normalize('NFC').replace(/[‘’]/g, "'").trim().toLowerCase()
-}
-
-async function findDestDir(bookTitle: string): Promise<{ dir: string } | { error: string }> {
-  const { root, subfolder } = await readCanonExportSettings()
-  let entries
-  try {
-    entries = await readdir(root, { withFileTypes: true })
-  } catch {
-    return { error: `Canon save folder not found at ${root}. Set it under Settings → Export.` }
-  }
-  const want = normalizeTitle(bookTitle)
-  const matches = entries
-    .filter(e => e.isDirectory())
-    .filter(e => normalizeTitle(e.name.replace(/^\d+\.\s*/, '')) === want)
-  if (matches.length === 0) {
-    return { error: `No folder matching "${bookTitle}" in ${root}.` }
-  }
-  if (matches.length > 1) {
-    return { error: `Multiple folders match "${bookTitle}": ${matches.map(m => m.name).join(', ')}.` }
-  }
-  const dir = path.join(root, matches[0].name, subfolder)
-  await mkdir(dir, { recursive: true })
-  return { dir }
-}
+// Destination lookup, title sanitizing, and the per-chapter content hash live
+// in canonManifest.ts, shared with the export-status check that reads these
+// manifests back (KAN-13). They must agree by construction: two copies of the
+// hash formula would drift, and the status check would then report every book
+// as permanently stale — the same "warning that carries no signal" failure it
+// exists to fix.
 
 // Content hash of the last successful export per destination path, so an
 // autosave that changed nothing (blur without edits, re-visits) skips the
@@ -86,7 +64,7 @@ export async function POST(req: Request, { params }: Params) {
   const body = await req.json().catch(() => ({})) as { format?: 'pages' | 'docx'; chapterId?: string }
   const format = body.format === 'docx' ? 'docx' : 'pages'
 
-  const dest = await findDestDir(data.bookTitle)
+  const dest = await findCanonDestDir(data.bookTitle, { create: true })
   if ('error' in dest) return NextResponse.json({ error: dest.error }, { status: 422 })
 
   // Every variable at its default value + no overrides = pure canon walk.
@@ -127,7 +105,7 @@ export async function POST(req: Request, { params }: Params) {
     ? profile.pseudonym.trim()
     : profile.authorName.trim() || 'Unknown Author'
 
-  const safeTitle = data.bookTitle.replace(/[/\\:]/g, '-').trim() || 'Manuscript'
+  const safeTitle = safeManuscriptTitle(data.bookTitle)
   const outPath = path.join(dest.dir, `${safeTitle}.${format}`)
   const docxSidecarPath = path.join(dest.dir, `${safeTitle}.docx`)
   const txtSidecarPath = path.join(dest.dir, `${safeTitle}.txt`)
@@ -171,9 +149,7 @@ export async function POST(req: Request, { params }: Params) {
         const t = extractTextFromTipTap(c).trim()
         return n + (t ? t.split(/\s+/).length : 0)
       }, 0),
-      contentHash: createHash('sha256')
-        .update(JSON.stringify({ label: ch.label, pov: ch.pov, date: ch.date, contents: ch.contents }))
-        .digest('hex'),
+      contentHash: chapterContentHash(ch),
     })),
   }, null, 2)
 
