@@ -234,21 +234,30 @@ export default function ReviewPanel({
   // Shown once the top is genuinely out of reach.
   const [scrolledDown, setScrolledDown] = useState(false)
 
-  // Everything the follow effect needs to know about who moved the scroller.
-  // A programmatic scroll and a wheel gesture both fire `scroll`, so the only
-  // way to tell them apart is to remember what we last set it to.
-  const lastAutoScroll = useRef(-1)
+  // Has the writer taken the scroller over? Once she has, the reply streams in
+  // without the view moving — she is reading something, and pulling her away
+  // from it is the whole problem this behaviour exists to avoid.
   const writerTookOver = useRef(false)
+
+  // Detected from INPUT events, not from watching scrollTop change.
+  //
+  // Comparing scrollTop against the last value we assigned looks like it should
+  // work and does not, because the browser is a third party here: CSS scroll
+  // anchoring silently adjusts scrollTop as content grows above the viewport,
+  // to keep what you are looking at stable. Those adjustments fire `scroll`
+  // events carrying values nobody assigned, so a growing reply reads as the
+  // writer scrolling and following switches itself off within a chunk or two.
+  //
+  // A wheel, a touch drag, a scrollbar grab and an arrow key are unambiguous:
+  // they only happen because she did something.
+  function takeOver() {
+    writerTookOver.current = true
+  }
 
   function onConversationScroll() {
     const el = scrollerRef.current
     if (!el) return
     setScrolledDown(el.scrollTop > 240)
-    // Anything more than a rounding difference from our own last assignment is
-    // the writer. From then on the reply streams in without the view moving:
-    // she is reading something, and pulling her away from it is the whole
-    // problem this behaviour exists to avoid.
-    if (Math.abs(el.scrollTop - lastAutoScroll.current) > 2) writerTookOver.current = true
   }
 
   // A revision pass says different things than a first read, and claiming to
@@ -298,7 +307,6 @@ export default function ReviewPanel({
     if (!s || !el) return
     writerTookOver.current = false
     const top = Math.max(0, Math.min(offsetWithin(s, el) - 8, s.scrollHeight - s.clientHeight))
-    lastAutoScroll.current = top
     s.scrollTop = top
   }, [runner.pending?.id])  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -317,7 +325,6 @@ export default function ReviewPanel({
       clientHeight: s.clientHeight,
     })
     if (next !== null) {
-      lastAutoScroll.current = next
       s.scrollTop = next
     }
   }, [runner.streamText])
@@ -471,7 +478,23 @@ export default function ReviewPanel({
         <div
           ref={scrollerRef}
           onScroll={onConversationScroll}
+          // Gestures, not scroll positions. Each of these only fires because
+          // the writer did something, so none of them can be confused with the
+          // browser's own adjustments or with our following.
+          onWheel={takeOver}
+          onTouchMove={takeOver}
+          onPointerDown={takeOver}
+          onKeyDown={takeOver}
           className="flex-1 flex flex-col overflow-y-auto overscroll-contain px-4 py-3"
+          // Turn OFF the browser's scroll anchoring for this scroller.
+          //
+          // Scroll anchoring exists to keep the view stable when content
+          // changes above it, which is normally a kindness. Here it fights us:
+          // a reply streaming in is exactly "content changing", so the browser
+          // adjusts scrollTop on its own, against the position we are trying to
+          // hold. The panel is doing its own deliberate positioning, so the
+          // browser's help is interference.
+          style={{ overflowAnchor: 'none' }}
         >
 
         {/* Each writer turn opens a round, so those are the dividers. */}
