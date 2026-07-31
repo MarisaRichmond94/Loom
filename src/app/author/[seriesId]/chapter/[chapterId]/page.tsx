@@ -128,6 +128,8 @@ export default function ChapterEditorPage() {
     data: reviewData,
     loading: reviewLoading,
     hasReview,
+    setData: setReviewData,
+    refetch: refetchReview,
   } = useChapterReview(seriesId, reviewBookId, chapterId)
   useRegisterShortcuts('chapter', CHAPTER_SHORTCUTS)
 
@@ -718,6 +720,33 @@ export default function ChapterEditorPage() {
     openPanel('refs')
   }
 
+  /**
+   * The chapter's rendered story text for the active path.
+   *
+   * Extracted so Copy and the review panel emit BYTE-IDENTICAL text (KAN-22).
+   * The review is only trustworthy if what the reviewer read is what Copy
+   * would have given you; two implementations would drift and the difference
+   * would be invisible.
+   *
+   * Reads `currentBlocksRef` — the LIVE editor state, not the saved chapter.
+   * That is what removes the resync step: the reviewer sees what is on screen,
+   * with no export, no ingest, and nothing written to disk.
+   */
+  function buildCanonText(): string {
+    if (!chapter) return ''
+    const blocks = currentBlocksRef.current ?? chapter.blocks
+    const storyState = buildStoryState(series.variables, lensState)
+    const resolutions = resolveChapter(blocks, storyState, varTypeMap(series.variables))
+    const parts: string[] = []
+    for (const block of blocks) {
+      const r = resolutions.get(block.id)
+      if (!r?.included || !r.source) continue
+      const text = substituteVarTemplates(extractPlainText(r.source), storyState, s => s)
+      if (text) parts.push(text)
+    }
+    return parts.join('\n\n')
+  }
+
   async function copyCanonText() {
     if (!chapter) return
     const blocks = currentBlocksRef.current ?? chapter.blocks
@@ -743,6 +772,10 @@ export default function ChapterEditorPage() {
       setTimeout(() => setCopyDone(false), 2000)
     } catch { /* clipboard denied */ }
   }
+  // Live ref so the panel always reads current blocks and lens without being
+  // re-rendered on every keystroke.
+  const buildCanonTextRef = useRef(buildCanonText)
+  buildCanonTextRef.current = buildCanonText
 
   async function handleDeleteChapter() {
     const book = series.books.find(b => b.chapters.some(c => c.id === chapterId))
@@ -1312,6 +1345,15 @@ export default function ChapterEditorPage() {
         notesSaving={notesSaving}
         review={reviewData}
         reviewLoading={reviewLoading}
+        reviewCtx={{
+          seriesId,
+          bookId: reviewBookId,
+          chapterId,
+          bookTitle: series?.books.find(b => b.id === reviewBookId)?.title,
+          getCanonText: () => buildCanonTextRef.current(),
+          onSession: s => setReviewData(d => ({ ...(d ?? {}), review: s })),
+          onRefetch: refetchReview,
+        }}
         width={panelWidth}
         onWidthChange={setPanelWidth}
         onClose={closePanel}

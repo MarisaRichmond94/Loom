@@ -42,6 +42,7 @@ export default function SidePanel({
   notesSaving,
   review,
   reviewLoading,
+  reviewCtx,
   width,
   onWidthChange,
   onClose,
@@ -53,8 +54,17 @@ export default function SidePanel({
   notes: string
   onNotesChange: (value: string) => void
   notesSaving: boolean
-  review: { review: ReviewSession | null; reason?: string; total?: number } | null
+  review: { review: ReviewSession | null; reason?: string; total?: number; chapter?: number | null } | null
   reviewLoading: boolean
+  reviewCtx: {
+    seriesId: string
+    bookId?: string
+    chapterId: string
+    bookTitle?: string
+    getCanonText: () => string
+    onSession: (s: ReviewSession | null) => void
+    onRefetch: () => void
+  }
   width: number
   onWidthChange: (width: number) => void
   onClose: () => void
@@ -169,7 +179,7 @@ export default function SidePanel({
         {tab === 'refs'
           ? <ReferenceList pins={pins} />
           : tab === 'review'
-            ? <ReviewPanel data={review} loading={reviewLoading} />
+            ? <ReviewPanel data={review} loading={reviewLoading} {...reviewCtx} />
             : <NotesPanel value={notes} onChange={onNotesChange} />}
       </div>
     </aside>
