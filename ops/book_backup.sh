@@ -38,6 +38,16 @@ LOOM_SNAPSHOT_DIR="$HOME/Backups/Loom"
 # It is gitignored, so before this nothing covered it at all.
 WRITER_DATA_DIR="$HOME/Documents/GitHub/WriteAi/writer_data"
 
+# WriteAI index essentials (KAN-28). data/ is 13GB and mostly derived, but
+# "derived" is not the same as "cheap to lose": rebuilding it re-runs LLM
+# extraction, and sync has cost $50 all-time with one full re-ingest at $35.
+# Roughly 8MB carries essentially all of that spend.
+WRITEAI_DATA_DIR="$HOME/Documents/GitHub/WriteAi/data"
+# Floor for "valid SQLite but suspiciously empty" — the index held 1431 chunks
+# on 2026-07-31. Same reasoning as MIN_CHAPTERS: wide margin, so ordinary
+# re-chunking never trips it.
+MIN_CHUNKS=500
+
 # Output validation (KAN-14). Exit codes only prove a step ran; these prove
 # what it produced is usable.
 VERIFY_LIB="$HOME/Scripts/lib/backup_verify.sh"
@@ -318,6 +328,74 @@ if [[ -d "$WRITER_DATA_DIR" ]]; then
   fi
 else
   log "WriteAI writer_data not found at ${WRITER_DATA_DIR} — skipping."
+fi
+
+###############################################################################
+# 1d) WriteAI index essentials (KAN-28)                                       #
+#                                                                             #
+#     data/ is 13GB and was excluded as "derived". True, but derived is not    #
+#     the same as cheap: rebuilding it re-runs LLM extraction. Sync has cost   #
+#     $50 all-time, one full re-ingest $35, enrichment another $25.            #
+#                                                                             #
+#     ~8MB carries essentially all of that:                                    #
+#       series_metadata.sqlite  chunks, characters, events, summaries,         #
+#                               foreshadowing, timeline — every extraction     #
+#                               and enrichment result. 19MB, ~8MB gzipped.     #
+#       chunk_hashes.json       the ingest's change-detection state. Lose it   #
+#                               and the next ingest may re-extract everything. #
+#                                                                             #
+#     DELIBERATELY NOT BACKED UP, do not "fix" this:                          #
+#       chroma_db (110MB)      local nomic embeddings — free, just slow        #
+#       extracted_text (143MB) re-parsed from ~/Writing — free                 #
+#       rich_text (5.4MB)      same                                            #
+#       backups/ (12GB)        WriteAI's own pre-ingest snapshots, 112 of them #
+#                              and never pruned. Backing up backups is not a   #
+#                              backup strategy. See KAN-28 for retention.      #
+#                                                                             #
+#     sqlite3 .backup, NOT cp: this database carries a multi-MB WAL, so a raw  #
+#     file copy of the main file alone is silently incomplete.                 #
+###############################################################################
+WRITEAI_DB="$WRITEAI_DATA_DIR/series_metadata.sqlite"
+if [[ -f "$WRITEAI_DB" ]] && command -v sqlite3 >/dev/null 2>&1; then
+  log "Snapshotting WriteAI index (series_metadata.sqlite)..."
+  WAI_GZ="$RUN_DIR_LOCAL/writeai-series_metadata.db.gz"
+  rm -f "$RUN_DIR_LOCAL/writeai-series_metadata.db" "$WAI_GZ"
+  wai_ok=0
+  if sqlite3 "$WRITEAI_DB" ".backup '$RUN_DIR_LOCAL/writeai-series_metadata.db'" 2>>"$LOG_FILE" \
+     && gzip -f "$RUN_DIR_LOCAL/writeai-series_metadata.db"; then
+    if [[ "$VERIFY_AVAILABLE" == 1 ]]; then
+      if wai_out="$(verify_db_snapshot "$WAI_GZ" "$MIN_CHUNKS" chunks)"; then
+        wai_ok=1
+      else
+        wai_ok=0
+      fi
+      while IFS= read -r vline; do
+        if [[ -n "$vline" ]]; then log "  writeai index: $vline"; fi
+      done <<< "$wai_out"
+    else
+      wai_ok=1
+      log "  writeai index: NOT VERIFIED — validator library missing at $VERIFY_LIB"
+    fi
+  else
+    log "  writeai index: sqlite3 .backup or gzip failed"
+  fi
+
+  # The ingest's change-detection state. Tiny, and losing it is expensive.
+  if [[ -f "$WRITEAI_DATA_DIR/chunk_hashes.json" ]]; then
+    /usr/bin/ditto "$WRITEAI_DATA_DIR/chunk_hashes.json" \
+      "$RUN_DIR_LOCAL/writeai-chunk_hashes.json" 2>>"$LOG_FILE" \
+      && log "  writeai index: chunk_hashes.json copied" \
+      || log "  WARNING: failed to copy chunk_hashes.json"
+  fi
+
+  if [[ "$wai_ok" == 1 ]]; then
+    log "WriteAI index snapshot complete and verified."
+  else
+    VALIDATION_OK=0
+    log "WARNING: WriteAI index snapshot FAILED VERIFICATION — keeping the suspect file at $WAI_GZ. Rebuilding this costs real API spend."
+  fi
+else
+  log "WriteAI index not found at ${WRITEAI_DB} — skipping."
 fi
 
 #############################################################################################

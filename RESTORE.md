@@ -16,6 +16,8 @@ only swap it in deliberately, at the end, if you decide to.
 | `*.loom.json` | `~/Backups/<date>/loom-json/<book>/` | Per-book prose **plus CYOA choices** |
 | `*.pages` / `.txt` / `.docx` | `~/Writing/`, iCloud Books | Linear manuscript only, no branches |
 | `writeai-writer_data/*.json` | `~/Backups/<date>/` **and** `gdrive:Backups/<date>/` | WriteAI's **writer-authored** state (KAN-27) |
+| `writeai-series_metadata.db.gz` | same | WriteAI's index — the parts that cost money (KAN-28) |
+| `writeai-chunk_hashes.json` | same | Ingest change-detection state |
 
 Backups run nightly at **22:30** (`~/Scripts/book_backup.sh` →
 `ops/book_backup.sh`, `com.marisarichmond.bookbackup.plist`). Worst case you
@@ -138,9 +140,35 @@ launchctl bootstrap gui/$(id -u) \
   ~/Library/LaunchAgents/com.marisarichmond.writeai.plist
 ```
 
-**Do not restore `data/`** — the ~11 GB Chroma index and extracted text are
-derived and deliberately not backed up. If that store is damaged, re-ingest
-from `~/Writing` rather than hunting for a copy that does not exist.
+## 4c. Restoring WriteAI's index
+
+`data/` is 13 GB and mostly derived, so only the parts that cost **money** are
+backed up (KAN-28) — about 8 MB carrying ~$75 of accumulated API spend.
+
+```sh
+launchctl bootout gui/$(id -u)/com.marisarichmond.writeai
+
+gunzip -c ~/Backups/<date>/writeai-series_metadata.db.gz \
+  > ~/Documents/GitHub/WriteAi/data/series_metadata.sqlite
+cp ~/Backups/<date>/writeai-chunk_hashes.json \
+   ~/Documents/GitHub/WriteAi/data/chunk_hashes.json
+
+launchctl bootstrap gui/$(id -u) \
+  ~/Library/LaunchAgents/com.marisarichmond.writeai.plist
+```
+
+Restore `chunk_hashes.json` **together with** the database. It is the ingest's
+change-detection state; a mismatched pair can make the next ingest re-extract
+everything, which is exactly the spend this backup exists to avoid.
+
+Then rebuild the free parts by re-ingesting from Settings → Sync: `chroma_db`
+(local embeddings), `extracted_text` and `rich_text` are regenerated at no API
+cost, just time.
+
+**Do not look for a backup of `chroma_db`, `extracted_text` or `backups/`** —
+they are deliberately excluded. The first two are free to rebuild; `backups/`
+is WriteAI's own 12 GB of pre-ingest snapshots, and backing up backups is not a
+strategy.
 
 `plan_outline.json` is machine-generated (verified 2026-07-30) and rebuilds
 from the index, so it is the one file here you can afford to lose.

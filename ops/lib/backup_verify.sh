@@ -15,15 +15,19 @@
 # return as a loud warning, NOT as fatal — see book_backup.sh's non-fatal
 # design notes.
 
-# verify_db_snapshot <path/to/snapshot.db.gz> [min_chapters]
+# verify_db_snapshot <path/to/snapshot.db.gz> [min_rows] [table]
 #
 # Proves the gzip stream is intact, the database inside decompresses, passes
 # SQLite's own integrity_check, and carries real content. The content floor
 # exists because an empty-but-perfectly-valid database passes integrity_check
 # and would otherwise be reported as a healthy backup.
+#
+# `table` defaults to Chapter (Loom's dev.db). WriteAI's series_metadata.sqlite
+# passes "chunks" instead — same checks, different schema (KAN-28).
 verify_db_snapshot() {
   local gz="$1"
   local min_chapters="${2:-1}"
+  local table="${3:-Chapter}"
   local tmp result count
 
   [[ -f "$gz" ]] || { echo "snapshot file missing: $gz"; return 1; }
@@ -52,19 +56,19 @@ verify_db_snapshot() {
     return 1
   fi
 
-  count="$(sqlite3 "$tmp" 'SELECT COUNT(*) FROM Chapter;' 2>/dev/null)" || count=""
+  count="$(sqlite3 "$tmp" "SELECT COUNT(*) FROM \"$table\";" 2>/dev/null)" || count=""
   rm -f "$tmp"
 
   if ! [[ "$count" =~ ^[0-9]+$ ]]; then
-    echo "could not read chapter count from snapshot (schema missing?)"
+    echo "could not read $table count from snapshot (schema missing?)"
     return 1
   fi
   if (( count < min_chapters )); then
-    echo "snapshot holds only $count chapters, below the floor of $min_chapters — valid SQLite but suspiciously empty"
+    echo "snapshot holds only $count rows in $table, below the floor of $min_chapters — valid SQLite but suspiciously empty"
     return 1
   fi
 
-  echo "integrity_check ok, $count chapters"
+  echo "integrity_check ok, $count rows in $table"
   return 0
 }
 
