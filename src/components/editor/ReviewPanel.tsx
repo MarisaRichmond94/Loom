@@ -350,6 +350,20 @@ export default function ReviewPanel({
           )
         })}
 
+        {/* The question just asked, before the session that will hold it
+            exists. Same markup as a stored writer turn, so nothing shifts when
+            the two swap over on completion. */}
+        {runner.pending && (
+          <div className={(review?.messages?.length ?? 0) > 0 ? 'mt-6 mb-3' : 'mb-3'}>
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-accent">
+              You
+            </div>
+            <div className="rounded-r border-l-2 border-accent/60 bg-accent/10 px-2.5 py-2 text-ink">
+              <ReviewMarkdown text={runner.pending.content ?? ''} />
+            </div>
+          </div>
+        )}
+
         {/* The first pass is the slow, expensive one — it includes the Ideal
             Version rewrite and reads the chapter cold. The animation carries
             that wait; follow-ups are quick enough that a line of text is
