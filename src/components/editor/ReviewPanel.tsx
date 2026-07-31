@@ -6,6 +6,7 @@ import { ReviewMarkdown } from './reviewMarkdown'
 import ReviewAnimation from './ReviewAnimation'
 import { DEFAULT_FOCUS, useReviewRunner } from './useReviewRunner'
 import { buildReviewTurn } from './reviewTurn'
+import { followScrollTop } from './reviewScroll'
 import { PanelEmpty, PanelEmptyState } from './PanelEmptyState'
 
 // The chapter's WriteAI review, in Loom's right dock (KAN-22).
@@ -225,17 +226,29 @@ export default function ReviewPanel({
   //
   // Assigning scrollTop moves exactly one element and never propagates.
   const scrollerRef = useRef<HTMLDivElement>(null)
-  // Marks the turn currently being asked, so it can be brought to the top of
-  // the panel once — see the scroll effect below.
+  // The turn being asked, and the reply arriving under it. Both are scroll
+  // anchors — see the follow effect below.
   const turnRef = useRef<HTMLDivElement>(null)
+  const responseRef = useRef<HTMLDivElement>(null)
 
   // Shown once the top is genuinely out of reach.
   const [scrolledDown, setScrolledDown] = useState(false)
+
+  // Everything the follow effect needs to know about who moved the scroller.
+  // A programmatic scroll and a wheel gesture both fire `scroll`, so the only
+  // way to tell them apart is to remember what we last set it to.
+  const lastAutoScroll = useRef(-1)
+  const writerTookOver = useRef(false)
 
   function onConversationScroll() {
     const el = scrollerRef.current
     if (!el) return
     setScrolledDown(el.scrollTop > 240)
+    // Anything more than a rounding difference from our own last assignment is
+    // the writer. From then on the reply streams in without the view moving:
+    // she is reading something, and pulling her away from it is the whole
+    // problem this behaviour exists to avoid.
+    if (Math.abs(el.scrollTop - lastAutoScroll.current) > 2) writerTookOver.current = true
   }
 
   // A revision pass says different things than a first read, and claiming to
@@ -264,24 +277,50 @@ export default function ReviewPanel({
   }, [runner.streamText])
 
   function scrollToTop() {
+    // The smooth scroll fires scroll events that will not match our last
+    // assignment, so this also counts as the writer taking over — which is
+    // right: having deliberately gone to the top mid-stream, she should not be
+    // dragged back down by the next chunk.
     scrollerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  // Move ONCE, when a turn starts: bring the writer's question to the top of
-  // the panel so the reply has the whole panel to fill beneath it.
-  //
-  // It used to follow the reply down, re-pinning to the bottom on every SSE
-  // chunk. Nobody reads at streaming speed, so that just dragged the writer
-  // past text she had not read, and she scrolled back up anyway. Reading is
-  // the point; keeping the newest token on screen is not.
+  /** Distance from the top of the scroller's content to the top of `el`. */
+  function offsetWithin(s: HTMLElement, el: HTMLElement) {
+    return el.getBoundingClientRect().top - s.getBoundingClientRect().top + s.scrollTop
+  }
+
+  // A new turn starts: bring the question toward the top so the reply has the
+  // panel to fill beneath it, and hand control back to the follow effect.
   useEffect(() => {
     if (!runner.pending) return
     const s = scrollerRef.current
     const el = turnRef.current
     if (!s || !el) return
-    const top = el.getBoundingClientRect().top - s.getBoundingClientRect().top + s.scrollTop
-    s.scrollTo({ top: Math.max(0, top - 8), behavior: 'smooth' })
+    writerTookOver.current = false
+    const top = Math.max(0, Math.min(offsetWithin(s, el) - 8, s.scrollHeight - s.clientHeight))
+    lastAutoScroll.current = top
+    s.scrollTop = top
   }, [runner.pending?.id])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Follow the reply as it streams — but only until its first line reaches the
+  // top of the panel, then stop and let it fill downward. The arithmetic and
+  // the reasoning live in reviewScroll.ts, where they can be tested.
+  useEffect(() => {
+    if (!runner.streamText || writerTookOver.current) return
+    const s = scrollerRef.current
+    const el = responseRef.current
+    if (!s || !el) return
+    const next = followScrollTop({
+      targetTop: offsetWithin(s, el) - 8,
+      scrollTop: s.scrollTop,
+      scrollHeight: s.scrollHeight,
+      clientHeight: s.clientHeight,
+    })
+    if (next !== null) {
+      lastAutoScroll.current = next
+      s.scrollTop = next
+    }
+  }, [runner.streamText])
 
   // Leaving the chapter mid-stream would otherwise keep the request alive.
   useEffect(() => () => runner.cancel(), [chapterId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -510,7 +549,9 @@ export default function ReviewPanel({
               </div>
             )}
             {runner.streamText && (
-              <div className="loom-fade-in mb-4">
+              // The scroll anchor: this block's top is what rises to the top of
+              // the panel and then stays there.
+              <div ref={responseRef} className="loom-fade-in mb-4">
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
                   {review?.focus ?? DEFAULT_FOCUS}
                 </div>
