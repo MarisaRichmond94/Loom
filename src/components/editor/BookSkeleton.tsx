@@ -14,11 +14,16 @@ export default function BookSkeleton() {
           resized on load, which is the exact jump the skeleton exists to
           prevent. Widths approximate px-3 padding + a 12px icon + the label.
 
-          Preview is last and accent-filled, matching it as the primary action. */}
+          Preview is last and accent-filled, matching it as the primary action.
+
+          Widths are per-label at text-xs with px-3 padding, a 12px icon and a
+          gap-1.5: Published/Draft ~96 (dot, no icon), Backup ~82, Save ~69,
+          Preview ~89. The first can only match one of its two labels, so it is
+          sized for "Published"; a Draft book shows a small gap there. */}
       <div className="flex items-center justify-end gap-2 mb-6">
         <div className="h-7 w-24 bg-surface-overlay rounded" />
-        <div className="h-7 w-24 bg-surface-overlay rounded" />
         <div className="h-7 w-20 bg-surface-overlay rounded" />
+        <div className="h-7 w-16 bg-surface-overlay rounded" />
         <div className="h-7 w-24 bg-accent/30 rounded" />
       </div>
 

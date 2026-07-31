@@ -33,20 +33,33 @@ export default function SeriesPageSkeleton() {
         </div>
         <div>
           <div className="h-3 w-16 bg-surface-muted rounded mb-2" />
-          {/* Chip cloud */}
+          {/* Genre chips. Genre is a MULTI-SELECT against the fixed list in
+              @/lib/genres, so the real row always renders ALL of them —
+              currently 16 — not just the ones selected. The skeleton drew 12
+              uniform-ish stubs, so the cloud re-wrapped when data landed.
+              Widths below are per-label (text-xs, px-2.5), longest "Contemporary"
+              and "Young Adult", shortest "CYOA". Re-derive if genres.ts changes. */}
           <div className="flex flex-wrap gap-1.5">
-            {[64, 56, 52, 60, 48, 56, 52, 60, 56, 48, 64, 52].map((w, i) => (
+            {[76, 57, 94, 51, 45, 51, 76, 63, 82, 57, 63, 82, 63, 57, 70, 88].map((w, i) => (
               <div key={i} className="h-6 bg-surface-muted rounded-full" style={{ width: w }} />
             ))}
           </div>
         </div>
         <div>
           <div className="h-3 w-20 bg-surface-muted rounded mb-2" />
-          {/* Keyword chips + the trailing input */}
+          {/* Keyword chips + the trailing input. Unlike genres these are
+              free-form, so the count is per-series; sized for the primary
+              user's two ("Psychological Thriller", "Dark") on the same basis
+              as the five book stubs below. Each carries a remove "×", hence
+              the extra ~14px over a plain chip.
+
+              The input is flex-1 min-w-[140px] in the real editor — it GROWS
+              to fill the row. A fixed w-36 stub left a gap that closed on
+              load, so it matches those constraints instead. */}
           <div className="flex flex-wrap gap-1.5">
-            <div className="h-6 w-24 bg-surface-muted rounded-full" />
+            <div className="h-6 w-44 bg-surface-muted rounded-full" />
             <div className="h-6 w-16 bg-surface-muted rounded-full" />
-            <div className="h-6 w-36 bg-surface-overlay border border-dashed border-accent/20 rounded-full" />
+            <div className="h-6 flex-1 min-w-[140px] bg-surface-overlay border border-dashed border-accent/20 rounded-full" />
           </div>
         </div>
       </div>
@@ -71,7 +84,14 @@ export default function SeriesPageSkeleton() {
                   ))}
                 </div>
               </div>
+              {/* THREE controls, not two: "Mark as in progress" (or the
+                  shorter "In progress" once set), Backup, and Delete. The
+                  skeleton drew two narrow stubs — about 152px against a real
+                  row nearer 300px — so every card's control row jumped
+                  rightward on load. Sized for the longer "Mark as in progress",
+                  which is the state most books are in. */}
               <div className="flex justify-end gap-2 mt-3">
+                <div className="h-7 w-40 bg-surface-overlay rounded" />
                 <div className="h-7 w-20 bg-surface-overlay rounded" />
                 <div className="h-7 w-16 bg-surface-overlay rounded" />
               </div>
