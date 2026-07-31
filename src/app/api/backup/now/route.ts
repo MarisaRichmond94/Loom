@@ -83,11 +83,22 @@ export async function POST() {
   const [, size, chapters, words, dest] = match
   return NextResponse.json({
     ok: true,
-    size,
+    size: humanSize(size),
     chapters: Number(chapters),
     words: Number(words),
     path: dest,
     file: path.basename(dest),
+    // The snapshot lands in <BACKUP_ROOT>/<date>/, and Drive mirrors that
+    // layout, so the parent directory name is the date the Drive link needs.
+    date: path.basename(path.dirname(dest)),
     uploaded: /Upload complete/.test(result.out),
   })
+}
+
+// `du -h` writes "25M", which reads as ambiguous — megabits, megabytes, or a
+// typo. Spell out the unit.
+function humanSize(raw: string): string {
+  const m = /^([\d.]+)\s*([KMGT])i?B?$/i.exec(raw.trim())
+  if (!m) return raw
+  return `${m[1]} ${m[2].toUpperCase()}B`
 }

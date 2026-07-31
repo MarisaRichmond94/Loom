@@ -15,10 +15,23 @@ export type AppNotification = {
   read: boolean
 }
 
+export type ToastAction = {
+  label: string
+  // Either navigate (href) or run something (onClick). A toast action never
+  // does both — the toast is a place to hand off, not a place to work.
+  href?: string
+  onClick?: () => void
+}
+
 export type AppToast = {
   id: number
-  kind: 'error' | 'warn'
+  // 'ok' exists for toasts raised by showToast(); notify() still only ever
+  // raises 'error' and 'warn', so nothing about the editor's toasts changes.
+  kind: 'error' | 'warn' | 'ok'
   message: string
+  // Optional second line — the detail you want available but not shouted.
+  detail?: string
+  actions?: ToastAction[]
 }
 
 type Snapshot = {
@@ -73,6 +86,36 @@ export function notify(kind: AppNotification['kind'], message: string) {
     setTimeout(() => { toasts = toasts.filter(t => t.id !== id); emit() }, 5000)
   }
   emit()
+}
+
+// Raise a toast directly, without a bell notification behind it.
+//
+// Separate from notify() on purpose. notify() is for things the writer should
+// be able to find again later, so it files a notification and only toasts when
+// the kind is bad enough to interrupt. This is for a result that is worth
+// showing at the moment it happens and worth forgetting afterwards — a
+// finished backup, say — where a permanent panel sitting on the page implies
+// there is something left to do with it.
+export function showToast(opts: {
+  kind: AppToast['kind']
+  message: string
+  detail?: string
+  actions?: ToastAction[]
+  // Longer than notify()'s 5s by default: a toast carrying actions has to
+  // outlast the time it takes to read it and decide to click.
+  durationMs?: number
+}) {
+  const id = nextId++
+  toasts = [...toasts, {
+    id,
+    kind: opts.kind,
+    message: opts.message,
+    detail: opts.detail,
+    actions: opts.actions,
+  }]
+  setTimeout(() => { toasts = toasts.filter(t => t.id !== id); emit() }, opts.durationMs ?? 15000)
+  emit()
+  return id
 }
 
 export function setNotificationBusy(value: boolean) {

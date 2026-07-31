@@ -11,6 +11,8 @@ import ExportFormattingSection from '@/components/ExportFormattingSection'
 import CanonSaveLocationSection from '@/components/CanonSaveLocationSection'
 import ManuscriptTemplateSection from '@/components/ManuscriptTemplateSection'
 import EditorColorsSection from '@/components/EditorColorsSection'
+import ToastLayer from '@/components/ToastLayer'
+import { showToast } from '@/lib/notifications'
 
 async function cropImageToBlob(imageSrc: string, pixelCrop: Area): Promise<Blob> {
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -48,14 +50,9 @@ export default function SettingsPage() {
   })
   const [backupStatus, setBackupStatus] = useState<{ ok: boolean; message: string } | null>(null)
   const [runningBackup, setRunningBackup] = useState(false)
-  // On-demand whole-database snapshot (KAN-26). Distinct from `backupStatus`
-  // above, which reports on the per-book .loom.json export.
-  const [backupNow, setBackupNow] = useState<{
-    state: 'idle' | 'running' | 'done' | 'error'
-    result?: { size: string; chapters: number; words: number; file: string; uploaded: boolean }
-    error?: string
-    log?: string
-  }>({ state: 'idle' })
+  // On-demand whole-database snapshot (KAN-26). Only the in-flight state lives
+  // here — the result is a toast, so there is nothing to hold afterwards.
+  const [snapshotting, setSnapshotting] = useState(false)
   const [pickingFolder, setPickingFolder] = useState(false)
   const [hasAvatar, setHasAvatar] = useState(false)
   const [avatarTs, setAvatarTs] = useState(0)
@@ -247,24 +244,68 @@ export default function SettingsPage() {
     setRunningBackup(false)
   }
 
+  async function revealBackup(p: string) {
+    const res = await fetch('/api/backup/reveal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: p }),
+    })
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({ error: null }))
+      showToast({ kind: 'error', message: error ?? 'Could not show that in Finder.' })
+    }
+  }
+
+  async function openInDrive(date: string) {
+    // Resolved on click rather than up front: the snapshot must not wait on
+    // Drive, and a Drive hiccup must not make a good backup look failed.
+    const res = await fetch(`/api/backup/drive-link?date=${encodeURIComponent(date)}`)
+    const body = await res.json().catch(() => ({}))
+    if (res.ok && body.url) window.open(body.url, '_blank', 'noopener,noreferrer')
+    else showToast({ kind: 'error', message: body.error ?? 'Could not open Google Drive.' })
+  }
+
   async function runBackupNow() {
-    setBackupNow({ state: 'running' })
+    setSnapshotting(true)
     try {
       const res = await fetch('/api/backup/now', { method: 'POST' })
       const result = await res.json()
       // Trust the payload, not the status code. The route only sets ok:true
       // after parsing the script's verified "Snapshot OK" line.
       if (!res.ok || !result.ok) {
-        setBackupNow({ state: 'error', error: result.error ?? 'Snapshot failed.', log: result.log })
+        setSnapshotting(false)
+        showToast({
+          kind: 'error',
+          message: result.error ?? 'Snapshot failed.',
+          detail: result.log?.trim().split('\n').slice(-1)[0],
+          // Failures stay up longer. A backup that did not happen is worth
+          // more of the writer's attention than one that did.
+          durationMs: 30000,
+        })
         return
       }
-      setBackupNow({ state: 'done', result })
+      setSnapshotting(false)
+      const actions = [{ label: 'Show in Finder', onClick: () => revealBackup(result.path) }]
+      // Only offer Drive when the upload actually succeeded — a link to a
+      // folder the file never reached is worse than no link.
+      if (result.uploaded) {
+        actions.push({ label: 'Open in Drive', onClick: () => openInDrive(result.date) })
+      }
+      showToast({
+        kind: 'ok',
+        // Lead with what was verified, not that it finished.
+        message: `Backed up ${result.chapters.toLocaleString()} chapters, ${result.words.toLocaleString()} words.`,
+        detail: `${result.size}${result.uploaded ? ' · copied to Google Drive' : ' · not uploaded'}`,
+        actions,
+      })
     } catch (err) {
+      setSnapshotting(false)
       // A network-level failure here is almost always the 4-minute timeout or
       // a restarted server — say so rather than showing an empty error.
-      setBackupNow({
-        state: 'error',
-        error: err instanceof Error ? err.message : 'Could not reach the server.',
+      showToast({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Could not reach the server.',
+        durationMs: 30000,
       })
     }
   }
@@ -281,6 +322,9 @@ export default function SettingsPage() {
           every Loom surface except the reader (KAN-8) — it used to sit only on
           author pages, which read as incidental rather than chosen. */}
       <AppHeader showAppSwitch lightMode={lightMode} onToggleLightMode={toggleLightMode} />
+      {/* Settings sits outside the author layout, which is where ToastLayer is
+          normally mounted — so it needs its own. */}
+      <ToastLayer />
 
       <main className={`flex-1 overflow-y-auto${lightMode ? ' light-body' : ''}`}>
         <div className="px-8 py-10">
@@ -524,35 +568,18 @@ export default function SettingsPage() {
                 </div>
                 <button
                   onClick={runBackupNow}
-                  disabled={backupNow.state === 'running'}
+                  disabled={snapshotting}
                   className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-white text-xs font-medium hover:opacity-90 transition disabled:opacity-50"
                 >
                   <LuDatabaseBackup size={11} />
-                  {backupNow.state === 'running' ? 'Snapshotting…' : 'Snapshot Now'}
+                  {snapshotting ? 'Snapshotting…' : 'Snapshot Now'}
                 </button>
               </div>
 
-              {/* Report what was actually verified, not just that it finished.
-                  "It exited 0" is the claim KAN-14 exists to stop trusting. */}
-              {backupNow.state === 'done' && backupNow.result && (
-                <div className="mt-4 rounded border border-accent/20 bg-accent/5 px-3 py-2 text-xs text-ink-muted">
-                  <span className="text-accent font-medium">Verified.</span>{' '}
-                  {backupNow.result.size} · {backupNow.result.chapters.toLocaleString()} chapters ·{' '}
-                  {backupNow.result.words.toLocaleString()} words
-                  {backupNow.result.uploaded ? ' · copied to Drive' : ' · not uploaded'}
-                  <div className="mt-1 font-mono text-[10px] text-ink-faint break-all">
-                    {backupNow.result.file}
-                  </div>
-                </div>
-              )}
-              {backupNow.state === 'error' && (
-                <div className="mt-4 rounded border border-choice-kill/40 bg-choice-kill/10 px-3 py-2 text-xs text-choice-kill">
-                  {backupNow.error}
-                  {backupNow.log && (
-                    <pre className="mt-1.5 whitespace-pre-wrap font-mono text-[10px] opacity-80">{backupNow.log}</pre>
-                  )}
-                </div>
-              )}
+              {/* The result is a toast, not a panel here. A verified backup is
+                  worth seeing when it happens and worth forgetting afterwards;
+                  a box that stays on the page implies there is something left
+                  to do with it. */}
             </div>
 
             <div className="bg-surface-raised border border-accent/10 rounded-xl p-6 flex flex-col gap-6">
