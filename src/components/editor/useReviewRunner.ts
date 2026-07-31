@@ -40,6 +40,12 @@ export function useReviewRunner(onPersisted: (s: ReviewSession) => void) {
   const [streamText, setStreamText] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [cost, setCost] = useState<number | null>(null)
+  // The writer's turn, while it is in flight. It is not in the session yet —
+  // the session is only written once the reviewer has answered — so without
+  // this the panel had nothing to show for the question just asked, and the
+  // conversation assembled backwards: progress and reply first, and the
+  // writer's own message appearing under them at the very end.
+  const [pending, setPending] = useState<ReviewMessage | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   const cancel = useCallback(() => {
@@ -57,8 +63,6 @@ export function useReviewRunner(onPersisted: (s: ReviewSession) => void) {
     setError(null)
     setCost(null)
 
-    // The writer's turn goes in immediately so the conversation reads in order
-    // while the reply streams beneath it.
     const askedAt = new Date().toISOString()
     const userMsg: ReviewMessage = {
       id: newSessionId(),
@@ -67,6 +71,12 @@ export function useReviewRunner(onPersisted: (s: ReviewSession) => void) {
         || `Please give me a ${args.focus} review of this chapter.`,
       timestamp: askedAt,
     }
+    // Show the writer's turn NOW, so the conversation grows downward in the
+    // order it happened: her message, then the progress line, then the reply
+    // replacing that line beneath it. Cleared in `finally`, by which point the
+    // same message is in the persisted session — React batches the two, so it
+    // hands over without a flicker.
+    setPending(userMsg)
 
     let acc = ''
     try {
@@ -170,8 +180,12 @@ export function useReviewRunner(onPersisted: (s: ReviewSession) => void) {
       abortRef.current = null
       setStreaming(false)
       setStreamText('')
+      // On success the persisted session now carries this message; on failure
+      // or cancellation nothing was saved, so leaving it on screen would show
+      // a question that was never asked.
+      setPending(null)
     }
   }, [onPersisted])
 
-  return { run, cancel, streaming, streamText, error, cost, setError }
+  return { run, cancel, streaming, streamText, error, cost, setError, pending }
 }
