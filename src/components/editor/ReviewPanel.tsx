@@ -6,6 +6,7 @@ import { ReviewMarkdown } from './reviewMarkdown'
 import ReviewAnimation from './ReviewAnimation'
 import { DEFAULT_FOCUS, useReviewRunner } from './useReviewRunner'
 import { buildReviewTurn } from './reviewTurn'
+import { PanelEmpty, PanelEmptyState } from './PanelEmptyState'
 
 // The chapter's WriteAI review, in Loom's right dock (KAN-22).
 //
@@ -192,11 +193,25 @@ export default function ReviewPanel({
   // doing the very thing she is reading.
   const stickToBottom = useRef(true)
 
+  // Shown once the top is genuinely out of reach. A threshold rather than
+  // `scrollTop > 0` so the control doesn't blink in and out during the small
+  // scrolls that happen while a reply streams in.
+  const [scrolledDown, setScrolledDown] = useState(false)
+
   function onConversationScroll() {
     const el = scrollerRef.current
     if (!el) return
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
     stickToBottom.current = distanceFromBottom <= 48
+    setScrolledDown(el.scrollTop > 240)
+  }
+
+  function scrollToTop() {
+    // Going to the top is a deliberate move away from the live end, so stop
+    // pinning — otherwise the next streamed chunk would drag you straight back
+    // down, which would read as the button not having worked.
+    stickToBottom.current = false
+    scrollerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   useEffect(() => {
@@ -253,36 +268,39 @@ export default function ReviewPanel({
 
   if (loading && !data) {
     return (
-      <Empty>
-        <EmptyState icon={<LuScanText size={28} />} title="Loading review…" />
-      </Empty>
+      <PanelEmpty>
+        <PanelEmptyState icon={<LuScanText size={28} />} title="Loading review…" />
+      </PanelEmpty>
     )
   }
 
   if (data?.reason === 'writeai-unavailable') {
     return (
-      <Empty>
-        <EmptyState icon={<LuUnplug size={28} />} title="WriteAI isn’t reachable">
+      <PanelEmpty>
+        <PanelEmptyState icon={<LuUnplug size={28} />} title="WriteAI isn’t reachable">
           Reviews can’t be shown or run until it’s back. Your chapter is unaffected.
-        </EmptyState>
-      </Empty>
+        </PanelEmptyState>
+      </PanelEmpty>
     )
   }
   if (data?.reason === 'chapter-not-addressable') {
     return (
-      <Empty>
-        <EmptyState icon={<LuCircleSlash size={28} />} title="This chapter can’t be reviewed">
+      <PanelEmpty>
+        <PanelEmptyState icon={<LuCircleSlash size={28} />} title="This chapter can’t be reviewed">
           It has no canon number, so WriteAI has no way to address it. Unnumbered
           chapters, and ones the canon walk skips, aren’t reachable.
-        </EmptyState>
-      </Empty>
+        </PanelEmptyState>
+      </PanelEmpty>
     )
   }
 
   const chapterLabel = chapter === 0 ? 'Prologue' : `Chapter ${chapter}`
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col">
+    // `relative` so the scroll-back-to-top control can sit above the
+    // conversation rather than inside it — a button that scrolls with the
+    // content it is there to escape would be unreachable exactly when wanted.
+    <div className="relative flex-1 min-h-0 flex flex-col">
       {/* This scroller sits inside SidePanel's, so it needs its own
           overscroll-contain: hitting the top or bottom of a review would
           otherwise hand the gesture to the dock and then to the page. */}
@@ -297,7 +315,13 @@ export default function ReviewPanel({
         {/* Pre-populated header: which book, which chapter, which persona —
             the same three things the old Review button filled in before
             handing off to WriteAI. */}
-        <div className="mb-3 shrink-0 flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-accent/10 pb-2">
+        {/* Sticky: a long review scrolls for pages, and which book, chapter and
+            persona it belongs to is exactly what you stop being sure of once
+            the top is out of sight. `-mx-4 px-4 -mt-3 pt-3` cancels the
+            scroller's own padding so the opaque background spans the full
+            width and covers the gap above, rather than letting text slide
+            through a transparent margin. */}
+        <div className="sticky top-0 z-10 -mx-4 -mt-3 mb-3 shrink-0 flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-accent/10 bg-surface-raised px-4 pt-3 pb-2">
           <span className="inline-flex items-center gap-1.5 rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent">
             <LuScanText size={11} /> {review?.focus ?? DEFAULT_FOCUS}
           </span>
@@ -387,13 +411,13 @@ export default function ReviewPanel({
         )}
 
         {!review && !runner.streaming && (
-          <EmptyState
+          <PanelEmptyState
             icon={<LuScanText size={28} />}
             title="This chapter has never been reviewed"
           >
             It will be read exactly as it stands in the editor right now —
             nothing is exported or synced first.
-          </EmptyState>
+          </PanelEmptyState>
         )}
 
         {runner.error && (
@@ -411,6 +435,18 @@ export default function ReviewPanel({
         )}
 
       </div>
+
+      {/* Floats over the conversation, just above the action bar. Reviews run
+          long, and after reading to the bottom the header — book, chapter,
+          persona — is a scroll of unknown length away. */}
+      {scrolledDown && (
+        <button
+          onClick={scrollToTop}
+          className="pointer-events-auto absolute bottom-2 left-1/2 z-20 -translate-x-1/2 rounded-full border border-accent/30 bg-surface-raised/95 px-3 py-1 text-[11px] font-medium text-accent shadow-lg backdrop-blur-sm transition hover:bg-accent/10"
+        >
+          Scroll back to top
+        </button>
+      )}
 
       {/* Action bar. Cost is shown here, at the point of action, rather than
           leaving spend to be found later in WriteAI's Spend pane. */}
@@ -473,28 +509,3 @@ export default function ReviewPanel({
  * panel read like a stray sentence; centred with an icon it reads as a
  * deliberate state.
  */
-function EmptyState({
-  icon,
-  title,
-  children,
-}: {
-  icon: React.ReactNode
-  title: string
-  children?: React.ReactNode
-}) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-2 px-6 py-8 text-center">
-      <div className="text-ink-faint/50">{icon}</div>
-      <p className="text-xs font-semibold text-ink-muted">{title}</p>
-      {children && (
-        <p className="max-w-[34ch] text-[11px] leading-relaxed text-ink-faint">{children}</p>
-      )}
-    </div>
-  )
-}
-
-function Empty({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex-1 overflow-y-auto overscroll-contain">{children}</div>
-  )
-}

@@ -64,8 +64,14 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
       { keys: '⌥⇧+ / -', label: 'Enlarge / shrink text' },
       { keys: '⌥⇧R', label: 'Read aloud from cursor' },
       { keys: '⌥⇧B', label: 'Insert scene break' },
-      { keys: '⌥⇧2', label: 'Toggle reference panel' },
+    ],
+  },
+  {
+    group: 'Side Panel',
+    items: [
+      { keys: '⌥⇧2', label: 'Toggle reviews' },
       { keys: '⌥⇧3', label: 'Toggle chapter notes' },
+      { keys: '⌥⇧4', label: 'Toggle pins' },
     ],
   },
 ]
@@ -111,8 +117,6 @@ export default function ChapterEditorPage() {
   const [panelOpen, setPanelOpen] = useState(false)
   const [panelTab, setPanelTab] = useState<PanelTab>('notes')
   // Live values for the hotkey handler, whose effect closes over mount-time state.
-  const pinsCountRef = useRef(0)
-  pinsCountRef.current = pins.length
   const panelOpenRef = useRef(panelOpen)
   panelOpenRef.current = panelOpen
   const panelTabRef = useRef(panelTab)
@@ -155,11 +159,11 @@ export default function ChapterEditorPage() {
   const togglePanelTabRef = useRef(togglePanelTab)
   togglePanelTabRef.current = togglePanelTab
 
-  // Clearing every pin retires the reference tab, so fall back to notes rather
-  // than leaving the panel showing a tab that no longer has a strip.
-  useEffect(() => {
-    if (pins.length === 0 && panelTab === 'refs') setPanelTab('notes')
-  }, [pins.length, panelTab])
+  // Pins is a permanent tab with its own empty state now, so clearing every pin
+  // leaves you looking at that rather than at a tab which no longer exists.
+  // There was an effect here forcing the panel back to notes whenever the pins
+  // ran out — with the tab now always present that would fight the writer,
+  // ejecting her the moment she opened an empty Pins tab.
   // Lifted from BlockEditor so the date-row toggle can flip every block at
   // once. Resets to empty on chapter switch (chapterId is in the dep list
   // below), matching the "all uncollapsed on initial load" rule.
@@ -645,10 +649,12 @@ export default function ChapterEditorPage() {
         case 'ArrowLeft': if (localSearchQueryRef.current.trim()) { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'prev') } break
         case 'Equal': case 'NumpadAdd': e.preventDefault(); adjustProseScale(0.1); break
         case 'Minus': case 'NumpadSubtract': e.preventDefault(); adjustProseScale(-0.1); break
-        // Toggle the reference tab — no-op unless something is pinned.
-        case 'Digit2': case 'Numpad2': if (pinsCountRef.current > 0) { e.preventDefault(); togglePanelTabRef.current('refs') } break
-        // Toggle the notes tab — always available; every chapter can have notes.
+        // The dock's three tabs, numbered in the order they appear in it.
+        // All three are unconditional now: 2 used to be Pins and did nothing
+        // unless something was already pinned, which read as a broken key.
+        case 'Digit2': case 'Numpad2': e.preventDefault(); togglePanelTabRef.current('review'); break
         case 'Digit3': case 'Numpad3': e.preventDefault(); togglePanelTabRef.current('notes'); break
+        case 'Digit4': case 'Numpad4': e.preventDefault(); togglePanelTabRef.current('refs'); break
       }
     }
     document.addEventListener('keydown', handleKeyDown)
