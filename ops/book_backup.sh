@@ -120,17 +120,109 @@ for f in "${BOOK_FILES[@]}"; do
   [[ -e "$f" ]] || fail "File not found: $f"
 done
 
-# Warn if Loom's canon auto-export looks stale: the DB has been written more
-# than a day after the newest .pages export. A warning here means tonight's
-# backup would be preserving out-of-date manuscripts.
-if [[ -f "$LOOM_DB" ]]; then
-  db_mtime="$(stat -f %m "$LOOM_DB")"
-  for f in "${BOOK_FILES[@]}"; do
-    pages_mtime="$(stat -f %m "$f")"
-    if (( db_mtime - pages_mtime > 86400 )); then
-      log "WARNING: $(basename "$f") is more than a day older than Loom's database — canon auto-export may have stopped."
+# Is each book's manuscript on disk current with Loom's database? (KAN-13)
+#
+# This used to compare each .pages mtime against dev.db's, and warn when they
+# were more than a day apart. That could not work. dev.db is touched by an edit
+# to ANY book, so its mtime is "now" every night; every book the writer wasn't
+# actively working on tripped the threshold. The warning fired most nights, for
+# books that were completely fine, and a warning that fires most nights is the
+# same as no warning at all.
+#
+# mtime is not evidence in the other direction either — a .pages file can be
+# touched by something that is not an export, and has been (Split's mtime moved
+# 17 days after its last real export).
+#
+# So ask Loom instead. GET /api/export-status re-walks canon for each book and
+# compares a content hash per chapter against the manifest sidecar written by
+# the last export. That is an exact answer to "does the manuscript on disk
+# reflect the book as it is now?", not a guess from timestamps. It writes
+# nothing — no export, no Pages round-trip — so it is safe to call here.
+#
+# THE DISTINCTION THIS PRESERVES, which the mtime check could not make:
+#   "you haven't touched this book in weeks"  -> fine, INFO, not a problem
+#   "the export no longer matches the book"   -> WARNING, act on it
+# Do not "simplify" this back into a timestamp comparison.
+LOOM_URL="${LOOM_URL:-http://localhost:3000}"
+export_status="$(curl -sf --max-time 60 "$LOOM_URL/api/export-status" 2>/dev/null || true)"
+
+if [[ -z "$export_status" ]]; then
+  # Loom being unreachable IS a real finding: it runs under launchd with
+  # KeepAlive, and if it is down then canon auto-export is not running either.
+  log "WARNING: could not reach Loom at $LOOM_URL to verify canon exports — is the app running?"
+else
+  # Python rather than jq: jq is not guaranteed installed, python3 ships with
+  # macOS, and the rest of this script already depends on it.
+  while IFS='|' read -r level book reason detail; do
+    [[ -z "$level" ]] && continue
+    if [[ "$level" == "WARN" ]]; then
+      log "WARNING: $book — $reason. $detail"
+    else
+      log "$book: $detail"
     fi
-  done
+  done < <(printf '%s' "$export_status" | python3 -c '
+import json, sys, datetime
+
+try:
+    d = json.load(sys.stdin)
+except Exception as e:
+    print("WARN|export-status|unreadable response|%s" % e)
+    sys.exit(0)
+
+REASONS = {
+    "content-drift": "the manuscript on disk no longer matches the book",
+    "no-manifest":   "no manifest sidecar, so export currency cannot be verified",
+    "no-manuscript": "the manuscript file is missing",
+    "no-folder":     "no canon export folder for this book",
+    "error":         "could not be checked",
+}
+
+for b in d.get("books", []):
+    title = b.get("title", "?")
+    if b.get("current"):
+        # Age is reported, never warned about. A book untouched for a month is
+        # a book that was finished a month ago.
+        exported = b.get("exportedAt")
+        try:
+            when = datetime.datetime.fromisoformat(exported.replace("Z", "+00:00"))
+            days = (datetime.datetime.now(datetime.timezone.utc) - when).days
+            age = "today" if days == 0 else ("1 day ago" if days == 1 else "%d days ago" % days)
+        except Exception:
+            age = "at an unknown time"
+        print("INFO|%s||canon export is current (last exported %s)" % (title, age))
+    else:
+        reason = REASONS.get(b.get("reason"), b.get("reason", "unknown"))
+        detail = b.get("drift")
+        if detail:
+            detail = "%d chapter(s) changed, %d added, %d removed since the export." % (
+                detail.get("changed", 0), detail.get("added", 0), detail.get("removed", 0))
+        else:
+            detail = (b.get("detail") or "").replace("|", "/")
+        print("WARN|%s|%s|%s" % (title, reason, detail))
+')
+
+  # BOOK_FILES is hardcoded at the top of this script, but Loom now tells us
+  # which books actually exist. A book Loom knows about that BOOK_FILES does
+  # not list is a book this script is silently not backing up — which is worth
+  # far more than a stale-export warning. Matching is by filename stem, so a
+  # title containing a character the export sanitizes (/ \ :) could warn
+  # spuriously; erring toward a false warning is the right side here.
+  while IFS= read -r title; do
+    [[ -z "$title" ]] && continue
+    found=0
+    for f in "${BOOK_FILES[@]}"; do
+      [[ "$(basename "$f" .pages)" == "$title" ]] && { found=1; break; }
+    done
+    (( found )) || log "WARNING: Loom has a book \"$title\" that this script does not back up — add it to BOOK_FILES."
+  done < <(printf '%s' "$export_status" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for b in d.get("books", []):
+    print(b.get("title", ""))
+')
 fi
 
 ###############################################################################
