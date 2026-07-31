@@ -297,31 +297,19 @@ export default function ReviewPanel({
   const chapterLabel = chapter === 0 ? 'Prologue' : `Chapter ${chapter}`
 
   return (
-    // `relative` so the scroll-back-to-top control can sit above the
-    // conversation rather than inside it — a button that scrolls with the
-    // content it is there to escape would be unreachable exactly when wanted.
-    <div className="relative flex-1 min-h-0 flex flex-col">
-      {/* This scroller sits inside SidePanel's, so it needs its own
-          overscroll-contain: hitting the top or bottom of a review would
-          otherwise hand the gesture to the dock and then to the page. */}
-      {/* `flex flex-col` so the empty state can claim the full height and
-          centre itself; with content present the children simply stack as
-          before. */}
-      <div
-        ref={scrollerRef}
-        onScroll={onConversationScroll}
-        className="flex-1 flex flex-col overflow-y-auto overscroll-contain px-4 py-3 text-xs text-ink-muted"
-      >
-        {/* Pre-populated header: which book, which chapter, which persona —
-            the same three things the old Review button filled in before
-            handing off to WriteAI. */}
-        {/* Sticky: a long review scrolls for pages, and which book, chapter and
-            persona it belongs to is exactly what you stop being sure of once
-            the top is out of sight. `-mx-4 px-4 -mt-3 pt-3` cancels the
-            scroller's own padding so the opaque background spans the full
-            width and covers the gap above, rather than letting text slide
-            through a transparent margin. */}
-        <div className="sticky top-0 z-10 -mx-4 -mt-3 mb-3 shrink-0 flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-accent/10 bg-surface-raised px-4 pt-3 pb-2">
+    <div className="flex-1 min-h-0 flex flex-col text-xs text-ink-muted">
+      {/* Pre-populated header: which book, which chapter, which persona — the
+          same three things the old Review button filled in before handing off
+          to WriteAI.
+
+          A SIBLING of the scroller, not a sticky child of it. It was sticky,
+          which left a band of scrolling text visible between it and the tab
+          strip: `sticky top-0` pins to the scrollport, but the scroller's own
+          top padding is part of that scrollport, so content slid through the
+          gap above the header. Cancelling the padding with negative margins
+          fought the symptom. A header that never scrolls does not need to be
+          sticky at all — outside the scroller there is no gap to cover. */}
+      <div className="shrink-0 flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-accent/10 px-4 py-2">
           <span className="inline-flex items-center gap-1.5 rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent">
             <LuScanText size={11} /> {review?.focus ?? DEFAULT_FOCUS}
           </span>
@@ -355,7 +343,23 @@ export default function ReviewPanel({
             )}
             {review && <span className="text-[10px] text-ink-faint">{when(review.timestamp)}</span>}
           </div>
-        </div>
+      </div>
+
+      {/* `relative` here rather than on the panel root, so the scroll-back-to-top
+          control anchors to the bottom of the CONVERSATION — just above the
+          reply box — instead of the bottom of the whole panel, where it sat
+          alongside the Re-review button. */}
+      <div className="relative flex-1 min-h-0 flex flex-col">
+        {/* This scroller sits inside SidePanel's, so it needs its own
+            overscroll-contain: hitting the top or bottom of a review would
+            otherwise hand the gesture to the dock and then to the page. */}
+        {/* `flex flex-col` so the empty state can claim the full height and
+            centre itself; with content present the children simply stack. */}
+        <div
+          ref={scrollerRef}
+          onScroll={onConversationScroll}
+          className="flex-1 flex flex-col overflow-y-auto overscroll-contain px-4 py-3"
+        >
 
         {/* Each writer turn opens a round, so those are the dividers. */}
         {(review?.messages ?? []).map((m, i) => {
@@ -434,19 +438,20 @@ export default function ReviewPanel({
           </p>
         )}
 
-      </div>
+        </div>
 
-      {/* Floats over the conversation, just above the action bar. Reviews run
-          long, and after reading to the bottom the header — book, chapter,
-          persona — is a scroll of unknown length away. */}
-      {scrolledDown && (
-        <button
-          onClick={scrollToTop}
-          className="pointer-events-auto absolute bottom-2 left-1/2 z-20 -translate-x-1/2 rounded-full border border-accent/30 bg-surface-raised/95 px-3 py-1 text-[11px] font-medium text-accent shadow-lg backdrop-blur-sm transition hover:bg-accent/10"
-        >
-          Scroll back to top
-        </button>
-      )}
+        {/* Floats over the end of the conversation, just above the reply box.
+            Reviews run long, and after reading to the bottom the header — book,
+            chapter, persona — is a scroll of unknown length away. */}
+        {scrolledDown && (
+          <button
+            onClick={scrollToTop}
+            className="absolute bottom-2 left-1/2 z-20 -translate-x-1/2 rounded-full border border-accent/30 bg-surface-raised/95 px-3 py-1 text-[11px] font-medium text-accent shadow-lg backdrop-blur-sm transition hover:bg-accent/10"
+          >
+            Scroll back to top
+          </button>
+        )}
+      </div>
 
       {/* Action bar. Cost is shown here, at the point of action, rather than
           leaving spend to be found later in WriteAI's Spend pane. */}
