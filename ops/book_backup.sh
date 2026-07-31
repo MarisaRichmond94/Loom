@@ -1,0 +1,366 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Make launchd behave more like your shell environment (safe even if unused)
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+###############################################################################
+# CONFIG (START)
+###############################################################################
+
+LOCAL_ROOT="$HOME/Writing"
+BOOK_FILES=(
+  "$LOCAL_ROOT/1. Nobody's Hero/Nobody's Hero.pages"
+  "$LOCAL_ROOT/2. Faded/Faded.pages"
+  "$LOCAL_ROOT/3. The Secrets We Keep/The Secrets We Keep.pages"
+  "$LOCAL_ROOT/4. The Secrets We Bury/The Secrets We Bury.pages"
+  "$LOCAL_ROOT/5. Split/Split.pages"
+)
+
+# iCloud Drive destination for your Mac mini RAG to index:
+# iCloud Drive/Books/<book>.pages  (overwritten each run)
+ICLOUD_BOOKS_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Books"
+
+# Local dated backups (kept as a safety net)
+LOCAL_BACKUP_ROOT="$HOME/Backups"
+GDRIVE_ROOT="gdrive:Backups"
+KEEP_LOCAL_DAYS=30
+
+# Loom app data: the SQLite source of truth (canon + choose-your-own-adventure)
+# and the nightly per-book JSON snapshots Loom writes at 22:00.
+LOOM_DB="$HOME/Documents/GitHub/Loom/dev.db"
+LOOM_SNAPSHOT_DIR="$HOME/Backups/Loom"
+
+# Output validation (KAN-14). Exit codes only prove a step ran; these prove
+# what it produced is usable.
+VERIFY_LIB="$HOME/Scripts/lib/backup_verify.sh"
+LOOM_JSON_CHECKER="$HOME/Scripts/check_loom_json.py"
+# Floor for "valid SQLite but suspiciously empty". Production held 341 chapters
+# on 2026-07-30 and the count only grows, so 200 catches a catastrophically
+# empty snapshot with wide margin. Deliberately NOT set just under the true
+# count: a threshold that trips on ordinary reorganisation becomes noise, which
+# is the exact failure KAN-13 is about.
+MIN_CHAPTERS=200
+
+NOW_DATE="$(date +%Y-%m-%d)"
+NOW_TIME="$(date +%H%M%S)"
+RUN_DIR_LOCAL="${LOCAL_BACKUP_ROOT}/${NOW_DATE}"
+
+LOG_DIR="${LOCAL_BACKUP_ROOT}/_logs"
+LOG_FILE="${LOG_DIR}/backup_${NOW_DATE}_${NOW_TIME}.log"
+
+###############################################################################
+# CONFIG (END)
+###############################################################################
+
+mkdir -p "$RUN_DIR_LOCAL" "$LOG_DIR" "$ICLOUD_BOOKS_DIR"
+
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
+}
+
+fail() {
+  log "ERROR: $*"
+  exit 1
+}
+
+# Locate rclone
+RCLONE=""
+if [[ -x "/opt/homebrew/bin/rclone" ]]; then
+  RCLONE="/opt/homebrew/bin/rclone"
+elif [[ -x "/usr/local/bin/rclone" ]]; then
+  RCLONE="/usr/local/bin/rclone"
+elif command -v rclone >/dev/null 2>&1; then
+  RCLONE="$(command -v rclone)"
+fi
+
+[[ -n "$RCLONE" ]] || fail "rclone not found. Install it (brew install rclone) and run rclone config."
+
+# Load the output validators. Missing lib is a warning, never fatal: an
+# unverified backup still beats no backup, which is the same reasoning that
+# keeps the iCloud and Drive steps non-fatal.
+VERIFY_AVAILABLE=0
+if [[ -f "$VERIFY_LIB" ]]; then
+  # shellcheck source=/dev/null
+  source "$VERIFY_LIB" && VERIFY_AVAILABLE=1
+fi
+
+# Set to 0 by any failed output check. Gates the prune and the closing message.
+VALIDATION_OK=1
+
+log "Starting book backup"
+log "Local destination: $RUN_DIR_LOCAL"
+log "iCloud Books destination: $ICLOUD_BOOKS_DIR"
+log "Google Drive destination: $GDRIVE_ROOT/$NOW_DATE"
+
+# Verify files exist before copying
+for f in "${BOOK_FILES[@]}"; do
+  [[ -e "$f" ]] || fail "File not found: $f"
+done
+
+# Warn if Loom's canon auto-export looks stale: the DB has been written more
+# than a day after the newest .pages export. A warning here means tonight's
+# backup would be preserving out-of-date manuscripts.
+if [[ -f "$LOOM_DB" ]]; then
+  db_mtime="$(stat -f %m "$LOOM_DB")"
+  for f in "${BOOK_FILES[@]}"; do
+    pages_mtime="$(stat -f %m "$f")"
+    if (( db_mtime - pages_mtime > 86400 )); then
+      log "WARNING: $(basename "$f") is more than a day older than Loom's database — canon auto-export may have stopped."
+    fi
+  done
+fi
+
+###############################################################################
+# 1) Local dated copy (safety net)                                            #
+###############################################################################
+log "Copying to local dated backup via ditto..."
+for f in "${BOOK_FILES[@]}"; do
+  base="$(basename "$f")"
+  log "Local backup: $base"
+  /usr/bin/ditto --rsrc --extattr "$f" "$RUN_DIR_LOCAL/$base"
+done
+log "Local dated backup complete."
+
+###############################################################################
+# 1b) Loom app data (canon + choose-your-own-adventure)                       #
+#     - Compressed snapshot of Loom's SQLite DB (sqlite3 .backup is safe on   #
+#       a live database).                                                     #
+#     - Today's .loom.json per-book snapshots (Loom writes them at 22:00;     #
+#       they include CYOA branches the .pages exports don't carry).          #
+#     Both land in RUN_DIR_LOCAL so they ride the Google Drive upload.        #
+#     Non-fatal: canon .pages backups above always take precedence.           #
+###############################################################################
+if [[ -f "$LOOM_DB" ]] && command -v sqlite3 >/dev/null 2>&1; then
+  SNAP_GZ="$RUN_DIR_LOCAL/loom-dev.db.gz"
+  snap_ok=0
+  for attempt in 1 2; do
+    log "Snapshotting Loom database (attempt ${attempt})..."
+    rm -f "$RUN_DIR_LOCAL/loom-dev.db" "$SNAP_GZ"
+    if sqlite3 "$LOOM_DB" ".backup '$RUN_DIR_LOCAL/loom-dev.db'" 2>>"$LOG_FILE" \
+       && gzip -f "$RUN_DIR_LOCAL/loom-dev.db"; then
+      if [[ "$VERIFY_AVAILABLE" == 1 ]]; then
+        # Test-restore what we just wrote: gzip integrity, SQLite
+        # integrity_check, and a content floor. A backup you have never
+        # decompressed is a hypothesis, not a backup.
+        if verify_out="$(verify_db_snapshot "$SNAP_GZ" "$MIN_CHAPTERS")"; then
+          snap_ok=1
+        else
+          snap_ok=0
+        fi
+        while IFS= read -r vline; do
+          if [[ -n "$vline" ]]; then log "  db snapshot: $vline"; fi
+        done <<< "$verify_out"
+      else
+        snap_ok=1
+        log "  db snapshot: NOT VERIFIED — validator library missing at $VERIFY_LIB"
+      fi
+    else
+      snap_ok=0
+      log "  db snapshot: sqlite3 .backup or gzip failed"
+    fi
+
+    if [[ "$snap_ok" == 1 ]]; then
+      break
+    fi
+    # The likeliest cause of a bad snapshot is a transient read while Loom was
+    # mid-write, so one retry is worth ~2s before crying wolf.
+    if [[ "$attempt" == 1 ]]; then
+      log "  db snapshot: verification failed — retrying once..."
+    fi
+  done
+
+  if [[ "$snap_ok" == 1 ]]; then
+    log "Loom database snapshot complete and verified (loom-dev.db.gz)."
+  else
+    VALIDATION_OK=0
+    # Deliberately NOT rm -f'd. The old code deleted the artifact on failure,
+    # leaving nothing to diagnose. A suspect file you can inspect beats an
+    # absence you can only guess about.
+    log "WARNING: Loom database snapshot FAILED VERIFICATION after 2 attempts — keeping the suspect file at $SNAP_GZ for inspection."
+  fi
+fi
+
+# Pick the NEWEST snapshot in each book folder rather than matching a date in
+# the filename. Loom stamps those names with a UTC date (toISOString) but writes
+# them at 22:00 local, so the file created tonight already carries tomorrow's
+# date — matching on "$NOW_DATE" here silently copied the PREVIOUS night's file
+# every single run, while still logging success. Newest-wins is correct
+# regardless of timezone, DST, or a change to Loom's backup time; the staleness
+# check below is what actually catches a Loom backup that stopped running.
+if [[ -d "$LOOM_SNAPSHOT_DIR" ]]; then
+  log "Copying latest Loom .loom.json snapshots..."
+  loom_json_count=0
+  loom_stale_count=0
+  now_epoch="$(date +%s)"
+  while IFS= read -r -d '' dir; do
+    newest=""
+    while IFS= read -r -d '' f; do
+      [[ -z "$newest" || "$f" -nt "$newest" ]] && newest="$f"
+    done < <(find "$dir" -maxdepth 1 -type f -name "*.loom.json" -print0 2>/dev/null)
+    [[ -n "$newest" ]] || continue
+
+    book="$(basename "$dir")"
+    # Default to now_epoch (age 0, no warning) if stat fails — the script runs
+    # under `set -e`, and an empty command substitution here would be an
+    # arithmetic syntax error that aborts the whole backup before the iCloud
+    # and Google Drive steps. A missing mtime must never cost us the upload.
+    snap_mtime="$(stat -f %m "$newest" 2>/dev/null || echo "$now_epoch")"
+    age_h=$(( (now_epoch - snap_mtime) / 3600 ))
+    # Loom runs at 22:00 and this script at 22:30, but RunAtLoad means it can
+    # also fire before 22:00, when the newest snapshot is legitimately ~23h old.
+    # 25h flags a genuinely missed nightly run without crying wolf on those.
+    if (( age_h > 25 )); then
+      log "WARNING: newest snapshot for ${book} is ${age_h}h old ($(basename "$newest")) — Loom's 22:00 backup may have stopped."
+      loom_stale_count=$((loom_stale_count + 1))
+    fi
+
+    if /usr/bin/ditto "$newest" "$RUN_DIR_LOCAL/loom-json/${book}/$(basename "$newest")" 2>>"$LOG_FILE"; then
+      loom_json_count=$((loom_json_count + 1))
+    else
+      log "WARNING: failed to copy $(basename "$newest")"
+    fi
+  done < <(find "$LOOM_SNAPSHOT_DIR" -type d -print0 2>/dev/null)
+
+  if [[ "$loom_json_count" -gt 0 ]]; then
+    log "Copied $loom_json_count Loom snapshot(s) (${loom_stale_count} stale)."
+    # Actually parse what was copied. Counting files proves ditto ran; it says
+    # nothing about whether Loom wrote real content. If the export started
+    # emitting empty or malformed JSON, the old code copied it, counted it, and
+    # logged success.
+    if [[ "$VERIFY_AVAILABLE" == 1 ]]; then
+      if lj_out="$(verify_loom_json "$RUN_DIR_LOCAL/loom-json" "$LOOM_JSON_CHECKER")"; then
+        lj_ok=1
+      else
+        lj_ok=0
+      fi
+      while IFS= read -r vline; do
+        if [[ -n "$vline" ]]; then log "  loom.json: $vline"; fi
+      done <<< "$lj_out"
+      if [[ "$lj_ok" == 1 ]]; then
+        log "Loom .loom.json snapshots verified."
+      else
+        VALIDATION_OK=0
+        log "WARNING: one or more .loom.json snapshots FAILED VALIDATION — these are the only backup carrying CYOA branch structure."
+      fi
+    else
+      log "  loom.json: NOT VERIFIED — validator library missing at $VERIFY_LIB"
+    fi
+  else
+    VALIDATION_OK=0
+    log "WARNING: no Loom .loom.json snapshots found under ${LOOM_SNAPSHOT_DIR} (Loom's 22:00 backup may not have run)."
+  fi
+fi
+
+#############################################################################################
+# 2) iCloud Books folder (overwrite-in-place safely)                                        #
+#    Copy to a temp bundle then swap, so the Mac mini never indexes a half-copied bundle.   #
+#############################################################################################
+log "Copying to iCloud Books folder (overwrite)..."
+ICLOUD_OK=1
+for f in "${BOOK_FILES[@]}"; do
+  base="$(basename "$f")"
+  dest="$ICLOUD_BOOKS_DIR/$base"
+  tmp="$ICLOUD_BOOKS_DIR/.${base}.tmp"
+
+  log "iCloud copy: $base"
+  rm -rf "$tmp" 2>/dev/null || true
+
+  # Non-fatal: a failure here (e.g. the scheduled job lacking Full Disk Access
+  # for iCloud Drive) must NOT abort the backup or the audiobook/ebook updates.
+  ok=1
+  /usr/bin/ditto --rsrc --extattr "$f" "$tmp" 2>/dev/null || ok=0
+  if [[ "$ok" == 1 ]]; then
+    rm -rf "$dest" 2>/dev/null || true
+    mv "$tmp" "$dest" 2>/dev/null || ok=0
+  fi
+  if [[ "$ok" == 0 ]]; then
+    ICLOUD_OK=0
+    rm -rf "$tmp" 2>/dev/null || true
+    log "WARNING: iCloud copy failed for $base (often Full Disk Access for the scheduled job). Continuing."
+  fi
+done
+if [[ "$ICLOUD_OK" == 1 ]]; then log "iCloud Books copy complete."
+else log "iCloud Books copy had failures (see warnings) — continuing with backup + audiobook/ebook updates."; fi
+
+#############################################################################################
+# 3) Google Drive (dated folder)                                                            #
+#############################################################################################
+log "Uploading local dated backup to Google Drive via rclone..."
+# Non-fatal: a network/auth failure must not abort the audiobook/ebook updates.
+if "$RCLONE" copy "$RUN_DIR_LOCAL" "${GDRIVE_ROOT}/${NOW_DATE}" \
+  --create-empty-src-dirs \
+  --retries 3 \
+  --low-level-retries 10 \
+  --log-level INFO \
+  --log-file "$LOG_FILE"; then
+  log "Google Drive upload complete."
+else
+  log "WARNING: Google Drive upload failed — continuing with audiobook/ebook updates."
+fi
+
+# Optional cleanup of old local backups.
+#
+# Gated on validation (KAN-14). This prune assumes recent backups are good and
+# deletes older ones on that basis. If tonight's outputs did not verify, that
+# assumption is exactly what is in doubt — and had snapshots been silently
+# invalid for a month, pruning would delete the last VALID copy. When in doubt,
+# keep more, not less: disk is cheaper than a manuscript.
+if [[ "$KEEP_LOCAL_DAYS" -gt 0 ]]; then
+  if [[ "$VALIDATION_OK" == 1 ]]; then
+    log "Cleaning up local backups older than ${KEEP_LOCAL_DAYS} days..."
+    find "$LOCAL_BACKUP_ROOT" -maxdepth 1 -type d -name "20??-??-??" -mtime +"$KEEP_LOCAL_DAYS" -print -exec rm -rf {} \; \
+      | tee -a "$LOG_FILE" || true
+  else
+    log "SKIPPING the ${KEEP_LOCAL_DAYS}-day cleanup: tonight's outputs failed verification, so old backups are being kept."
+  fi
+fi
+
+#############################################################################################
+# 4) Update audiobooks (incremental: only re-narrates chapters that changed)                #
+#    Runs AFTER all backup work. Non-fatal by design — an audiobook problem must never       #
+#    fail the backup. Needs you logged in (Pages export uses the GUI session).               #
+#############################################################################################
+AUDIOBOOK_SCRIPT="$HOME/Scripts/generate_audiobook.sh"
+AUDIOBOOK_LOG="${LOG_DIR}/audiobooks_${NOW_DATE}_${NOW_TIME}.log"
+if [[ -x "$AUDIOBOOK_SCRIPT" ]]; then
+  log "Updating audiobooks (incremental) -> $AUDIOBOOK_LOG"
+  if /bin/zsh "$AUDIOBOOK_SCRIPT" --update >"$AUDIOBOOK_LOG" 2>&1; then
+    log "Audiobook update complete."
+  else
+    log "WARNING: audiobook update hit an error (see $AUDIOBOOK_LOG). Backup itself is fine."
+  fi
+else
+  log "Audiobook script not executable at $AUDIOBOOK_SCRIPT — skipping audiobook update."
+fi
+
+#############################################################################################
+# 5) Update ebooks (clean EPUBs for Apple Books). Reuses the chapter split the audiobook    #
+#    step just refreshed, so it does not re-open Pages. Non-fatal, like the audiobook step.  #
+#############################################################################################
+EBOOK_SCRIPT="$HOME/Scripts/generate_ebook.sh"
+EBOOK_LOG="${LOG_DIR}/ebooks_${NOW_DATE}_${NOW_TIME}.log"
+if [[ -x "$EBOOK_SCRIPT" ]]; then
+  log "Updating ebooks (incremental) -> $EBOOK_LOG"
+  if /bin/zsh "$EBOOK_SCRIPT" --update >"$EBOOK_LOG" 2>&1; then
+    log "Ebook update complete."
+  else
+    log "WARNING: ebook update hit an error (see $EBOOK_LOG). Backup itself is fine."
+  fi
+else
+  log "Ebook script not executable at $EBOOK_SCRIPT — skipping ebook update."
+fi
+
+# "Successfully" now means the outputs were checked, not merely that the
+# commands exited 0. Every failure this chain has had logged success while
+# producing a bad artifact — that is the whole point of KAN-14.
+if [[ "$VALIDATION_OK" == 1 ]]; then
+  if [[ "$VERIFY_AVAILABLE" == 1 ]]; then
+    log "Backup finished successfully — all outputs verified."
+  else
+    log "Backup finished, but outputs were NOT verified (validator library missing at $VERIFY_LIB)."
+  fi
+else
+  log "Backup finished WITH VERIFICATION FAILURES — see the warnings above. Files were uploaded and old backups were kept; inspect before trusting this run."
+fi
+exit 0
