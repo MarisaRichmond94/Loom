@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { LuShield, LuPlay, LuFolderOpen, LuUser, LuX, LuCheck, LuArrowLeft } from 'react-icons/lu'
+import { LuShield, LuPlay, LuFolderOpen, LuUser, LuX, LuCheck, LuArrowLeft, LuDatabaseBackup } from 'react-icons/lu'
 import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
 import AppHeader from '@/components/AppHeader'
@@ -11,6 +11,8 @@ import ExportFormattingSection from '@/components/ExportFormattingSection'
 import CanonSaveLocationSection from '@/components/CanonSaveLocationSection'
 import ManuscriptTemplateSection from '@/components/ManuscriptTemplateSection'
 import EditorColorsSection from '@/components/EditorColorsSection'
+import ToastLayer from '@/components/ToastLayer'
+import { showToast } from '@/lib/notifications'
 
 async function cropImageToBlob(imageSrc: string, pixelCrop: Area): Promise<Blob> {
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -48,6 +50,9 @@ export default function SettingsPage() {
   })
   const [backupStatus, setBackupStatus] = useState<{ ok: boolean; message: string } | null>(null)
   const [runningBackup, setRunningBackup] = useState(false)
+  // On-demand whole-database snapshot (KAN-26). Only the in-flight state lives
+  // here — the result is a toast, so there is nothing to hold afterwards.
+  const [snapshotting, setSnapshotting] = useState(false)
   const [pickingFolder, setPickingFolder] = useState(false)
   const [hasAvatar, setHasAvatar] = useState(false)
   const [avatarTs, setAvatarTs] = useState(0)
@@ -239,6 +244,63 @@ export default function SettingsPage() {
     setRunningBackup(false)
   }
 
+  async function revealBackup(p: string) {
+    const res = await fetch('/api/backup/reveal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: p }),
+    })
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({ error: null }))
+      showToast({ kind: 'error', message: error ?? 'Could not show that in Finder.' })
+    }
+  }
+
+  async function runBackupNow() {
+    setSnapshotting(true)
+    try {
+      const res = await fetch('/api/backup/now', { method: 'POST' })
+      const result = await res.json()
+      // Trust the payload, not the status code. The route only sets ok:true
+      // after parsing the script's verified "Snapshot OK" line.
+      if (!res.ok || !result.ok) {
+        setSnapshotting(false)
+        showToast({
+          kind: 'error',
+          message: result.error ?? 'Snapshot failed.',
+          detail: result.log?.trim().split('\n').slice(-1)[0],
+          // Failures stay up longer. A backup that did not happen is worth
+          // more of the writer's attention than one that did.
+          durationMs: 30000,
+        })
+        return
+      }
+      setSnapshotting(false)
+      showToast({
+        kind: 'ok',
+        // Lead with what was verified, not that it finished.
+        message: `Backed up ${result.chapters.toLocaleString()} chapters, ${result.words.toLocaleString()} words.`,
+        // Drive still gets a mention — knowing the off-machine copy happened is
+        // the point of it — it just isn't a link.
+        detail: `${result.size}${result.uploaded ? ' · copied to Google Drive' : ' · not uploaded'}`,
+        actions: [{ label: 'Show in Finder', onClick: () => revealBackup(result.path) }],
+        // 5s, the same as every other toast. The backup is already safe on
+        // disk by the time this appears — Show in Finder is a convenience, not
+        // something the writer has to catch before it disappears.
+        durationMs: 5000,
+      })
+    } catch (err) {
+      setSnapshotting(false)
+      // A network-level failure here is almost always the 4-minute timeout or
+      // a restarted server — say so rather than showing an empty error.
+      showToast({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Could not reach the server.',
+        durationMs: 30000,
+      })
+    }
+  }
+
   const TABS = ['Profile', 'Editor', 'Export', 'Backups', 'Demo Data'] as const
   type Tab = typeof TABS[number]
   const [activeTab, setActiveTab] = useState<Tab>('Profile')
@@ -251,6 +313,16 @@ export default function SettingsPage() {
           every Loom surface except the reader (KAN-8) — it used to sit only on
           author pages, which read as incidental rather than chosen. */}
       <AppHeader showAppSwitch lightMode={lightMode} onToggleLightMode={toggleLightMode} />
+      {/* Settings sits outside the author layout, which is where ToastLayer is
+          normally mounted — so it needs its own.
+
+          The default bottom offset lifts toasts clear of the editor's footer
+          and floating add-block button, neither of which exists here, leaving
+          a lopsided gap. Override it to match the right inset so the toast sits
+          equally far from both edges. */}
+      <div style={{ '--loom-toast-bottom': '0.75rem' } as React.CSSProperties}>
+        <ToastLayer />
+      </div>
 
       <main className={`flex-1 overflow-y-auto${lightMode ? ' light-body' : ''}`}>
         <div className="px-8 py-10">
@@ -469,7 +541,45 @@ export default function SettingsPage() {
           </>}
 
           {/* Backups */}
-          {activeTab === 'Backups' && <section>
+          {activeTab === 'Backups' && <section className="flex flex-col gap-4">
+            {/* Back up now (KAN-26).
+                Sits ABOVE the schedule settings deliberately: this is the
+                thing you reach for at a specific moment — before a big
+                restructure, before letting an agent near the database — and
+                that moment shouldn't require scrolling past configuration.
+
+                Distinct from a book's Backup button, which exports one story
+                as .loom.json. This is the whole database: notes, narration,
+                reader sessions and settings included. */}
+            <div className="bg-surface-raised border border-accent/10 rounded-xl p-6">
+              <div className="flex items-start justify-between gap-6">
+                <div>
+                  <div className="text-sm font-medium text-ink mb-1 flex items-center gap-2">
+                    <LuDatabaseBackup size={14} className="text-accent" /> Database Snapshot
+                  </div>
+                  <div className="text-xs text-ink-faint leading-relaxed max-w-md">
+                    A verified copy of the entire database — everything the book
+                    exports below leave out, including chapter notes, narration
+                    and reader sessions. Compressed, checked, and copied to
+                    Google Drive. Safe to run while you&rsquo;re writing.
+                  </div>
+                </div>
+                <button
+                  onClick={runBackupNow}
+                  disabled={snapshotting}
+                  className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-white text-xs font-medium hover:opacity-90 transition disabled:opacity-50"
+                >
+                  <LuDatabaseBackup size={11} />
+                  {snapshotting ? 'Snapshotting…' : 'Snapshot Now'}
+                </button>
+              </div>
+
+              {/* The result is a toast, not a panel here. A verified backup is
+                  worth seeing when it happens and worth forgetting afterwards;
+                  a box that stays on the page implies there is something left
+                  to do with it. */}
+            </div>
+
             <div className="bg-surface-raised border border-accent/10 rounded-xl p-6 flex flex-col gap-6">
 
               {/* Enable toggle */}

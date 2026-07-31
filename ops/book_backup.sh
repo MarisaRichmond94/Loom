@@ -38,6 +38,11 @@ LOOM_SNAPSHOT_DIR="$HOME/Backups/Loom"
 # It is gitignored, so before this nothing covered it at all.
 WRITER_DATA_DIR="$HOME/Documents/GitHub/WriteAi/writer_data"
 
+# Book cover images (KAN-26). Gitignored, and the .loom.json export stores only
+# coverPath — the string, never the bytes. So before this they existed in
+# exactly one place on one disk. Small (~1.6MB) and irreplaceable.
+COVERS_DIR="$HOME/Documents/GitHub/Loom/public/covers"
+
 # WriteAI index essentials (KAN-28). data/ is 13GB and mostly derived, but
 # "derived" is not the same as "cheap to lose": rebuilding it re-runs LLM
 # extraction, and sync has cost $50 all-time with one full re-ingest at $35.
@@ -266,6 +271,37 @@ if [[ -d "$LOOM_SNAPSHOT_DIR" ]]; then
   else
     VALIDATION_OK=0
     log "WARNING: no Loom .loom.json snapshots found under ${LOOM_SNAPSHOT_DIR} (Loom's 22:00 backup may not have run)."
+  fi
+fi
+
+###############################################################################
+# 1b-ii) Book cover images (KAN-26)                                           #
+#                                                                             #
+#     Gitignored, and .loom.json carries only coverPath — never the bytes.    #
+#     Nothing backed these up, so they lived on one disk in one place. A       #
+#     restore without them leaves every book with a broken cover.             #
+#                                                                             #
+#     No JSON to validate here; the check is that the count and total size    #
+#     are non-zero, logged so a silent emptying is visible.                   #
+###############################################################################
+if [[ -d "$COVERS_DIR" ]]; then
+  cover_count=$(find "$COVERS_DIR" -type f ! -name '.*' | wc -l | tr -d ' ')
+  if [[ "$cover_count" -gt 0 ]]; then
+    if /usr/bin/ditto "$COVERS_DIR" "$RUN_DIR_LOCAL/loom-covers" 2>>"$LOG_FILE"; then
+      copied=$(find "$RUN_DIR_LOCAL/loom-covers" -type f ! -name '.*' | wc -l | tr -d ' ')
+      bytes=$(du -sk "$RUN_DIR_LOCAL/loom-covers" | cut -f1)
+      if [[ "$copied" -eq "$cover_count" && "$bytes" -gt 0 ]]; then
+        log "Copied $copied cover image(s) (${bytes}KB)."
+      else
+        VALIDATION_OK=0
+        log "WARNING: cover copy incomplete — $copied of $cover_count file(s), ${bytes}KB."
+      fi
+    else
+      VALIDATION_OK=0
+      log "WARNING: failed to copy cover images from ${COVERS_DIR}."
+    fi
+  else
+    log "No cover images in ${COVERS_DIR} — nothing to copy."
   fi
 fi
 
