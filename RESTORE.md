@@ -13,15 +13,28 @@ only swap it in deliberately, at the end, if you decide to.
 | What | Where | Contains |
 |------|-------|----------|
 | `loom-dev.db.gz` | `~/Backups/<date>/` **and** `gdrive:Backups/<date>/` | The whole database, gzipped (~24 MB) |
+| `loom-dev-<HHMM>.db.gz` | same | Intraday snapshot (08:30, 18:00) — same contents, more recent |
+| `loom-dev-<HHMMSS>-manual.db.gz` | same | On-demand snapshot from Settings → Backups (KAN-26) |
 | `*.loom.json` | `~/Backups/<date>/loom-json/<book>/` | Per-book prose **plus CYOA choices** |
+| `loom-covers/` | `~/Backups/<date>/` **and** `gdrive:Backups/<date>/` | Book cover images — in **no** git repo (KAN-26) |
 | `*.pages` / `.txt` / `.docx` | `~/Writing/`, iCloud Books | Linear manuscript only, no branches |
 | `writeai-writer_data/*.json` | `~/Backups/<date>/` **and** `gdrive:Backups/<date>/` | WriteAI's **writer-authored** state (KAN-27) |
 | `writeai-series_metadata.db.gz` | same | WriteAI's index — the parts that cost money (KAN-28) |
 | `writeai-chunk_hashes.json` | same | Ingest change-detection state |
 
 Backups run nightly at **22:30** (`~/Scripts/book_backup.sh` →
-`ops/book_backup.sh`, `com.marisarichmond.bookbackup.plist`). Worst case you
-lose the writing done since the last run.
+`ops/book_backup.sh`, `com.marisarichmond.bookbackup.plist`), plus database-only
+snapshots at **08:30 and 18:00** (`ops/loom_db_snapshot.sh`). Worst case you
+lose the writing done since the most recent of those.
+
+You can also take one **on demand** — Settings → Backups → **Snapshot Now**.
+Use it before anything risky: a large restructure, a bulk edit, letting an
+agent near the database. It is the same script and the same validation as the
+scheduled runs, so its output restores identically; it just ignores the
+"nothing changed since the last snapshot" skip and stamps the filename
+`-manual` so it can never overwrite a scheduled one. It reports the chapter
+and word counts it verified — if those numbers look wrong, do not proceed with
+whatever you were about to do.
 
 `dev.db` is `journal_mode=delete` with no `-wal`/`-shm` sidecars, so the
 gzipped `sqlite3 .backup` is a complete, consistent database. There is no
@@ -109,6 +122,15 @@ Open <http://localhost:3000> and confirm your books are there.
 older than you thought, that file is the only copy of whatever was in the
 broken database. `dev.db.pre-*` is gitignored; `dev.db.before-restore-*` is
 not — do not commit it.
+
+**Cover images restore separately.** The database stores each book's
+`coverPath`, never the image bytes, so a database-only restore leaves every
+cover broken. `public/covers` is gitignored, so git will not bring it back
+either:
+
+```sh
+ditto ~/Backups/2026-07-30/loom-covers ~/Documents/GitHub/Loom/public/covers
+```
 
 ---
 
@@ -233,5 +255,30 @@ restore would actually have cost:
 
 That is the real exposure of a nightly-only schedule on a normal writing day.
 
-**Re-run this drill periodically.** A backup chain that worked in July is not
+## 7. Drill results — on-demand snapshot, 2026-07-31
+
+The **Snapshot Now** button (KAN-26) was exercised end-to-end against a copy of
+production, with `BACKUP_ROOT` and `GDRIVE_ROOT` pointed at scratch paths so
+nothing touched the real Drive.
+
+| Check | Result |
+|-------|--------|
+| Snapshot via the button | **ok** — 25 MB, 341 chapters, 775,425 words, in 2.8s |
+| Off-machine copy | **ok** — replicated to the configured remote |
+| Restore from it (`gunzip -t`, `integrity_check`, row counts) | **ok** — 5 books, 341 chapters, 775,425 words, 26 notes |
+| Counts vs what the UI reported | **exact match** |
+
+The three ways it must refuse, each verified to report failure rather than a
+false success — this is the KAN-14 class, so it is tested rather than assumed:
+
+| Situation | Result |
+|-----------|--------|
+| Database missing | HTTP 500, `ok:false`, log names the missing file; nothing written |
+| Structurally valid but near-empty DB (3 chapters) | HTTP 500, `ok:false`, floor refused it; nothing written |
+| Nothing changed since the last snapshot | still snapshots (FORCE) — a manual request must never silently no-op |
+
+Three snapshots taken in the same minute produced three distinct files
+(`090700-manual`, `090714-manual`, `090717-manual`) — none overwrote another.
+
+**Re-run these drills periodically.** A backup chain that worked in July is not
 evidence about November.

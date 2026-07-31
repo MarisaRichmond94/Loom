@@ -44,7 +44,17 @@ LOG_DIR="$BACKUP_ROOT/_logs"
 MIN_CHAPTERS=100
 
 NOW_DATE="$(date +%Y-%m-%d)"
-NOW_HHMM="$(date +%H%M)"
+# Scheduled runs are minute-unique by construction (08:30, 18:00), so HHMM is
+# enough for them. A FORCED run is not: two clicks in the same minute, or a
+# manual backup landing in the same minute as a scheduled one, would resolve to
+# the same filename and the second would OVERWRITE the first. Overwriting a
+# good scheduled snapshot with a manual one is a quiet loss, so forced runs get
+# seconds and a marker that says where they came from.
+if [[ "${FORCE:-0}" == "1" ]]; then
+  NOW_HHMM="$(date +%H%M%S)-manual"
+else
+  NOW_HHMM="$(date +%H%M)"
+fi
 RUN_DIR="$BACKUP_ROOT/$NOW_DATE"
 # Stamped with the run time so multiple intraday snapshots coexist instead of
 # overwriting each other. More restore points is the point: an accidental
@@ -86,9 +96,19 @@ while IFS= read -r f; do
   [[ -z "$newest_snap" || "$f" -nt "$newest_snap" ]] && newest_snap="$f"
 done < <(find "$BACKUP_ROOT" -maxdepth 2 -type f -name 'loom-dev*.db.gz' 2>/dev/null)
 
-if [[ -n "$newest_snap" && ! "$LOOM_DB" -nt "$newest_snap" ]]; then
+if [[ -n "$newest_snap" && ! "$LOOM_DB" -nt "$newest_snap" && "${FORCE:-0}" != "1" ]]; then
   log "dev.db (modified $(date -r "$db_mtime" '+%m-%d %H:%M')) is not newer than $(basename "$newest_snap") — nothing new to capture, skipping."
   exit 0
+fi
+
+# FORCE=1 defeats the skip above. Correct for the scheduled runs — there is no
+# point storing a second identical snapshot — but WRONG for an on-demand
+# backup: the writer asks for one because they are about to do something
+# risky, and exiting 0 having produced nothing would report success for work
+# that never happened. That is the exact failure class KAN-14 exists to stop.
+# Loom's "Back up now" (KAN-26) sets it.
+if [[ "${FORCE:-0}" == "1" && -n "$newest_snap" && ! "$LOOM_DB" -nt "$newest_snap" ]]; then
+  log "FORCE=1 — snapshotting even though dev.db is not newer than $(basename "$newest_snap")."
 fi
 
 # --- snapshot ---------------------------------------------------------------

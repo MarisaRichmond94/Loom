@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { LuShield, LuPlay, LuFolderOpen, LuUser, LuX, LuCheck, LuArrowLeft } from 'react-icons/lu'
+import { LuShield, LuPlay, LuFolderOpen, LuUser, LuX, LuCheck, LuArrowLeft, LuDatabaseBackup } from 'react-icons/lu'
 import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
 import AppHeader from '@/components/AppHeader'
@@ -48,6 +48,14 @@ export default function SettingsPage() {
   })
   const [backupStatus, setBackupStatus] = useState<{ ok: boolean; message: string } | null>(null)
   const [runningBackup, setRunningBackup] = useState(false)
+  // On-demand whole-database snapshot (KAN-26). Distinct from `backupStatus`
+  // above, which reports on the per-book .loom.json export.
+  const [backupNow, setBackupNow] = useState<{
+    state: 'idle' | 'running' | 'done' | 'error'
+    result?: { size: string; chapters: number; words: number; file: string; uploaded: boolean }
+    error?: string
+    log?: string
+  }>({ state: 'idle' })
   const [pickingFolder, setPickingFolder] = useState(false)
   const [hasAvatar, setHasAvatar] = useState(false)
   const [avatarTs, setAvatarTs] = useState(0)
@@ -237,6 +245,28 @@ export default function SettingsPage() {
     const result = await res.json()
     setBackupStatus(result)
     setRunningBackup(false)
+  }
+
+  async function runBackupNow() {
+    setBackupNow({ state: 'running' })
+    try {
+      const res = await fetch('/api/backup/now', { method: 'POST' })
+      const result = await res.json()
+      // Trust the payload, not the status code. The route only sets ok:true
+      // after parsing the script's verified "Snapshot OK" line.
+      if (!res.ok || !result.ok) {
+        setBackupNow({ state: 'error', error: result.error ?? 'Snapshot failed.', log: result.log })
+        return
+      }
+      setBackupNow({ state: 'done', result })
+    } catch (err) {
+      // A network-level failure here is almost always the 4-minute timeout or
+      // a restarted server — say so rather than showing an empty error.
+      setBackupNow({
+        state: 'error',
+        error: err instanceof Error ? err.message : 'Could not reach the server.',
+      })
+    }
   }
 
   const TABS = ['Profile', 'Editor', 'Export', 'Backups', 'Demo Data'] as const
@@ -469,7 +499,62 @@ export default function SettingsPage() {
           </>}
 
           {/* Backups */}
-          {activeTab === 'Backups' && <section>
+          {activeTab === 'Backups' && <section className="flex flex-col gap-4">
+            {/* Back up now (KAN-26).
+                Sits ABOVE the schedule settings deliberately: this is the
+                thing you reach for at a specific moment — before a big
+                restructure, before letting an agent near the database — and
+                that moment shouldn't require scrolling past configuration.
+
+                Distinct from a book's Backup button, which exports one story
+                as .loom.json. This is the whole database: notes, narration,
+                reader sessions and settings included. */}
+            <div className="bg-surface-raised border border-accent/10 rounded-xl p-6">
+              <div className="flex items-start justify-between gap-6">
+                <div>
+                  <div className="text-sm font-medium text-ink mb-1 flex items-center gap-2">
+                    <LuDatabaseBackup size={14} className="text-accent" /> Database Snapshot
+                  </div>
+                  <div className="text-xs text-ink-faint leading-relaxed max-w-md">
+                    A verified copy of the entire database — everything the book
+                    exports below leave out, including chapter notes, narration
+                    and reader sessions. Compressed, checked, and copied to
+                    Google Drive. Safe to run while you&rsquo;re writing.
+                  </div>
+                </div>
+                <button
+                  onClick={runBackupNow}
+                  disabled={backupNow.state === 'running'}
+                  className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-white text-xs font-medium hover:opacity-90 transition disabled:opacity-50"
+                >
+                  <LuDatabaseBackup size={11} />
+                  {backupNow.state === 'running' ? 'Snapshotting…' : 'Snapshot Now'}
+                </button>
+              </div>
+
+              {/* Report what was actually verified, not just that it finished.
+                  "It exited 0" is the claim KAN-14 exists to stop trusting. */}
+              {backupNow.state === 'done' && backupNow.result && (
+                <div className="mt-4 rounded border border-accent/20 bg-accent/5 px-3 py-2 text-xs text-ink-muted">
+                  <span className="text-accent font-medium">Verified.</span>{' '}
+                  {backupNow.result.size} · {backupNow.result.chapters.toLocaleString()} chapters ·{' '}
+                  {backupNow.result.words.toLocaleString()} words
+                  {backupNow.result.uploaded ? ' · copied to Drive' : ' · not uploaded'}
+                  <div className="mt-1 font-mono text-[10px] text-ink-faint break-all">
+                    {backupNow.result.file}
+                  </div>
+                </div>
+              )}
+              {backupNow.state === 'error' && (
+                <div className="mt-4 rounded border border-choice-kill/40 bg-choice-kill/10 px-3 py-2 text-xs text-choice-kill">
+                  {backupNow.error}
+                  {backupNow.log && (
+                    <pre className="mt-1.5 whitespace-pre-wrap font-mono text-[10px] opacity-80">{backupNow.log}</pre>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="bg-surface-raised border border-accent/10 rounded-xl p-6 flex flex-col gap-6">
 
               {/* Enable toggle */}
