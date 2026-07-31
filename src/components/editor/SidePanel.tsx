@@ -138,7 +138,12 @@ export default function SidePanel({
         <span className={`absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 transition-colors ${dragging ? 'bg-accent' : 'bg-transparent group-hover/resize:bg-accent/40'}`} />
       </div>
 
-      <div className="sticky top-0 h-[calc(100vh-3.75rem-var(--loom-footer-h,0px))] overflow-y-auto flex flex-col">
+      {/* overscroll-contain stops wheel events chaining out to the document.
+          Without it, scrolling the dock scrolls the PAGE first — reaching a
+          boundary here (or resting over a tab that manages its own scrolling,
+          like Review) passes the gesture straight through to the editor
+          behind. Two nested scrollers made that easy to hit. */}
+      <div className="sticky top-0 h-[calc(100vh-3.75rem-var(--loom-footer-h,0px))] overflow-y-auto overscroll-contain flex flex-col">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-accent/10 shrink-0">
           {hasTabs ? (
             <div role="tablist" className="flex items-center gap-1">

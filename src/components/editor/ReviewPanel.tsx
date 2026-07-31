@@ -184,7 +184,10 @@ export default function ReviewPanel({
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="flex-1 overflow-y-auto px-4 py-3 text-xs text-ink-muted">
+      {/* This scroller sits inside SidePanel's, so it needs its own
+          overscroll-contain: hitting the top or bottom of a review would
+          otherwise hand the gesture to the dock and then to the page. */}
+      <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 text-xs text-ink-muted">
         {/* Pre-populated header: which book, which chapter, which persona —
             the same three things the old Review button filled in before
             handing off to WriteAI. */}
@@ -270,7 +273,7 @@ export default function ReviewPanel({
 
       {/* Action bar. Cost is shown here, at the point of action, rather than
           leaving spend to be found later in WriteAI's Spend pane. */}
-      <div className="shrink-0 border-t border-accent/10 px-3 py-2">
+      <div className="shrink-0 border-t border-accent/10 px-3 pt-2 pb-3.5">
         {runner.cost !== null && (
           <div className="mb-1.5 text-[10px] text-ink-faint">
             last review cost ${runner.cost.toFixed(3)}
@@ -323,7 +326,7 @@ export default function ReviewPanel({
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-6 text-xs leading-relaxed text-ink-faint">
+    <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-6 text-xs leading-relaxed text-ink-faint">
       {children}
     </div>
   )
