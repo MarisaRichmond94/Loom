@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { LuPlay, LuDownload } from 'react-icons/lu'
+import { LuPlay, LuDatabaseBackup } from 'react-icons/lu'
 
 type SeriesStats = { bookCount: number; uniquePovs: number; choiceCount: number; wordCount: number }
 type Series = {
@@ -204,9 +204,10 @@ export default function WritePage() {
                   <a
                     href={`/api/series/${s.id}/export`}
                     download
+                    title="Back up this series as a .loom.json you can re-import. Covers prose, choices and characters — not chapter notes, narration or cover images."
                     className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition flex items-center gap-1.5"
                   >
-                    <LuDownload size={11} /> Export
+                    <LuDatabaseBackup size={11} /> Backup
                   </a>
                   <button
                     onClick={async () => {

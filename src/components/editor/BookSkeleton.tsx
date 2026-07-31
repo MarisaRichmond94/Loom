@@ -3,12 +3,22 @@
 export default function BookSkeleton() {
   return (
     <div className="max-w-3xl mx-auto px-8 py-8 animate-pulse">
-      {/* Action row — Published/Draft, Download, Preview. This was missing
+      {/* Action row — Published/Draft, Backup, Save, Preview. This was missing
           entirely, so the cover and everything under it jumped up by the row's
-          height plus its margin the moment data landed (KAN-19). */}
+          height plus its margin the moment data landed (KAN-19).
+
+          KEEP THE COUNT AND WIDTHS IN STEP WITH THE REAL ROW in
+          author/[seriesId]/book/[bookId]/page.tsx. It has drifted once already:
+          KAN-20 added Backup and renamed Download to Save, and this skeleton
+          still drew three boxes sized for the old labels — so the row silently
+          resized on load, which is the exact jump the skeleton exists to
+          prevent. Widths approximate px-3 padding + a 12px icon + the label.
+
+          Preview is last and accent-filled, matching it as the primary action. */}
       <div className="flex items-center justify-end gap-2 mb-6">
         <div className="h-7 w-24 bg-surface-overlay rounded" />
-        <div className="h-7 w-28 bg-surface-overlay rounded" />
+        <div className="h-7 w-24 bg-surface-overlay rounded" />
+        <div className="h-7 w-20 bg-surface-overlay rounded" />
         <div className="h-7 w-24 bg-accent/30 rounded" />
       </div>
 

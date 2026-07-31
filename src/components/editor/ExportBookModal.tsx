@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { LuDownload, LuTriangleAlert, LuX } from 'react-icons/lu'
+import { LuSave, LuTriangleAlert, LuX } from 'react-icons/lu'
 
 // Export-to-Pages modal. The writer picks the context the manuscript should
 // be flattened under — variables default to the series defaults, which is
@@ -134,10 +134,12 @@ export default function ExportBookModal({ seriesId, bookId, bookTitle, onClose }
           <button onClick={onClose} className="absolute top-4 right-4 text-ink-faint hover:text-ink transition">
             <LuX size={16} />
           </button>
-          {/* "Download" throughout, matching the button that opens this. Export
-              is reserved for .loom.json data dumps — see the note on the book
-              page (KAN-19). */}
-          <h2 className="text-base font-bold text-ink">Download &ldquo;{bookTitle}&rdquo;</h2>
+          {/* "Save" throughout, matching the button that opens this. Backup is
+              reserved for .loom.json data — see the note on the book page.
+              (KAN-19 first split these as Export/Download; they shared a
+              download icon and read as synonyms, so KAN-20 renamed them to
+              Backup/Save with distinct icons.) */}
+          <h2 className="text-base font-bold text-ink">Save &ldquo;{bookTitle}&rdquo;</h2>
           <p className="text-xs text-ink-faint mt-1.5 leading-relaxed">
             Flattens the book into a single Pages manuscript using the context
             below. The defaults are your canon values — change them to produce
@@ -256,7 +258,9 @@ export default function ExportBookModal({ seriesId, bookId, bookTitle, onClose }
               title={unresolvedCount > 0 ? 'Pick a branch for the highlighted choice points first' : undefined}
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50"
             >
-              <LuDownload size={14} /> {exporting ? 'Downloading…' : 'Download'}
+              {/* Matches the "Save" button that opens this modal — the CTA
+                  should say what the button the writer pressed said. */}
+              <LuSave size={14} /> {exporting ? 'Saving…' : 'Save'}
             </button>
           </div>
         </div>

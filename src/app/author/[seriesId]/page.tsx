@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { LuDownload, LuEye, LuPencilLine } from 'react-icons/lu'
+import { LuDatabaseBackup, LuEye, LuPencilLine } from 'react-icons/lu'
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import SeriesTagsEditor from '@/components/editor/SeriesTagsEditor'
@@ -106,10 +106,10 @@ export default function AuthorSeriesPage() {
           <a
             href={`/api/series/${seriesId}/export`}
             download
-            title="Export the whole series as a .loom.json — a data backup you can re-import. For a readable manuscript, open a book and use Download."
+            title="Back up the whole series as a .loom.json you can re-import. Covers prose, choices and characters — not chapter notes, narration or cover images. For a readable manuscript, open a book and use Save."
             className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition flex items-center gap-1.5"
           >
-            <LuDownload size={11} /> Export
+            <LuDatabaseBackup size={11} /> Backup
           </a>
           <a
             href={`/preview/series/${seriesId}`}
@@ -218,10 +218,10 @@ export default function AuthorSeriesPage() {
                       <a
                         href={`/api/series/${seriesId}/books/${book.id}/export`}
                         download
-                        title="Export this book as a .loom.json — a data backup you can re-import. For a readable manuscript, open the book and use Download."
+                        title="Back up this book as a .loom.json you can re-import. Covers prose, choices and characters — not chapter notes, narration or cover images. For a readable manuscript, open the book and use Save."
                         className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition flex items-center gap-1.5"
                       >
-                        <LuDownload size={11} /> Export
+                        <LuDatabaseBackup size={11} /> Backup
                       </a>
                       <button
                         onClick={() => setDeleteTarget({ id: book.id, title: book.title })}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { LuUser, LuCheck, LuPencil, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff, LuDownload, LuFileText } from 'react-icons/lu'
+import { LuUser, LuCheck, LuPencil, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff, LuDownload, LuFileText, LuSave, LuDatabaseBackup } from 'react-icons/lu'
 import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
 import { useAuthor } from '@/lib/authorContext'
@@ -481,29 +481,31 @@ export default function BookDetailPage() {
               projects was the root Write page. That is what blocked orphaning
               `/`: the manuscript was downloadable, the data was not.
 
-              Safe to sit next to Download only because KAN-19 split the
-              vocabulary — Export means .loom.json (re-importable data),
-              Download means a Pages manuscript. Two buttons both saying
-              "Export" for different formats would have been worse than the gap.
-              Same endpoint and wording as the series page's per-book control. */}
+              KAN-19 first split these as Export/Download, but both rendered
+              with the same download icon and read as near-synonyms — a real
+              coin-flip at the point of use. They are now Backup vs Save, with
+              distinct icons: the verb and the glyph both carry the difference.
+
+              Backup = .loom.json, the re-importable data. NOT a complete
+              system backup: chapter notes, narration audio, reader sessions
+              and cover image files live only in dev.db and public/covers. The
+              nightly chain covers those; this button is for portability. */}
           <a
             href={`/api/series/${seriesId}/books/${bookId}/export`}
             download
-            title="Export this book as a .loom.json — a data backup you can re-import. For a readable manuscript, use Download."
+            title="Back up this book's story data as a .loom.json you can re-import. Covers prose, choices and characters — not chapter notes, narration or cover images."
             className="px-3 py-1.5 rounded text-xs bg-surface-overlay text-ink-muted border border-accent/20 font-medium hover:text-ink transition flex items-center gap-1.5"
           >
-            <LuDownload size={12} /> Export
+            <LuDatabaseBackup size={12} /> Backup
           </a>
-          {/* "Download", not "Export" (KAN-19). Elsewhere in Loom, Export means
-              a .loom.json data dump for backup and re-import; this produces a
-              flattened Pages manuscript. One word for two formats was genuinely
-              confusing, so the manuscript flow took a distinct verb. */}
+          {/* Save = the readable manuscript (Pages/Word), the thing you hand to
+              a person. Distinct verb AND icon from Backup above. */}
           <button
             onClick={() => setShowExportModal(true)}
-            title="Download this book as a Pages manuscript"
+            title="Save this book as a Pages manuscript to read or share"
             className="px-3 py-1.5 rounded text-xs bg-surface-overlay text-ink-muted border border-accent/20 font-medium hover:text-ink transition flex items-center gap-1.5"
           >
-            <LuDownload size={12} /> Download
+            <LuSave size={12} /> Save
           </button>
           <a
             href={`/preview/book/${bookId}`}

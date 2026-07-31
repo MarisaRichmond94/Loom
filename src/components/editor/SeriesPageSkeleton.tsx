@@ -1,14 +1,19 @@
 // Body skeleton for the /author/[seriesId] (books list) route. Used by the
 // author layout when series hasn't returned and the page hasn't mounted yet.
-// Mirrors the real layout: the Export/Preview action row, centered title, then
+// Mirrors the real layout: the Backup/Preview action row, centered title, then
 // Description / Genres / Keywords / books list — so the layout doesn't
 // jump when the data lands.
 export default function SeriesPageSkeleton() {
   return (
     <div className="max-w-3xl mx-auto px-8 py-8 animate-pulse">
-      {/* Action row — Export then Preview (KAN-19). Was a single absolutely
-          positioned Preview stub; the real page now uses a flex row, and the
-          skeleton has to match or the title shifts down when data lands. */}
+      {/* Action row — Backup then Preview (KAN-19; renamed from Export in
+          KAN-20). Was a single absolutely positioned Preview stub; the real
+          page now uses a flex row, and the skeleton has to match or the title
+          shifts down when data lands.
+
+          Widths still hold after the rename: same two controls, and "Backup"
+          is the same length as "Export". Re-check if a third one lands here —
+          BookSkeleton drifted exactly that way and went unnoticed. */}
       <div className="flex justify-end items-center gap-2 mb-2">
         <div className="h-7 w-20 bg-surface-overlay rounded" />
         <div className="h-7 w-24 bg-accent/30 rounded" />
