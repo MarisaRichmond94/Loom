@@ -18,11 +18,17 @@ import { Fragment, type ReactNode } from 'react'
  * is a small surface, not a reimplementation.
  */
 
-/** Inline spans: `code`, **bold**, *italic*. Applied in that order so code
- *  spans win — a backtick run containing asterisks stays literal. */
+/** Inline spans: `code`, **bold**, ~~strikethrough~~, *italic*. Applied in that
+ *  order so code spans win — a backtick run containing asterisks stays literal.
+ *
+ *  Strikethrough matters more here than it looks. The reviewer's "Ideal
+ *  Version" writes its rewrites as struck original beside bold replacement, so
+ *  without it the writer reads deleted prose and kept prose as the same thing,
+ *  with stray tildes around one of them. There are 129 such spans in the
+ *  reviews written so far. */
 function inline(text: string, keyPrefix: string): ReactNode[] {
   const out: ReactNode[] = []
-  const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*]+\*)|(_[^_]+_)/g
+  const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(~~[^~]+~~)|(\*[^*]+\*)|(_[^_]+_)/g
   let last = 0
   let m: RegExpExecArray | null
   let i = 0
@@ -39,6 +45,10 @@ function inline(text: string, keyPrefix: string): ReactNode[] {
       )
     } else if (tok.startsWith('**')) {
       out.push(<strong key={key} className="font-semibold text-ink">{tok.slice(2, -2)}</strong>)
+    } else if (tok.startsWith('~~')) {
+      // Dimmed as well as struck: this is prose the reviewer is proposing to
+      // remove, and it should read as receding next to what replaces it.
+      out.push(<del key={key} className="text-ink-faint line-through">{tok.slice(2, -2)}</del>)
     } else {
       out.push(<em key={key}>{tok.slice(1, -1)}</em>)
     }
