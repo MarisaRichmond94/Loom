@@ -5,6 +5,7 @@ import { LuScanText, LuTrash2, LuPlus, LuSend, LuUnplug, LuCircleSlash } from 'r
 import { ReviewMarkdown } from './reviewMarkdown'
 import ReviewAnimation from './ReviewAnimation'
 import { DEFAULT_FOCUS, useReviewRunner } from './useReviewRunner'
+import { buildReviewTurn } from './reviewTurn'
 
 // The chapter's WriteAI review, in Loom's right dock (KAN-22).
 //
@@ -80,6 +81,36 @@ export function useChapterReview(seriesId: string, bookId: string | undefined, c
   }
 }
 
+// The draft text each chapter was last reviewed against, so "assess the
+// changes" still has something to diff after a page reload — otherwise every
+// revision pass following a refresh silently degrades to "read this again".
+//
+// Bounded to a handful of chapters: a chapter's canon text runs to tens of KB,
+// and keeping one per chapter would blow the ~5MB localStorage quota well
+// before the writer noticed. Losing an old entry costs only the explicit diff;
+// the conversation history still carries the earlier feedback.
+const REVIEWED_KEY = 'loom-reviewed-drafts'
+const REVIEWED_KEEP = 5
+
+function readReviewedDrafts(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(REVIEWED_KEY) ?? '{}') as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+
+function rememberReviewedText(chapterId: string, text: string) {
+  try {
+    const all = readReviewedDrafts()
+    delete all[chapterId] // re-insert so this chapter becomes the newest key
+    const trimmed = Object.entries(all).slice(-(REVIEWED_KEEP - 1))
+    localStorage.setItem(REVIEWED_KEY, JSON.stringify({ ...Object.fromEntries(trimmed), [chapterId]: text }))
+  } catch {
+    // Quota or a locked-down browser. The diff degrades; the review still runs.
+  }
+}
+
 function when(ts?: string) {
   if (!ts) return ''
   const d = new Date(ts)
@@ -116,7 +147,16 @@ export default function ReviewPanel({
   // stored one until the new review lands.
   const [startingFresh, setStartingFresh] = useState(false)
   const [busy, setBusy] = useState(false)
+  // Explains why a click did nothing — currently only "the draft is unchanged".
+  const [notice, setNotice] = useState<string | null>(null)
   const lastSentRef = useRef<string>('')
+
+  // Restore what this chapter was last reviewed against, so a revision pass
+  // after a reload still diffs.
+  useEffect(() => {
+    lastSentRef.current = readReviewedDrafts()[chapterId] ?? ''
+    setNotice(null)
+  }, [chapterId])
 
   const runner = useReviewRunner(s => {
     onSession(s)
@@ -171,14 +211,28 @@ export default function ReviewPanel({
   async function start(message?: string) {
     if (!canRun || runner.streaming) return
     const text = getCanonText()
+
+    // Read the previously-reviewed draft BEFORE overwriting it. This used to
+    // assign lastSentRef first and then read it back for previousText, so
+    // previousText was always identical to chapterText and the reviewer was
+    // handed two copies of the same draft to "diff".
+    const previous = lastSentRef.current || null
+
+    const turn = buildReviewTurn({ typed: message, hasReview: !!review, previous, text })
+    if (turn.kind === 'refused') {
+      setNotice(turn.notice)
+      return
+    }
+    setNotice(null)
+
     lastSentRef.current = text
+    rememberReviewedText(chapterId, text)
+
     await runner.run({
       seriesId, bookId: bookId!, chapterId, bookTitle: bookTitle!,
       chapter, chapterText: text,
-      message,
-      // The draft reviewed last turn, so a follow-up diffs rather than
-      // starting over. Only meaningful once a round has happened.
-      previousText: review ? lastSentRef.current : undefined,
+      message: turn.message,
+      previousText: turn.previousText,
       session: review,
       focus: review?.focus ?? DEFAULT_FOCUS,
     })
@@ -331,6 +385,14 @@ export default function ReviewPanel({
         {runner.error && (
           <p className="my-2 rounded border border-choice-kill/40 bg-choice-kill/10 px-2.5 py-2 text-choice-kill">
             {runner.error}
+          </p>
+        )}
+
+        {/* Not an error — the click was refused on purpose, and saying so is
+            better than a button that appears to do nothing. */}
+        {notice && (
+          <p className="my-2 rounded border border-accent/25 bg-accent/5 px-2.5 py-2 text-ink-muted">
+            {notice}
           </p>
         )}
 
