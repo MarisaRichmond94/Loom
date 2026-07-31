@@ -112,6 +112,44 @@ function rememberReviewedText(chapterId: string, text: string) {
   }
 }
 
+// A first review is a genuinely long wait — the reviewer reads the whole
+// chapter before it says anything. One frozen line of text for that long reads
+// as stalled, so the status names what is actually happening in sequence, the
+// way WriteAI's indexing bar does.
+//
+// Deliberately not fake progress: these are not steps being ticked off, and
+// none of them claims a percentage. They pass the time honestly.
+const READING_PHRASES = [
+  'Reading the chapter…',
+  'Following the scene…',
+  'Listening for voice…',
+  'Weighing the pacing…',
+  'Checking continuity…',
+  'Reading it again, closely…',
+  'Gathering its notes…',
+  'Writing up the review…',
+]
+
+const REVISION_PHRASES = [
+  'Re-reading your revision…',
+  'Comparing against the last draft…',
+  'Checking what changed…',
+  'Weighing it against its notes…',
+  'Writing up the assessment…',
+]
+
+const PHRASE_MS = 3400
+
+function useCyclingPhrase(phrases: string[], active: boolean) {
+  const [i, setI] = useState(0)
+  useEffect(() => {
+    if (!active) { setI(0); return }
+    const id = setInterval(() => setI(n => n + 1), PHRASE_MS)
+    return () => clearInterval(id)
+  }, [active, phrases])
+  return { text: phrases[i % phrases.length], index: i }
+}
+
 function when(ts?: string) {
   if (!ts) return ''
   const d = new Date(ts)
@@ -187,38 +225,63 @@ export default function ReviewPanel({
   //
   // Assigning scrollTop moves exactly one element and never propagates.
   const scrollerRef = useRef<HTMLDivElement>(null)
-  // Whether to keep pinning to the bottom. Set false when the writer scrolls
-  // up — mid-review she may well be re-reading an earlier point, and yanking
-  // her back down on the next token would make the panel unusable while it is
-  // doing the very thing she is reading.
-  const stickToBottom = useRef(true)
+  // Marks the turn currently being asked, so it can be brought to the top of
+  // the panel once — see the scroll effect below.
+  const turnRef = useRef<HTMLDivElement>(null)
 
-  // Shown once the top is genuinely out of reach. A threshold rather than
-  // `scrollTop > 0` so the control doesn't blink in and out during the small
-  // scrolls that happen while a reply streams in.
+  // Shown once the top is genuinely out of reach.
   const [scrolledDown, setScrolledDown] = useState(false)
 
   function onConversationScroll() {
     const el = scrollerRef.current
     if (!el) return
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-    stickToBottom.current = distanceFromBottom <= 48
     setScrolledDown(el.scrollTop > 240)
   }
 
+  // A revision pass says different things than a first read, and claiming to
+  // be "reading the chapter" when it is diffing two drafts would be wrong.
+  const phrase = useCyclingPhrase(
+    review ? REVISION_PHRASES : READING_PHRASES,
+    runner.streaming && !runner.streamText,
+  )
+
+  // The waiting state and the reply occupy different places — one centred in
+  // the panel, the other at the top — so they cannot cross-fade in place.
+  // Instead the placeholder is lifted out of the flow the moment text arrives
+  // and fades over the top of it, which reads as it stepping aside rather than
+  // vanishing. 300ms, matching the CSS transition.
+  const [handingOff, setHandingOff] = useState(false)
+  const hadText = useRef(false)
+  useEffect(() => {
+    const hasText = !!runner.streamText
+    if (hasText && !hadText.current) {
+      hadText.current = true
+      setHandingOff(true)
+      const t = setTimeout(() => setHandingOff(false), 300)
+      return () => clearTimeout(t)
+    }
+    if (!hasText) hadText.current = false
+  }, [runner.streamText])
+
   function scrollToTop() {
-    // Going to the top is a deliberate move away from the live end, so stop
-    // pinning — otherwise the next streamed chunk would drag you straight back
-    // down, which would read as the button not having worked.
-    stickToBottom.current = false
     scrollerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  // Move ONCE, when a turn starts: bring the writer's question to the top of
+  // the panel so the reply has the whole panel to fill beneath it.
+  //
+  // It used to follow the reply down, re-pinning to the bottom on every SSE
+  // chunk. Nobody reads at streaming speed, so that just dragged the writer
+  // past text she had not read, and she scrolled back up anyway. Reading is
+  // the point; keeping the newest token on screen is not.
   useEffect(() => {
-    if (!review && !runner.streamText) return
-    const el = scrollerRef.current
-    if (el && stickToBottom.current) el.scrollTop = el.scrollHeight
-  }, [review, runner.streamText])
+    if (!runner.pending) return
+    const s = scrollerRef.current
+    const el = turnRef.current
+    if (!s || !el) return
+    const top = el.getBoundingClientRect().top - s.getBoundingClientRect().top + s.scrollTop
+    s.scrollTo({ top: Math.max(0, top - 8), behavior: 'smooth' })
+  }, [runner.pending?.id])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Leaving the chapter mid-stream would otherwise keep the request alive.
   useEffect(() => () => runner.cancel(), [chapterId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -382,7 +445,7 @@ export default function ReviewPanel({
             exists. Same markup as a stored writer turn, so nothing shifts when
             the two swap over on completion. */}
         {runner.pending && (
-          <div className={(review?.messages?.length ?? 0) > 0 ? 'mt-6 mb-3' : 'mb-3'}>
+          <div ref={turnRef} className={(review?.messages?.length ?? 0) > 0 ? 'mt-6 mb-3' : 'mb-3'}>
             <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-accent">
               You
             </div>
@@ -397,20 +460,52 @@ export default function ReviewPanel({
             that wait; follow-ups are quick enough that a line of text is
             honest and a spinning graphic would be theatre. Either way it
             gives way the moment real text arrives. */}
-        {runner.streaming && !runner.streamText && !review && (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 py-8 text-center">
-            <ReviewAnimation />
-            <p className="text-[11px] text-ink-faint">Reading the chapter…</p>
-          </div>
-        )}
-        {runner.streaming && (runner.streamText || review) && (
-          <div className="mb-4">
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
-              {review?.focus ?? DEFAULT_FOCUS}
-            </div>
-            {runner.streamText
-              ? <ReviewMarkdown text={runner.streamText} />
-              : <span className="text-ink-faint italic">Reading the chapter…</span>}
+        {/* ONE assistant slot, occupied first by the waiting state and then by
+            the reply. It used to be two separate blocks: the waiting state was
+            `flex-1 justify-center`, filling the panel and centring itself, and
+            the reply was a normal top-aligned block. So the first token made
+            the content leap from the middle of the panel to the top — the jolt
+            was a change of layout, not a change of content.
+
+            Now the placeholder sits exactly where the reply will be, under the
+            same label, and hands over by fading. Nothing moves; the box simply
+            fills. The reply then grows downward, which the pin-to-bottom
+            follows smoothly. */}
+        {runner.streaming && (
+          // The waiting state stays centred and full size — it is the best
+          // thing on the screen and the wait is long enough to deserve it.
+          // `relative` lets it lift OUT of the flow while it fades, so the
+          // reply can take its place underneath without the two briefly
+          // stacking and doubling the height.
+          <div className={runner.streamText ? 'relative' : 'relative flex-1 flex flex-col'}>
+            {(!runner.streamText || handingOff) && (
+              <div
+                className={`flex flex-col items-center justify-center gap-3 py-8 text-center transition-opacity duration-300 ${
+                  runner.streamText ? 'pointer-events-none absolute inset-0' : 'flex-1'
+                } ${handingOff ? 'opacity-0' : 'opacity-100'}`}
+              >
+                {/* The graphic earns its place on a first pass, where the wait
+                    is long. A follow-up returns fast enough that it would be
+                    theatre, so that case gets the words alone. */}
+                {!review && <ReviewAnimation />}
+                <p
+                  // Re-keying on the phrase restarts the animation, so each
+                  // line rises in rather than swapping in place.
+                  key={phrase.index}
+                  className="loom-phrase-in text-[11px] text-ink-faint"
+                >
+                  {phrase.text}
+                </p>
+              </div>
+            )}
+            {runner.streamText && (
+              <div className="loom-fade-in mb-4">
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+                  {review?.focus ?? DEFAULT_FOCUS}
+                </div>
+                <ReviewMarkdown text={runner.streamText} />
+              </div>
+            )}
           </div>
         )}
 
@@ -486,7 +581,7 @@ export default function ReviewPanel({
               className="flex items-center gap-1.5 rounded bg-accent px-2.5 py-1 text-[11px] font-medium text-white transition hover:opacity-90 disabled:opacity-50"
             >
               <LuSend size={11} />
-              {review ? (reply.trim() ? 'Send' : 'Re-review') : 'Run review'}
+              {review ? (reply.trim() ? 'Send' : 'Re-review') : 'Submit'}
             </button>
           )}
           {startingFresh && !runner.streaming && (
