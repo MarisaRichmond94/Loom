@@ -50,7 +50,8 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
       { keys: '⌥⇧N', label: 'Create next chapter' },
       { keys: '⌥⇧E', label: 'Export canon' },
       { keys: '⌥⇧F', label: 'Find in chapter' },
-      { keys: '⌥⇧→ / ←', label: 'Next / previous match' },
+      { keys: '⌥⇧→ / ←', label: 'Next / previous match (while searching)' },
+      { keys: '⌥⇧← / →', label: 'Previous / next chapter' },
       { keys: '⌥⇧K', label: 'Clear chapter search' },
       { keys: '⌥⇧W', label: 'Clear path lens' },
       { keys: '⌥⇧D', label: 'Delete active block' },
@@ -630,10 +631,17 @@ export default function ChapterEditorPage() {
   const addChoiceBlockRef = useRef<() => Promise<void>>(async () => {})
   const createNextChapterRef = useRef<() => Promise<void>>(async () => {})
   const saveCanonRef = useRef<() => Promise<void>>(async () => {})
+  // Mirrors the footer's prev/next buttons for the ⌥⇧←/→ hotkey. Null on
+  // either end of the book, which is how the handler knows to do nothing.
+  const goChapterRef = useRef<{ prev: (() => void) | null; next: (() => void) | null }>({ prev: null, next: null })
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (!e.altKey || !e.shiftKey) return
+      // ⌥⇧←/→ means "extend selection by word" inside prose, so chapter
+      // navigation only claims it when the writer isn't in a text box.
+      const t = e.target as HTMLElement | null
+      const inTextBox = !!t?.closest?.('input, textarea, [contenteditable="true"]')
       switch (e.code) {
         case 'KeyT': e.preventDefault(); addBlockRef.current('text'); break
         case 'KeyQ': e.preventDefault(); addChoiceBlockRef.current(); break
@@ -645,8 +653,16 @@ export default function ChapterEditorPage() {
         case 'KeyJ': e.preventDefault(); scrollToCursorRef.current?.(); break
         case 'KeyK': e.preventDefault(); setLocalSearchQuery(''); setLocalSearchReplaceMode(false); break
         case 'KeyW': e.preventDefault(); clearLensRef.current(); break
-        case 'ArrowRight': if (localSearchQueryRef.current.trim()) { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'next') } break
-        case 'ArrowLeft': if (localSearchQueryRef.current.trim()) { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'prev') } break
+        // An active chapter search owns these keys; with the search bar empty
+        // they fall through to the footer's prev/next chapter navigation.
+        case 'ArrowRight':
+          if (localSearchQueryRef.current.trim()) { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'next') }
+          else if (!inTextBox && goChapterRef.current.next) { e.preventDefault(); goChapterRef.current.next() }
+          break
+        case 'ArrowLeft':
+          if (localSearchQueryRef.current.trim()) { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'prev') }
+          else if (!inTextBox && goChapterRef.current.prev) { e.preventDefault(); goChapterRef.current.prev() }
+          break
         case 'Equal': case 'NumpadAdd': e.preventDefault(); adjustProseScale(0.1); break
         case 'Minus': case 'NumpadSubtract': e.preventDefault(); adjustProseScale(-0.1); break
         // The dock's three tabs, numbered in the order they appear in it.
@@ -873,6 +889,13 @@ export default function ChapterEditorPage() {
   const currentIdx = bookChapters.findIndex(c => c.id === chapterId)
   const prevChapter = currentIdx > 0 ? bookChapters[currentIdx - 1] : null
   const nextChapter = currentIdx >= 0 && currentIdx < bookChapters.length - 1 ? bookChapters[currentIdx + 1] : null
+
+  // Hand the same two jumps to the ⌥⇧←/→ handler, so the hotkey and the
+  // footer buttons can never disagree about where the ends of the book are.
+  goChapterRef.current = {
+    prev: prevChapter ? () => router.push(`/author/${seriesId}/chapter/${prevChapter.id}`) : null,
+    next: nextChapter ? () => router.push(`/author/${seriesId}/chapter/${nextChapter.id}`) : null,
+  }
 
   return (
     // flex row: the writing column fills the layout's <main> scroll container;
