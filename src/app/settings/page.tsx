@@ -284,6 +284,10 @@ export default function SettingsPage() {
         // the point of it — it just isn't a link.
         detail: `${result.size}${result.uploaded ? ' · copied to Google Drive' : ' · not uploaded'}`,
         actions: [{ label: 'Show in Finder', onClick: () => revealBackup(result.path) }],
+        // 5s, the same as every other toast. The backup is already safe on
+        // disk by the time this appears — Show in Finder is a convenience, not
+        // something the writer has to catch before it disappears.
+        durationMs: 5000,
       })
     } catch (err) {
       setSnapshotting(false)
@@ -310,8 +314,15 @@ export default function SettingsPage() {
           author pages, which read as incidental rather than chosen. */}
       <AppHeader showAppSwitch lightMode={lightMode} onToggleLightMode={toggleLightMode} />
       {/* Settings sits outside the author layout, which is where ToastLayer is
-          normally mounted — so it needs its own. */}
-      <ToastLayer />
+          normally mounted — so it needs its own.
+
+          The default bottom offset lifts toasts clear of the editor's footer
+          and floating add-block button, neither of which exists here, leaving
+          a lopsided gap. Override it to match the right inset so the toast sits
+          equally far from both edges. */}
+      <div style={{ '--loom-toast-bottom': '0.75rem' } as React.CSSProperties}>
+        <ToastLayer />
+      </div>
 
       <main className={`flex-1 overflow-y-auto${lightMode ? ' light-body' : ''}`}>
         <div className="px-8 py-10">

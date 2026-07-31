@@ -101,8 +101,8 @@ export function showToast(opts: {
   message: string
   detail?: string
   actions?: ToastAction[]
-  // Longer than notify()'s 5s by default: a toast carrying actions has to
-  // outlast the time it takes to read it and decide to click.
+  // Defaults to notify()'s 5s so toasts feel the same everywhere. Callers
+  // raise it for things worth interrupting over — a failure, say.
   durationMs?: number
 }) {
   const id = nextId++
@@ -113,7 +113,7 @@ export function showToast(opts: {
     detail: opts.detail,
     actions: opts.actions,
   }]
-  setTimeout(() => { toasts = toasts.filter(t => t.id !== id); emit() }, opts.durationMs ?? 15000)
+  setTimeout(() => { toasts = toasts.filter(t => t.id !== id); emit() }, opts.durationMs ?? 5000)
   emit()
   return id
 }
