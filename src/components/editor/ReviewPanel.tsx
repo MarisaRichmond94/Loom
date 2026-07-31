@@ -109,7 +109,6 @@ export default function ReviewPanel({
   onSession: (s: ReviewSession | null) => void
   onRefetch: () => void
 }) {
-  const endRef = useRef<HTMLDivElement>(null)
   const [reply, setReply] = useState('')
   // Set when the writer asks for a fresh review while one exists. Both are
   // kept — they are paid for, and comparing a first pass against a later one
@@ -131,8 +130,39 @@ export default function ReviewPanel({
   const chapter = data?.chapter ?? null
   const canRun = !!bookId && !!bookTitle && chapter !== null
 
+  // Keep the newest text in view WITHOUT touching any other scroller.
+  //
+  // This used to be endRef.scrollIntoView({ block: 'end' }). scrollIntoView
+  // scrolls EVERY scrollable ancestor to reveal the element, and there are
+  // four above this one: the conversation, its wrapper, the sticky dock, and
+  // the page. Because the dock is sticky inside the page scroller, revealing
+  // the end of a streaming review scrolled the page — so the writer's chapter
+  // text crept downward on its own while the review came in. And because
+  // streamText changes on every SSE chunk, that fired dozens of times per
+  // review.
+  //
+  // overscroll-contain does not prevent this. It governs chained scrolling
+  // from a user gesture, not a programmatic scroll.
+  //
+  // Assigning scrollTop moves exactly one element and never propagates.
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  // Whether to keep pinning to the bottom. Set false when the writer scrolls
+  // up — mid-review she may well be re-reading an earlier point, and yanking
+  // her back down on the next token would make the panel unusable while it is
+  // doing the very thing she is reading.
+  const stickToBottom = useRef(true)
+
+  function onConversationScroll() {
+    const el = scrollerRef.current
+    if (!el) return
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    stickToBottom.current = distanceFromBottom <= 48
+  }
+
   useEffect(() => {
-    if (review || runner.streamText) endRef.current?.scrollIntoView({ block: 'end' })
+    if (!review && !runner.streamText) return
+    const el = scrollerRef.current
+    if (el && stickToBottom.current) el.scrollTop = el.scrollHeight
   }, [review, runner.streamText])
 
   // Leaving the chapter mid-stream would otherwise keep the request alive.
@@ -205,7 +235,11 @@ export default function ReviewPanel({
       {/* `flex flex-col` so the empty state can claim the full height and
           centre itself; with content present the children simply stack as
           before. */}
-      <div className="flex-1 flex flex-col overflow-y-auto overscroll-contain px-4 py-3 text-xs text-ink-muted">
+      <div
+        ref={scrollerRef}
+        onScroll={onConversationScroll}
+        className="flex-1 flex flex-col overflow-y-auto overscroll-contain px-4 py-3 text-xs text-ink-muted"
+      >
         {/* Pre-populated header: which book, which chapter, which persona —
             the same three things the old Review button filled in before
             handing off to WriteAI. */}
@@ -300,7 +334,6 @@ export default function ReviewPanel({
           </p>
         )}
 
-        <div ref={endRef} />
       </div>
 
       {/* Action bar. Cost is shown here, at the point of action, rather than
