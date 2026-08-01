@@ -67,13 +67,13 @@ function EventRow({
   const when = formatEventWhen(event)
 
   return (
-    <div className="group/event flex items-start gap-1">
+    <div className="group/event relative">
       <button
         type="button"
         onClick={onActivate}
         aria-pressed={onUntag ? undefined : tagged}
         aria-expanded={onUntag ? expanded : undefined}
-        className={`min-w-0 flex-1 cursor-pointer rounded-lg border px-3 py-2.5 text-left transition hover:border-accent/60 ${
+        className={`w-full cursor-pointer rounded-lg border px-3 py-2.5 text-left transition hover:border-accent/60 ${
           tagged ? 'border-accent bg-accent/5' : 'border-accent/10 bg-surface-overlay/40'
         }`}
       >
@@ -159,9 +159,16 @@ function EventRow({
         )}
       </button>
 
-      {/* Revealed on hover, outside the card so they never overlap the text. */}
+      {/* Overlaid in the corner on hover, rather than sitting in a lane beside
+          the card. The lane cost every card its width permanently to show two
+          icons that are wanted momentarily. Kept a SIBLING of the card button,
+          not a child — a button inside a button is invalid, and the browser
+          resolves it by dropping the nesting rather than by telling you.
+
+          The cluster carries its own background so the title, which truncates
+          under it, is masked rather than showing through the icons. */}
       {(onUntag || onEdit) && (
-        <div className="flex shrink-0 flex-col gap-1 pt-1 opacity-0 transition group-hover/event:opacity-100 focus-within:opacity-100">
+        <div className="absolute right-1.5 top-1.5 flex items-center gap-1.5 rounded-md border border-accent/15 bg-surface-raised px-1.5 py-1 opacity-0 shadow-sm transition group-hover/event:opacity-100 focus-within:opacity-100">
           {onUntag && (
             <button
               type="button"
