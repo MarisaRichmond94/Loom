@@ -732,7 +732,7 @@ export default function ChapterEditorPage() {
         case 'KeyE': e.preventDefault(); saveCanonRef.current(); break
         case 'KeyP': e.preventDefault(); startPreviewRef.current(); break
         case 'KeyX': e.preventDefault(); copyCanonTextRef.current(); break
-        case 'Backquote': e.preventDefault(); setShowChapterSettings(true); break
+        case 'Backquote': e.preventDefault(); setShowChapterSettings(v => !v); break
         case 'KeyF': e.preventDefault(); setTimeout(() => { localSearchInputRef.current?.focus(); localSearchInputRef.current?.select() }, 0); break
         case 'KeyJ': e.preventDefault(); scrollToCursorRef.current?.(); break
         case 'KeyK': e.preventDefault(); setLocalSearchQuery(''); setLocalSearchReplaceMode(false); break
@@ -1253,7 +1253,7 @@ export default function ChapterEditorPage() {
                     <button
                       role="menuitem"
                       onClick={() => { setActionMenuOpen(false); togglePanelTab('events') }}
-                      title="Events referenced in this chapter (⌥⇧3)"
+                      title="Events referenced in this chapter (⌥⇧2)"
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
                     >
                       <span className="flex w-5 items-center justify-center text-accent"><LuCalendarDays size={14} /></span>
@@ -1261,12 +1261,12 @@ export default function ChapterEditorPage() {
                       {chapterEvents.count > 0 && (
                         <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />
                       )}
-                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧3</span>
+                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧2</span>
                     </button>
                     <button
                       role="menuitem"
                       onClick={() => { setActionMenuOpen(false); togglePanelTab('characters') }}
-                      title="Characters appearing in this chapter (⌥⇧4)"
+                      title="Characters appearing in this chapter (⌥⇧2)"
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
                     >
                       <span className="flex w-5 items-center justify-center text-accent"><LuUsers size={14} /></span>
@@ -1274,20 +1274,20 @@ export default function ChapterEditorPage() {
                       {chapterCharacters.count > 0 && (
                         <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />
                       )}
-                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧4</span>
+                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧2</span>
                     </button>
                     {/* The dot means this chapter has notes you can't currently
                         see — it clears once the panel is showing them. */}
                     <button
                       role="menuitem"
                       onClick={() => { setActionMenuOpen(false); togglePanelTab('notes') }}
-                      title="Chapter notes (⌥⇧5)"
+                      title="Chapter notes (⌥⇧2)"
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
                     >
                       <span className="flex w-5 items-center justify-center text-accent"><PiNotebookThin size={16} /></span>
                       <span className="flex-1">Notes</span>
                       {hasNotes && <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />}
-                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧5</span>
+                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧2</span>
                     </button>
                     <button
                       role="menuitem"
