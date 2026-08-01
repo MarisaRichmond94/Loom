@@ -961,7 +961,10 @@ export default function ChapterEditorPage() {
               popover and the ☰ menu aren't clipped by it on a short window;
               modals are fixed at z-50 and still win.
             - pb-2 rather than a margin on the last row: a margin would collapse
-              out of the sticky box and let prose scroll flush against its edge. */}
+              out of the sticky box and let prose scroll flush against its edge.
+            - If you change this block's structure, update ChapterSkeleton.tsx's
+              header placeholder to match — it drifted silently after KAN-30
+              until LOOM-49 caught it. */}
         <div ref={headerRef} className="sticky top-0 z-[45] -mx-8 px-8 pt-3 pb-2 bg-surface-base">
           {/* Title + POV — centered */}
           <div className="flex flex-col items-center mb-8">
