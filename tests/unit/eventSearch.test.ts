@@ -1,5 +1,7 @@
 import {
   formatEventTime,
+  fromDateInputValue,
+  toDateInputValue,
   formatEventWhen,
   matchesQuery,
   parseEventDate,
@@ -165,5 +167,67 @@ describe('sortEvents', () => {
     const input = [b, a, c]
     sortEvents(input, 'asc')
     expect(input.map(e => e.id)).toEqual(['b', 'a', 'c'])
+  })
+})
+
+describe('date <-> <input type="date"> round trip', () => {
+  it('converts a stored date to the picker value', () => {
+    expect(toDateInputValue('Monday, November 16th, 2009')).toBe('2009-11-16')
+    expect(toDateInputValue('Saturday, January 2nd, 1943')).toBe('1943-01-02')
+  })
+
+  it('gives an empty picker value when there is no readable date', () => {
+    expect(toDateInputValue(null)).toBe('')
+    expect(toDateInputValue('sometime')).toBe('')
+  })
+
+  it('rebuilds the exact string WriteAI stores', () => {
+    expect(fromDateInputValue('2009-11-16')).toBe('Monday, November 16th, 2009')
+    expect(fromDateInputValue('1943-01-02')).toBe('Saturday, January 2nd, 1943')
+  })
+
+  it('round-trips every real date shape without drift', () => {
+    for (const stored of [
+      'Monday, November 16th, 2009',
+      'Saturday, January 2nd, 1943',
+      'Monday, July 9th, 1951',
+      'Thursday, March 5th, 1959',
+      'Monday, May 3rd, 2010',
+      'Saturday, May 1st, 2010',
+      'Wednesday, December 11th, 2002',
+      'Friday, June 12th, 1970',
+    ]) {
+      expect(fromDateInputValue(toDateInputValue(stored))).toBe(stored)
+    }
+  })
+
+  it('derives the weekday rather than trusting the input', () => {
+    // A stored weekday that disagrees with its date would otherwise survive
+    // into WriteAI's timeline as a small permanent lie.
+    expect(fromDateInputValue('2009-11-16')).toContain('Monday')
+    expect(toDateInputValue('Friday, November 16th, 2009')).toBe('2009-11-16')
+    expect(fromDateInputValue(toDateInputValue('Friday, November 16th, 2009'))).toBe(
+      'Monday, November 16th, 2009',
+    )
+  })
+
+  it('handles every ordinal boundary', () => {
+    expect(fromDateInputValue('2010-05-01')).toContain('1st')
+    expect(fromDateInputValue('2010-05-02')).toContain('2nd')
+    expect(fromDateInputValue('2010-05-03')).toContain('3rd')
+    expect(fromDateInputValue('2010-05-11')).toContain('11th')
+    expect(fromDateInputValue('2010-05-12')).toContain('12th')
+    expect(fromDateInputValue('2010-05-13')).toContain('13th')
+    expect(fromDateInputValue('2010-05-21')).toContain('21st')
+    expect(fromDateInputValue('2010-05-22')).toContain('22nd')
+    expect(fromDateInputValue('2010-05-23')).toContain('23rd')
+    expect(fromDateInputValue('2010-05-31')).toContain('31st')
+  })
+
+  it('rejects malformed and impossible dates', () => {
+    expect(fromDateInputValue('')).toBeNull()
+    expect(fromDateInputValue('16-11-2009')).toBeNull()
+    expect(fromDateInputValue('2010-02-31')).toBeNull() // February has no 31st
+    expect(fromDateInputValue('2010-13-01')).toBeNull()
   })
 })

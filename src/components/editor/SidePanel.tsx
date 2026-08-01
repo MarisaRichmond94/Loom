@@ -74,8 +74,12 @@ export default function SidePanel({
     count: number
     loading: boolean
     unreachable: boolean
+    locations: string[]
+    characterPool: string[]
+    loadCharacterPool: () => void | Promise<void>
     onToggleTag: (writerEventId: string, tagged: boolean) => void
     onRetry: () => void
+    onRefresh: () => void | Promise<void>
   }
   review: { review: ReviewSession | null; reason?: string; total?: number; chapter?: number | null } | null
   reviewLoading: boolean

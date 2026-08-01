@@ -1445,8 +1445,12 @@ export default function ChapterEditorPage() {
           count: chapterEvents.count,
           loading: chapterEvents.loading,
           unreachable: chapterEvents.unreachable,
+          locations: chapterEvents.locations,
+          characterPool: chapterEvents.characterPool,
+          loadCharacterPool: chapterEvents.loadCharacterPool,
           onToggleTag: chapterEvents.setTagged,
           onRetry: chapterEvents.refresh,
+          onRefresh: chapterEvents.refresh,
         }}
         review={reviewData}
         reviewLoading={reviewLoading}

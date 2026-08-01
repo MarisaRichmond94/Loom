@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { LuArrowUpDown, LuCalendarDays, LuMapPin, LuPencil, LuPlus, LuTag, LuX } from 'react-icons/lu'
 import { PanelEmpty, PanelEmptyState } from './PanelEmptyState'
+import EventModal from './EventModal'
 import { formatEventWhen, matchesQuery, sortEvents, type WriterEvent } from '@/lib/eventSearch'
 import type { EventAppearance, TaggedEvent } from './useChapterEvents'
 
@@ -122,8 +123,10 @@ export default function EventsPanel({
   onToggleTag,
   onRetry,
   bookId,
-  onCreate,
-  onEdit,
+  locations,
+  characterPool,
+  loadCharacterPool,
+  onRefresh,
 }: {
   events: WriterEvent[]
   tagged: TaggedEvent[]
@@ -133,15 +136,27 @@ export default function EventsPanel({
   onToggleTag: (writerEventId: string, tagged: boolean) => void
   onRetry: () => void
   bookId?: string
-  /** Supplied by LOOM-37. Until then the create and edit affordances stay
-   *  hidden rather than shipping as dead controls. */
-  onCreate?: () => void
-  onEdit?: (event: WriterEvent) => void
+  locations: string[]
+  characterPool: string[]
+  loadCharacterPool: () => void | Promise<void>
+  onRefresh: () => void | Promise<void>
 }) {
   const [tagMode, setTagMode] = useState(false)
   const [query, setQuery] = useState('')
   const [direction, setDirection] = useState<'asc' | 'desc'>('asc')
   const searchRef = useRef<HTMLInputElement>(null)
+  // null = closed; { event: undefined } = creating.
+  const [editorFor, setEditorFor] = useState<{ event?: WriterEvent } | null>(null)
+
+  function openEditor(event?: WriterEvent) {
+    // Fetched here rather than on mount because the characters endpoint writes
+    // to disk when read — see loadCharacterPool.
+    void loadCharacterPool()
+    setEditorFor({ event })
+  }
+
+  const onCreate = () => openEditor()
+  const onEdit = (event: WriterEvent) => openEditor(event)
 
   // autoFocus is not available here: the input never unmounts, so it would only
   // fire once. Focus is driven by the mode instead, and blurred on close so the
@@ -220,17 +235,15 @@ export default function EventsPanel({
         <LuArrowUpDown size={15} />
       </button>
 
-      {onCreate && (
-        <button
-          type="button"
-          onClick={onCreate}
-          title="Create an event and tag it here"
-          aria-label="Create an event and tag it here"
-          className="shrink-0 text-ink-faint transition hover:text-ink"
-        >
-          <LuPlus size={17} />
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={onCreate}
+        title="Create an event and tag it here"
+        aria-label="Create an event and tag it here"
+        className="shrink-0 text-ink-faint transition hover:text-ink"
+      >
+        <LuPlus size={17} />
+      </button>
 
     </div>
   )
@@ -263,17 +276,14 @@ export default function EventsPanel({
       if (tagMode) {
         return (
           <PanelEmptyState icon={<LuCalendarDays size={26} />} title="No events yet">
-            {onCreate
-              ? 'Create one with the + button, or add events from WriteAI’s timeline.'
-              : 'Add events from WriteAI’s timeline and they’ll show up here.'}
+            Create one with the + button, or add events from WriteAI’s timeline.
           </PanelEmptyState>
         )
       }
       return (
         <PanelEmptyState icon={<LuCalendarDays size={26} />} title="No events tagged yet">
-          {onCreate
-            ? 'Click the tag toggle to search events and tag them to this chapter, or click the + button to create a new event and tag it here.'
-            : 'Click the tag toggle to search events and tag them to this chapter.'}
+          Click the tag toggle to search events and tag them to this chapter, or click the + button
+          to create a new event and tag it here.
         </PanelEmptyState>
       )
     }
@@ -290,7 +300,7 @@ export default function EventsPanel({
               tagged={isTagged}
               spread={alsoIn?.length ? describeSpread(alsoIn, bookId) : undefined}
               onToggle={tagMode || isTagged ? () => onToggleTag(event.id, !isTagged) : undefined}
-              onEdit={onEdit && !tagMode ? () => onEdit(event) : undefined}
+              onEdit={tagMode ? undefined : () => onEdit(event)}
             />
           )
         })}
@@ -302,6 +312,22 @@ export default function EventsPanel({
     <div className="flex flex-1 flex-col min-h-0">
       {toolbar}
       <PanelEmpty>{body()}</PanelEmpty>
+      {editorFor && (
+        <EventModal
+          event={editorFor.event}
+          characterPool={characterPool}
+          locationPool={locations}
+          onSaved={async saved => {
+            // A newly created event is tagged here immediately. Creating one
+            // from a chapter and then having to go find it would be worse than
+            // the timeline this exists to replace.
+            if (!editorFor.event && saved?.id) onToggleTag(saved.id, true)
+            else await onRefresh()
+          }}
+          onDeleted={onRefresh}
+          onClose={() => setEditorFor(null)}
+        />
+      )}
     </div>
   )
 }
