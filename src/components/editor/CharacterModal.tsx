@@ -103,14 +103,15 @@ export default function CharacterModal({
   /**
    * A new character may not take an existing name.
    *
-   * Names are still load-bearing: relationships and writer-events reference
-   * characters by name (LOOM-45 is what changes that), so a second "Jared
-   * Gatlin" would make those lookups ambiguous. There are currently no
-   * duplicates, and this keeps it that way.
+   * References are `wc-` ids now (LOOM-45), so a duplicate name no longer
+   * breaks lookups — but it still makes every picker in both apps ambiguous to
+   * a human, who has only the name to choose by. Applies to renames as well as
+   * creation: renaming one character onto another's name is the same collision
+   * arriving by a different route. `c.id !== draft.id` keeps a character from
+   * colliding with itself.
    */
   const trimmedName = draft.name.trim()
   const duplicate =
-    creating &&
     trimmedName.length > 0 &&
     pool.some(c => c.id !== draft.id && c.name.trim().toLowerCase() === trimmedName.toLowerCase())
   const saveable = trimmedName.length > 0 && !duplicate
@@ -194,15 +195,17 @@ export default function CharacterModal({
   const relCandidates = pool.filter(
     c =>
       c.id !== draft.id &&
-      !draft.relationships.some(r => r.target === c.name) &&
+      !draft.relationships.some(r => r.target === c.id) &&
       c.name.toLowerCase().includes(relSearch.trim().toLowerCase()),
   )
 
   /** Picking a character does NOT commit — it fills the target and moves to
    *  the description, which is what Enter in a two-field row should do. */
-  function chooseTarget(name: string) {
-    setRelTarget(name)
-    setRelSearch(name)
+  function chooseTarget(c: { id: string; name: string }) {
+    // The id is what gets stored; the search box keeps showing the name,
+    // because that is what the writer just picked and expects to see.
+    setRelTarget(c.id)
+    setRelSearch(c.name)
     setRelOpen(false)
     // Focus is handled by the effect above, once the field is enabled.
   }
@@ -262,26 +265,20 @@ export default function CharacterModal({
           />
 
           <div className="min-w-0 flex-1">
-            {creating ? (
-              <input
-                ref={nameRef}
-                value={draft.name}
-                onChange={e => set({ name: e.target.value })}
-                placeholder="What is this character's name?"
-                aria-label="Character name"
-                className="w-full border-b border-accent/20 bg-transparent pb-1 text-sm font-semibold text-ink outline-none transition focus:border-accent placeholder:font-normal placeholder:text-ink-faint"
-              />
-            ) : (
-              // Read-only until LOOM-45 migrates the 353 references that point
-              // at a character by NAME. Renaming here would orphan them
-              // silently — the one edit this form cannot safely make.
-              <div
-                title="Renaming is done in WriteAI for now — other records still refer to characters by name"
-                className="cursor-default truncate text-sm font-semibold text-ink"
-              >
-                {draft.name}
-              </div>
-            )}
+            {/* Editable when creating AND when renaming (LOOM-45). This field
+                was read-only for existing characters because event casts and
+                relationships referenced them by name, so a rename orphaned all
+                of them silently. Those references are `wc-` ids now and the
+                display name is derived at read time, which makes renaming an
+                ordinary edit. */}
+            <input
+              ref={nameRef}
+              value={draft.name}
+              onChange={e => set({ name: e.target.value })}
+              placeholder="What is this character's name?"
+              aria-label="Character name"
+              className="w-full border-b border-accent/20 bg-transparent pb-1 text-sm font-semibold text-ink outline-none transition focus:border-accent placeholder:font-normal placeholder:text-ink-faint"
+            />
             <input
               value={draft.aliases ?? ''}
               onChange={e => set({ aliases: e.target.value || null })}
@@ -425,7 +422,7 @@ export default function CharacterModal({
                   // useless.
                   if ((e.key === 'Enter' || e.key === 'Tab') && relCandidates.length > 0 && !relTarget) {
                     e.preventDefault()
-                    chooseTarget(relCandidates[0].name)
+                    chooseTarget(relCandidates[0])
                   }
                 }}
                 placeholder="Select character…"
@@ -443,7 +440,7 @@ export default function CharacterModal({
                       <button
                         key={c.id}
                         type="button"
-                        onClick={() => chooseTarget(c.name)}
+                        onClick={() => chooseTarget(c)}
                         className="block w-full px-3 py-1.5 text-left text-[11px] text-ink-muted transition hover:bg-accent/10 hover:text-ink"
                       >
                         {c.name}

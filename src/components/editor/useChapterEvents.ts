@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { notify } from '@/lib/notifications'
 import type { WriterEvent } from '@/lib/eventSearch'
+import type { CharacterOption } from '@/lib/writerCharacters'
 
 // The Events tab's data (LOOM-32 / LOOM-36).
 //
@@ -29,7 +30,7 @@ export type TaggedEvent = WriterEvent & { alsoIn: EventAppearance[] }
 export function useChapterEvents(chapterId: string) {
   const [events, setEvents] = useState<WriterEvent[]>([])
   const [locations, setLocations] = useState<string[]>([])
-  const [characterPool, setCharacterPool] = useState<string[]>([])
+  const [characterPool, setCharacterPool] = useState<CharacterOption[]>([])
   const [characterPhotos, setCharacterPhotos] = useState<Record<string, string | null>>({})
   const [taggedIds, setTaggedIds] = useState<string[]>([])
   const [spread, setSpread] = useState<Record<string, EventAppearance[]>>({})
@@ -88,12 +89,19 @@ export function useChapterEvents(chapterId: string) {
       const res = await fetch('/api/writeai/characters')
       if (!res.ok) return
       const data = await res.json()
-      const rows: { name?: string; photo_url?: string | null }[] = data?.characters ?? []
+      const rows: { id?: string; name?: string; photo_url?: string | null }[] = data?.characters ?? []
+      // An entry without an id cannot be referenced at all now that events store
+      // ids (LOOM-45), so it is dropped from the pool rather than offered as a
+      // choice that could not be saved.
       const named = rows.filter(
-        (c): c is { name: string; photo_url?: string | null } =>
-          typeof c.name === 'string' && c.name.length > 0,
+        (c): c is { id: string; name: string; photo_url?: string | null } =>
+          typeof c.name === 'string' && c.name.length > 0 && typeof c.id === 'string' && !!c.id,
       )
-      setCharacterPool(named.map(c => c.name).sort((a, b) => a.localeCompare(b)))
+      setCharacterPool(
+        named
+          .map(c => ({ id: c.id, name: c.name }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      )
       // WriteAI serves portraits from its own origin; rewrite to Loom's proxy
       // so the browser never talks to :8000 and the no-cache header survives.
       setCharacterPhotos(

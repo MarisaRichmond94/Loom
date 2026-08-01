@@ -113,3 +113,14 @@ export function validateWriterCharacter(
 export function isSafeCharacterId(id: string): boolean {
   return /^[A-Za-z0-9_-]+$/.test(id)
 }
+
+/**
+ * The minimum a picker needs to offer a character and store a reference to it
+ * (LOOM-45).
+ *
+ * Both halves are load-bearing and neither is optional: the NAME is what the
+ * writer searches and reads, the ID is the only part that survives a rename.
+ * Pools used to carry names alone, which is exactly how an event's cast came to
+ * orphan itself the moment a character was renamed.
+ */
+export type CharacterOption = { id: string; name: string }

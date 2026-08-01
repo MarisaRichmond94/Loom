@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LuArrowUpDown, LuCalendarDays, LuMapPin, LuPencil, LuPlus, LuTag, LuX } from 'react-icons/lu'
 import { PanelEmpty, PanelEmptyState } from './PanelEmptyState'
 import { CharacterAvatar } from './CharacterAvatar'
 import EventModal from './EventModal'
 import { formatEventWhen, matchesQuery, sortEvents, type WriterEvent } from '@/lib/eventSearch'
+import type { CharacterOption } from '@/lib/writerCharacters'
 import type { EventAppearance, TaggedEvent } from './useChapterEvents'
 
 // The Events tab: which WriteAI events this chapter references (LOOM-32).
@@ -39,6 +40,7 @@ function EventRow({
   tagged,
   spread,
   photos,
+  nameOf,
   expanded,
   onActivate,
   onUntag,
@@ -48,6 +50,10 @@ function EventRow({
   tagged: boolean
   spread?: string
   photos: Record<string, string | null>
+  /** Stored cast entries are `wc-` ids (LOOM-45); this turns one into the name
+   *  to display. The photo map is keyed by name, so it is indexed by the
+   *  RESOLVED name rather than the raw reference. */
+  nameOf: (id: string) => string
   expanded: boolean
   /** Expands in browse mode, toggles the tag in tag mode — the two things a
    *  click can sensibly mean, one per mode. */
@@ -85,7 +91,7 @@ function EventRow({
         <div className="mt-0.5 flex items-baseline gap-2">
           {!expanded && (
             <span className="flex-1 truncate text-[11px] text-ink-muted">
-              {event.characters.join(', ')}
+              {event.characters.map(nameOf).join(', ')}
             </span>
           )}
           {when && (
@@ -113,15 +119,18 @@ function EventRow({
                     Character(s) ({event.characters.length})
                   </p>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {event.characters.map(name => (
+                    {event.characters.map(id => {
+                      const label = nameOf(id)
+                      return (
                       <span
-                        key={name}
+                        key={id}
                         className="flex items-center gap-1.5 rounded-lg border border-accent/15 bg-surface-overlay/60 py-1 pl-1 pr-2.5"
                       >
-                        <CharacterAvatar name={name} src={photos[name]} size={28} />
-                        <span className="text-[11px] font-medium text-ink">{name}</span>
+                        <CharacterAvatar name={label} src={photos[label]} size={28} />
+                        <span className="text-[11px] font-medium text-ink">{label}</span>
                       </span>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -205,7 +214,7 @@ export default function EventsPanel({
   onRetry: () => void
   bookId?: string
   locations: string[]
-  characterPool: string[]
+  characterPool: CharacterOption[]
   characterPhotos: Record<string, string | null>
   loadCharacterPool: () => void | Promise<void>
   onRefresh: () => void | Promise<void>
@@ -230,6 +239,18 @@ export default function EventsPanel({
   const onCreate = () => openEditor()
   const onEdit = (event: WriterEvent) => openEditor(event)
 
+  // Cast entries are stored as `wc-` ids (LOOM-45). One resolver for the whole
+  // panel — rendering AND searching — so a name can never be shown in one place
+  // and searched as an id in the other.
+  const nameById = useMemo(
+    () => new Map(characterPool.map(c => [c.id, c.name])),
+    [characterPool],
+  )
+  const nameOf = useCallback(
+    (id: string) => nameById.get(id) ?? 'Unknown character',
+    [nameById],
+  )
+
 
   // autoFocus is not available here: the input never unmounts, so it would only
   // fire once. Focus is driven by the mode instead, and blurred on close so the
@@ -240,9 +261,9 @@ export default function EventsPanel({
   }, [tagMode])
 
   const visible = useMemo(() => {
-    const pool = tagMode ? events.filter(e => matchesQuery(e, query)) : tagged
+    const pool = tagMode ? events.filter(e => matchesQuery(e, query, nameOf)) : tagged
     return sortEvents(pool, direction)
-  }, [tagMode, events, tagged, query, direction])
+  }, [tagMode, events, tagged, query, direction, nameOf])
 
   const toolbar = (
     <div className="flex items-center gap-2 px-4 py-3 shrink-0">
@@ -373,6 +394,7 @@ export default function EventsPanel({
               tagged={isTagged}
               spread={alsoIn?.length ? describeSpread(alsoIn, bookId) : undefined}
               photos={characterPhotos}
+              nameOf={nameOf}
               expanded={!tagMode && expandedId === event.id}
               onActivate={
                 tagMode

@@ -12,6 +12,7 @@ import { tabsFitLabelled } from '@/lib/panelTabs'
 import type { WriterEvent } from '@/lib/eventSearch'
 import type { TaggedEvent } from './useChapterEvents'
 import type { WriterCharacter } from '@/lib/characterSearch'
+import type { CharacterOption } from '@/lib/writerCharacters'
 import type { TaggedCharacter } from './useChapterCharacters'
 
 export type PanelTab = 'notes' | 'refs' | 'review' | 'events' | 'characters'
@@ -95,7 +96,7 @@ export default function SidePanel({
     loading: boolean
     unreachable: boolean
     locations: string[]
-    characterPool: string[]
+    characterPool: CharacterOption[]
     characterPhotos: Record<string, string | null>
     loadCharacterPool: () => void | Promise<void>
     onToggleTag: (writerEventId: string, tagged: boolean) => void | Promise<void>

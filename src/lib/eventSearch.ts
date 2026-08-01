@@ -141,10 +141,18 @@ export function formatEventWhen(event: Pick<WriterEvent, 'date' | 'time'>): stri
  * narrows rather than widens — the behaviour people expect from a search box
  * even when they cannot say why.
  */
-export function matchesQuery(event: WriterEvent, query: string): boolean {
+export function matchesQuery(
+  event: WriterEvent,
+  query: string,
+  /** Resolves a stored `wc-` id to a display name (LOOM-45). Required, not
+   *  optional: `characters` holds ids now, and searching them raw would mean
+   *  typing a character's name silently matched nothing — a defect no type
+   *  checker can see, because ids and names are both `string`. */
+  nameOf: (id: string) => string,
+): boolean {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
   if (terms.length === 0) return true
-  const haystack = `${event.title} ${event.characters.join(' ')}`.toLowerCase()
+  const haystack = `${event.title} ${event.characters.map(nameOf).join(' ')}`.toLowerCase()
   return terms.every(term => haystack.includes(term))
 }
 

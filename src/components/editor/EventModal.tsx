@@ -6,6 +6,7 @@ import { LuCalendar, LuCheck, LuClock, LuMapPin, LuPlus, LuSearch, LuTrash2, LuX
 import { notify } from '@/lib/notifications'
 import { fromDateInputValue, toDateInputValue, type WriterEvent } from '@/lib/eventSearch'
 import { portalHost } from '@/lib/portalHost'
+import type { CharacterOption } from '@/lib/writerCharacters'
 import { AnchoredPopover, LIST_MAX_HEIGHT, useClickOutside } from './AnchoredPopover'
 
 // Create or edit a WriteAI writer-event, without leaving Loom (LOOM-37).
@@ -48,9 +49,10 @@ function CharacterPicker({
   selected,
   onToggle,
 }: {
-  pool: string[]
+  pool: CharacterOption[]
+  /** `wc-` ids, not names — see CharacterOption. */
   selected: string[]
-  onToggle: (name: string) => void
+  onToggle: (id: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -61,7 +63,7 @@ function CharacterPicker({
   useClickOutside([anchorRef, popRef], () => setOpen(false), open)
   useEffect(() => { if (open) inputRef.current?.focus() }, [open])
 
-  const matches = pool.filter(name => name.toLowerCase().includes(query.trim().toLowerCase()))
+  const matches = pool.filter(c => c.name.toLowerCase().includes(query.trim().toLowerCase()))
 
   return (
     <div className="mt-2 inline-block">
@@ -95,7 +97,7 @@ function CharacterPicker({
                 onKeyDown={e => {
                   if (e.key === 'Enter' && matches.length > 0) {
                     e.preventDefault()
-                    onToggle(matches[0])
+                    onToggle(matches[0].id)
                     setQuery('')
                     inputRef.current?.focus()
                   }
@@ -113,18 +115,18 @@ function CharacterPicker({
                 {pool.length === 0 ? 'No characters found in WriteAI.' : 'No characters found'}
               </p>
             ) : (
-              matches.map(name => {
-                const isSelected = selected.includes(name)
+              matches.map(c => {
+                const isSelected = selected.includes(c.id)
                 return (
                   <button
-                    key={name}
+                    key={c.id}
                     type="button"
-                    onClick={() => { onToggle(name); setQuery(''); inputRef.current?.focus() }}
+                    onClick={() => { onToggle(c.id); setQuery(''); inputRef.current?.focus() }}
                     className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-[11px] transition hover:bg-accent/10 ${
                       isSelected ? 'text-accent' : 'text-ink-muted'
                     }`}
                   >
-                    {name}
+                    {c.name}
                     {isSelected && <LuCheck size={12} className="shrink-0 text-accent" />}
                   </button>
                 )
@@ -242,7 +244,7 @@ export default function EventModal({
 }: {
   /** Absent when creating. */
   event?: WriterEvent
-  characterPool: string[]
+  characterPool: CharacterOption[]
   locationPool: string[]
   onSaved: (event: WriterEvent) => void | Promise<void>
   onDeleted: (id: string) => void | Promise<void>
@@ -420,30 +422,36 @@ export default function EventModal({
             </p>
             {characters.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
-                {characters.map(name => (
+                {characters.map(id => {
+                  // Stored as an id; shown by name. An id the pool no longer
+                  // knows is surfaced as unknown rather than dropped — a cast
+                  // member that silently vanishes is the bug being fixed.
+                  const label = characterPool.find(c => c.id === id)?.name ?? 'Unknown character'
+                  return (
                   <span
-                    key={name}
+                    key={id}
                     className="flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[11px] text-accent"
                   >
-                    {name}
+                    {label}
                     <button
                       type="button"
-                      onClick={() => setCharacters(cs => cs.filter(c => c !== name))}
-                      title={`Remove ${name}`}
-                      aria-label={`Remove ${name}`}
+                      onClick={() => setCharacters(cs => cs.filter(c => c !== id))}
+                      title={`Remove ${label}`}
+                      aria-label={`Remove ${label}`}
                       className="transition hover:text-red-400"
                     >
                       <LuX size={11} />
                     </button>
                   </span>
-                ))}
+                  )
+                })}
               </div>
             )}
             <CharacterPicker
               pool={characterPool}
               selected={characters}
-              onToggle={name =>
-                setCharacters(cs => (cs.includes(name) ? cs.filter(c => c !== name) : [...cs, name]))
+              onToggle={id =>
+                setCharacters(cs => (cs.includes(id) ? cs.filter(c => c !== id) : [...cs, id]))
               }
             />
           </div>

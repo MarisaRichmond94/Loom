@@ -274,14 +274,21 @@ carries `bookOrder` for both tabs.
 requested id gets a key, malformed ids dropped rather than failing the request,
 and each side names the outage rather than rendering an empty list.
 
-> ⚠️ **Characters are not yet id-identified *inside* WriteAI.** This seam is
-> id-keyed end to end, but within `writer_characters.json` a relationship still
-> references its target **by name**, and writer-events still name their cast the
-> same way. So renaming a character in Loom updates the record the tags point at
-> while leaving those references dangling. LOOM-45 is what closes this; until it
-> lands, the Characters tab guards the reachable half by refusing a new
-> character whose name duplicates an existing one. **This is the one place the
-> character seam is weaker than the event seam** — do not assume symmetry.
+> ⚠️ **Renaming a writer character detaches it from its canon entity.**
+> Resolved for cross-references by LOOM-45: `events[].characters` and
+> `relationships[].target` hold `wc-` ids, and the display name is derived at
+> read time, so a rename now reaches every event and relationship instead of
+> orphaning them. Loom's character modal can therefore edit the name.
+>
+> What LOOM-45 deliberately did NOT change is `plan.py`'s canon lookup —
+> `s.canon.entities.get(c["name"])`, which still matches **by name**. Canon is
+> rebuilt from the manuscript and has no notion of `wc-` ids, so there is
+> nothing to key it on. The consequence is real and worth stating plainly:
+> renaming a writer character to something the manuscript does not call them
+> detaches it from its canon entity, and the features that rely on that
+> lookup — junk-pruning and `/characters/{id}/extracted` — stop finding it.
+> Nothing errors; the extracted data simply goes quiet. Rename to match the
+> manuscript, or expect to lose the canon tie-in for that character.
 
 ## Identity
 

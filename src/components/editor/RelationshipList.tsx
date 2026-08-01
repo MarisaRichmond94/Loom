@@ -27,11 +27,11 @@ export function RelationshipList({
   /** Absent in read-only contexts, like the expanded card in the panel. */
   onRemove?: (index: number) => void
 }) {
-  // Relationships point at a character by NAME, not by id — the thing LOOM-45
-  // is migrating. Looking the portrait up by name works today (every target
-  // resolves) and degrades to initials when it does not, which is also what
-  // will happen for any target that stops resolving after a rename.
-  const photoByName = new Map(pool.map(c => [c.name, characterPhotoHref(c.photo_url)]))
+  // Relationships point at a character by `wc-` id (LOOM-45), so both the name
+  // and the portrait are derived here. That is what makes a rename reach every
+  // relationship pointing at that character instead of orphaning them.
+  const byId = new Map(pool.map(c => [c.id, c]))
+  const labelOf = (target: string) => byId.get(target)?.name ?? 'Unknown character'
 
   return (
     <div>
@@ -56,9 +56,13 @@ export function RelationshipList({
                 i > 0 ? 'border-t border-accent/10' : ''
               }`}
             >
-              <CharacterAvatar name={r.target} src={photoByName.get(r.target)} size={26} />
+              <CharacterAvatar
+                name={labelOf(r.target)}
+                src={characterPhotoHref(byId.get(r.target)?.photo_url ?? null)}
+                size={26}
+              />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[11px] font-medium text-ink">{r.target}</div>
+                <div className="truncate text-[11px] font-medium text-ink">{labelOf(r.target)}</div>
                 {r.nature && (
                   <div className="truncate text-[10px] italic text-ink-faint">{r.nature}</div>
                 )}
@@ -67,8 +71,8 @@ export function RelationshipList({
                 <button
                   type="button"
                   onClick={() => onRemove(i)}
-                  title={`Remove ${r.target}`}
-                  aria-label={`Remove relationship with ${r.target}`}
+                  title={`Remove ${labelOf(r.target)}`}
+                  aria-label={`Remove relationship with ${labelOf(r.target)}`}
                   className="shrink-0 rounded p-1 text-ink-faint opacity-0 transition group-hover/rel:opacity-100 focus:opacity-100 hover:text-red-500"
                 >
                   <LuX size={12} />

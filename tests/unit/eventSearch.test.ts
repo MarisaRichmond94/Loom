@@ -98,38 +98,62 @@ describe('formatEventTime / formatEventWhen', () => {
 })
 
 describe('matchesQuery', () => {
-  const emma = ev({ title: 'Emma has a miscarriage', characters: ['Emma', 'Jared Gatlin'] })
+  // `characters` stores `wc-` ids (LOOM-45), so every case here goes through a
+  // resolver. The point of the tests below is that a writer still types a NAME.
+  const NAMES: Record<string, string> = {
+    'wc-emma': 'Emma',
+    'wc-jared': 'Jared Gatlin',
+    'wc-noah': 'Noah Gatlin',
+  }
+  const nameOf = (id: string) => NAMES[id] ?? 'Unknown character'
+
+  const emma = ev({ title: 'Emma has a miscarriage', characters: ['wc-emma', 'wc-jared'] })
 
   it('matches on title', () => {
-    expect(matchesQuery(emma, 'miscarriage')).toBe(true)
+    expect(matchesQuery(emma, 'miscarriage', nameOf)).toBe(true)
   })
 
   it('matches on a character name — the point of widening past title', () => {
-    expect(matchesQuery(ev({ title: 'A party', characters: ['Noah Gatlin'] }), 'noah')).toBe(true)
+    expect(
+      matchesQuery(ev({ title: 'A party', characters: ['wc-noah'] }), 'noah', nameOf),
+    ).toBe(true)
+  })
+
+  it('does NOT match the stored id itself', () => {
+    // Ids are an implementation detail. Matching them would mean a search for
+    // "wc" returned the entire cast of every event.
+    expect(matchesQuery(emma, 'wc-emma', nameOf)).toBe(false)
+  })
+
+  it('follows a rename, because the name is resolved and not stored', () => {
+    // The whole reason for the migration: the event is untouched, the character
+    // record changed, and search tracks it.
+    const renamed = (id: string) => (id === 'wc-emma' ? 'Emmaline Vasquez' : nameOf(id))
+    expect(matchesQuery(emma, 'emmaline', renamed)).toBe(true)
+    expect(matchesQuery(emma, 'emmaline', nameOf)).toBe(false)
   })
 
   it('is case-insensitive and matches substrings', () => {
-    expect(matchesQuery(emma, 'EMMA')).toBe(true)
-    expect(matchesQuery(emma, 'carriage')).toBe(true)
+    expect(matchesQuery(emma, 'EMMA', nameOf)).toBe(true)
+    expect(matchesQuery(emma, 'carriage', nameOf)).toBe(true)
   })
 
   it('narrows with multiple terms rather than widening', () => {
-    expect(matchesQuery(emma, 'emma jared')).toBe(true)
-    expect(matchesQuery(emma, 'emma quinn')).toBe(false)
+    expect(matchesQuery(emma, 'emma jared', nameOf)).toBe(true)
+    expect(matchesQuery(emma, 'emma quinn', nameOf)).toBe(false)
   })
 
   it('does NOT match description or location', () => {
     // Neither is shown in the row, so a hit there looks arbitrary.
     const e = ev({ title: 'A quiet scene', description: 'at the hospital', location: 'Hospital' })
-    expect(matchesQuery(e, 'hospital')).toBe(false)
+    expect(matchesQuery(e, 'hospital', nameOf)).toBe(false)
   })
 
   it('treats an empty query as matching everything', () => {
-    expect(matchesQuery(emma, '')).toBe(true)
-    expect(matchesQuery(emma, '   ')).toBe(true)
+    expect(matchesQuery(emma, '', nameOf)).toBe(true)
+    expect(matchesQuery(emma, '   ', nameOf)).toBe(true)
   })
 })
-
 describe('sortEvents', () => {
   const a = ev({ id: 'a', title: 'A', date: 'Monday, May 10th, 2010', time: '09:00' })
   const b = ev({ id: 'b', title: 'B', date: 'Monday, May 10th, 2010', time: '20:00' })
