@@ -76,8 +76,9 @@ export default function SidePanel({
     unreachable: boolean
     locations: string[]
     characterPool: string[]
+    characterPhotos: Record<string, string | null>
     loadCharacterPool: () => void | Promise<void>
-    onToggleTag: (writerEventId: string, tagged: boolean) => void
+    onToggleTag: (writerEventId: string, tagged: boolean) => void | Promise<void>
     onRetry: () => void
     onRefresh: () => void | Promise<void>
   }

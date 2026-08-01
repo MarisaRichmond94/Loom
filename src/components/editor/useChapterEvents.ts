@@ -30,6 +30,7 @@ export function useChapterEvents(chapterId: string) {
   const [events, setEvents] = useState<WriterEvent[]>([])
   const [locations, setLocations] = useState<string[]>([])
   const [characterPool, setCharacterPool] = useState<string[]>([])
+  const [characterPhotos, setCharacterPhotos] = useState<Record<string, string | null>>({})
   const [taggedIds, setTaggedIds] = useState<string[]>([])
   const [spread, setSpread] = useState<Record<string, EventAppearance[]>>({})
   const [loading, setLoading] = useState(true)
@@ -87,11 +88,21 @@ export function useChapterEvents(chapterId: string) {
       const res = await fetch('/api/writeai/characters')
       if (!res.ok) return
       const data = await res.json()
-      setCharacterPool(
-        (data?.characters ?? [])
-          .map((c: { name?: string }) => c.name)
-          .filter((n: unknown): n is string => typeof n === 'string' && n.length > 0)
-          .sort((a: string, b: string) => a.localeCompare(b)),
+      const rows: { name?: string; photo_url?: string | null }[] = data?.characters ?? []
+      const named = rows.filter(
+        (c): c is { name: string; photo_url?: string | null } =>
+          typeof c.name === 'string' && c.name.length > 0,
+      )
+      setCharacterPool(named.map(c => c.name).sort((a, b) => a.localeCompare(b)))
+      // WriteAI serves portraits from its own origin; rewrite to Loom's proxy
+      // so the browser never talks to :8000 and the no-cache header survives.
+      setCharacterPhotos(
+        Object.fromEntries(
+          named.map(c => {
+            const file = c.photo_url?.split('/').pop()
+            return [c.name, file ? `/api/writeai/photo/${file}` : null]
+          }),
+        ),
       )
     } catch {
       // The picker degrades to "no characters found"; the form still saves.
@@ -168,6 +179,7 @@ export function useChapterEvents(chapterId: string) {
     events,
     locations,
     characterPool,
+    characterPhotos,
     loadCharacterPool,
     tagged,
     taggedIds: taggedSet,

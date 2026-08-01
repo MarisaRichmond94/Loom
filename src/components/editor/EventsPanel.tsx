@@ -33,36 +33,67 @@ function describeSpread(alsoIn: EventAppearance[], thisBookId: string | undefine
     .join(', ')
 }
 
+/** Portrait, or the character's initials when WriteAI has no photo for them. */
+function Avatar({ name, photoUrl }: { name: string; photoUrl?: string | null }) {
+  const initials = name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase() ?? '')
+    .join('')
+  return photoUrl ? (
+    // Plain <img>: these are proxied from WriteAI at an arbitrary path, which
+    // next/image would want configured, and they are ~28px.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={photoUrl} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
+  ) : (
+    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent/15 text-[9px] font-semibold text-accent">
+      {initials}
+    </span>
+  )
+}
+
 function EventRow({
   event,
   tagged,
   spread,
-  onToggle,
+  photos,
+  expanded,
+  onActivate,
+  onUntag,
   onEdit,
 }: {
   event: WriterEvent
   tagged: boolean
   spread?: string
-  onToggle?: () => void
+  photos: Record<string, string | null>
+  expanded: boolean
+  /** Expands in browse mode, toggles the tag in tag mode — the two things a
+   *  click can sensibly mean, one per mode. */
+  onActivate: () => void
+  /** Browse mode only. Untagging is deliberately NOT what a click on the card
+   *  does: the card is for reading, and losing a tag by misclicking while
+   *  reading is the kind of thing you only notice much later. */
+  onUntag?: () => void
   onEdit?: () => void
 }) {
   const when = formatEventWhen(event)
-  const interactive = Boolean(onToggle)
 
   return (
     <div className="group/event flex items-start gap-1">
       <button
         type="button"
-        onClick={onToggle}
-        disabled={!interactive}
-        aria-pressed={interactive ? tagged : undefined}
-        className={`flex-1 min-w-0 rounded-lg border px-3 py-2.5 text-left transition ${
+        onClick={onActivate}
+        aria-pressed={onUntag ? undefined : tagged}
+        aria-expanded={onUntag ? expanded : undefined}
+        className={`min-w-0 flex-1 cursor-pointer rounded-lg border px-3 py-2.5 text-left transition hover:border-accent/60 ${
           tagged ? 'border-accent bg-accent/5' : 'border-accent/10 bg-surface-overlay/40'
-        } ${interactive ? 'hover:border-accent/60 cursor-pointer' : 'cursor-default'}`}
+        }`}
       >
         <div className="flex items-baseline gap-2">
-          <span className="flex-1 truncate text-[13px] font-semibold text-ink">{event.title}</span>
-          {event.location && (
+          <span className={`flex-1 text-[13px] font-semibold text-ink ${expanded ? '' : 'truncate'}`}>
+            {event.title}
+          </span>
+          {event.location && !expanded && (
             <span className="flex shrink-0 items-center gap-1 text-[10px] text-ink-faint">
               <LuMapPin size={10} />
               <span className="max-w-[12ch] truncate">{event.location}</span>
@@ -70,26 +101,80 @@ function EventRow({
           )}
         </div>
         <div className="mt-0.5 flex items-baseline gap-2">
-          <span className="flex-1 truncate text-[11px] text-ink-muted">
-            {event.characters.join(', ')}
-          </span>
-          {when && <span className="shrink-0 text-[10px] text-ink-faint">{when}</span>}
+          {!expanded && (
+            <span className="flex-1 truncate text-[11px] text-ink-muted">
+              {event.characters.join(', ')}
+            </span>
+          )}
+          {when && (
+            <span className={`shrink-0 text-[10px] text-ink-faint ${expanded ? 'flex-1' : ''}`}>
+              {when}
+            </span>
+          )}
         </div>
+
+        {/* Height animates via grid-template-rows 0fr→1fr, the one way to
+            transition to CONTENT height without measuring it first. */}
+        <div
+          className={`grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${
+            expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+          }`}
+        >
+          <div className="overflow-hidden">
+            <div className="mt-2.5 flex flex-col gap-3 border-t border-accent/10 pt-2.5">
+              {event.description && (
+                <p className="text-[11px] leading-relaxed text-ink-muted">{event.description}</p>
+              )}
+              {event.characters.length > 0 && (
+                <div>
+                  <p className="text-[9px] font-semibold uppercase tracking-widest text-ink-faint">
+                    Character(s) ({event.characters.length})
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {event.characters.map(name => (
+                      <span
+                        key={name}
+                        className="flex items-center gap-1.5 rounded-lg border border-accent/15 bg-surface-overlay/60 py-1 pl-1 pr-2.5"
+                      >
+                        <Avatar name={name} photoUrl={photos[name]} />
+                        <span className="text-[11px] font-medium text-ink">{name}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {event.location && (
+                <div>
+                  <p className="text-[9px] font-semibold uppercase tracking-widest text-ink-faint">
+                    Location
+                  </p>
+                  <span className="mt-1 flex items-center gap-1.5 text-[11px] text-ink-muted">
+                    <LuMapPin size={11} className="shrink-0 text-ink-faint" />
+                    {event.location}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* The cross-chapter spread — the one thing this tab shows that nothing
             else can, and the reason the epic exists. Quieter than the lines
             above so it informs without competing. */}
         {spread && (
-          <div className="mt-1 truncate text-[10px] italic text-ink-faint/80">Also in {spread}</div>
+          <div className={`mt-1 text-[10px] italic text-ink-faint/80 ${expanded ? '' : 'truncate'}`}>
+            Also in {spread}
+          </div>
         )}
       </button>
 
       {/* Revealed on hover, outside the card so they never overlap the text. */}
-      {(onToggle || onEdit) && (
+      {(onUntag || onEdit) && (
         <div className="flex shrink-0 flex-col gap-1 pt-1 opacity-0 transition group-hover/event:opacity-100 focus-within:opacity-100">
-          {onToggle && tagged && (
+          {onUntag && (
             <button
               type="button"
-              onClick={onToggle}
+              onClick={onUntag}
               title="Remove this tag"
               aria-label={`Remove tag: ${event.title}`}
               className="text-ink-faint transition hover:text-ink"
@@ -125,6 +210,7 @@ export default function EventsPanel({
   bookId,
   locations,
   characterPool,
+  characterPhotos,
   loadCharacterPool,
   onRefresh,
 }: {
@@ -133,11 +219,12 @@ export default function EventsPanel({
   taggedIds: Set<string>
   loading: boolean
   unreachable: boolean
-  onToggleTag: (writerEventId: string, tagged: boolean) => void
+  onToggleTag: (writerEventId: string, tagged: boolean) => void | Promise<void>
   onRetry: () => void
   bookId?: string
   locations: string[]
   characterPool: string[]
+  characterPhotos: Record<string, string | null>
   loadCharacterPool: () => void | Promise<void>
   onRefresh: () => void | Promise<void>
 }) {
@@ -147,6 +234,9 @@ export default function EventsPanel({
   const searchRef = useRef<HTMLInputElement>(null)
   // null = closed; { event: undefined } = creating.
   const [editorFor, setEditorFor] = useState<{ event?: WriterEvent } | null>(null)
+  // One card open at a time — the dock is narrow, and two expanded cards means
+  // scrolling to compare things that no longer fit on screen together.
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   function openEditor(event?: WriterEvent) {
     // Fetched here rather than on mount because the characters endpoint writes
@@ -157,6 +247,7 @@ export default function EventsPanel({
 
   const onCreate = () => openEditor()
   const onEdit = (event: WriterEvent) => openEditor(event)
+
 
   // autoFocus is not available here: the input never unmounts, so it would only
   // fire once. Focus is driven by the mode instead, and blurred on close so the
@@ -299,7 +390,19 @@ export default function EventsPanel({
               event={event}
               tagged={isTagged}
               spread={alsoIn?.length ? describeSpread(alsoIn, bookId) : undefined}
-              onToggle={tagMode || isTagged ? () => onToggleTag(event.id, !isTagged) : undefined}
+              photos={characterPhotos}
+              expanded={!tagMode && expandedId === event.id}
+              onActivate={
+                tagMode
+                  ? () => onToggleTag(event.id, !isTagged)
+                  : () => {
+                      setExpandedId(id => (id === event.id ? null : event.id))
+                      // Portraits come from the character pool, which is not
+                      // fetched on mount because that endpoint writes on read.
+                      void loadCharacterPool()
+                    }
+              }
+              onUntag={tagMode ? undefined : () => onToggleTag(event.id, false)}
               onEdit={tagMode ? undefined : () => onEdit(event)}
             />
           )
@@ -321,8 +424,12 @@ export default function EventsPanel({
             // A newly created event is tagged here immediately. Creating one
             // from a chapter and then having to go find it would be worse than
             // the timeline this exists to replace.
-            if (!editorFor.event && saved?.id) onToggleTag(saved.id, true)
-            else await onRefresh()
+            if (!editorFor.event && saved?.id) await onToggleTag(saved.id, true)
+            // ALWAYS refresh, including after a create. Tagging only records an
+            // id in Loom; the row is rendered by looking that id up in the list
+            // fetched from WriteAI, so without this the new event is tagged and
+            // invisible — present in neither the tagged list nor search.
+            await onRefresh()
           }}
           onDeleted={onRefresh}
           onClose={() => setEditorFor(null)}

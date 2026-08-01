@@ -1,24 +1,330 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { LuCalendar, LuClock, LuMapPin, LuPlus, LuTrash2, LuX } from 'react-icons/lu'
+import { createPortal } from 'react-dom'
+import { LuCalendar, LuCheck, LuClock, LuMapPin, LuPlus, LuSearch, LuTrash2, LuX } from 'react-icons/lu'
 import { notify } from '@/lib/notifications'
 import { fromDateInputValue, toDateInputValue, type WriterEvent } from '@/lib/eventSearch'
 
 // Create or edit a WriteAI writer-event, without leaving Loom (LOOM-37).
 //
 // A modal rather than an inline panel form: WriteAI's own event form is 885
-// lines and the dock's floor is 280px. This is the same field set, sized for
-// a surface that can afford it.
+// lines and the dock's floor is 280px. Same field set, on a surface that can
+// afford it.
 //
 // ⚠️ WriteAI's PATCH REPLACES the whole event — every field on its
 // WriterEventBody has a default, so anything omitted is silently reset rather
 // than left alone. This form therefore always submits the COMPLETE event, not
 // a diff. Loom's proxy refuses partial bodies as a backstop, but relying on
 // that to catch our own bugs would be the wrong way round.
+//
+// Rendered through a PORTAL, into <main>. Two things must hold at once:
+//
+//   * it must escape the dock's `relative z-30` stacking context — a fixed
+//     child cannot outrank a sibling of its own context however high its
+//     z-index, which is why z-[100] still lost to the chapter header;
+//   * it must stay inside `.light-body`, the class that carries light mode.
+//     That class lives on <main>, not on <html>, so portalling to <body>
+//     escapes the theme and renders a dark modal over a light page.
+//
+// <main> is an ancestor of the dock and only sets overflow, which neither
+// clips nor re-anchors a fixed child. It satisfies both.
+
+/** Where portalled UI belongs — see the note above. */
+function portalHost(): Element {
+  return (typeof document !== 'undefined' && document.querySelector('main')) || document.body
+}
 
 const FIELD =
   'w-full rounded-lg border border-accent/20 bg-surface-overlay/40 px-3 py-2 text-sm text-ink outline-none transition focus:border-accent placeholder:text-ink-faint'
+
+/** Four rows, then scroll. Matches the row height below (py-1.5 + 11px text). */
+const LIST_MAX_HEIGHT = 4 * 28
+
+/** Close a popover when the pointer goes down outside ALL of the given
+ *  elements. Takes several because a portalled dropdown is not a DOM
+ *  descendant of the control that opened it. */
+function useClickOutside(
+  refs: React.RefObject<HTMLElement | null>[],
+  onOutside: () => void,
+  active: boolean,
+) {
+  useEffect(() => {
+    if (!active) return
+    function onDown(e: MouseEvent) {
+      const target = e.target as Node
+      if (refs.some(r => r.current?.contains(target))) return
+      onOutside()
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onOutside, active])
+}
+
+/**
+ * A dropdown anchored to a control but rendered at the document root.
+ *
+ * The dialog scrolls its own body, and an `overflow` ancestor CLIPS absolutely
+ * positioned descendants — which is why the location list was being cut off at
+ * the modal's edge. Portalling escapes the clip; fixed coordinates taken from
+ * the anchor keep it attached.
+ *
+ * Flips above the anchor when there is not enough room below, so a control near
+ * the bottom of the modal still shows its options.
+ */
+function AnchoredPopover({
+  anchorRef,
+  popoverRef,
+  children,
+  width,
+  className = '',
+}: {
+  anchorRef: React.RefObject<HTMLElement | null>
+  popoverRef: React.RefObject<HTMLDivElement | null>
+  children: React.ReactNode
+  /** Defaults to the anchor's width — right for a full-width field, wrong for
+   *  a small button, which wants a readable list instead. */
+  width?: number
+  className?: string
+}) {
+  const [style, setStyle] = useState<React.CSSProperties | null>(null)
+
+  useEffect(() => {
+    function place() {
+      const anchor = anchorRef.current
+      if (!anchor) return
+      const r = anchor.getBoundingClientRect()
+      // Header + list at full height, so the flip decision does not depend on
+      // how many results happen to match.
+      const needed = LIST_MAX_HEIGHT + 56
+      const below = window.innerHeight - r.bottom
+      const w = width ?? r.width
+      setStyle(
+        below < needed && r.top > below
+          ? { position: 'fixed', left: r.left, width: w, bottom: window.innerHeight - r.top + 4 }
+          : { position: 'fixed', left: r.left, width: w, top: r.bottom + 4 },
+      )
+    }
+    place()
+    window.addEventListener('resize', place)
+    // Capture phase so the modal's own scroll container is heard too.
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [anchorRef, width])
+
+  if (!style) return null
+  return createPortal(
+    <div
+      ref={popoverRef}
+      style={style}
+      className={`z-[300] overflow-hidden rounded-md border border-accent/20 bg-surface-raised shadow-lg ${className}`}
+    >
+      {children}
+    </div>,
+    portalHost(),
+  )
+}
+
+/**
+ * The character picker, matching WriteAI's so the two apps do not teach
+ * different muscle memory for the same job.
+ *
+ * Enter takes the first match, clears the query and KEEPS focus, so a cast of
+ * several is added by typing rather than by aiming. Clicking a name toggles it
+ * and clears the query too, which is why the list stays open on select.
+ */
+function CharacterPicker({
+  pool,
+  selected,
+  onToggle,
+}: {
+  pool: string[]
+  selected: string[]
+  onToggle: (name: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const anchorRef = useRef<HTMLButtonElement>(null)
+  const popRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useClickOutside([anchorRef, popRef], () => setOpen(false), open)
+  useEffect(() => { if (open) inputRef.current?.focus() }, [open])
+
+  const matches = pool.filter(name => name.toLowerCase().includes(query.trim().toLowerCase()))
+
+  return (
+    <div className="mt-2 inline-block">
+      <button
+        ref={anchorRef}
+        type="button"
+        onClick={() => { setQuery(''); setOpen(v => !v) }}
+        aria-expanded={open}
+        className="flex items-center gap-1.5 rounded-md border border-dashed border-accent/30 px-2.5 py-1.5 text-[11px] text-ink-muted transition hover:border-accent hover:text-accent"
+      >
+        <LuPlus size={12} /> Add Character
+      </button>
+
+      {open && (
+        <AnchoredPopover anchorRef={anchorRef} popoverRef={popRef} width={224}>
+          <div className="p-2">
+            <div className="relative">
+              <LuSearch
+                size={12}
+                className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-ink-faint"
+              />
+              <input
+                ref={inputRef}
+                // autoFocus, not a useEffect: the popover renders null on its
+                // first pass while it measures the anchor, so an effect keyed
+                // on `open` fires before this input exists. autoFocus runs when
+                // it actually mounts.
+                autoFocus
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && matches.length > 0) {
+                    e.preventDefault()
+                    onToggle(matches[0])
+                    setQuery('')
+                    inputRef.current?.focus()
+                  }
+                  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setOpen(false) }
+                }}
+                placeholder="Search…"
+                aria-label="Search characters"
+                className="w-full rounded border border-accent/20 bg-surface-overlay/40 py-1 pl-6 pr-2 text-[11px] text-ink outline-none transition focus:border-accent placeholder:text-ink-faint"
+              />
+            </div>
+          </div>
+          <div className="overflow-y-auto pb-1" style={{ maxHeight: LIST_MAX_HEIGHT }}>
+            {matches.length === 0 ? (
+              <p className="px-3 py-2 text-[11px] text-ink-faint">
+                {pool.length === 0 ? 'No characters found in WriteAI.' : 'No characters found'}
+              </p>
+            ) : (
+              matches.map(name => {
+                const isSelected = selected.includes(name)
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => { onToggle(name); setQuery(''); inputRef.current?.focus() }}
+                    className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-[11px] transition hover:bg-accent/10 ${
+                      isSelected ? 'text-accent' : 'text-ink-muted'
+                    }`}
+                  >
+                    {name}
+                    {isSelected && <LuCheck size={12} className="shrink-0 text-accent" />}
+                  </button>
+                )
+              })
+            )}
+          </div>
+        </AnchoredPopover>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Location combobox — pick an existing one or type a new one.
+ *
+ * WriteAI folds unseen locations into its pool on save, so this must stay open
+ * to free text; a closed <select> would make the first use of a place
+ * impossible. The "Create …" row appears only when the typed value is not
+ * already in the pool, so it never duplicates.
+ */
+function LocationCombobox({
+  value,
+  pool,
+  onChange,
+}: {
+  value: string
+  pool: string[]
+  onChange: (value: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const anchorRef = useRef<HTMLDivElement>(null)
+  const popRef = useRef<HTMLDivElement>(null)
+  useClickOutside([anchorRef, popRef], () => setOpen(false), open)
+
+  const typed = value.trim()
+  const matches = pool.filter(l => l.toLowerCase().includes(typed.toLowerCase()))
+  const exact = pool.some(l => l.toLowerCase() === typed.toLowerCase())
+
+  function commit(next: string) {
+    onChange(next)
+    setOpen(false)
+  }
+
+  return (
+    <div>
+      <div ref={anchorRef} className="relative">
+        <LuMapPin
+          size={13}
+          className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint"
+        />
+        <input
+          value={value}
+          onChange={e => { onChange(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              // First match wins; otherwise keep what was typed as a new one.
+              if (matches.length > 0) commit(matches[0])
+              else if (typed) commit(typed)
+            }
+            if (e.key === 'Escape' && open) { e.preventDefault(); e.stopPropagation(); setOpen(false) }
+          }}
+          placeholder="Select or create a location…"
+          aria-label="Event location"
+          className={`${FIELD} pl-8 ${value ? 'pr-8' : ''}`}
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => { onChange(''); setOpen(false) }}
+            aria-label="Clear location"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-faint transition hover:text-ink"
+          >
+            <LuX size={13} />
+          </button>
+        )}
+      </div>
+      {open && (matches.length > 0 || (typed && !exact)) && (
+        <AnchoredPopover anchorRef={anchorRef} popoverRef={popRef}>
+          <div className="overflow-y-auto" style={{ maxHeight: LIST_MAX_HEIGHT }}>
+          {typed && !exact && (
+            <button
+              type="button"
+              onClick={() => commit(typed)}
+              className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-[11px] text-accent transition hover:bg-accent/10"
+            >
+              <LuPlus size={12} /> Create “{typed}”
+            </button>
+          )}
+          {matches.map(l => (
+            <button
+              key={l}
+              type="button"
+              onClick={() => commit(l)}
+              className="block w-full px-3 py-1.5 text-left text-[11px] text-ink-muted transition hover:bg-accent/10 hover:text-ink"
+            >
+              {l}
+            </button>
+          ))}
+          </div>
+        </AnchoredPopover>
+      )}
+    </div>
+  )
+}
 
 export default function EventModal({
   event,
@@ -44,26 +350,15 @@ export default function EventModal({
   const [description, setDescription] = useState(event?.description ?? '')
   const [characters, setCharacters] = useState<string[]>(event?.characters ?? [])
   const [location, setLocation] = useState(event?.location ?? '')
-  const [picking, setPicking] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const titleRef = useRef<HTMLInputElement>(null)
   useEffect(() => { titleRef.current?.focus() }, [])
 
-  // ESC closes, except while a delete is armed — there it disarms first, so
-  // the key cannot dismiss the safety and the dialog in one press.
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key !== 'Escape' || busy) return
-      e.preventDefault()
-      e.stopPropagation()
-      if (confirmingDelete) setConfirmingDelete(false)
-      else onClose()
-    }
-    document.addEventListener('keydown', onKey, true)
-    return () => document.removeEventListener('keydown', onKey, true)
-  }, [onClose, confirmingDelete, busy])
+  // Portals need a DOM to target, so nothing renders until mounted.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
 
   const canSave = title.trim().length > 0 && !busy
 
@@ -112,11 +407,40 @@ export default function EventModal({
     }
   }
 
-  const available = characterPool.filter(c => !characters.includes(c))
+  // Keyboard. Declared after save/remove so it closes over them.
+  //
+  // ⌥⇧⏎ saves and ⌥⇧⎋ cancels, matching how every other Loom shortcut is
+  // spelled. Plain ⎋ also cancels, because a modal that ignores Escape is
+  // surprising in a way that no house style justifies.
+  //
+  // While a delete is armed, Escape disarms it FIRST — one press must not be
+  // able to dismiss the safety and the dialog together.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (busy) return
+      const escape = e.code === 'Escape'
+      const modified = e.altKey && e.shiftKey
+      if (escape || (modified && e.code === 'Enter')) {
+        e.preventDefault()
+        e.stopPropagation()
+      }
+      if (escape) {
+        if (confirmingDelete) setConfirmingDelete(false)
+        else onClose()
+        return
+      }
+      if (modified && e.code === 'Enter') void save()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onClose, confirmingDelete, busy, canSave, title, dateValue, time, description, characters, location])
 
-  return (
+  if (!mounted) return null
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-4"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 px-4"
       onMouseDown={e => { if (e.target === e.currentTarget && !busy) onClose() }}
     >
       <div
@@ -185,85 +509,40 @@ export default function EventModal({
           />
 
           <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-ink-faint">
-              Character{characters.length === 1 ? '' : 's'}
-              {characters.length > 0 && ` (${characters.length})`}
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">
+              Character(s){characters.length > 0 && ` (${characters.length})`}
             </p>
-            <div className="flex flex-wrap items-center gap-2">
-              {characters.map(name => (
-                <span
-                  key={name}
-                  className="flex items-center gap-1.5 rounded-full bg-accent/15 px-2.5 py-1 text-[11px] text-accent"
-                >
-                  {name}
-                  <button
-                    onClick={() => setCharacters(cs => cs.filter(c => c !== name))}
-                    aria-label={`Remove ${name}`}
-                    className="transition hover:text-ink"
+            {characters.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {characters.map(name => (
+                  <span
+                    key={name}
+                    className="flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[11px] text-accent"
                   >
-                    <LuX size={11} />
-                  </button>
-                </span>
-              ))}
-              <button
-                type="button"
-                onClick={() => setPicking(p => !p)}
-                aria-expanded={picking}
-                className="flex items-center gap-1.5 rounded-full border border-dashed border-accent/30 px-2.5 py-1 text-[11px] text-ink-faint transition hover:border-accent/60 hover:text-ink"
-              >
-                <LuPlus size={11} /> Add Character
-              </button>
-            </div>
-            {picking && (
-              <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-accent/20 bg-surface-overlay/40 p-1">
-                {available.length === 0 ? (
-                  <p className="px-2 py-1.5 text-[11px] text-ink-faint">
-                    {characterPool.length === 0
-                      ? 'No characters found in WriteAI.'
-                      : 'Everyone is already on this event.'}
-                  </p>
-                ) : (
-                  available.map(name => (
+                    {name}
                     <button
-                      key={name}
                       type="button"
-                      onClick={() => { setCharacters(cs => [...cs, name]); setPicking(false) }}
-                      className="block w-full rounded px-2 py-1.5 text-left text-xs text-ink-muted transition hover:bg-accent/10 hover:text-ink"
+                      onClick={() => setCharacters(cs => cs.filter(c => c !== name))}
+                      title={`Remove ${name}`}
+                      aria-label={`Remove ${name}`}
+                      className="transition hover:text-red-400"
                     >
-                      {name}
+                      <LuX size={11} />
                     </button>
-                  ))
-                )}
+                  </span>
+                ))}
               </div>
             )}
+            <CharacterPicker
+              pool={characterPool}
+              selected={characters}
+              onToggle={name =>
+                setCharacters(cs => (cs.includes(name) ? cs.filter(c => c !== name) : [...cs, name]))
+              }
+            />
           </div>
 
-          <label className="flex items-center gap-2 rounded-lg border border-accent/20 bg-surface-overlay/40 px-3 py-2 transition focus-within:border-accent">
-            <LuMapPin size={13} className="shrink-0 text-ink-faint" />
-            {/* A datalist rather than a closed select: the pool is a
-                convenience, and a location the writer has not used before must
-                still be typeable. WriteAI folds new ones in on save. */}
-            <input
-              list="loom-event-locations"
-              value={location}
-              onChange={e => setLocation(e.target.value)}
-              placeholder="Where does it happen?"
-              aria-label="Event location"
-              className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
-            />
-            <datalist id="loom-event-locations">
-              {locationPool.map(l => <option key={l} value={l} />)}
-            </datalist>
-            {location && (
-              <button
-                onClick={() => setLocation('')}
-                aria-label="Clear location"
-                className="shrink-0 text-ink-faint transition hover:text-ink"
-              >
-                <LuX size={13} />
-              </button>
-            )}
-          </label>
+          <LocationCombobox value={location} pool={locationPool} onChange={setLocation} />
         </div>
 
         <div className="flex items-center gap-2 border-t border-accent/10 px-5 py-4">
@@ -324,6 +603,7 @@ export default function EventModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    portalHost(),
   )
 }
