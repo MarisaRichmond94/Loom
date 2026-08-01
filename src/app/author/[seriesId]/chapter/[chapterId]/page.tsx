@@ -51,6 +51,9 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
     items: [
       { keys: '⌥⇧N', label: 'Create next chapter' },
       { keys: '⌥⇧E', label: 'Export canon' },
+      { keys: '⌥⇧P', label: 'Preview chapter' },
+      { keys: '⌥⇧X', label: 'Copy canon text' },
+      { keys: '⌥⇧`', label: 'Chapter settings' },
       { keys: '⌥⇧F', label: 'Find in chapter' },
       { keys: '⌥⇧→ / ←', label: 'Next / previous match (while searching)' },
       { keys: '⌥⇧← / →', label: 'Previous / next chapter' },
@@ -707,6 +710,8 @@ export default function ChapterEditorPage() {
   const addChoiceBlockRef = useRef<() => Promise<void>>(async () => {})
   const createNextChapterRef = useRef<() => Promise<void>>(async () => {})
   const saveCanonRef = useRef<() => Promise<void>>(async () => {})
+  const startPreviewRef = useRef<() => Promise<void>>(async () => {})
+  const copyCanonTextRef = useRef<() => Promise<void>>(async () => {})
   // Mirrors the footer's prev/next buttons for the ⌥⇧←/→ hotkey. Null on
   // either end of the book, which is how the handler knows to do nothing.
   const goChapterRef = useRef<{ prev: (() => void) | null; next: (() => void) | null }>({ prev: null, next: null })
@@ -725,6 +730,9 @@ export default function ChapterEditorPage() {
         case 'KeyS': e.preventDefault(); addBlockRef.current('soundtrack'); break
         case 'KeyN': e.preventDefault(); createNextChapterRef.current(); break
         case 'KeyE': e.preventDefault(); saveCanonRef.current(); break
+        case 'KeyP': e.preventDefault(); startPreviewRef.current(); break
+        case 'KeyX': e.preventDefault(); copyCanonTextRef.current(); break
+        case 'Backquote': e.preventDefault(); setShowChapterSettings(true); break
         case 'KeyF': e.preventDefault(); setTimeout(() => { localSearchInputRef.current?.focus(); localSearchInputRef.current?.select() }, 0); break
         case 'KeyJ': e.preventDefault(); scrollToCursorRef.current?.(); break
         case 'KeyK': e.preventDefault(); setLocalSearchQuery(''); setLocalSearchReplaceMode(false); break
@@ -875,6 +883,7 @@ export default function ChapterEditorPage() {
   // re-rendered on every keystroke.
   const buildCanonTextRef = useRef(buildCanonText)
   buildCanonTextRef.current = buildCanonText
+  copyCanonTextRef.current = copyCanonText
 
   async function handleDeleteChapter() {
     const book = series.books.find(b => b.chapters.some(c => c.id === chapterId))
@@ -898,11 +907,17 @@ export default function ChapterEditorPage() {
 
   async function createNextChapter() {
     const book = series.books.find(b => b.chapters.some(c => c.id === chapterId))
-    if (!book || !chapter) return
+    const activeMeta = book?.chapters.find(c => c.id === chapterId)
+    if (!book || !chapter || !activeMeta) return
+    // Insert right after the active chapter (LOOM-52) rather than appending
+    // at the end — insertAtOrder tells the route to shift every chapter from
+    // there on by one, bumping their titles too when they share this title's
+    // numbering prefix. Without it, "Chapter 29" open with a "Chapter 30"
+    // already existing produced two "Chapter 30"s instead of a real insert.
     const res = await fetch(`/api/series/${seriesId}/books/${book.id}/chapters`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: bumpChapterTitle(chapter.title) }),
+      body: JSON.stringify({ title: bumpChapterTitle(chapter.title), insertAtOrder: activeMeta.order + 1 }),
     })
     if (!res.ok) return
     const created = await res.json()
@@ -917,6 +932,7 @@ export default function ChapterEditorPage() {
     const session = await res.json()
     router.push(`/read/${session.id}?returnTo=/author/${seriesId}/chapter/${chapterId}&startChapterId=${chapterId}`)
   }
+  startPreviewRef.current = startPreview
 
   function scrollToTop() {
     // The author layout's <main> is the scroll container; scrollTo it
@@ -1183,11 +1199,12 @@ export default function ChapterEditorPage() {
                     <button
                       role="menuitem"
                       onClick={() => { setActionMenuOpen(false); startPreview() }}
-                      title="Read this chapter in the reader, then come back here."
+                      title="Read this chapter in the reader, then come back here. (⌥⇧P)"
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
                     >
                       <span className="flex w-5 items-center justify-center text-accent"><LuPlay size={14} /></span>
                       <span className="flex-1">Preview</span>
+                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧P</span>
                     </button>
                     {/* Left open on click so the label's "Copied!" confirmation
                         is actually visible — every other item closes the menu. */}
@@ -1195,12 +1212,13 @@ export default function ChapterEditorPage() {
                       role="menuitem"
                       onClick={copyCanonText}
                       title={lensState
-                        ? "Copies this chapter's story text for the active path — the same text Preview renders with that context."
-                        : "Copies this chapter's canon story text to your clipboard — the rendered text as it would appear in the published book."}
+                        ? "Copies this chapter's story text for the active path — the same text Preview renders with that context. (⌥⇧X)"
+                        : "Copies this chapter's canon story text to your clipboard — the rendered text as it would appear in the published book. (⌥⇧X)"}
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
                     >
                       <span className="flex w-5 items-center justify-center text-accent"><PiCopySimpleThin size={16} /></span>
                       <span className="flex-1">{copyDone ? 'Copied!' : 'Copy'}</span>
+                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧X</span>
                     </button>
                     {/* Path lens — configure a context and the editor dims
                         off-path text (Copy and Preview follow the same path).
@@ -1274,11 +1292,12 @@ export default function ChapterEditorPage() {
                     <button
                       role="menuitem"
                       onClick={() => { setActionMenuOpen(false); setShowChapterSettings(true) }}
-                      title="Chapter settings — numbering, visibility gate, delete"
+                      title="Chapter settings — numbering, visibility gate, delete (⌥⇧`)"
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
                     >
                       <span className="flex w-5 items-center justify-center text-accent"><LuSettings size={14} /></span>
                       <span className="flex-1">Settings</span>
+                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧`</span>
                     </button>
                   </div>
                 )}
