@@ -78,8 +78,15 @@ export default function AppHeader({
   onToggleLightMode,
   loading = false,
 }: Props) {
+  // z-50 — the nav is app chrome and outranks everything in the page below it.
+  // This has to live on the <nav> itself, not on the dropdowns: a z-indexed
+  // sticky element is a stacking context, so the bell's z-[95] and the
+  // switcher's z-50 only order them against each other, never against page
+  // content. At z-30 that put both menus behind the chapter editor's sticky
+  // header (z-[45]). Full-screen modals are z-50 too and still win, being
+  // later in the document.
   return (
-    <nav className="font-chrome sticky top-0 z-30 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
+    <nav className="font-chrome sticky top-0 z-50 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
       <Link href="/" className="shrink-0" aria-label="Loom">
         <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
       </Link>

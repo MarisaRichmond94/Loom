@@ -561,11 +561,15 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
 
   return (
     <div>
-      {/* Formatting toolbar */}
+      {/* Formatting toolbar. Stays pinned to the top of the block so formatting
+          is one click away from anywhere in a long passage — no scrolling up to
+          the toolbar and back down. It parks below the sticky chapter header
+          rather than at top-0, which would tuck it underneath (KAN-30). */}
       {editor && (
         <div
           onMouseDown={e => e.preventDefault()}
-          className="sticky top-0 z-10 flex items-center flex-wrap gap-0.5 mb-2 px-1.5 py-1 bg-surface-raised rounded border border-accent/10 shadow-sm"
+          style={{ top: 'var(--loom-block-toolbar-top, 0px)' }}
+          className="sticky z-10 flex items-center flex-wrap gap-0.5 mb-2 px-1.5 py-1 bg-surface-raised rounded border border-accent/10 shadow-sm"
         >
           <ToolBtn active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="Bold">
             <LuBold size={13} />
