@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { LuArrowUpDown, LuCalendarDays, LuMapPin, LuPencil, LuPlus, LuTag, LuX } from 'react-icons/lu'
+import { LuArrowUpDown, LuCalendarDays, LuGitBranch, LuMapPin, LuPencil, LuPlus, LuTag, LuX } from 'react-icons/lu'
 import { PanelEmpty, PanelEmptyState } from './PanelEmptyState'
 import { CharacterAvatar } from './CharacterAvatar'
 import EventModal from './EventModal'
@@ -44,6 +44,8 @@ function EventRow({
   expanded,
   onActivate,
   onUntag,
+  nonCanon,
+  onToggleNonCanon,
   onEdit,
 }: {
   event: WriterEvent
@@ -62,6 +64,10 @@ function EventRow({
    *  does: the card is for reading, and losing a tag by misclicking while
    *  reading is the kind of thing you only notice much later. */
   onUntag?: () => void
+  /** Browse mode only, like untag. Absent while tagging, where the flag has no
+   *  meaning yet — the tag does not exist. */
+  nonCanon?: boolean
+  onToggleNonCanon?: () => void
   onEdit?: () => void
 }) {
   const when = formatEventWhen(event)
@@ -81,6 +87,17 @@ function EventRow({
           <span className={`flex-1 text-[13px] font-semibold text-ink ${expanded ? '' : 'truncate'}`}>
             {event.title}
           </span>
+          {/* Persistent, unlike the toggle that sets it: the toggle only
+              appears on hover, and a tag whose non-canon-ness is only visible
+              while pointing at it may as well not be marked. */}
+          {nonCanon && (
+            <span
+              title="Referenced in this chapter only on a non-canon branch — hidden from WriteAI"
+              className="shrink-0 rounded-full bg-amber-500/20 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-400"
+            >
+              Branch
+            </span>
+          )}
           {event.location && !expanded && (
             <span className="flex shrink-0 items-center gap-1 text-[10px] text-ink-faint">
               <LuMapPin size={10} />
@@ -167,8 +184,26 @@ function EventRow({
 
           The cluster carries its own background so the title, which truncates
           under it, is masked rather than showing through the icons. */}
-      {(onUntag || onEdit) && (
+      {(onUntag || onEdit || onToggleNonCanon) && (
         <div className="absolute right-1.5 top-1.5 flex items-center gap-1.5 rounded-md border border-accent/15 bg-surface-raised px-1.5 py-1 opacity-0 shadow-sm transition group-hover/event:opacity-100 focus-within:opacity-100">
+          {onToggleNonCanon && (
+            <button
+              type="button"
+              onClick={onToggleNonCanon}
+              title={
+                nonCanon
+                  ? 'Referenced only on a non-canon branch — click to mark canon'
+                  : 'Mark as referenced only on a non-canon branch'
+              }
+              aria-pressed={nonCanon}
+              aria-label={`Mark as non-canon in this chapter: ${event.title}`}
+              className={`transition ${
+                nonCanon ? 'text-amber-400 hover:text-amber-300' : 'text-ink-faint hover:text-ink'
+              }`}
+            >
+              <LuGitBranch size={12} />
+            </button>
+          )}
           {onUntag && (
             <button
               type="button"
@@ -204,6 +239,7 @@ export default function EventsPanel({
   loading,
   unreachable,
   onToggleTag,
+  onSetNonCanon,
   onRetry,
   bookId,
   locations,
@@ -218,6 +254,7 @@ export default function EventsPanel({
   loading: boolean
   unreachable: boolean
   onToggleTag: (writerEventId: string, tagged: boolean) => void | Promise<void>
+  onSetNonCanon: (writerEventId: string, nonCanon: boolean) => void | Promise<void>
   onRetry: () => void
   bookId?: string
   locations: string[]
@@ -414,6 +451,12 @@ export default function EventsPanel({
                     }
               }
               onUntag={tagMode ? undefined : () => onToggleTag(event.id, false)}
+              nonCanon={(event as TaggedEvent).nonCanon}
+              onToggleNonCanon={
+                tagMode
+                  ? undefined
+                  : () => onSetNonCanon(event.id, !(event as TaggedEvent).nonCanon)
+              }
               onEdit={tagMode ? undefined : () => onEdit(event)}
             />
           )

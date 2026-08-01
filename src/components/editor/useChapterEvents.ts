@@ -23,9 +23,16 @@ export type EventAppearance = {
   chapterNumber: number | null
   bookId: string
   bookTitle: string
+  /** That appearance is on a non-canon branch (LOOM-78). */
+  nonCanon?: boolean
 }
 
-export type TaggedEvent = WriterEvent & { alsoIn: EventAppearance[] }
+export type TaggedEvent = WriterEvent & {
+  alsoIn: EventAppearance[]
+  /** Tagged as referenced only on a non-canon branch of this chapter
+   *  (LOOM-78). Loom-only: the route WriteAI reads filters these out. */
+  nonCanon: boolean
+}
 
 export function useChapterEvents(chapterId: string) {
   const [events, setEvents] = useState<WriterEvent[]>([])
@@ -34,6 +41,7 @@ export function useChapterEvents(chapterId: string) {
   const [characterPhotos, setCharacterPhotos] = useState<Record<string, string | null>>({})
   const [taggedIds, setTaggedIds] = useState<string[]>([])
   const [spread, setSpread] = useState<Record<string, EventAppearance[]>>({})
+  const [nonCanonIds, setNonCanonIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   // Distinct from "no events": WriteAI being down must be SAYABLE. An empty
   // list would read as "this chapter references nothing", which is a lie.
@@ -46,9 +54,12 @@ export function useChapterEvents(chapterId: string) {
   const loadTags = useCallback(async (id: string) => {
     const res = await fetch(`/api/chapters/${id}/events`)
     if (!res.ok) throw new Error(`tags ${res.status}`)
-    const data: { events: { writerEventId: string; alsoIn: EventAppearance[] }[] } = await res.json()
+    const data: {
+      events: { writerEventId: string; nonCanon?: boolean; alsoIn: EventAppearance[] }[]
+    } = await res.json()
     if (chapterIdRef.current !== id) return
     setTaggedIds(data.events.map(e => e.writerEventId))
+    setNonCanonIds(data.events.filter(e => e.nonCanon).map(e => e.writerEventId))
     setSpread(Object.fromEntries(data.events.map(e => [e.writerEventId, e.alsoIn])))
   }, [])
 
@@ -135,6 +146,7 @@ export function useChapterEvents(chapterId: string) {
     setEvents([])
     setTaggedIds([])
     setSpread({})
+    setNonCanonIds([])
     setUnreachable(false)
     void refresh()
   }, [chapterId, refresh])
@@ -176,12 +188,48 @@ export function useChapterEvents(chapterId: string) {
     [taggedIds, loadTags],
   )
 
+  /**
+   * Flip a tag between canon and non-canon (LOOM-78).
+   *
+   * Optimistic like setTagged, and for the same reason: it is a switch, and a
+   * switch that waits for a round trip before moving feels broken. A failure
+   * reverts and says so rather than leaving the UI asserting something the
+   * database does not agree with.
+   */
+  const setNonCanon = useCallback(
+    async (writerEventId: string, nonCanon: boolean) => {
+      const id = chapterIdRef.current
+      const previous = nonCanonIds
+      setNonCanonIds(current =>
+        nonCanon
+          ? current.includes(writerEventId) ? current : [...current, writerEventId]
+          : current.filter(e => e !== writerEventId),
+      )
+      try {
+        const res = await fetch(`/api/chapters/${id}/events/${writerEventId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nonCanon }),
+        })
+        if (!res.ok) throw new Error(String(res.status))
+        // Re-read the spread: the flag rides on every OTHER chapter's view of
+        // this event too, so "also in Ch. 7" can change meaning here.
+        await loadTags(id)
+      } catch {
+        if (chapterIdRef.current === id) setNonCanonIds(previous)
+        notify('error', "Couldn't change whether that tag is canon.")
+      }
+    },
+    [nonCanonIds, loadTags],
+  )
+
   const taggedSet = new Set(taggedIds)
+  const nonCanonSet = new Set(nonCanonIds)
   // Tagged events, in WriteAI's order for now — the panel sorts. An id with no
   // matching event is dropped here: that is the degradation contract.
   const tagged: TaggedEvent[] = events
     .filter(e => taggedSet.has(e.id))
-    .map(e => ({ ...e, alsoIn: spread[e.id] ?? [] }))
+    .map(e => ({ ...e, alsoIn: spread[e.id] ?? [], nonCanon: nonCanonSet.has(e.id) }))
 
   return {
     events,
@@ -197,6 +245,7 @@ export function useChapterEvents(chapterId: string) {
     loading,
     unreachable,
     setTagged,
+    setNonCanon,
     refresh,
   }
 }

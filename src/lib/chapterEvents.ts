@@ -20,11 +20,17 @@ export type EventAppearance = {
   /** Book.order — reading order, so a spread across books lists them in the
    *  order they're read rather than alphabetically. */
   bookOrder: number
+  /** This appearance is on a NON-CANON branch (LOOM-78). Loom-only: the route
+   *  WriteAI reads filters these rows out entirely, so a consumer of that
+   *  endpoint never sees the field or the row. */
+  nonCanon?: boolean
 }
 
 export type TaggedEvent = {
   writerEventId: string
   taggedAt: string
+  /** Referenced in this chapter only on a non-canon branch (LOOM-78). */
+  nonCanon: boolean
   /** Other chapters this event is tagged in — never includes the chapter
    *  being asked about. Empty when it is tagged here and nowhere else. */
   alsoIn: EventAppearance[]
@@ -132,6 +138,7 @@ export function buildChapterLinks(
 export type SpreadRow = {
   writerEventId: string
   chapterId: string
+  nonCanon?: boolean
   chapter: {
     title: string
     bookId: string
@@ -167,6 +174,7 @@ export function groupAppearances(
       bookId: row.chapter.bookId,
       bookTitle: row.chapter.book.title,
       bookOrder: row.chapter.book.order,
+      nonCanon: row.nonCanon ?? false,
     })
     out.set(row.writerEventId, list)
   }

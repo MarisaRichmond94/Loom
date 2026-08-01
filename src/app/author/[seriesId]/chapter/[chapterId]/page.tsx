@@ -1541,6 +1541,7 @@ export default function ChapterEditorPage() {
           characterPhotos: chapterEvents.characterPhotos,
           loadCharacterPool: chapterEvents.loadCharacterPool,
           onToggleTag: chapterEvents.setTagged,
+          onSetNonCanon: chapterEvents.setNonCanon,
           onRetry: chapterEvents.refresh,
           onRefresh: chapterEvents.refresh,
         }}

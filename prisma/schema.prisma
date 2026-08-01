@@ -172,6 +172,18 @@ model ChapterEvent {
   chapterId     String
   writerEventId String
   createdAt     DateTime @default(now())
+  // This event is referenced in this chapter only on a NON-CANON branch —
+  // behind a choice point, a conditional fragment, or an override (LOOM-78).
+  // The sibling of ChapterCharacter.nonCanon, for the same reasons: the flag
+  // belongs on the TAG, because non-canon in Loom is a path THROUGH an
+  // otherwise canon chapter, so the same event can be canon in chapter 4 and
+  // branch-only in chapter 7.
+  //
+  // `/api/chapter-events` — the one route WriteAI reads — filters these out.
+  // Note this hides the TAG, not the event: the event itself still lives in
+  // WriteAI's writer_events.json and still appears on its timeline, just
+  // without a chapter link claiming it as canon here.
+  nonCanon      Boolean  @default(false)
   chapter       Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 
   // Tagging the same event twice is a no-op, not an error — the API relies on
