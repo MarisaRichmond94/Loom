@@ -54,6 +54,7 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
       { keys: '⌥⇧P', label: 'Preview chapter' },
       { keys: '⌥⇧X', label: 'Copy canon text' },
       { keys: '⌥⇧`', label: 'Chapter settings' },
+      { keys: '⌥⇧O', label: 'Toggle path config' },
       { keys: '⌥⇧F', label: 'Find in chapter' },
       { keys: '⌥⇧→ / ←', label: 'Next / previous match (while searching)' },
       { keys: '⌥⇧← / →', label: 'Previous / next chapter' },
@@ -733,6 +734,7 @@ export default function ChapterEditorPage() {
         case 'KeyP': e.preventDefault(); startPreviewRef.current(); break
         case 'KeyX': e.preventDefault(); copyCanonTextRef.current(); break
         case 'Backquote': e.preventDefault(); setShowChapterSettings(v => !v); break
+        case 'KeyO': e.preventDefault(); setShowPathConfig(v => !v); break
         case 'KeyF': e.preventDefault(); setTimeout(() => { localSearchInputRef.current?.focus(); localSearchInputRef.current?.select() }, 0); break
         case 'KeyJ': e.preventDefault(); scrollToCursorRef.current?.(); break
         case 'KeyK': e.preventDefault(); setLocalSearchQuery(''); setLocalSearchReplaceMode(false); break
@@ -1229,11 +1231,12 @@ export default function ChapterEditorPage() {
                       <button
                         role="menuitem"
                         onClick={() => { setActionMenuOpen(false); setShowPathConfig(true) }}
-                        title="Configure a context path — the editor highlights the blocks and branches on that path and dims the rest. Copy and Preview follow the same path."
+                        title="Configure a context path — the editor highlights the blocks and branches on that path and dims the rest. Copy and Preview follow the same path. (⌥⇧O)"
                         className={`flex flex-1 items-center gap-3 px-4 py-2.5 text-left text-sm transition hover:bg-surface-overlay hover:text-ink ${lensState ? 'text-accent' : 'text-ink-muted'}`}
                       >
                         <span className="flex w-5 items-center justify-center text-accent"><LuRoute size={14} /></span>
                         <span className="flex-1">{lensState ? `Path · ${lensAnsweredCount}` : 'Path'}</span>
+                        <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧O</span>
                       </button>
                       {lensState && (
                         <button
