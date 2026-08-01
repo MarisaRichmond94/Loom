@@ -1,22 +1,21 @@
 import { resolveConditional, applyChoice, rewindTo, matchesCondition } from '@/lib/storyEngine'
 import type { StoryState, HistoryEntry, ConditionalBlock, ChoiceRecord, Condition } from '@/lib/storyEngine'
 
-const BASE = '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"base"}]}]}'
 const OVR_A = '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"override-a"}]}]}'
 const OVR_B = '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"override-b"}]}]}'
 
 function makeBlock(overrides: ConditionalBlock['overrides'] = []): ConditionalBlock {
-  return { baseContent: BASE, overrides }
+  return { overrides }
 }
 
 describe('resolveConditional', () => {
-  it('returns baseContent when state is empty', () => {
-    expect(resolveConditional(makeBlock(), {})).toBe(BASE)
+  it('returns null when state is empty', () => {
+    expect(resolveConditional(makeBlock(), {})).toBe(null)
   })
 
-  it('returns baseContent when no override condition matches', () => {
+  it('returns null when no override condition matches', () => {
     const block = makeBlock([{ id: 'o1', order: 1, condition: { spare_victim: true }, content: OVR_A }])
-    expect(resolveConditional(block, { spare_victim: false })).toBe(BASE)
+    expect(resolveConditional(block, { spare_victim: false })).toBe(null)
   })
 
   it('returns override content when condition matches', () => {
@@ -36,7 +35,7 @@ describe('resolveConditional', () => {
     const block = makeBlock([
       { id: 'o1', order: 1, condition: { spare_victim: true, burned_letter: true }, content: OVR_A },
     ])
-    expect(resolveConditional(block, { spare_victim: true, burned_letter: false })).toBe(BASE)
+    expect(resolveConditional(block, { spare_victim: true, burned_letter: false })).toBe(null)
     expect(resolveConditional(block, { spare_victim: true, burned_letter: true })).toBe(OVR_A)
   })
 })

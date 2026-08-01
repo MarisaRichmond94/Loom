@@ -37,7 +37,7 @@ function opts(storyState: StoryState): SerializeOptions {
 }
 
 describe('canon export template resolution (real manuscripts)', () => {
-  const storyState = storyStateFromDefaults()
+  const storyState = hasDb ? storyStateFromDefaults() : {}
 
   dbIt('no MARK-SPLIT template leaks after the fix (the only residual leaks are single-quote+apostrophe collisions)', () => {
     const bookTitles = ['Faded', 'The Secrets We Keep']
