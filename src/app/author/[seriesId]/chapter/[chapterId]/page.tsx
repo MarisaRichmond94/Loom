@@ -13,7 +13,7 @@ import { useChapterEvents } from '@/components/editor/useChapterEvents'
 import { useChapterCharacters } from '@/components/editor/useChapterCharacters'
 import { useRegisterShortcuts, type ShortcutGroup } from '@/lib/shortcuts'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
-import { notify } from '@/lib/notifications'
+import { notify, showToast } from '@/lib/notifications'
 import { registerProseFlush, subscribeProseReplaced } from '@/lib/proseSync'
 import { ConditionRow } from '@/components/editor/conditionUI'
 import { useAuthor } from '@/lib/authorContext'
@@ -879,7 +879,10 @@ export default function ChapterEditorPage() {
       await navigator.clipboard.writeText(parts.join('\n\n'))
       setCopyDone(true)
       setTimeout(() => setCopyDone(false), 2000)
-    } catch { /* clipboard denied */ }
+      showToast({ kind: 'ok', message: 'Copy successful' })
+    } catch {
+      showToast({ kind: 'error', message: 'Copy failed' })
+    }
   }
   // Live ref so the panel always reads current blocks and lens without being
   // re-rendered on every keystroke.
