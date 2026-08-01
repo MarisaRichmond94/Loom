@@ -43,7 +43,7 @@ export type SpreadRow = {
   chapter: {
     title: string
     bookId: string
-    book: { title: string }
+    book: { title: string; order: number }
   }
 }
 
@@ -70,6 +70,7 @@ export function groupAppearances(
       chapterNumber: numbers.get(row.chapterId) ?? null,
       bookId: row.chapter.bookId,
       bookTitle: row.chapter.book.title,
+      bookOrder: row.chapter.book.order,
     })
     out.set(row.writerCharacterId, list)
   }
@@ -95,7 +96,7 @@ export type LinkRow = {
   chapter: {
     title: string
     bookId: string
-    book: { title: string; seriesId: string; series: { title: string } }
+    book: { title: string; order: number; seriesId: string; series: { title: string } }
   }
 }
 
@@ -122,6 +123,7 @@ export function buildChapterLinks(
       seriesTitle: row.chapter.book.series.title,
       bookId: row.chapter.bookId,
       bookTitle: row.chapter.book.title,
+      bookOrder: row.chapter.book.order,
       chapterId: row.chapterId,
       chapterTitle: row.chapter.title,
       chapterNumber,

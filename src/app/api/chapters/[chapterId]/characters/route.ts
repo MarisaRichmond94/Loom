@@ -45,7 +45,7 @@ export async function GET(_: Request, { params }: Params) {
         select: {
           title: true,
           bookId: true,
-          book: { select: { title: true, seriesId: true } },
+          book: { select: { title: true, order: true, seriesId: true } },
         },
       },
     },

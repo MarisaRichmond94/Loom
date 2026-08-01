@@ -16,6 +16,10 @@ export type ChapterAppearance = {
   chapterNumber: number | null
   bookId: string
   bookTitle: string
+  /** Book.order — the series' reading order. Carried so appearances sort
+   *  chronologically; the title sorts alphabetically, which is only
+   *  coincidentally right. */
+  bookOrder: number
 }
 
 /**
@@ -66,12 +70,19 @@ export function parseIdList(param: string | null, prefix: string, max = 500): st
 }
 
 /**
- * Stable, readable order for a list of appearances: by book, then by chapter
- * number, with unnumbered chapters LAST rather than sorting as 0 and jumping
- * ahead of the prologue.
+ * Stable, readable order for a list of appearances: by book in READING order,
+ * then by chapter number, with unnumbered chapters LAST rather than sorting as
+ * 0 and jumping ahead of the prologue.
+ *
+ * Books sort on Book.order, not on title. Sorting by title is alphabetical
+ * order wearing chronological order's clothes — it happens to agree for some
+ * series and silently disagrees for others, and a spread that lists book three
+ * before book one reads as a bug in the tags rather than in the sort. Title
+ * remains only as a tiebreak for two books that share an order.
  */
 export function compareAppearances(a: ChapterAppearance, b: ChapterAppearance): number {
   return (
+    a.bookOrder - b.bookOrder ||
     a.bookTitle.localeCompare(b.bookTitle) ||
     (a.chapterNumber ?? Infinity) - (b.chapterNumber ?? Infinity) ||
     a.chapterTitle.localeCompare(b.chapterTitle)

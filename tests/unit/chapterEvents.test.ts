@@ -48,10 +48,11 @@ describe('groupAppearances', () => {
     chapterTitle: string,
     bookId: string,
     bookTitle: string,
+    bookOrder = 1,
   ): SpreadRow => ({
     writerEventId,
     chapterId,
-    chapter: { title: chapterTitle, bookId, book: { title: bookTitle } },
+    chapter: { title: chapterTitle, bookId, book: { title: bookTitle, order: bookOrder } },
   })
 
   const numbers = new Map<string, number | null>([
@@ -164,7 +165,7 @@ describe('buildChapterLinks', () => {
     chapter: {
       title: chapterNumberTitle,
       bookId: 'b1',
-      book: { title: 'Faded', seriesId: 's1', series: { title: 'Dark Horse' } },
+      book: { title: 'Faded', order: 1, seriesId: 's1', series: { title: 'Dark Horse' } },
     },
   })
   const numbers = new Map<string, number | null>([['c1', 1], ['c7', 7], ['cu', null]])
@@ -183,6 +184,7 @@ describe('buildChapterLinks', () => {
       seriesTitle: 'Dark Horse',
       bookId: 'b1',
       bookTitle: 'Faded',
+      bookOrder: 1,
       chapterId: 'c1',
       chapterTitle: 'One',
       chapterNumber: 1,

@@ -30,7 +30,7 @@ export async function GET(req: Request) {
         select: {
           title: true,
           bookId: true,
-          book: { select: { title: true, seriesId: true, series: { select: { title: true } } } },
+          book: { select: { title: true, order: true, seriesId: true, series: { select: { title: true } } } },
         },
       },
     },

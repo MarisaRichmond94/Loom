@@ -86,10 +86,11 @@ describe('groupAppearances', () => {
     chapterTitle: string,
     bookId = 'b1',
     bookTitle = 'Faded',
+    bookOrder = 1,
   ): SpreadRow => ({
     writerCharacterId,
     chapterId,
-    chapter: { title: chapterTitle, bookId, book: { title: bookTitle } },
+    chapter: { title: chapterTitle, bookId, book: { title: bookTitle, order: bookOrder } },
   })
 
   it('excludes the chapter being asked about', () => {
@@ -116,12 +117,26 @@ describe('groupAppearances', () => {
 
   it('spans books', () => {
     const rows = [
-      row('wc-a', 'c1', 'One', 'b1', 'Faded'),
-      row('wc-a', 'c7', 'Seven', 'b2', 'Nobody’s Hero'),
+      row('wc-a', 'c1', 'One', 'b1', 'Faded', 1),
+      row('wc-a', 'c7', 'Seven', 'b2', 'Nobody’s Hero', 2),
     ]
     expect(groupAppearances(rows, 'cX', numbers).get('wc-a')!.map(a => a.bookTitle)).toEqual([
       'Faded',
       'Nobody’s Hero',
+    ])
+  })
+
+  // Titles that sort the OPPOSITE way to reading order, which is the whole
+  // point of carrying Book.order: the previous sort was alphabetical and
+  // agreed with chronology only by luck.
+  it('orders books by reading order, not alphabetically', () => {
+    const rows = [
+      row('wc-a', 'c7', 'Seven', 'b2', 'Aftermath', 2),
+      row('wc-a', 'c1', 'One', 'b1', 'Zero Hour', 1),
+    ]
+    expect(groupAppearances(rows, 'cX', numbers).get('wc-a')!.map(a => a.bookTitle)).toEqual([
+      'Zero Hour',
+      'Aftermath',
     ])
   })
 })
@@ -133,7 +148,7 @@ describe('buildChapterLinks', () => {
     chapter: {
       title: chapterTitle,
       bookId: 'b1',
-      book: { title: 'Faded', seriesId: 's1', series: { title: 'Dark Horse' } },
+      book: { title: 'Faded', order: 1, seriesId: 's1', series: { title: 'Dark Horse' } },
     },
   })
 
@@ -150,6 +165,7 @@ describe('buildChapterLinks', () => {
       seriesTitle: 'Dark Horse',
       bookId: 'b1',
       bookTitle: 'Faded',
+      bookOrder: 1,
       chapterId: 'c1',
       chapterTitle: 'One',
       chapterNumber: 1,

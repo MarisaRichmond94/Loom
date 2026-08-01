@@ -17,6 +17,9 @@ export type EventAppearance = {
   chapterNumber: number | null
   bookId: string
   bookTitle: string
+  /** Book.order — reading order, so a spread across books lists them in the
+   *  order they're read rather than alphabetically. */
+  bookOrder: number
 }
 
 export type TaggedEvent = {
@@ -63,6 +66,8 @@ export type ChapterLink = {
   seriesTitle: string
   bookId: string
   bookTitle: string
+  /** Book.order — reading order, for chronological grouping on the far side. */
+  bookOrder: number
   chapterId: string
   chapterTitle: string
   /** Canon display number (0 = prologue), or null when the chapter has no
@@ -82,7 +87,7 @@ export type LinkRow = {
   chapter: {
     title: string
     bookId: string
-    book: { title: string; seriesId: string; series: { title: string } }
+    book: { title: string; order: number; seriesId: string; series: { title: string } }
   }
 }
 
@@ -109,6 +114,7 @@ export function buildChapterLinks(
       seriesTitle: row.chapter.book.series.title,
       bookId: row.chapter.bookId,
       bookTitle: row.chapter.book.title,
+      bookOrder: row.chapter.book.order,
       chapterId: row.chapterId,
       chapterTitle: row.chapter.title,
       chapterNumber,
@@ -129,7 +135,7 @@ export type SpreadRow = {
   chapter: {
     title: string
     bookId: string
-    book: { title: string }
+    book: { title: string; order: number }
   }
 }
 
@@ -160,6 +166,7 @@ export function groupAppearances(
       chapterNumber: numbers.get(row.chapterId) ?? null,
       bookId: row.chapter.bookId,
       bookTitle: row.chapter.book.title,
+      bookOrder: row.chapter.book.order,
     })
     out.set(row.writerEventId, list)
   }
