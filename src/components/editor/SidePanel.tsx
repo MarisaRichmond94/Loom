@@ -1,24 +1,27 @@
 'use client'
 
 import { useRef, useState, type ReactNode } from 'react'
-import { LuCalendarDays, LuPin, LuScanText, LuX } from 'react-icons/lu'
+import { LuCalendarDays, LuPin, LuScanText, LuUsers, LuX } from 'react-icons/lu'
 import { PiNotebookThin } from 'react-icons/pi'
 import { ReferenceList, type PinnedText } from './ReferencePanel'
 import NotesPanel from './NotesPanel'
 import ReviewPanel, { type ReviewSession } from './ReviewPanel'
 import EventsPanel from './EventsPanel'
+import CharactersPanel from './CharactersPanel'
 import { tabsFitLabelled } from '@/lib/panelTabs'
 import type { WriterEvent } from '@/lib/eventSearch'
 import type { TaggedEvent } from './useChapterEvents'
+import type { WriterCharacter } from '@/lib/characterSearch'
+import type { TaggedCharacter } from './useChapterCharacters'
 
-export type PanelTab = 'notes' | 'refs' | 'review' | 'events'
+export type PanelTab = 'notes' | 'refs' | 'review' | 'events' | 'characters'
 
 const MIN_WIDTH = 280
 
 /** How many tabs the strip renders. Kept beside the tab list rather than
  *  derived from it, because the label-fit calculation needs it before the
- *  buttons are built. Bump when a tab is added (Characters — LOOM-33). */
-const TAB_COUNT = 4
+ *  buttons are built. Bump when a tab is added. */
+const TAB_COUNT = 5
 
 /** Review needs materially more room than notes — it is a document, not a
  *  margin. A third of the viewport is the floor below which it stops being
@@ -50,7 +53,9 @@ export default function SidePanel({
   notes,
   onNotesChange,
   notesSaving,
+  chapterPov,
   events,
+  characters,
   review,
   reviewLoading,
   reviewCtx,
@@ -65,6 +70,21 @@ export default function SidePanel({
   notes: string
   onNotesChange: (value: string) => void
   notesSaving: boolean
+  /** The chapter's POV, for marking that character in the Characters tab. */
+  chapterPov?: string | null
+  /** Everything the Characters tab needs, passed through whole — the shape is
+   *  exactly useChapterCharacters' return, so the two cannot drift apart. */
+  characters: {
+    characters: WriterCharacter[]
+    tagged: TaggedCharacter[]
+    taggedIds: Set<string>
+    count: number
+    loading: boolean
+    unreachable: boolean
+    onToggleTag: (writerCharacterId: string, tagged: boolean) => void | Promise<void>
+    onSetCategory: (character: WriterCharacter, category: string) => void | Promise<void>
+    onRetry: () => void
+  }
   /** Everything the Events tab needs, passed through whole — the shape is
    *  exactly useChapterEvents' return, so the two cannot drift apart. */
   events: {
@@ -181,16 +201,19 @@ export default function SidePanel({
       <div className="sticky top-0 h-[calc(100vh-3.75rem-var(--loom-footer-h,0px))] overflow-y-auto overscroll-contain flex flex-col">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-accent/10 shrink-0">
           {/* All four, always, in the order they are reached for: the review
-              is the reason the panel is usually open, events sit beside it
-              because both answer "what is this chapter", notes are constant
+              is the reason the panel is usually open, events and characters
+              sit beside it because all three answer "what is this chapter" —
+              and beside each other because they are the same kind of
+              cross-app story data, notes are constant
               company, pins are occasional. Pins used to appear only when
               something was pinned, which meant the way to discover pinning was
               to already be doing it. */}
           <div role="tablist" className="flex items-center gap-0.5">
             {tabButton('review', <LuScanText size={13} />, 'Reviews', '⌥⇧2')}
             {tabButton('events', <LuCalendarDays size={13} />, 'Events', '⌥⇧3')}
-            {tabButton('notes', <PiNotebookThin size={14} />, 'Notes', '⌥⇧4')}
-            {tabButton('refs', <LuPin size={12} />, 'Pins', '⌥⇧5')}
+            {tabButton('characters', <LuUsers size={13} />, 'Characters', '⌥⇧4')}
+            {tabButton('notes', <PiNotebookThin size={14} />, 'Notes', '⌥⇧5')}
+            {tabButton('refs', <LuPin size={12} />, 'Pins', '⌥⇧6')}
           </div>
 
           <div className="ml-auto flex items-center gap-2 shrink-0">
@@ -200,6 +223,11 @@ export default function SidePanel({
             {tab === 'events' && events.count > 0 && (
               <span className="text-[10px] tabular-nums text-ink-faint">
                 {events.count} tagged
+              </span>
+            )}
+            {tab === 'characters' && characters.count > 0 && (
+              <span className="text-[10px] tabular-nums text-ink-faint">
+                {characters.count} tagged
               </span>
             )}
             {tab === 'refs' && hasPins && (
@@ -228,7 +256,9 @@ export default function SidePanel({
             ? <ReviewPanel data={review} loading={reviewLoading} {...reviewCtx} />
             : tab === 'events'
               ? <EventsPanel {...events} bookId={reviewCtx.bookId} />
-              : <NotesPanel value={notes} onChange={onNotesChange} />}
+              : tab === 'characters'
+                ? <CharactersPanel {...characters} bookId={reviewCtx.bookId} pov={chapterPov} />
+                : <NotesPanel value={notes} onChange={onNotesChange} />}
       </div>
     </aside>
   )
