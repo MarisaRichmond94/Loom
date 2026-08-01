@@ -83,6 +83,7 @@ export default function SidePanel({
     loading: boolean
     unreachable: boolean
     onToggleTag: (writerCharacterId: string, tagged: boolean) => void | Promise<void>
+    onSetNonCanon: (writerCharacterId: string, nonCanon: boolean) => void | Promise<void>
     onSetCategory: (character: WriterCharacter, category: string) => void | Promise<void>
     onRetry: () => void
   }

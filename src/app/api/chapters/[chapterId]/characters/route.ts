@@ -30,7 +30,7 @@ export async function GET(_: Request, { params }: Params) {
 
   const mine = await prisma.chapterCharacter.findMany({
     where: { chapterId },
-    select: { writerCharacterId: true, createdAt: true },
+    select: { writerCharacterId: true, createdAt: true, nonCanon: true },
     orderBy: { createdAt: 'asc' },
   })
   if (mine.length === 0) return NextResponse.json({ characters: [] })
@@ -41,6 +41,7 @@ export async function GET(_: Request, { params }: Params) {
     select: {
       writerCharacterId: true,
       chapterId: true,
+      nonCanon: true,
       chapter: {
         select: {
           title: true,
@@ -64,6 +65,7 @@ export async function GET(_: Request, { params }: Params) {
   const characters: TaggedCharacter[] = mine.map(c => ({
     writerCharacterId: c.writerCharacterId,
     taggedAt: c.createdAt.toISOString(),
+    nonCanon: c.nonCanon,
     alsoIn: spread.get(c.writerCharacterId) ?? [],
   }))
   return NextResponse.json({ characters })
@@ -87,15 +89,21 @@ export async function POST(req: Request, { params }: Params) {
   }
   const parsed = parseWriterCharacterId(payload)
   if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
+  // Optional, and false unless explicitly asked for: a tag is canon by default,
+  // which is the common case and the safe one — a mistakenly canon tag shows up
+  // in WriteAI where it can be seen and fixed, whereas a mistakenly non-canon
+  // one silently vanishes from it.
+  const nonCanon = (payload as { nonCanon?: unknown })?.nonCanon === true
 
   try {
     const tag = await prisma.chapterCharacter.create({
-      data: { chapterId, writerCharacterId: parsed.id },
-      select: { writerCharacterId: true, createdAt: true },
+      data: { chapterId, writerCharacterId: parsed.id, nonCanon },
+      select: { writerCharacterId: true, createdAt: true, nonCanon: true },
     })
     return NextResponse.json({
       writerCharacterId: tag.writerCharacterId,
       taggedAt: tag.createdAt.toISOString(),
+      nonCanon: tag.nonCanon,
     })
   } catch (err) {
     const code = (err as { code?: string }).code

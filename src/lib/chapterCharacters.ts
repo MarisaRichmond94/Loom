@@ -21,6 +21,8 @@ export type CharacterAppearance = ChapterAppearance
 export type TaggedCharacter = {
   writerCharacterId: string
   taggedAt: string
+  /** Appears in this chapter only on a non-canon branch (LOOM-63). */
+  nonCanon: boolean
   /** Other chapters this character appears in — never includes the chapter
    *  being asked about. */
   alsoIn: CharacterAppearance[]
@@ -40,6 +42,7 @@ export function parseCharacterIds(param: string | null, max = 500): string[] {
 export type SpreadRow = {
   writerCharacterId: string
   chapterId: string
+  nonCanon?: boolean
   chapter: {
     title: string
     bookId: string
@@ -71,6 +74,7 @@ export function groupAppearances(
       bookId: row.chapter.bookId,
       bookTitle: row.chapter.book.title,
       bookOrder: row.chapter.book.order,
+      nonCanon: row.nonCanon ?? false,
     })
     out.set(row.writerCharacterId, list)
   }

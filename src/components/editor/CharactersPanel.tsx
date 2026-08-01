@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { LuArrowUpDown, LuPencil, LuPlus, LuTag, LuUnlink, LuUsers } from 'react-icons/lu'
+import { LuArrowUpDown, LuGitBranch, LuPencil, LuPlus, LuTag, LuUnlink, LuUsers } from 'react-icons/lu'
 import { PanelEmpty, PanelEmptyState } from './PanelEmptyState'
 import { CharacterAvatar, characterPhotoHref } from './CharacterAvatar'
 import { RelationshipList } from './RelationshipList'
@@ -47,6 +47,8 @@ function CharacterRow({
   expanded,
   onActivate,
   onUntag,
+  nonCanon,
+  onToggleNonCanon,
   onEdit,
   onCategory,
 }: {
@@ -61,6 +63,10 @@ function CharacterRow({
   expanded: boolean
   onActivate: () => void
   onUntag?: () => void
+  /** Browse mode only, like untag. Absent while tagging, where the flag has no
+   *  meaning yet — the tag does not exist. */
+  nonCanon?: boolean
+  onToggleNonCanon?: () => void
   onEdit?: () => void
   onCategory: (category: string) => void
 }) {
@@ -100,6 +106,17 @@ function CharacterRow({
                     POV
                   </span>
                 )}
+                {/* Persistent, unlike the toggle that sets it: the toggle only
+                    appears on hover, and a tag whose non-canon-ness is only
+                    visible while pointing at it may as well not be marked. */}
+                {nonCanon && (
+                  <span
+                    title="Appears in this chapter only on a non-canon branch — hidden from WriteAI"
+                    className="shrink-0 rounded-full bg-amber-500/20 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-400"
+                  >
+                    Branch
+                  </span>
+                )}
               </div>
               {aliases.length > 0 && (
                 <div className="truncate text-[11px] text-ink-muted">{aliases.join(', ')}</div>
@@ -122,6 +139,24 @@ function CharacterRow({
               focus-within so the buttons are reachable by keyboard, where
               there is no hover to depend on. */}
           <div className="flex shrink-0 self-start items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/char:opacity-100 focus-within:opacity-100 motion-reduce:transition-none">
+            {onToggleNonCanon && (
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); onToggleNonCanon() }}
+                title={
+                  nonCanon
+                    ? 'Appears only on a non-canon branch — click to mark canon'
+                    : 'Mark as appearing only on a non-canon branch'
+                }
+                aria-pressed={nonCanon}
+                aria-label={`Mark ${character.name} as non-canon in this chapter`}
+                className={`rounded p-1 transition hover:bg-accent/10 ${
+                  nonCanon ? 'text-amber-400 hover:text-amber-300' : 'text-ink-faint hover:text-ink'
+                }`}
+              >
+                <LuGitBranch size={12} />
+              </button>
+            )}
             {onEdit && (
               <button
                 type="button"
@@ -222,6 +257,7 @@ function CharacterRow({
 export default function CharactersPanel({
   characters,
   tagged,
+  onSetNonCanon,
   taggedIds,
   loading,
   unreachable,
@@ -237,6 +273,7 @@ export default function CharactersPanel({
   loading: boolean
   unreachable: boolean
   onToggleTag: (writerCharacterId: string, tagged: boolean) => void | Promise<void>
+  onSetNonCanon: (writerCharacterId: string, nonCanon: boolean) => void | Promise<void>
   onSetCategory: (character: WriterCharacter, category: string) => void | Promise<void>
   onRetry: () => void
   bookId?: string
@@ -407,6 +444,13 @@ export default function CharactersPanel({
                   : () => setExpandedId(id => (id === character.id ? null : character.id))
               }
               onUntag={tagMode ? undefined : () => onToggleTag(character.id, false)}
+              nonCanon={(character as TaggedCharacter).nonCanon}
+              onToggleNonCanon={
+                tagMode
+                  ? undefined
+                  : () =>
+                      onSetNonCanon(character.id, !(character as TaggedCharacter).nonCanon)
+              }
               onEdit={tagMode ? undefined : () => onEdit(character)}
               onCategory={c => onSetCategory(character, c)}
             />

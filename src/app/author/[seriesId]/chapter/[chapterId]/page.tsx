@@ -1527,6 +1527,7 @@ export default function ChapterEditorPage() {
           loading: chapterCharacters.loading,
           unreachable: chapterCharacters.unreachable,
           onToggleTag: chapterCharacters.setTagged,
+          onSetNonCanon: chapterCharacters.setNonCanon,
           onSetCategory: chapterCharacters.setCategory,
           onRetry: chapterCharacters.refresh,
         }}

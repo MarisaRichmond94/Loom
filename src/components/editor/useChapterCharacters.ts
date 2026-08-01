@@ -17,12 +17,18 @@ import type { ChapterAppearance } from '@/lib/chapterTags'
 // a tagged id can disappear through ordinary use rather than deliberate
 // deletion.
 
-export type TaggedCharacter = WriterCharacter & { alsoIn: ChapterAppearance[] }
+export type TaggedCharacter = WriterCharacter & {
+  alsoIn: ChapterAppearance[]
+  /** Tagged as appearing only on a non-canon branch of this chapter (LOOM-63).
+   *  Loom-only: the route WriteAI reads filters these out. */
+  nonCanon: boolean
+}
 
 export function useChapterCharacters(chapterId: string) {
   const [characters, setCharacters] = useState<WriterCharacter[]>([])
   const [taggedIds, setTaggedIds] = useState<string[]>([])
   const [spread, setSpread] = useState<Record<string, ChapterAppearance[]>>({})
+  const [nonCanonIds, setNonCanonIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [unreachable, setUnreachable] = useState(false)
 
@@ -32,10 +38,12 @@ export function useChapterCharacters(chapterId: string) {
   const loadTags = useCallback(async (id: string) => {
     const res = await fetch(`/api/chapters/${id}/characters`)
     if (!res.ok) throw new Error(`tags ${res.status}`)
-    const data: { characters: { writerCharacterId: string; alsoIn: ChapterAppearance[] }[] } =
-      await res.json()
+    const data: {
+      characters: { writerCharacterId: string; nonCanon?: boolean; alsoIn: ChapterAppearance[] }[]
+    } = await res.json()
     if (chapterIdRef.current !== id) return
     setTaggedIds(data.characters.map(c => c.writerCharacterId))
+    setNonCanonIds(data.characters.filter(c => c.nonCanon).map(c => c.writerCharacterId))
     setSpread(Object.fromEntries(data.characters.map(c => [c.writerCharacterId, c.alsoIn])))
   }, [])
 
@@ -113,6 +121,39 @@ export function useChapterCharacters(chapterId: string) {
   )
 
   /**
+   * Flip a tag between canon and non-canon (LOOM-63).
+   *
+   * Optimistic like setTagged, and for the same reason: it is a switch, and a
+   * switch that waits for a round trip before moving feels broken. A failure
+   * reverts and says so rather than leaving the UI asserting something the
+   * database does not agree with.
+   */
+  const setNonCanon = useCallback(
+    async (writerCharacterId: string, nonCanon: boolean) => {
+      const id = chapterIdRef.current
+      const previous = nonCanonIds
+      setNonCanonIds(current =>
+        nonCanon
+          ? current.includes(writerCharacterId) ? current : [...current, writerCharacterId]
+          : current.filter(c => c !== writerCharacterId),
+      )
+      try {
+        const res = await fetch(`/api/chapters/${id}/characters/${writerCharacterId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nonCanon }),
+        })
+        if (!res.ok) throw new Error(String(res.status))
+        await loadTags(id)
+      } catch {
+        if (chapterIdRef.current === id) setNonCanonIds(previous)
+        notify('error', "Couldn't change whether that tag is canon.")
+      }
+    },
+    [nonCanonIds, loadTags],
+  )
+
+  /**
    * Change a character's category from the row.
    *
    * Sends the COMPLETE character, because WriteAI stores the PUT body verbatim
@@ -143,9 +184,10 @@ export function useChapterCharacters(chapterId: string) {
   )
 
   const taggedSet = new Set(taggedIds)
+  const nonCanonSet = new Set(nonCanonIds)
   const tagged: TaggedCharacter[] = characters
     .filter(c => taggedSet.has(c.id))
-    .map(c => ({ ...c, alsoIn: spread[c.id] ?? [] }))
+    .map(c => ({ ...c, alsoIn: spread[c.id] ?? [], nonCanon: nonCanonSet.has(c.id) }))
 
   return {
     characters,
@@ -157,6 +199,7 @@ export function useChapterCharacters(chapterId: string) {
     loading,
     unreachable,
     setTagged,
+    setNonCanon,
     setCategory,
     refresh,
   }

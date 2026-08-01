@@ -274,6 +274,18 @@ carries `bookOrder` for both tabs.
 requested id gets a key, malformed ids dropped rather than failing the request,
 and each side names the outage rather than rendering an empty list.
 
+**Non-canon tags never cross this seam (LOOM-63).** Loom owns a branching CYOA
+story; WriteAI holds canon data only. A character tag can be marked as
+appearing solely on a non-canon branch, and `GET /api/chapter-characters`
+filters those rows out **in the query**. The flag lives on the TAG rather than
+on the character or the chapter, because non-canon in Loom is a path THROUGH an
+otherwise canon chapter — the same character can be canon in chapter 4 and
+branch-only in chapter 7. Enforcing it at the seam rather than in WriteAI keeps
+the boundary true by construction: the non-canon story is not filtered out of
+WriteAI, it never reaches it. `tests/unit/chapterCharactersRoute.test.ts` pins
+this, because the failure is invisible from the response — WriteAI would just
+start showing chapters from a story it should not know exists.
+
 > ⚠️ **Renaming a writer character detaches it from its canon entity.**
 > Resolved for cross-references by LOOM-45: `events[].characters` and
 > `relationships[].target` hold `wc-` ids, and the display name is derived at

@@ -20,6 +20,10 @@ export type ChapterAppearance = {
    *  chronologically; the title sorts alphabetically, which is only
    *  coincidentally right. */
   bookOrder: number
+  /** This appearance is on a NON-CANON branch (LOOM-63). Loom-only: the route
+   *  WriteAI reads filters these out entirely, so a consumer of that endpoint
+   *  never sees the field or the row. */
+  nonCanon?: boolean
 }
 
 /**
