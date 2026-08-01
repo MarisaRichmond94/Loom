@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { LuArrowUpDown, LuCalendarDays, LuMapPin, LuPencil, LuPlus, LuTag, LuX } from 'react-icons/lu'
 import { PanelEmpty, PanelEmptyState } from './PanelEmptyState'
+import { CharacterAvatar } from './CharacterAvatar'
 import EventModal from './EventModal'
 import { formatEventWhen, matchesQuery, sortEvents, type WriterEvent } from '@/lib/eventSearch'
 import type { EventAppearance, TaggedEvent } from './useChapterEvents'
@@ -31,25 +32,6 @@ function describeSpread(alsoIn: EventAppearance[], thisBookId: string | undefine
       return thisBookId && a.bookId !== thisBookId ? `${a.bookTitle} ${where}` : where
     })
     .join(', ')
-}
-
-/** Portrait, or the character's initials when WriteAI has no photo for them. */
-function Avatar({ name, photoUrl }: { name: string; photoUrl?: string | null }) {
-  const initials = name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map(part => part[0]?.toUpperCase() ?? '')
-    .join('')
-  return photoUrl ? (
-    // Plain <img>: these are proxied from WriteAI at an arbitrary path, which
-    // next/image would want configured, and they are ~28px.
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={photoUrl} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
-  ) : (
-    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent/15 text-[9px] font-semibold text-accent">
-      {initials}
-    </span>
-  )
 }
 
 function EventRow({
@@ -136,7 +118,7 @@ function EventRow({
                         key={name}
                         className="flex items-center gap-1.5 rounded-lg border border-accent/15 bg-surface-overlay/60 py-1 pl-1 pr-2.5"
                       >
-                        <Avatar name={name} photoUrl={photos[name]} />
+                        <CharacterAvatar name={name} src={photos[name]} size={28} />
                         <span className="text-[11px] font-medium text-ink">{name}</span>
                       </span>
                     ))}

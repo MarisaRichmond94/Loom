@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays } from 'react-icons/lu'
+import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers } from 'react-icons/lu'
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
 import SidePanel, { minWidthForTab, type PanelTab } from '@/components/editor/SidePanel'
@@ -10,6 +10,7 @@ import { useChapterReview } from '@/components/editor/ReviewPanel'
 import { type PinnedText } from '@/components/editor/ReferencePanel'
 import { useChapterNotes } from '@/components/editor/useChapterNotes'
 import { useChapterEvents } from '@/components/editor/useChapterEvents'
+import { useChapterCharacters } from '@/components/editor/useChapterCharacters'
 import { useRegisterShortcuts, type ShortcutGroup } from '@/lib/shortcuts'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import { notify } from '@/lib/notifications'
@@ -73,8 +74,9 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
     items: [
       { keys: '⌥⇧2', label: 'Toggle reviews' },
       { keys: '⌥⇧3', label: 'Toggle events' },
-      { keys: '⌥⇧4', label: 'Toggle chapter notes' },
-      { keys: '⌥⇧5', label: 'Toggle pins' },
+      { keys: '⌥⇧4', label: 'Toggle characters' },
+      { keys: '⌥⇧5', label: 'Toggle chapter notes' },
+      { keys: '⌥⇧6', label: 'Toggle pins' },
       { keys: '⌥⇧⏎', label: 'Save (in a dialog)' },
       { keys: '⌥⇧⎋', label: 'Cancel (in a dialog)' },
     ],
@@ -132,6 +134,7 @@ export default function ChapterEditorPage() {
 
   const { notes, setNotes, saving: notesSaving, hasNotes } = useChapterNotes(chapterId)
   const chapterEvents = useChapterEvents(chapterId)
+  const chapterCharacters = useChapterCharacters(chapterId)
   // The same book lookup as `currentBook` further down, but that one sits
   // after `if (!chapter) return <ChapterSkeleton />` — a hook cannot live past
   // an early return. Optional-chained so it is simply undefined until the
@@ -158,7 +161,7 @@ export default function ChapterEditorPage() {
   function closePanel() {
     setPanelOpen(false)
   }
-  // One rule for every tab hotkey (⌥⇧2–5): closed → open on my tab; open on
+  // One rule for every tab hotkey (⌥⇧2–6): closed → open on my tab; open on
   // another tab → switch to mine; open on my tab → close.
   function togglePanelTab(tab: PanelTab) {
     if (!panelOpenRef.current) { openPanel(tab); return }
@@ -695,15 +698,16 @@ export default function ChapterEditorPage() {
           break
         case 'Equal': case 'NumpadAdd': e.preventDefault(); adjustProseScale(0.1); break
         case 'Minus': case 'NumpadSubtract': e.preventDefault(); adjustProseScale(-0.1); break
-        // The dock's four tabs, numbered in the order they appear in it. All
+        // The dock's five tabs, numbered in the order they appear in it. All
         // unconditional: 2 used to be Pins and did nothing unless something was
-        // already pinned, which read as a broken key. Events took 3 when it was
-        // inserted beside Reviews (LOOM-36), pushing Notes and Pins along — the
-        // numbers follow the strip, so they have to move when it does.
+        // already pinned, which read as a broken key. Events took 3 (LOOM-36)
+        // and Characters took 4 (LOOM-44), pushing Notes and Pins along each
+        // time — the numbers follow the strip, so they move when it does.
         case 'Digit2': case 'Numpad2': e.preventDefault(); togglePanelTabRef.current('review'); break
         case 'Digit3': case 'Numpad3': e.preventDefault(); togglePanelTabRef.current('events'); break
-        case 'Digit4': case 'Numpad4': e.preventDefault(); togglePanelTabRef.current('notes'); break
-        case 'Digit5': case 'Numpad5': e.preventDefault(); togglePanelTabRef.current('refs'); break
+        case 'Digit4': case 'Numpad4': e.preventDefault(); togglePanelTabRef.current('characters'); break
+        case 'Digit5': case 'Numpad5': e.preventDefault(); togglePanelTabRef.current('notes'); break
+        case 'Digit6': case 'Numpad6': e.preventDefault(); togglePanelTabRef.current('refs'); break
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -1201,18 +1205,31 @@ export default function ChapterEditorPage() {
                       )}
                       <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧3</span>
                     </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => { setActionMenuOpen(false); togglePanelTab('characters') }}
+                      title="Characters appearing in this chapter (⌥⇧4)"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
+                    >
+                      <span className="flex w-5 items-center justify-center text-accent"><LuUsers size={14} /></span>
+                      <span className="flex-1">Characters</span>
+                      {chapterCharacters.count > 0 && (
+                        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />
+                      )}
+                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧4</span>
+                    </button>
                     {/* The dot means this chapter has notes you can't currently
                         see — it clears once the panel is showing them. */}
                     <button
                       role="menuitem"
                       onClick={() => { setActionMenuOpen(false); togglePanelTab('notes') }}
-                      title="Chapter notes (⌥⇧4)"
+                      title="Chapter notes (⌥⇧5)"
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
                     >
                       <span className="flex w-5 items-center justify-center text-accent"><PiNotebookThin size={16} /></span>
                       <span className="flex-1">Notes</span>
                       {hasNotes && <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />}
-                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧4</span>
+                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧5</span>
                     </button>
                     <button
                       role="menuitem"
@@ -1443,6 +1460,10 @@ export default function ChapterEditorPage() {
         notes={notes}
         onNotesChange={setNotes}
         notesSaving={notesSaving}
+        // The committed value, not povDraft: the draft carries an
+        // autocomplete suffix mid-typing, so the badge would flicker onto
+        // whichever character the suggestion currently spelled.
+        chapterPov={chapter?.pov ?? null}
         events={{
           events: chapterEvents.events,
           tagged: chapterEvents.tagged,
@@ -1457,6 +1478,17 @@ export default function ChapterEditorPage() {
           onToggleTag: chapterEvents.setTagged,
           onRetry: chapterEvents.refresh,
           onRefresh: chapterEvents.refresh,
+        }}
+        characters={{
+          characters: chapterCharacters.characters,
+          tagged: chapterCharacters.tagged,
+          taggedIds: chapterCharacters.taggedIds,
+          count: chapterCharacters.count,
+          loading: chapterCharacters.loading,
+          unreachable: chapterCharacters.unreachable,
+          onToggleTag: chapterCharacters.setTagged,
+          onSetCategory: chapterCharacters.setCategory,
+          onRetry: chapterCharacters.refresh,
         }}
         review={reviewData}
         reviewLoading={reviewLoading}
