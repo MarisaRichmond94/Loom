@@ -75,6 +75,8 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
       { keys: '⌥⇧3', label: 'Toggle events' },
       { keys: '⌥⇧4', label: 'Toggle chapter notes' },
       { keys: '⌥⇧5', label: 'Toggle pins' },
+      { keys: '⌥⇧⏎', label: 'Save (in a dialog)' },
+      { keys: '⌥⇧⎋', label: 'Cancel (in a dialog)' },
     ],
   },
 ]
@@ -1445,8 +1447,13 @@ export default function ChapterEditorPage() {
           count: chapterEvents.count,
           loading: chapterEvents.loading,
           unreachable: chapterEvents.unreachable,
+          locations: chapterEvents.locations,
+          characterPool: chapterEvents.characterPool,
+          characterPhotos: chapterEvents.characterPhotos,
+          loadCharacterPool: chapterEvents.loadCharacterPool,
           onToggleTag: chapterEvents.setTagged,
           onRetry: chapterEvents.refresh,
+          onRefresh: chapterEvents.refresh,
         }}
         review={reviewData}
         reviewLoading={reviewLoading}

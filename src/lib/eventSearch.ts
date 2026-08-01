@@ -52,6 +52,51 @@ export function parseEventDate(date: string | null | undefined): number | null {
   return Number(m[3]) * 10000 + (month + 1) * 100 + day
 }
 
+const WEEKDAYS = [
+  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+]
+
+/** 1 → "1st", 12 → "12th", 23 → "23rd". */
+function ordinal(day: number): string {
+  if (day % 100 >= 11 && day % 100 <= 13) return `${day}th`
+  return `${day}${['th', 'st', 'nd', 'rd'][day % 10] ?? 'th'}`
+}
+
+/**
+ * A stored date → the value an <input type="date"> wants ("2009-11-16").
+ * Empty string when there is no readable date, which is what the element
+ * treats as blank.
+ */
+export function toDateInputValue(date: string | null | undefined): string {
+  const n = parseEventDate(date)
+  if (n === null) return ''
+  const y = Math.floor(n / 10000)
+  const m = Math.floor((n % 10000) / 100)
+  return `${y}-${String(m).padStart(2, '0')}-${String(n % 100).padStart(2, '0')}`
+}
+
+/**
+ * An <input type="date"> value → the display string WriteAI stores
+ * ("Monday, November 16th, 2009").
+ *
+ * The weekday is DERIVED, not carried through: the picker only yields a
+ * calendar date, and a stored weekday that disagrees with it would be a lie
+ * that survives into WriteAI's timeline. Computed in UTC so a date never
+ * shifts by one across a timezone boundary — these are story dates, not
+ * instants, and "November 16th" must stay November 16th everywhere.
+ */
+export function fromDateInputValue(value: string): string | null {
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return null
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])]
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null
+  const utc = new Date(Date.UTC(y, mo - 1, d))
+  // Rejects impossible dates the regex lets through, e.g. 2010-02-31.
+  if (utc.getUTCMonth() !== mo - 1 || utc.getUTCDate() !== d) return null
+  const monthName = MONTHS[mo - 1]
+  return `${WEEKDAYS[utc.getUTCDay()]}, ${monthName[0].toUpperCase()}${monthName.slice(1)} ${ordinal(d)}, ${y}`
+}
+
 /** Minutes since midnight for a stored time, or null. Accepts the stored
  *  24-hour form and, defensively, a 12-hour one a future WriteAI might send. */
 export function parseEventTime(time: string | null | undefined): number | null {

@@ -28,6 +28,9 @@ export type TaggedEvent = WriterEvent & { alsoIn: EventAppearance[] }
 
 export function useChapterEvents(chapterId: string) {
   const [events, setEvents] = useState<WriterEvent[]>([])
+  const [locations, setLocations] = useState<string[]>([])
+  const [characterPool, setCharacterPool] = useState<string[]>([])
+  const [characterPhotos, setCharacterPhotos] = useState<Record<string, string | null>>({})
   const [taggedIds, setTaggedIds] = useState<string[]>([])
   const [spread, setSpread] = useState<Record<string, EventAppearance[]>>({})
   const [loading, setLoading] = useState(true)
@@ -66,6 +69,44 @@ export function useChapterEvents(chapterId: string) {
     }
     setUnreachable(false)
     setEvents(data?.events ?? [])
+    // The location pool rides along with the list, so the modal's combobox
+    // costs no extra request.
+    setLocations(data?.locations ?? [])
+  }, [])
+
+  /**
+   * WriteAI's writer-character names, for the modal's picker.
+   *
+   * Lazy and called on modal open, never on mount and never on a timer:
+   * GET /api/plan/characters WRITES TO DISK — it seeds from canon on first
+   * call, prunes entries canon has reclassified, and self-heals the `books`
+   * field, saving whenever any of that changes. Treating it as a cheap read is
+   * how a panel that merely opens starts rewriting writer data.
+   */
+  const loadCharacterPool = useCallback(async () => {
+    try {
+      const res = await fetch('/api/writeai/characters')
+      if (!res.ok) return
+      const data = await res.json()
+      const rows: { name?: string; photo_url?: string | null }[] = data?.characters ?? []
+      const named = rows.filter(
+        (c): c is { name: string; photo_url?: string | null } =>
+          typeof c.name === 'string' && c.name.length > 0,
+      )
+      setCharacterPool(named.map(c => c.name).sort((a, b) => a.localeCompare(b)))
+      // WriteAI serves portraits from its own origin; rewrite to Loom's proxy
+      // so the browser never talks to :8000 and the no-cache header survives.
+      setCharacterPhotos(
+        Object.fromEntries(
+          named.map(c => {
+            const file = c.photo_url?.split('/').pop()
+            return [c.name, file ? `/api/writeai/photo/${file}` : null]
+          }),
+        ),
+      )
+    } catch {
+      // The picker degrades to "no characters found"; the form still saves.
+    }
   }, [])
 
   const refresh = useCallback(async () => {
@@ -136,6 +177,10 @@ export function useChapterEvents(chapterId: string) {
 
   return {
     events,
+    locations,
+    characterPool,
+    characterPhotos,
+    loadCharacterPool,
     tagged,
     taggedIds: taggedSet,
     /** Tag count for the header badge. Counts RESOLVED tags, so it agrees with
