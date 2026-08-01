@@ -216,6 +216,73 @@ chapters" stays distinguishable from "lookup failed". Unknown or malformed ids
 are dropped rather than failing the request, so one stale id cannot blank every
 other event's links.
 
+### 6. Character tagging (Loom ↔ WriteAI)
+
+Which chapters a writer-character appears in. **Loom owns the join; WriteAI
+owns the character.** The sibling of §5 and deliberately built from the same
+parts — `src/lib/chapterTags.ts` holds the validation and ordering both use, so
+the two tabs cannot drift into disagreeing about what a valid id or a sensible
+order is.
+
+Keyed by **chapter cuid** (`ChapterCharacter`), for the same reason events are:
+WriteAI can already say which *books* a character is in — `books`, matched by
+title — but nothing on that side is chapter-aware, and any chapter-level answer
+it tried to store would be renumbered out from under it by an insert in Loom.
+
+| Direction | Route | Purpose |
+|---|---|---|
+| Loom → WriteAI | `GET /api/writeai/characters` | The character pool, proxied onto `/api/plan/characters`. Shared with the event form. |
+| Loom → WriteAI | `PUT/DELETE /api/writeai/characters/[id]` | Create, edit and delete from the Characters tab, onto `/api/plan/characters/{id}`. |
+| Loom → WriteAI | `POST /api/writeai/characters/[id]/photo` | Portrait upload. Multipart, so it bypasses `callWriteAi` and calls `writeaiBase()` directly. |
+| Loom → WriteAI | `GET /api/writeai/photo/[file]` | Portraits, proxied from `/api/plan/photos/`. |
+| Loom internal | `GET/POST /api/chapters/[chapterId]/characters`, `DELETE /api/chapters/[chapterId]/characters/[writerCharacterId]` | Tag and untag within a chapter. |
+| WriteAI → Loom | `GET /api/plan/characters/chapter-links?ids=…` → `GET <LOOM_URL>/api/chapter-characters?characterIds=…` | The reverse lookup the Plan card renders. |
+
+**Loom never writes `writer_characters.json` directly**, for the reason given
+in §5: the FastAPI process is the file's single writer.
+
+> ⚠️ **`PUT /api/plan/characters/{id}` is the worst of the three replace-shaped
+> endpoints.** It takes a **raw `dict` with no Pydantic model at all** and does
+> `chars[i] = body`, so an omitted key does not reset to a default — it
+> *disappears*. It is also an **upsert**: an unrecognised id appends a new
+> character rather than 404ing, which is how the Characters tab creates one.
+> Both halves are load-bearing and neither is guessable from the method.
+
+Ids for new characters are minted **client-side in Loom** as `wc-` + 8 hex
+(`CharacterModal.tsx`), matching WriteAI's own format, and handed straight to
+the upsert. Validation checks the `wc-` **prefix only** — never the suffix:
+at least one live character predates the format (`draft-<ms>`), and pinning the
+shape would make a real record unsavable while catching nothing. Where an id
+reaches the filesystem the check is filename *safety* instead —
+`_safe_photo_stem()` in `plan.py`, added by LOOM-43 after that id was found
+being interpolated into a **glob whose matches are then unlinked**: `*` widened
+the pattern to every portrait in the directory. Verified, not theoretical.
+
+`GET /api/chapter-characters` carries the same **read-only** obligation as its
+event twin, pinned by `tests/unit/chapterCharactersRoute.test.ts`: numbers come
+from the canon **walk**, never the **export**, which would rewrite the
+manuscript on every Plan-page render. `readPath` is relative and null-when-
+unnumbered, exactly as in §5.
+
+Appearances sort by **`Book.order`**, not by book title. Title order is
+alphabetical order wearing chronology's clothes — it agrees for some series and
+silently disagrees for others, and a character listed in book three above book
+one reads as a bug in the tags rather than in the sort. `compareAppearances`
+carries `bookOrder` for both tabs.
+
+**Degradation** matches §5 — unknown ids hidden and never auto-deleted, every
+requested id gets a key, malformed ids dropped rather than failing the request,
+and each side names the outage rather than rendering an empty list.
+
+> ⚠️ **Characters are not yet id-identified *inside* WriteAI.** This seam is
+> id-keyed end to end, but within `writer_characters.json` a relationship still
+> references its target **by name**, and writer-events still name their cast the
+> same way. So renaming a character in Loom updates the record the tags point at
+> while leaving those references dangling. LOOM-45 is what closes this; until it
+> lands, the Characters tab guards the reachable half by refusing a new
+> character whose name duplicates an existing one. **This is the one place the
+> character seam is weaker than the event seam** — do not assume symmetry.
+
 ## Identity
 
 **Loom's cuids are the identity of a series and a book across both apps.**
