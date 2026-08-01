@@ -2,13 +2,14 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute } from 'react-icons/lu'
+import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays } from 'react-icons/lu'
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
 import SidePanel, { minWidthForTab, type PanelTab } from '@/components/editor/SidePanel'
 import { useChapterReview } from '@/components/editor/ReviewPanel'
 import { type PinnedText } from '@/components/editor/ReferencePanel'
 import { useChapterNotes } from '@/components/editor/useChapterNotes'
+import { useChapterEvents } from '@/components/editor/useChapterEvents'
 import { useRegisterShortcuts, type ShortcutGroup } from '@/lib/shortcuts'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import { notify } from '@/lib/notifications'
@@ -71,8 +72,9 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
     group: 'Side Panel',
     items: [
       { keys: '⌥⇧2', label: 'Toggle reviews' },
-      { keys: '⌥⇧3', label: 'Toggle chapter notes' },
-      { keys: '⌥⇧4', label: 'Toggle pins' },
+      { keys: '⌥⇧3', label: 'Toggle events' },
+      { keys: '⌥⇧4', label: 'Toggle chapter notes' },
+      { keys: '⌥⇧5', label: 'Toggle pins' },
     ],
   },
 ]
@@ -127,6 +129,7 @@ export default function ChapterEditorPage() {
   panelTabRef.current = panelTab
 
   const { notes, setNotes, saving: notesSaving, hasNotes } = useChapterNotes(chapterId)
+  const chapterEvents = useChapterEvents(chapterId)
   // The same book lookup as `currentBook` further down, but that one sits
   // after `if (!chapter) return <ChapterSkeleton />` — a hook cannot live past
   // an early return. Optional-chained so it is simply undefined until the
@@ -153,8 +156,8 @@ export default function ChapterEditorPage() {
   function closePanel() {
     setPanelOpen(false)
   }
-  // One rule for both ⌥⇧2 and ⌥⇧3: closed → open on my tab; open on the other
-  // tab → switch to mine; open on my tab → close.
+  // One rule for every tab hotkey (⌥⇧2–5): closed → open on my tab; open on
+  // another tab → switch to mine; open on my tab → close.
   function togglePanelTab(tab: PanelTab) {
     if (!panelOpenRef.current) { openPanel(tab); return }
     if (panelTabRef.current !== tab) { setPanelTab(tab); return }
@@ -690,12 +693,15 @@ export default function ChapterEditorPage() {
           break
         case 'Equal': case 'NumpadAdd': e.preventDefault(); adjustProseScale(0.1); break
         case 'Minus': case 'NumpadSubtract': e.preventDefault(); adjustProseScale(-0.1); break
-        // The dock's three tabs, numbered in the order they appear in it.
-        // All three are unconditional now: 2 used to be Pins and did nothing
-        // unless something was already pinned, which read as a broken key.
+        // The dock's four tabs, numbered in the order they appear in it. All
+        // unconditional: 2 used to be Pins and did nothing unless something was
+        // already pinned, which read as a broken key. Events took 3 when it was
+        // inserted beside Reviews (LOOM-36), pushing Notes and Pins along — the
+        // numbers follow the strip, so they have to move when it does.
         case 'Digit2': case 'Numpad2': e.preventDefault(); togglePanelTabRef.current('review'); break
-        case 'Digit3': case 'Numpad3': e.preventDefault(); togglePanelTabRef.current('notes'); break
-        case 'Digit4': case 'Numpad4': e.preventDefault(); togglePanelTabRef.current('refs'); break
+        case 'Digit3': case 'Numpad3': e.preventDefault(); togglePanelTabRef.current('events'); break
+        case 'Digit4': case 'Numpad4': e.preventDefault(); togglePanelTabRef.current('notes'); break
+        case 'Digit5': case 'Numpad5': e.preventDefault(); togglePanelTabRef.current('refs'); break
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -1173,18 +1179,35 @@ export default function ChapterEditorPage() {
                         </button>
                       )}
                     </div>
+                    {/* Sits beside Notes rather than beside Review because both
+                        are things the chapter *carries*, not things you run on
+                        it. The dot counts resolved tags, so it agrees with what
+                        the panel will actually list. */}
+                    <button
+                      role="menuitem"
+                      onClick={() => { setActionMenuOpen(false); togglePanelTab('events') }}
+                      title="Events referenced in this chapter (⌥⇧3)"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
+                    >
+                      <span className="flex w-5 items-center justify-center text-accent"><LuCalendarDays size={14} /></span>
+                      <span className="flex-1">Events</span>
+                      {chapterEvents.count > 0 && (
+                        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />
+                      )}
+                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧3</span>
+                    </button>
                     {/* The dot means this chapter has notes you can't currently
                         see — it clears once the panel is showing them. */}
                     <button
                       role="menuitem"
                       onClick={() => { setActionMenuOpen(false); togglePanelTab('notes') }}
-                      title="Chapter notes (⌥⇧3)"
+                      title="Chapter notes (⌥⇧4)"
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
                     >
                       <span className="flex w-5 items-center justify-center text-accent"><PiNotebookThin size={16} /></span>
                       <span className="flex-1">Notes</span>
                       {hasNotes && <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />}
-                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧3</span>
+                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧4</span>
                     </button>
                     <button
                       role="menuitem"
@@ -1415,6 +1438,16 @@ export default function ChapterEditorPage() {
         notes={notes}
         onNotesChange={setNotes}
         notesSaving={notesSaving}
+        events={{
+          events: chapterEvents.events,
+          tagged: chapterEvents.tagged,
+          taggedIds: chapterEvents.taggedIds,
+          count: chapterEvents.count,
+          loading: chapterEvents.loading,
+          unreachable: chapterEvents.unreachable,
+          onToggleTag: chapterEvents.setTagged,
+          onRetry: chapterEvents.refresh,
+        }}
         review={reviewData}
         reviewLoading={reviewLoading}
         reviewCtx={{
