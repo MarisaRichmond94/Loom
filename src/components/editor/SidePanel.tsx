@@ -138,14 +138,24 @@ export default function SidePanel({
   // way; collapsing costs the always-on hint, not the affordance.
   const labelled = tabsFitLabelled(width, TAB_COUNT)
 
-  function tabButton(value: PanelTab, icon: ReactNode, label: string, hint: string) {
+  // `count` rides in the tab rather than in the header's right-hand slot,
+  // where "3 tagged" was eating enough width to collapse every label early.
+  // A pill costs a fraction of that and only appears when there is something
+  // to count.
+  function tabButton(
+    value: PanelTab,
+    icon: ReactNode,
+    label: string,
+    hint: string,
+    count?: number,
+  ) {
     const active = tab === value
     return (
       <button
         role="tab"
         aria-selected={active}
-        aria-label={`${label} (${hint})`}
-        title={`${label} (${hint})`}
+        aria-label={count ? `${label}, ${count} tagged (${hint})` : `${label} (${hint})`}
+        title={count ? `${label} — ${count} tagged (${hint})` : `${label} (${hint})`}
         onClick={() => onTabChange(value)}
         className={`flex items-center gap-1.5 h-7 rounded-md text-[11px] font-medium transition ${
           labelled ? 'px-2' : 'px-1.5'
@@ -155,6 +165,18 @@ export default function SidePanel({
       >
         {icon}
         {labelled && label}
+        {/* After the label when there is one, beside the icon when there is
+            not — a count that trails the word reads as "Events: 3", where one
+            wedged before it reads as a badge on the icon and competes with it. */}
+        {count ? (
+          <span
+            className={`rounded-full px-1 text-[9px] tabular-nums leading-[1.4] ${
+              active ? 'bg-accent/25 text-accent' : 'bg-surface-overlay text-ink-faint'
+            }`}
+          >
+            {count}
+          </span>
+        ) : null}
       </button>
     )
   }
@@ -210,8 +232,8 @@ export default function SidePanel({
               to already be doing it. */}
           <div role="tablist" className="flex items-center gap-0.5">
             {tabButton('review', <LuScanText size={13} />, 'Reviews', '⌥⇧2')}
-            {tabButton('events', <LuCalendarDays size={13} />, 'Events', '⌥⇧3')}
-            {tabButton('characters', <LuUsers size={13} />, 'Characters', '⌥⇧4')}
+            {tabButton('events', <LuCalendarDays size={13} />, 'Events', '⌥⇧3', events.count)}
+            {tabButton('characters', <LuUsers size={13} />, 'Characters', '⌥⇧4', characters.count)}
             {tabButton('notes', <PiNotebookThin size={14} />, 'Notes', '⌥⇧5')}
             {tabButton('refs', <LuPin size={12} />, 'Pins', '⌥⇧6')}
           </div>
@@ -219,16 +241,6 @@ export default function SidePanel({
           <div className="ml-auto flex items-center gap-2 shrink-0">
             {tab === 'notes' && notesSaving && (
               <span className="text-[10px] text-ink-faint italic">Saving…</span>
-            )}
-            {tab === 'events' && events.count > 0 && (
-              <span className="text-[10px] tabular-nums text-ink-faint">
-                {events.count} tagged
-              </span>
-            )}
-            {tab === 'characters' && characters.count > 0 && (
-              <span className="text-[10px] tabular-nums text-ink-faint">
-                {characters.count} tagged
-              </span>
             )}
             {tab === 'refs' && hasPins && (
               <button

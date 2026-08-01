@@ -5,6 +5,8 @@ import { createPortal } from 'react-dom'
 import { LuCalendar, LuCheck, LuClock, LuMapPin, LuPlus, LuSearch, LuTrash2, LuX } from 'react-icons/lu'
 import { notify } from '@/lib/notifications'
 import { fromDateInputValue, toDateInputValue, type WriterEvent } from '@/lib/eventSearch'
+import { portalHost } from '@/lib/portalHost'
+import { AnchoredPopover, LIST_MAX_HEIGHT, useClickOutside } from './AnchoredPopover'
 
 // Create or edit a WriteAI writer-event, without leaving Loom (LOOM-37).
 //
@@ -30,104 +32,8 @@ import { fromDateInputValue, toDateInputValue, type WriterEvent } from '@/lib/ev
 // <main> is an ancestor of the dock and only sets overflow, which neither
 // clips nor re-anchors a fixed child. It satisfies both.
 
-/** Where portalled UI belongs — see the note above. */
-function portalHost(): Element {
-  return (typeof document !== 'undefined' && document.querySelector('main')) || document.body
-}
-
 const FIELD =
   'w-full rounded-lg border border-accent/20 bg-surface-overlay/40 px-3 py-2 text-sm text-ink outline-none transition focus:border-accent placeholder:text-ink-faint'
-
-/** Four rows, then scroll. Matches the row height below (py-1.5 + 11px text). */
-const LIST_MAX_HEIGHT = 4 * 28
-
-/** Close a popover when the pointer goes down outside ALL of the given
- *  elements. Takes several because a portalled dropdown is not a DOM
- *  descendant of the control that opened it. */
-function useClickOutside(
-  refs: React.RefObject<HTMLElement | null>[],
-  onOutside: () => void,
-  active: boolean,
-) {
-  useEffect(() => {
-    if (!active) return
-    function onDown(e: MouseEvent) {
-      const target = e.target as Node
-      if (refs.some(r => r.current?.contains(target))) return
-      onOutside()
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onOutside, active])
-}
-
-/**
- * A dropdown anchored to a control but rendered at the document root.
- *
- * The dialog scrolls its own body, and an `overflow` ancestor CLIPS absolutely
- * positioned descendants — which is why the location list was being cut off at
- * the modal's edge. Portalling escapes the clip; fixed coordinates taken from
- * the anchor keep it attached.
- *
- * Flips above the anchor when there is not enough room below, so a control near
- * the bottom of the modal still shows its options.
- */
-function AnchoredPopover({
-  anchorRef,
-  popoverRef,
-  children,
-  width,
-  className = '',
-}: {
-  anchorRef: React.RefObject<HTMLElement | null>
-  popoverRef: React.RefObject<HTMLDivElement | null>
-  children: React.ReactNode
-  /** Defaults to the anchor's width — right for a full-width field, wrong for
-   *  a small button, which wants a readable list instead. */
-  width?: number
-  className?: string
-}) {
-  const [style, setStyle] = useState<React.CSSProperties | null>(null)
-
-  useEffect(() => {
-    function place() {
-      const anchor = anchorRef.current
-      if (!anchor) return
-      const r = anchor.getBoundingClientRect()
-      // Header + list at full height, so the flip decision does not depend on
-      // how many results happen to match.
-      const needed = LIST_MAX_HEIGHT + 56
-      const below = window.innerHeight - r.bottom
-      const w = width ?? r.width
-      setStyle(
-        below < needed && r.top > below
-          ? { position: 'fixed', left: r.left, width: w, bottom: window.innerHeight - r.top + 4 }
-          : { position: 'fixed', left: r.left, width: w, top: r.bottom + 4 },
-      )
-    }
-    place()
-    window.addEventListener('resize', place)
-    // Capture phase so the modal's own scroll container is heard too.
-    window.addEventListener('scroll', place, true)
-    return () => {
-      window.removeEventListener('resize', place)
-      window.removeEventListener('scroll', place, true)
-    }
-  }, [anchorRef, width])
-
-  if (!style) return null
-  return createPortal(
-    <div
-      ref={popoverRef}
-      style={style}
-      className={`z-[300] overflow-hidden rounded-md border border-accent/20 bg-surface-raised shadow-lg ${className}`}
-    >
-      {children}
-    </div>,
-    portalHost(),
-  )
-}
 
 /**
  * The character picker, matching WriteAI's so the two apps do not teach

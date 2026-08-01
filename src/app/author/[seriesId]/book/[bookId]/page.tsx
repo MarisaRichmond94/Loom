@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { LuUser, LuCheck, LuPencil, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff, LuDownload, LuFileText, LuSave, LuDatabaseBackup } from 'react-icons/lu'
 import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
+import { cropImageToBlob } from '@/lib/cropImage'
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import BookSkeleton from '@/components/editor/BookSkeleton'
@@ -47,22 +48,6 @@ type Soundtrack = {
   hasAlbumArt: boolean
 }
 
-async function cropImageToBlob(imageSrc: string, pixelCrop: Area): Promise<Blob> {
-  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => resolve(img)
-    img.onerror = reject
-    img.src = imageSrc
-  })
-  const canvas = document.createElement('canvas')
-  canvas.width = pixelCrop.width
-  canvas.height = pixelCrop.height
-  const ctx = canvas.getContext('2d')!
-  ctx.drawImage(image, pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height, 0, 0, pixelCrop.width, pixelCrop.height)
-  return new Promise((resolve, reject) =>
-    canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas empty')), 'image/jpeg', 0.92),
-  )
-}
 
 // Covers arrive straight from art tools as multi-MB PNGs; downscale to a
 // display-appropriate JPEG before upload so /covers never accumulates
