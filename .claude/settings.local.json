@@ -31,7 +31,8 @@
       "mcp__atlassian__getTransitionsForJiraIssue",
       "mcp__atlassian__transitionJiraIssue",
       "Bash(bash -c ' *)",
-      "mcp__atlassian__getJiraProjectIssueTypesMetadata"
+      "mcp__atlassian__getJiraProjectIssueTypesMetadata",
+      "mcp__atlassian__getAccessibleAtlassianResources"
     ],
     "deny": [
       "Bash(rm -rf *)"
