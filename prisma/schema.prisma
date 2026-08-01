@@ -128,6 +128,7 @@ model Chapter {
   inboundChoices Choice[]       @relation("TargetChapter")
   narrations     ChapterNarration[]
   note           ChapterNote?
+  events         ChapterEvent[]
 
   @@index([bookId, order])
 }
@@ -148,6 +149,36 @@ model ChapterNote {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+}
+
+// A WriteAI writer-event referenced in this chapter (LOOM-32).
+//
+// Events themselves live in WriteAI (writer_data/writer_events.json); this
+// table holds ONLY the id. Nothing about the event — title, date, characters —
+// is copied here, so there is no second source of truth to drift and no sync
+// to keep running. It is a foreign key across the app boundary, not a mirror.
+//
+// The point of the table is that it is keyed by chapter *cuid*. WriteAI used to
+// tag chapters as {book title, chapter number}, both of which move: inserting a
+// chapter renumbered every tag in the book, silently. Loom already renumbers
+// chapters on insert, so a cuid-keyed tag simply follows its chapter.
+//
+// An id that no longer resolves (the event was deleted in WriteAI) is treated
+// as unknown identity — hidden from the UI, never auto-deleted. Same
+// degradation contract as the rest of the seam; see INTEGRATION.md.
+model ChapterEvent {
+  id            String   @id @default(cuid())
+  chapterId     String
+  writerEventId String
+  createdAt     DateTime @default(now())
+  chapter       Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  // Tagging the same event twice is a no-op, not an error — the API relies on
+  // this to make POST idempotent rather than checking first and racing.
+  @@unique([chapterId, writerEventId])
+  // Answers "which OTHER chapters is this event tagged in?" — the sidebar's
+  // "also in Ch. 7", which is the whole reason to look at the tab.
+  @@index([writerEventId])
 }
 
 // Cached text-to-speech narration for one *variant* of a chapter — a specific

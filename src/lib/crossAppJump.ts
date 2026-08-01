@@ -79,13 +79,45 @@ export async function reviewNumberForChapter(
   bookId: string,
   chapterId: string,
 ): Promise<number | null> {
+  const numbers = await canonNumbersForBook(seriesId, bookId)
+  return numbers.get(chapterId) ?? null
+}
+
+/**
+ * Every chapter's canon display number for one book, from a single walk.
+ *
+ * Same mapping as reviewNumberForChapter — which is now a lookup into this —
+ * but walking once and keeping the whole book. Callers that need numbers for
+ * several chapters (the event/character tag spread, LOOM-32) would otherwise
+ * reload and re-walk the manuscript once per chapter.
+ *
+ * A chapter absent from the map, or mapped to null, has no canon address:
+ * unnumbered and not the prologue, or skipped by the walk. That is a real
+ * state, not an error — such chapters are still taggable, just not linkable.
+ *
+ * Deliberately READ-ONLY, for the same reason reviewNumberForChapter is: the
+ * canon export returns the same numbers but writes the manuscript to ~/Writing
+ * on its way there, and these callers run on ordinary reads.
+ */
+export async function canonNumbersForBook(
+  seriesId: string,
+  bookId: string,
+): Promise<Map<string, number | null>> {
+  const out = new Map<string, number | null>()
   const data = await loadManuscriptBook(seriesId, bookId)
-  if (!data) return null
+  if (!data) return out
   const walk = walkBook(data.chapters, data.variables, defaultStoryState(data.variables), {})
-  const walked = walk.chapters.find(ch => ch.id === chapterId)
-  if (!walked) return null
-  if (walked.numbered) return Number(walked.label)
-  return walked.label.trim().toLowerCase() === 'prologue' ? 0 : null
+  for (const walked of walk.chapters) {
+    out.set(
+      walked.id,
+      walked.numbered
+        ? Number(walked.label)
+        : walked.label.trim().toLowerCase() === 'prologue'
+          ? 0
+          : null,
+    )
+  }
+  return out
 }
 
 /**
