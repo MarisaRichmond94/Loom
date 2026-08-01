@@ -63,6 +63,6 @@ dev.db.pre-*
 .claude/*
 graphify-out/*
 
-# Python bytecode — ops/ is the only Python in this repo (KAN-23)
+# Python bytecode — ops/ is the only Python in this repo (LOOM-23)
 __pycache__/
 *.pyc

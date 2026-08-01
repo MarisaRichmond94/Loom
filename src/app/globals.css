@@ -1,13 +1,13 @@
 @import "tailwindcss";
 
 @theme {
-  /* Type (KAN-21). Content is Inter, loaded by next/font in layout.tsx; chrome
+  /* Type (LOOM-21). Content is Inter, loaded by next/font in layout.tsx; chrome
      stays on the native UI face. Both apps carry this split — see TOKENS.md. */
   --font-sans: var(--font-inter), system-ui, sans-serif;
   --font-chrome: system-ui, -apple-system, sans-serif;
 
-  /* The shared palette (KAN-6), promoted out of the UNIFIED_CHROME flag when
-     KAN-8 retired it. Surfaces and ink are WriteAI's cooler ramp; the accent is
+  /* The shared palette (LOOM-6), promoted out of the UNIFIED_CHROME flag when
+     LOOM-8 retired it. Surfaces and ink are WriteAI's cooler ramp; the accent is
      Loom's. Canonical values live in TOKENS.md, mirrored in both repos. */
   --color-surface-base: #0f1117;
   --color-surface-raised: #1a1d27;
@@ -39,7 +39,7 @@
 }
 
 /* ---------------------------------------------------------------------------
-   Always-dark chrome (KAN-17).
+   Always-dark chrome (LOOM-17).
 
    Some chrome must stay dark even inside .light-body — the chapter editor's
    sticky footer and its skeleton, which mirror the reader's bars. The reader
@@ -51,7 +51,7 @@
    .chrome-dark maps the theme tokens back onto it. Descendants then use
    ordinary bg-surface-raised / text-ink utilities.
 
-   These were previously hardcoded hexes in inline styles (KAN-17), which
+   These were previously hardcoded hexes in inline styles (LOOM-17), which
    pinned that chrome to the old palette. Keep --dark-* in step with the
    --color-* values in @theme.
    --------------------------------------------------------------------------- */
@@ -74,7 +74,7 @@
 body {
   /* var() rather than literals so .light-body reaches the page background.
      These were hardcoded, which pinned the body to the old dark violet
-     regardless of theme (KAN-6). */
+     regardless of theme (LOOM-6). */
   background-color: var(--color-surface-base);
   color: var(--color-ink);
   cursor: default;
@@ -85,7 +85,7 @@ body {
   user-select: none;
 }
 
-/* The chapter editor's header is sticky (KAN-30), so any scrollIntoView that
+/* The chapter editor's header is sticky (LOOM-30), so any scrollIntoView that
    lands a block at the top of the scroller would tuck it underneath. The page
    publishes the live header height; this keeps every scroll target clear of it
    without each call site having to know the offset. Falls back to 0 elsewhere. */
@@ -135,7 +135,7 @@ button, a, select, [role="button"] {
   bottom: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
-  /* Tokenised (KAN-6): the footnote tooltip used to hardcode the old violet
+  /* Tokenised (LOOM-6): the footnote tooltip used to hardcode the old violet
      overlay and cream ink, so it stayed on the old palette under the flag. */
   background: var(--color-surface-overlay);
   color: var(--color-ink);
@@ -163,7 +163,7 @@ button, a, select, [role="button"] {
      --color-accent-rgb is defined nowhere, so the literal fallback was always
      what rendered. A dead var reference reads as tokenised while behaving like
      a hardcode, which is worse than an honest literal. color-mix works
-     directly off the hex token (KAN-6). */
+     directly off the hex token (LOOM-6). */
   color: color-mix(in srgb, var(--color-accent) 85%, transparent);
   text-decoration: underline;
   text-decoration-style: dotted;
@@ -184,7 +184,7 @@ button, a, select, [role="button"] {
   transition: background-color 0.1s linear, box-shadow 0.1s linear;
 }
 .narration-word.is-active {
-  /* Same dead --color-accent-rgb reference as .character-ref had (KAN-6). */
+  /* Same dead --color-accent-rgb reference as .character-ref had (LOOM-6). */
   background-color: color-mix(in srgb, var(--color-accent) 32%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
@@ -265,12 +265,12 @@ mark.search-match,
 
 .light-body .ProseMirror,
 .light-body .ProseMirror * {
-  /* var() rather than the literal (KAN-6) — same value, but it now tracks
+  /* var() rather than the literal (LOOM-6) — same value, but it now tracks
      --color-ink instead of silently drifting if the light palette changes. */
   color: var(--color-ink);
 }
 
-/* Review panel loading states (KAN-22).
+/* Review panel loading states (LOOM-22).
    The status phrase changes every few seconds while the reviewer reads; it
    rises into place rather than snapping, so the wait has some motion to it.
    The hand-off to real text fades rather than cutting, so the moment the

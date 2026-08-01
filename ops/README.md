@@ -37,8 +37,8 @@ Logs land in `~/Backups/_logs/`.
 
 | File | Purpose |
 |---|---|
-| `book_backup.sh` | Nightly manuscripts + Loom DB + `.loom.json` → local, iCloud, Google Drive. Validates its outputs (KAN-14). |
-| `loom_db_snapshot.sh` | Intraday `dev.db` snapshot, matched to writing sessions (KAN-15). |
+| `book_backup.sh` | Nightly manuscripts + Loom DB + `.loom.json` → local, iCloud, Google Drive. Validates its outputs (LOOM-14). |
+| `loom_db_snapshot.sh` | Intraday `dev.db` snapshot, matched to writing sessions (LOOM-15). |
 | `lib/backup_verify.sh` | Output validators, sourced by the above. Side-effect free so a harness can exercise them against corrupted fixtures. |
 | `check_loom_json.py` | Parses `.loom.json` snapshots and asserts real content. |
 | `generate_audiobook.sh` / `build_audiobooks.sh` / `build_m4b.sh` | TTS audiobook build. |
@@ -51,7 +51,7 @@ They run unattended against irreplaceable data, so:
 
 * **Validate outputs, not exit codes.** Every failure this chain has had was a
   command exiting 0 while producing something wrong. See `lib/backup_verify.sh`
-  and KAN-14.
+  and LOOM-14.
 * **Never run `book_backup.sh` directly to test it** — it drives Pages,
   regenerates audiobooks and ebooks, and uploads to Drive. Copy it and `sed` the
   config vars (`LOCAL_BACKUP_ROOT`, `ICLOUD_BOOKS_DIR`, `GDRIVE_ROOT`,

@@ -31,19 +31,19 @@ KEEP_LOCAL_DAYS=30
 LOOM_DB="$HOME/Documents/GitHub/Loom/dev.db"
 LOOM_SNAPSHOT_DIR="$HOME/Backups/Loom"
 
-# WriteAI's writer-authored state (KAN-27). Small and IRREPLACEABLE: timeline
+# WriteAI's writer-authored state (LOOM-27). Small and IRREPLACEABLE: timeline
 # events, character-name decisions, writer characters, and every review and
 # explore conversation. Its sibling data/ is ~11GB but derived — a corrupted
 # index is a re-ingest, never a loss — so only this directory is backed up.
 # It is gitignored, so before this nothing covered it at all.
 WRITER_DATA_DIR="$HOME/Documents/GitHub/WriteAi/writer_data"
 
-# Book cover images (KAN-26). Gitignored, and the .loom.json export stores only
+# Book cover images (LOOM-26). Gitignored, and the .loom.json export stores only
 # coverPath — the string, never the bytes. So before this they existed in
 # exactly one place on one disk. Small (~1.6MB) and irreplaceable.
 COVERS_DIR="$HOME/Documents/GitHub/Loom/public/covers"
 
-# WriteAI index essentials (KAN-28). data/ is 13GB and mostly derived, but
+# WriteAI index essentials (LOOM-28). data/ is 13GB and mostly derived, but
 # "derived" is not the same as "cheap to lose": rebuilding it re-runs LLM
 # extraction, and sync has cost $50 all-time with one full re-ingest at $35.
 # Roughly 8MB carries essentially all of that spend.
@@ -53,7 +53,7 @@ WRITEAI_DATA_DIR="$HOME/Documents/GitHub/WriteAi/data"
 # re-chunking never trips it.
 MIN_CHUNKS=500
 
-# Output validation (KAN-14). Exit codes only prove a step ran; these prove
+# Output validation (LOOM-14). Exit codes only prove a step ran; these prove
 # what it produced is usable.
 VERIFY_LIB="$HOME/Scripts/lib/backup_verify.sh"
 LOOM_JSON_CHECKER="$HOME/Scripts/check_loom_json.py"
@@ -61,7 +61,7 @@ LOOM_JSON_CHECKER="$HOME/Scripts/check_loom_json.py"
 # on 2026-07-30 and the count only grows, so 200 catches a catastrophically
 # empty snapshot with wide margin. Deliberately NOT set just under the true
 # count: a threshold that trips on ordinary reorganisation becomes noise, which
-# is the exact failure KAN-13 is about.
+# is the exact failure LOOM-13 is about.
 MIN_CHAPTERS=200
 
 NOW_DATE="$(date +%Y-%m-%d)"
@@ -120,7 +120,7 @@ for f in "${BOOK_FILES[@]}"; do
   [[ -e "$f" ]] || fail "File not found: $f"
 done
 
-# Is each book's manuscript on disk current with Loom's database? (KAN-13)
+# Is each book's manuscript on disk current with Loom's database? (LOOM-13)
 #
 # This used to compare each .pages mtime against dev.db's, and warn when they
 # were more than a day apart. That could not work. dev.db is touched by an edit
@@ -367,7 +367,7 @@ if [[ -d "$LOOM_SNAPSHOT_DIR" ]]; then
 fi
 
 ###############################################################################
-# 1b-ii) Book cover images (KAN-26)                                           #
+# 1b-ii) Book cover images (LOOM-26)                                           #
 #                                                                             #
 #     Gitignored, and .loom.json carries only coverPath — never the bytes.    #
 #     Nothing backed these up, so they lived on one disk in one place. A       #
@@ -398,7 +398,7 @@ if [[ -d "$COVERS_DIR" ]]; then
 fi
 
 ###############################################################################
-# 1c) WriteAI writer-authored state (KAN-27)                                  #
+# 1c) WriteAI writer-authored state (LOOM-27)                                  #
 #                                                                             #
 #     Nothing covered this before: writer_data/ is gitignored, so it was in   #
 #     neither the repo nor any backup. It holds the writer's timeline events, #
@@ -431,7 +431,7 @@ if [[ -d "$WRITER_DATA_DIR" ]]; then
     # about whether the JSON survived. Structural damage fails; entry counts
     # are reported but never asserted — writer_events.json can legitimately be
     # empty, and a floor that trips on a legitimate state becomes the nightly
-    # noise KAN-13 exists to remove.
+    # noise LOOM-13 exists to remove.
     if [[ "$VERIFY_AVAILABLE" == 1 ]]; then
       if wd_out="$(verify_writer_data "$WD_DEST")"; then
         wd_ok=1
@@ -459,7 +459,7 @@ else
 fi
 
 ###############################################################################
-# 1d) WriteAI index essentials (KAN-28)                                       #
+# 1d) WriteAI index essentials (LOOM-28)                                       #
 #                                                                             #
 #     data/ is 13GB and was excluded as "derived". True, but derived is not    #
 #     the same as cheap: rebuilding it re-runs LLM extraction. Sync has cost   #
@@ -478,7 +478,7 @@ fi
 #       rich_text (5.4MB)      same                                            #
 #       backups/ (12GB)        WriteAI's own pre-ingest snapshots, 112 of them #
 #                              and never pruned. Backing up backups is not a   #
-#                              backup strategy. See KAN-28 for retention.      #
+#                              backup strategy. See LOOM-28 for retention.      #
 #                                                                             #
 #     sqlite3 .backup, NOT cp: this database carries a multi-MB WAL, so a raw  #
 #     file copy of the main file alone is silently incomplete.                 #
@@ -575,7 +575,7 @@ fi
 
 # Optional cleanup of old local backups.
 #
-# Gated on validation (KAN-14). This prune assumes recent backups are good and
+# Gated on validation (LOOM-14). This prune assumes recent backups are good and
 # deletes older ones on that basis. If tonight's outputs did not verify, that
 # assumption is exactly what is in doubt — and had snapshots been silently
 # invalid for a month, pruning would delete the last VALID copy. When in doubt,
@@ -627,7 +627,7 @@ fi
 
 # "Successfully" now means the outputs were checked, not merely that the
 # commands exited 0. Every failure this chain has had logged success while
-# producing a bad artifact — that is the whole point of KAN-14.
+# producing a bad artifact — that is the whole point of LOOM-14.
 if [[ "$VALIDATION_OK" == 1 ]]; then
   if [[ "$VERIFY_AVAILABLE" == 1 ]]; then
     log "Backup finished successfully — all outputs verified."

@@ -69,7 +69,7 @@ form (fallback, retained indefinitely). WriteAI configures `VITE_LOOM_URL`
 - **Loom → WriteAI:** plain link to `NEXT_PUBLIC_WRITEAI_URL`
   (default `http://localhost:5173`), plus the review deep link below.
 
-### 3. Review — now runs inside Loom (KAN-22)
+### 3. Review — now runs inside Loom (LOOM-22)
 
 The chapter editor's Review button opens Loom's own review panel. It no
 longer opens WriteAI, and **Loom no longer constructs the deep link below** —
@@ -109,7 +109,7 @@ WriteAI's own review pane is unchanged and remains fully usable.
 
 **Retained, but no longer produced by Loom.** The WriteAI-side route still
 works, so links already saved or shared keep resolving. Note it is
-title-addressed, which KAN-12 exists to move away from — do not extend it.
+title-addressed, which LOOM-12 exists to move away from — do not extend it.
 
 The chapter editor's Review button used to save the book's canon manuscript,
 then open:
@@ -156,7 +156,7 @@ reconciliation safety net when either app was closed.
 Loom mints them; WriteAI reads them from the manifest sidecar and stores them.
 They are stable across renaming, reordering, and re-ingestion.
 
-Resolved by KAN-12. The former caveat — *"identity is title-based, so renaming
+Resolved by LOOM-12. The former caveat — *"identity is title-based, so renaming
 breaks the jump links and folder matching"* — no longer describes the contract.
 
 **What each app holds**
@@ -183,4 +183,4 @@ breaks the jump links and folder matching"* — no longer describes the contract
 **Degradation contract.** A book that has never been canon-exported has no
 manifest and therefore no cuid. Every consumer treats a missing id as *unknown
 identity* and falls back to number or title matching — never as *no match*. So
-the pre-KAN-12 behaviour remains the worst case, never a regression.
+the pre-LOOM-12 behaviour remains the worst case, never a regression.

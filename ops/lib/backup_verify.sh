@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Output validation for book_backup.sh (KAN-14).
+# Output validation for book_backup.sh (LOOM-14).
 #
 # The backup chain's failures have all been the same shape: a command exits 0,
 # the log says success, and the artifact is wrong. Exit codes tell you a step
@@ -8,7 +8,7 @@
 # Sourcing this file must have no side effects — it defines functions only, so
 # it can be sourced by a test harness and exercised against deliberately
 # corrupted fixtures. A check that has never been seen to fail is not known to
-# work (same reasoning as the KAN-11 restore drill).
+# work (same reasoning as the LOOM-11 restore drill).
 #
 # Each function echoes human-readable diagnostics on stdout and returns 0 (ok)
 # or 1 (problem). Callers are expected to log the output and treat a non-zero
@@ -23,7 +23,7 @@
 # and would otherwise be reported as a healthy backup.
 #
 # `table` defaults to Chapter (Loom's dev.db). WriteAI's series_metadata.sqlite
-# passes "chunks" instead — same checks, different schema (KAN-28).
+# passes "chunks" instead — same checks, different schema (LOOM-28).
 verify_db_snapshot() {
   local gz="$1"
   local min_chapters="${2:-1}"
@@ -104,12 +104,12 @@ verify_loom_json() {
 # events, character-name decisions, writer characters, and every review and
 # explore conversation. Its sibling data/ is ~11GB but derived: a corrupted
 # index is a re-ingest, never a loss. This one has no such fallback, and until
-# KAN-27 nothing backed it up at all.
+# LOOM-27 nothing backed it up at all.
 #
 # Fails on structural damage only — unparseable JSON, an empty file, a missing
 # directory. Entry counts are REPORTED, never asserted: writer_events.json can
 # legitimately be empty, and a floor that trips on a legitimate state becomes
-# the nightly noise KAN-13 exists to remove.
+# the nightly noise LOOM-13 exists to remove.
 verify_writer_data() {
   local dir="$1"
   local py out rc

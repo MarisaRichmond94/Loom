@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Intraday snapshots of Loom's database (KAN-15).
+# Intraday snapshots of Loom's database (LOOM-15).
 #
 # Loom's dev.db IS production. book_backup.sh runs once nightly at 22:30, so up
 # to ~24h of writing can sit unbacked. This runs at 08:30 and 18:00 — chosen
@@ -12,7 +12,7 @@
 #
 # Unlike the nightly script, this one VALIDATES its output before claiming
 # success: gunzip -t, a real restore, PRAGMA integrity_check, and a content
-# floor. That is deliberate — see KAN-14. Every backup bug found so far was a
+# floor. That is deliberate — see LOOM-14. Every backup bug found so far was a
 # step that checked its exit code and never looked at what it produced.
 #
 # Safe to run while Loom is live: `sqlite3 .backup` is designed for it, and
@@ -105,8 +105,8 @@ fi
 # point storing a second identical snapshot — but WRONG for an on-demand
 # backup: the writer asks for one because they are about to do something
 # risky, and exiting 0 having produced nothing would report success for work
-# that never happened. That is the exact failure class KAN-14 exists to stop.
-# Loom's "Back up now" (KAN-26) sets it.
+# that never happened. That is the exact failure class LOOM-14 exists to stop.
+# Loom's "Back up now" (LOOM-26) sets it.
 if [[ "${FORCE:-0}" == "1" && -n "$newest_snap" && ! "$LOOM_DB" -nt "$newest_snap" ]]; then
   log "FORCE=1 — snapshotting even though dev.db is not newer than $(basename "$newest_snap")."
 fi

@@ -14,12 +14,12 @@ only swap it in deliberately, at the end, if you decide to.
 |------|-------|----------|
 | `loom-dev.db.gz` | `~/Backups/<date>/` **and** `gdrive:Backups/<date>/` | The whole database, gzipped (~24 MB) |
 | `loom-dev-<HHMM>.db.gz` | same | Intraday snapshot (08:30, 18:00) — same contents, more recent |
-| `loom-dev-<HHMMSS>-manual.db.gz` | same | On-demand snapshot from Settings → Backups (KAN-26) |
+| `loom-dev-<HHMMSS>-manual.db.gz` | same | On-demand snapshot from Settings → Backups (LOOM-26) |
 | `*.loom.json` | `~/Backups/<date>/loom-json/<book>/` | Per-book prose **plus CYOA choices** |
-| `loom-covers/` | `~/Backups/<date>/` **and** `gdrive:Backups/<date>/` | Book cover images — in **no** git repo (KAN-26) |
+| `loom-covers/` | `~/Backups/<date>/` **and** `gdrive:Backups/<date>/` | Book cover images — in **no** git repo (LOOM-26) |
 | `*.pages` / `.txt` / `.docx` | `~/Writing/`, iCloud Books | Linear manuscript only, no branches |
-| `writeai-writer_data/*.json` | `~/Backups/<date>/` **and** `gdrive:Backups/<date>/` | WriteAI's **writer-authored** state (KAN-27) |
-| `writeai-series_metadata.db.gz` | same | WriteAI's index — the parts that cost money (KAN-28) |
+| `writeai-writer_data/*.json` | `~/Backups/<date>/` **and** `gdrive:Backups/<date>/` | WriteAI's **writer-authored** state (LOOM-27) |
+| `writeai-series_metadata.db.gz` | same | WriteAI's index — the parts that cost money (LOOM-28) |
 | `writeai-chunk_hashes.json` | same | Ingest change-detection state |
 
 Backups run nightly at **22:30** (`~/Scripts/book_backup.sh` →
@@ -165,7 +165,7 @@ launchctl bootstrap gui/$(id -u) \
 ## 4c. Restoring WriteAI's index
 
 `data/` is 13 GB and mostly derived, so only the parts that cost **money** are
-backed up (KAN-28) — about 8 MB carrying ~$75 of accumulated API spend.
+backed up (LOOM-28) — about 8 MB carrying ~$75 of accumulated API spend.
 
 ```sh
 launchctl bootout gui/$(id -u)/com.marisarichmond.writeai
@@ -257,7 +257,7 @@ That is the real exposure of a nightly-only schedule on a normal writing day.
 
 ## 7. Drill results — on-demand snapshot, 2026-07-31
 
-The **Snapshot Now** button (KAN-26) was exercised end-to-end against a copy of
+The **Snapshot Now** button (LOOM-26) was exercised end-to-end against a copy of
 production, with `BACKUP_ROOT` and `GDRIVE_ROOT` pointed at scratch paths so
 nothing touched the real Drive.
 
@@ -269,7 +269,7 @@ nothing touched the real Drive.
 | Counts vs what the UI reported | **exact match** |
 
 The three ways it must refuse, each verified to report failure rather than a
-false success — this is the KAN-14 class, so it is tested rather than assumed:
+false success — this is the LOOM-14 class, so it is tested rather than assumed:
 
 | Situation | Result |
 |-----------|--------|
