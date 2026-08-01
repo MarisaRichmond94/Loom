@@ -1,3 +1,5 @@
+import { compareAppearances, parseIdList, parseTaggedId } from './chapterTags'
+
 // Chapter ↔ WriteAI writer-event tags (LOOM-32).
 //
 // Loom stores only the event id; the event itself lives in WriteAI. The pure
@@ -37,15 +39,7 @@ export type TaggedEvent = {
  * Returns the id, or the message to 400 with.
  */
 export function parseWriterEventId(payload: unknown): { id: string } | { error: string } {
-  const raw = (payload as { writerEventId?: unknown } | null)?.writerEventId
-  if (typeof raw !== 'string') return { error: 'writerEventId must be a string' }
-  const id = raw.trim()
-  if (!id) return { error: 'writerEventId must not be empty' }
-  // Length cap so a malformed client cannot write unbounded rows. Generous
-  // enough that a format change upstream will not hit it.
-  if (id.length > 64) return { error: 'writerEventId is too long' }
-  if (!id.startsWith('we-')) return { error: 'writerEventId must start with "we-"' }
-  return { id }
+  return parseTaggedId(payload, 'we-', 'writerEventId')
 }
 
 /**
@@ -59,18 +53,7 @@ export function parseWriterEventId(payload: unknown): { id: string } | { error: 
  * chapter links.
  */
 export function parseEventIds(param: string | null, max = 500): string[] {
-  if (!param) return []
-  const out: string[] = []
-  const seen = new Set<string>()
-  for (const part of param.split(',')) {
-    const parsed = parseWriterEventId({ writerEventId: part })
-    if ('error' in parsed) continue
-    if (seen.has(parsed.id)) continue
-    seen.add(parsed.id)
-    out.push(parsed.id)
-    if (out.length >= max) break
-  }
-  return out
+  return parseIdList(param, 'we-', max)
 }
 
 /** One chapter an event is tagged in, denormalised for WriteAI to render
@@ -135,14 +118,7 @@ export function buildChapterLinks(
           : `/read/by-id/${row.chapter.book.seriesId}/${row.chapter.bookId}/${chapterNumber}`,
     })
   }
-  for (const list of Object.values(out)) {
-    list.sort(
-      (a, b) =>
-        a.bookTitle.localeCompare(b.bookTitle) ||
-        (a.chapterNumber ?? Infinity) - (b.chapterNumber ?? Infinity) ||
-        a.chapterTitle.localeCompare(b.chapterTitle),
-    )
-  }
+  for (const list of Object.values(out)) list.sort(compareAppearances)
   return out
 }
 
@@ -189,13 +165,6 @@ export function groupAppearances(
   }
   // Stable, readable order: by book, then by chapter number, with unnumbered
   // chapters last rather than sorting as 0 and jumping the prologue.
-  for (const list of out.values()) {
-    list.sort(
-      (a, b) =>
-        a.bookTitle.localeCompare(b.bookTitle) ||
-        (a.chapterNumber ?? Infinity) - (b.chapterNumber ?? Infinity) ||
-        a.chapterTitle.localeCompare(b.chapterTitle),
-    )
-  }
+  for (const list of out.values()) list.sort(compareAppearances)
   return out
 }

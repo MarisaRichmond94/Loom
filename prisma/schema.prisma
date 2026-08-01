@@ -129,6 +129,7 @@ model Chapter {
   narrations     ChapterNarration[]
   note           ChapterNote?
   events         ChapterEvent[]
+  characters     ChapterCharacter[]
 
   @@index([bookId, order])
 }
@@ -179,6 +180,36 @@ model ChapterEvent {
   // Answers "which OTHER chapters is this event tagged in?" — the sidebar's
   // "also in Ch. 7", which is the whole reason to look at the tab.
   @@index([writerEventId])
+}
+
+// A WriteAI writer-character who appears in this chapter (LOOM-33).
+//
+// The sibling of ChapterEvent, and for the same reason: WriteAI can only say
+// which BOOKS a character is in (`books`, matched by title), never which
+// chapters. Keyed by chapter cuid, so a tag follows its chapter through
+// insertion and renumbering.
+//
+// Stores the `wc-` id and nothing else. Deliberately NOT the name: names are
+// what WriteAI itself still references in a few places, and renaming a
+// character there silently orphans them (LOOM-45). Loom does not repeat that.
+//
+// An id that no longer resolves is unknown identity — hidden, never
+// auto-deleted. Note WriteAI's GET /api/plan/characters PRUNES auto-seeded
+// entries it has reclassified, so this happens in ordinary use, not just when
+// a character is deliberately deleted.
+model ChapterCharacter {
+  id                String   @id @default(cuid())
+  chapterId         String
+  writerCharacterId String
+  createdAt         DateTime @default(now())
+  chapter           Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  // Tagging the same character twice is a no-op, not an error — the API
+  // relies on this to make POST idempotent rather than checking first.
+  @@unique([chapterId, writerCharacterId])
+  // Answers "which OTHER chapters is this character in?" — the expanded
+  // card's appearance list.
+  @@index([writerCharacterId])
 }
 
 // Cached text-to-speech narration for one *variant* of a chapter — a specific
