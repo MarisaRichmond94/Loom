@@ -26,7 +26,7 @@ export async function GET(_: Request, { params }: Params) {
 
   const mine = await prisma.chapterEvent.findMany({
     where: { chapterId },
-    select: { writerEventId: true, createdAt: true },
+    select: { writerEventId: true, createdAt: true, nonCanon: true },
     orderBy: { createdAt: 'asc' },
   })
   if (mine.length === 0) return NextResponse.json({ events: [] })
@@ -37,6 +37,7 @@ export async function GET(_: Request, { params }: Params) {
     select: {
       writerEventId: true,
       chapterId: true,
+      nonCanon: true,
       chapter: {
         select: {
           title: true,
@@ -61,6 +62,7 @@ export async function GET(_: Request, { params }: Params) {
   const events: TaggedEvent[] = mine.map(e => ({
     writerEventId: e.writerEventId,
     taggedAt: e.createdAt.toISOString(),
+    nonCanon: e.nonCanon,
     alsoIn: spread.get(e.writerEventId) ?? [],
   }))
   return NextResponse.json({ events })
@@ -84,13 +86,22 @@ export async function POST(req: Request, { params }: Params) {
   }
   const parsed = parseWriterEventId(payload)
   if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
+  // Optional, and false unless explicitly asked for: a tag is canon by default,
+  // which is the common case and the safe one — a mistakenly canon tag shows up
+  // in WriteAI where it can be seen and fixed, whereas a mistakenly non-canon
+  // one silently vanishes from it.
+  const nonCanon = (payload as { nonCanon?: unknown })?.nonCanon === true
 
   try {
     const tag = await prisma.chapterEvent.create({
-      data: { chapterId, writerEventId: parsed.id },
-      select: { writerEventId: true, createdAt: true },
+      data: { chapterId, writerEventId: parsed.id, nonCanon },
+      select: { writerEventId: true, createdAt: true, nonCanon: true },
     })
-    return NextResponse.json({ writerEventId: tag.writerEventId, taggedAt: tag.createdAt.toISOString() })
+    return NextResponse.json({
+      writerEventId: tag.writerEventId,
+      taggedAt: tag.createdAt.toISOString(),
+      nonCanon: tag.nonCanon,
+    })
   } catch (err) {
     const code = (err as { code?: string }).code
     // P2002 — already tagged. The desired state holds, so this is a success.

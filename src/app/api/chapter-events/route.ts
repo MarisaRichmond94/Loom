@@ -21,7 +21,12 @@ export async function GET(req: Request) {
   if (ids.length === 0) return NextResponse.json({})
 
   const rows = await prisma.chapterEvent.findMany({
-    where: { writerEventId: { in: ids } },
+    // nonCanon tags are EXCLUDED here, and only here (LOOM-78). WriteAI holds
+    // canon data only — it has no notion of the CYOA story and nothing to do
+    // with an event referenced solely behind a choice point. Filtering at the
+    // seam rather than in WriteAI keeps that true by construction: the
+    // non-canon story never crosses the app boundary at all.
+    where: { writerEventId: { in: ids }, nonCanon: false },
     select: {
       writerEventId: true,
       chapterId: true,

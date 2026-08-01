@@ -195,6 +195,25 @@ wiring it there would rewrite the manuscript on every page load and trigger an
 ingest each time. `tests/unit/chapterEventsRoute.test.ts` pins this at source
 level.
 
+**Non-canon event tags never cross this seam (LOOM-78).** The sibling of
+LOOM-63 for events: a chapter↔event tag can be marked as referencing the event
+solely on a non-canon branch, and `GET /api/chapter-events` filters those rows
+out **in the query**. The flag lives on the TAG rather than on the event or the
+chapter, because non-canon in Loom is a path THROUGH an otherwise canon chapter
+— the same event can be canon in chapter 4 and branch-only in chapter 7.
+Enforcing it at the seam keeps the boundary true by construction: the non-canon
+story is not filtered out of WriteAI, it never reaches it.
+`tests/unit/chapterEventsRoute.test.ts` pins this too.
+
+> ⚠️ This hides the **tag**, not the event. An event authored from Loom's
+> sidebar is still written to WriteAI's `writer_events.json` through
+> `/api/writeai/events`, and `GET /writer-events` returns the whole store
+> unfiltered, so it still appears on WriteAI's Timeline page — just without a
+> chapter link claiming it as canon anywhere. `writer_events.json` is read by
+> no other WriteAI subsystem (not enrichment, not review context, not canonical
+> extraction), so a branch event never reaches RAG or extracted canon. Making
+> events themselves Loom-only is a separate piece of work.
+
 `readPath` in that response is **relative**. Loom has no reliable way to know
 its own external origin; WriteAI prefixes `VITE_LOOM_URL` via
 `loomLinks.loomHref()`. A `null` `readPath` means the chapter has no canon

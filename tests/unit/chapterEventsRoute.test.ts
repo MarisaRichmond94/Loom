@@ -37,3 +37,23 @@ describe('GET /api/chapter-events stays read-only', () => {
     expect(routeSrc).toContain('canonNumbersForBook')
   })
 })
+
+// The app boundary (LOOM-78).
+//
+// Loom owns a non-canon CYOA story; WriteAI holds canon data only. A tag marked
+// non-canon must therefore never cross this seam. Pinned at source level for
+// the same reason as the read-only rule above: the failure is INVISIBLE from
+// the response — WriteAI's timeline would simply start showing chapter links
+// from a story it is not supposed to know exists, and nothing would report it.
+describe('GET /api/chapter-events excludes non-canon tags', () => {
+  it('filters nonCanon in the query', () => {
+    expect(routeSrc).toContain('nonCanon: false')
+  })
+
+  it('filters in the DATABASE, not after the fact', () => {
+    // A post-query .filter() would still be correct today, but it puts the rule
+    // one refactor away from being dropped while the query keeps "working".
+    const where = routeSrc.slice(routeSrc.indexOf('findMany'), routeSrc.indexOf('select:'))
+    expect(where).toContain('nonCanon: false')
+  })
+})

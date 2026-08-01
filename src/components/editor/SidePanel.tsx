@@ -101,6 +101,7 @@ export default function SidePanel({
     characterPhotos: Record<string, string | null>
     loadCharacterPool: () => void | Promise<void>
     onToggleTag: (writerEventId: string, tagged: boolean) => void | Promise<void>
+    onSetNonCanon: (writerEventId: string, nonCanon: boolean) => void | Promise<void>
     onRetry: () => void
     onRefresh: () => void | Promise<void>
   }
