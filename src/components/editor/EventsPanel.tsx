@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { LuArrowUpDown, LuCalendarDays, LuMapPin, LuPencil, LuPlus, LuTag, LuX } from 'react-icons/lu'
 import { PanelEmpty, PanelEmptyState } from './PanelEmptyState'
 import { formatEventWhen, matchesQuery, sortEvents, type WriterEvent } from '@/lib/eventSearch'
@@ -141,6 +141,15 @@ export default function EventsPanel({
   const [tagMode, setTagMode] = useState(false)
   const [query, setQuery] = useState('')
   const [direction, setDirection] = useState<'asc' | 'desc'>('asc')
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  // autoFocus is not available here: the input never unmounts, so it would only
+  // fire once. Focus is driven by the mode instead, and blurred on close so the
+  // caret does not sit invisibly inside a collapsed box.
+  useEffect(() => {
+    if (tagMode) searchRef.current?.focus()
+    else searchRef.current?.blur()
+  }, [tagMode])
 
   const visible = useMemo(() => {
     const pool = tagMode ? events.filter(e => matchesQuery(e, query)) : tagged
@@ -149,37 +158,57 @@ export default function EventsPanel({
 
   const toolbar = (
     <div className="flex items-center gap-2 px-4 py-3 shrink-0">
-      {tagMode ? (
-        <div className="flex flex-1 items-center gap-2 rounded-lg border border-accent/30 bg-surface-overlay/40 px-2.5 py-1.5 focus-within:border-accent">
-          <LuTag size={13} className="shrink-0 text-accent" />
-          <input
-            autoFocus
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Escape') {
-                e.stopPropagation()
-                setTagMode(false)
-                setQuery('')
-              }
-            }}
-            placeholder="Search events by title or character…"
-            aria-label="Search events to tag"
-            className="w-full bg-transparent text-xs text-ink outline-none placeholder:text-ink-faint"
-          />
-        </div>
-      ) : (
+      {/* One element that grows, not two that swap.
+          The search field and the collapsed tag button are the SAME box: it
+          claims the row with flex-1 and is clamped back to the icon's width
+          when closed, so opening and closing is a width animation rather than
+          a hard cut between two different elements.
+          The input stays mounted throughout — unmounting it would collapse the
+          box instantly and there would be nothing left to animate. */}
+      <div
+        className={`flex min-w-0 flex-1 items-center overflow-hidden rounded-lg border bg-surface-overlay/40 transition-[max-width,border-color] duration-200 ease-out motion-reduce:transition-none ${
+          tagMode
+            ? 'max-w-full border-accent/30 focus-within:border-accent'
+            : 'max-w-[32px] border-accent/20 hover:border-accent/60'
+        }`}
+      >
         <button
           type="button"
-          onClick={() => setTagMode(true)}
-          title="Search events to tag"
-          aria-label="Search events to tag"
-          aria-pressed={false}
-          className="rounded-lg border border-accent/20 p-2 text-ink-faint transition hover:border-accent/60 hover:text-ink"
+          onClick={() => {
+            setTagMode(open => !open)
+            if (tagMode) setQuery('')
+          }}
+          title={tagMode ? 'Done tagging' : 'Search events to tag'}
+          aria-label={tagMode ? 'Done tagging' : 'Search events to tag'}
+          aria-expanded={tagMode}
+          className={`grid h-[30px] w-[30px] shrink-0 place-items-center transition-colors ${
+            tagMode ? 'text-accent' : 'text-ink-faint hover:text-ink'
+          }`}
         >
           <LuTag size={14} />
         </button>
-      )}
+        <input
+          ref={searchRef}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Escape') {
+              e.stopPropagation()
+              setTagMode(false)
+              setQuery('')
+            }
+          }}
+          placeholder="Search events by title or character…"
+          aria-label="Search events to tag"
+          // Hidden from tab order and screen readers while collapsed: it is
+          // still in the DOM purely so the box has something to expand around.
+          tabIndex={tagMode ? 0 : -1}
+          aria-hidden={!tagMode}
+          className={`w-full min-w-0 bg-transparent pr-2.5 text-xs text-ink outline-none transition-opacity duration-150 placeholder:text-ink-faint motion-reduce:transition-none ${
+            tagMode ? 'opacity-100 delay-75' : 'opacity-0'
+          }`}
+        />
+      </div>
 
       <button
         type="button"
@@ -203,17 +232,6 @@ export default function EventsPanel({
         </button>
       )}
 
-      {tagMode && (
-        <button
-          type="button"
-          onClick={() => { setTagMode(false); setQuery('') }}
-          title="Done tagging"
-          aria-label="Done tagging"
-          className="shrink-0 text-ink-faint transition hover:text-ink"
-        >
-          <LuX size={15} />
-        </button>
-      )}
     </div>
   )
 

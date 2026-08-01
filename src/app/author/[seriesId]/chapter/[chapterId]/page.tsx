@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute } from 'react-icons/lu'
+import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays } from 'react-icons/lu'
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
 import SidePanel, { minWidthForTab, type PanelTab } from '@/components/editor/SidePanel'
@@ -1179,6 +1179,23 @@ export default function ChapterEditorPage() {
                         </button>
                       )}
                     </div>
+                    {/* Sits beside Notes rather than beside Review because both
+                        are things the chapter *carries*, not things you run on
+                        it. The dot counts resolved tags, so it agrees with what
+                        the panel will actually list. */}
+                    <button
+                      role="menuitem"
+                      onClick={() => { setActionMenuOpen(false); togglePanelTab('events') }}
+                      title="Events referenced in this chapter (⌥⇧3)"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
+                    >
+                      <span className="flex w-5 items-center justify-center text-accent"><LuCalendarDays size={14} /></span>
+                      <span className="flex-1">Events</span>
+                      {chapterEvents.count > 0 && (
+                        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />
+                      )}
+                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧3</span>
+                    </button>
                     {/* The dot means this chapter has notes you can't currently
                         see — it clears once the panel is showing them. */}
                     <button
