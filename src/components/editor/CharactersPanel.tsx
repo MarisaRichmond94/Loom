@@ -311,6 +311,12 @@ export default function CharactersPanel({
           onChange={e => setQuery(e.target.value)}
           onKeyDown={e => {
             if (e.key === 'Escape') { e.stopPropagation(); setTagMode(false); setQuery('') }
+            else if (e.key === 'Enter' && tagMode && visible.length > 0) {
+              e.preventDefault()
+              const top = visible[0]
+              if (!taggedIds.has(top.id)) onToggleTag(top.id, true)
+              setQuery('')
+            }
           }}
           placeholder="Search characters by name or alias…"
           aria-label="Search characters to tag"
