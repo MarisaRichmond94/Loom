@@ -146,7 +146,6 @@ export default function SidePanel({
     value: PanelTab,
     icon: ReactNode,
     label: string,
-    hint: string,
     count?: number,
   ) {
     const active = tab === value
@@ -154,8 +153,8 @@ export default function SidePanel({
       <button
         role="tab"
         aria-selected={active}
-        aria-label={count ? `${label}, ${count} tagged (${hint})` : `${label} (${hint})`}
-        title={count ? `${label} — ${count} tagged (${hint})` : `${label} (${hint})`}
+        aria-label={count ? `${label}, ${count} tagged` : label}
+        title={count ? `${label} — ${count} tagged` : label}
         onClick={() => onTabChange(value)}
         className={`flex items-center gap-1.5 h-7 rounded-md text-[11px] font-medium transition ${
           labelled ? 'px-2' : 'px-1.5'
@@ -229,13 +228,17 @@ export default function SidePanel({
               cross-app story data, notes are constant
               company, pins are occasional. Pins used to appear only when
               something was pinned, which meant the way to discover pinning was
-              to already be doing it. */}
+              to already be doing it.
+              This is also the cycle order for ⌥⇧< / ⌥⇧> (LOOM-56) — each tab
+              used to carry its own ⌥⇧2–6 hotkey, but that grew unmanageable as
+              tabs kept getting added, so the hints moved to the panel-level
+              open (⌥⇧2) and step (⌥⇧< / >) shortcuts instead. */}
           <div role="tablist" className="flex items-center gap-0.5">
-            {tabButton('review', <LuScanText size={13} />, 'Reviews', '⌥⇧2')}
-            {tabButton('events', <LuCalendarDays size={13} />, 'Events', '⌥⇧3', events.count)}
-            {tabButton('characters', <LuUsers size={13} />, 'Characters', '⌥⇧4', characters.count)}
-            {tabButton('notes', <PiNotebookThin size={14} />, 'Notes', '⌥⇧5')}
-            {tabButton('refs', <LuPin size={12} />, 'Pins', '⌥⇧6')}
+            {tabButton('review', <LuScanText size={13} />, 'Reviews')}
+            {tabButton('events', <LuCalendarDays size={13} />, 'Events', events.count)}
+            {tabButton('characters', <LuUsers size={13} />, 'Characters', characters.count)}
+            {tabButton('notes', <PiNotebookThin size={14} />, 'Notes')}
+            {tabButton('refs', <LuPin size={12} />, 'Pins')}
           </div>
 
           <div className="ml-auto flex items-center gap-2 shrink-0">

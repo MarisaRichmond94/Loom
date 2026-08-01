@@ -72,16 +72,17 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
   {
     group: 'Side Panel',
     items: [
-      { keys: '⌥⇧2', label: 'Toggle reviews' },
-      { keys: '⌥⇧3', label: 'Toggle events' },
-      { keys: '⌥⇧4', label: 'Toggle characters' },
-      { keys: '⌥⇧5', label: 'Toggle chapter notes' },
-      { keys: '⌥⇧6', label: 'Toggle pins' },
+      { keys: '⌥⇧2', label: 'Open / close side panel' },
+      { keys: '⌥⇧< / >', label: 'Previous / next side panel tab' },
       { keys: '⌥⇧⏎', label: 'Save (in a dialog)' },
       { keys: '⌥⇧⎋', label: 'Cancel (in a dialog)' },
     ],
   },
 ]
+
+// The dock's tabs in the order they appear in the strip — also the order
+// ⌥⇧< / ⌥⇧> step through (LOOM-56).
+const PANEL_TAB_ORDER: PanelTab[] = ['review', 'events', 'characters', 'notes', 'refs']
 
 function safeCondition(raw: string | null | undefined): Condition | null {
   if (!raw) return null
@@ -132,6 +133,18 @@ export default function ChapterEditorPage() {
   const panelTabRef = useRef(panelTab)
   panelTabRef.current = panelTab
 
+  // Restore the writer's last-used tab and width (LOOM-56) so reopening the
+  // dock doesn't drop them back to Notes at 360px. Read on mount rather than
+  // as a lazy useState initializer — localStorage isn't available during SSR.
+  useEffect(() => {
+    try {
+      const savedTab = localStorage.getItem('loom-panel-tab') as PanelTab | null
+      if (savedTab && PANEL_TAB_ORDER.includes(savedTab)) setPanelTab(savedTab)
+      const savedWidth = Number(localStorage.getItem('loom-panel-width'))
+      if (Number.isFinite(savedWidth) && savedWidth > 0) setPanelWidth(savedWidth)
+    } catch { /* ignore */ }
+  }, [])
+
   const { notes, setNotes, saving: notesSaving, hasNotes } = useChapterNotes(chapterId)
   const chapterEvents = useChapterEvents(chapterId)
   const chapterCharacters = useChapterCharacters(chapterId)
@@ -149,27 +162,57 @@ export default function ChapterEditorPage() {
   } = useChapterReview(seriesId, reviewBookId, chapterId)
   useRegisterShortcuts('chapter', CHAPTER_SHORTCUTS)
 
-  function openPanel(tab: PanelTab) {
+  // Both setters persist (LOOM-56) — plain wrappers around setPanelTab /
+  // setPanelWidth so every caller below gets the write for free.
+  function setPanelTabPersisted(tab: PanelTab) {
     setPanelTab(tab)
+    try { localStorage.setItem('loom-panel-tab', tab) } catch { /* ignore */ }
+  }
+  function openPanel(tab: PanelTab) {
+    setPanelTabPersisted(tab)
     setPanelOpen(true)
     // Review needs a third of the viewport to be readable, and the panel
     // remembers whatever width notes last used. Widen on the way in rather
     // than leaving the writer to drag it open every time (KAN-22). Never
     // narrows — a deliberately wide panel stays wide switching back.
-    setPanelWidth(w => Math.max(w, minWidthForTab(tab, window.innerWidth)))
+    setPanelWidth(w => {
+      const next = Math.max(w, minWidthForTab(tab, window.innerWidth))
+      try { localStorage.setItem('loom-panel-width', String(next)) } catch { /* ignore */ }
+      return next
+    })
   }
   function closePanel() {
     setPanelOpen(false)
   }
-  // One rule for every tab hotkey (⌥⇧2–6): closed → open on my tab; open on
-  // another tab → switch to mine; open on my tab → close.
+  // One rule for every side-panel menu item: closed → open on my tab; open on
+  // another tab → switch to mine; open on my tab → close. Used to also back
+  // the ⌥⇧2–6 hotkeys; those collapsed into ⌥⇧2 (open/close) and ⌥⇧< / ⌥⇧>
+  // (step tabs) once the per-tab hotkeys got out of hand (LOOM-56).
   function togglePanelTab(tab: PanelTab) {
     if (!panelOpenRef.current) { openPanel(tab); return }
-    if (panelTabRef.current !== tab) { setPanelTab(tab); return }
+    if (panelTabRef.current !== tab) { setPanelTabPersisted(tab); return }
     closePanel()
   }
   const togglePanelTabRef = useRef(togglePanelTab)
   togglePanelTabRef.current = togglePanelTab
+  // ⌥⇧2 — open the dock (restoring the last tab) or close it if already open.
+  function toggleDock() {
+    if (panelOpenRef.current) { closePanel(); return }
+    openPanel(panelTabRef.current)
+  }
+  const toggleDockRef = useRef(toggleDock)
+  toggleDockRef.current = toggleDock
+  // ⌥⇧< / ⌥⇧> — step to the previous/next tab in PANEL_TAB_ORDER. A no-op
+  // past either end rather than wrapping, and only while the dock is open
+  // (checked by the caller, which also owns whether to open it first).
+  function cyclePanelTab(direction: 1 | -1) {
+    const idx = PANEL_TAB_ORDER.indexOf(panelTabRef.current)
+    const next = idx + direction
+    if (next < 0 || next >= PANEL_TAB_ORDER.length) return
+    setPanelTabPersisted(PANEL_TAB_ORDER[next])
+  }
+  const cyclePanelTabRef = useRef(cyclePanelTab)
+  cyclePanelTabRef.current = cyclePanelTab
 
   // Pins is a permanent tab with its own empty state now, so clearing every pin
   // leaves you looking at that rather than at a tab which no longer exists.
@@ -698,16 +741,13 @@ export default function ChapterEditorPage() {
           break
         case 'Equal': case 'NumpadAdd': e.preventDefault(); adjustProseScale(0.1); break
         case 'Minus': case 'NumpadSubtract': e.preventDefault(); adjustProseScale(-0.1); break
-        // The dock's five tabs, numbered in the order they appear in it. All
-        // unconditional: 2 used to be Pins and did nothing unless something was
-        // already pinned, which read as a broken key. Events took 3 (LOOM-36)
-        // and Characters took 4 (LOOM-44), pushing Notes and Pins along each
-        // time — the numbers follow the strip, so they move when it does.
-        case 'Digit2': case 'Numpad2': e.preventDefault(); togglePanelTabRef.current('review'); break
-        case 'Digit3': case 'Numpad3': e.preventDefault(); togglePanelTabRef.current('events'); break
-        case 'Digit4': case 'Numpad4': e.preventDefault(); togglePanelTabRef.current('characters'); break
-        case 'Digit5': case 'Numpad5': e.preventDefault(); togglePanelTabRef.current('notes'); break
-        case 'Digit6': case 'Numpad6': e.preventDefault(); togglePanelTabRef.current('refs'); break
+        // The dock used to carry one hotkey per tab (⌥⇧2–6), numbered in strip
+        // order — that grew unmanageable as tabs kept getting added (Events in
+        // LOOM-36, Characters in LOOM-44). LOOM-56 collapsed it to one hotkey
+        // to open/close the dock and two to step through its tabs.
+        case 'Digit2': case 'Numpad2': e.preventDefault(); toggleDockRef.current(); break
+        case 'Comma': if (panelOpenRef.current) { e.preventDefault(); cyclePanelTabRef.current(-1) } break
+        case 'Period': if (panelOpenRef.current) { e.preventDefault(); cyclePanelTabRef.current(1) } break
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -1502,7 +1542,10 @@ export default function ChapterEditorPage() {
           onRefetch: refetchReview,
         }}
         width={panelWidth}
-        onWidthChange={setPanelWidth}
+        onWidthChange={w => {
+          setPanelWidth(w)
+          try { localStorage.setItem('loom-panel-width', String(w)) } catch { /* ignore */ }
+        }}
         onClose={closePanel}
       />
     )}
