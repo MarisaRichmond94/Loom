@@ -85,6 +85,34 @@ body {
   user-select: none;
 }
 
+/* The chapter editor's header is sticky (KAN-30), so any scrollIntoView that
+   lands a block at the top of the scroller would tuck it underneath. The page
+   publishes the live header height; this keeps every scroll target clear of it
+   without each call site having to know the offset. Falls back to 0 elsewhere. */
+[data-block-id] {
+  scroll-margin-top: calc(var(--loom-chapter-header-h, 0px) + 12px);
+}
+
+/* Where a block's own sticky chrome parks once it reaches the top of the
+   scroller. Everything a block pins for itself — the formatting toolbar, the
+   drag handle, the delete/collapse column — has to clear the sticky chapter
+   header or it just slides underneath it (which is exactly what the toolbar's
+   plain `top-0` did the moment that header landed).
+
+   --loom-block-edge-top      the block's own top border + the 16px of card
+                              padding under it. Pinning this is what stops the
+                              toolbar sitting flush against the header, and
+                              keeps the block looking like it still has a top.
+   --loom-block-toolbar-top   +16px, i.e. directly under that pinned edge.
+   --loom-block-chrome-top    +23px, which centres the 16px drag handle and the
+                              ✕ against the ~30px toolbar beside them.
+   All fall back to 0 outside the chapter editor, where no header is published. */
+:root {
+  --loom-block-edge-top: var(--loom-chapter-header-h, 0px);
+  --loom-block-toolbar-top: calc(var(--loom-chapter-header-h, 0px) + 16px);
+  --loom-block-chrome-top: calc(var(--loom-chapter-header-h, 0px) + 23px);
+}
+
 input, textarea, [contenteditable], .ProseMirror, .ProseMirror * {
   cursor: text;
   user-select: text;

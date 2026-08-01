@@ -192,31 +192,59 @@ function SortableBlock({
       onClick={onActivate}
       onDoubleClick={handleDoubleClick}
     >
-      <div className={`flex-1 min-w-0 bg-surface-raised border border-accent/10 border-l-4 ${BLOCK_BORDER[block.type] ?? ''} rounded-r-lg p-4 relative transition-shadow duration-150 ${isActive ? 'ring-1 ring-inset ring-accent/40' : 'group-hover:ring-1 group-hover:ring-inset group-hover:ring-accent/20'}`}>
-        <button
-          {...attributes}
-          {...listeners}
-          className="absolute top-2 left-2 text-ink-faint opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition"
-          title="Drag to reorder"
-        >
-          <LuGripVertical size={16} />
-        </button>
-        <div className="pl-4">
-          {isCollapsed ? (
-            <div className="flex items-baseline gap-3 min-w-0">
-              <span className="shrink-0 text-xs font-bold text-ink uppercase tracking-widest">
-                {BLOCK_TYPE_LABEL[block.type] ?? block.type}
-              </span>
-              {summary && (
-                <span className="flex-1 min-w-0 truncate text-xs text-ink-faint italic">{summary}</span>
-              )}
-            </div>
-          ) : (
-            children
-          )}
+      {/* border-t-0: the card's top border is drawn by the sticky edge below
+          instead, so it survives scrolling into a long block rather than
+          leaving with the top of the card. `relative` stays for the popovers
+          inside blocks (colour picker, character picker) that anchor to the
+          card. The handle's -mt-2/-ml-2/mr-2 reproduce exactly where
+          `absolute top-2 left-2` put it, content at the same 32px inset. */}
+      <div className={`flex-1 min-w-0 bg-surface-raised border border-t-0 border-accent/10 border-l-4 ${BLOCK_BORDER[block.type] ?? ''} rounded-r-lg p-4 relative flex flex-col transition-shadow duration-150 ${isActive ? 'ring-1 ring-inset ring-accent/40' : 'group-hover:ring-1 group-hover:ring-inset group-hover:ring-accent/20'}`}>
+        {/* The block's top edge: its border plus the 16px of card padding under
+            it, pinned. -mt-4 against h-4 makes it cost nothing in layout — it
+            simply occupies the padding that was already there. Being opaque is
+            the point: it gives the pinned toolbar a strip of card to sit under
+            instead of prose scrolling right up against it. The border tracks
+            the card's own states, since it now draws the top edge of the
+            active ring / hover ring as well as the resting border. */}
+        <div
+          aria-hidden
+          style={{ top: 'var(--loom-block-edge-top, 0px)' }}
+          className={`sticky z-20 shrink-0 -mt-4 -mx-4 h-4 rounded-tr-lg bg-surface-raised border-t ${
+            isActive ? 'border-t-accent/40' : 'border-t-accent/10 group-hover:border-t-accent/20'
+          }`}
+        />
+        <div className="flex min-w-0">
+          <button
+            {...attributes}
+            {...listeners}
+            style={{ top: 'var(--loom-block-chrome-top, 0px)' }}
+            className="sticky z-30 self-start shrink-0 -mt-2 -ml-2 mr-2 text-ink-faint opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition"
+            title="Drag to reorder"
+          >
+            <LuGripVertical size={16} />
+          </button>
+          <div className="flex-1 min-w-0">
+            {isCollapsed ? (
+              <div className="flex items-baseline gap-3 min-w-0">
+                <span className="shrink-0 text-xs font-bold text-ink uppercase tracking-widest">
+                  {BLOCK_TYPE_LABEL[block.type] ?? block.type}
+                </span>
+                {summary && (
+                  <span className="flex-1 min-w-0 truncate text-xs text-ink-faint italic">{summary}</span>
+                )}
+              </div>
+            ) : (
+              children
+            )}
+          </div>
         </div>
       </div>
-      <div className="shrink-0 flex flex-col gap-1.5 mt-2 ml-2">
+      {/* Delete / collapse gutter. Sticky alongside the handle and toolbar so
+          the whole strip of block chrome rides with you down a long block. */}
+      <div
+        style={{ top: 'var(--loom-block-chrome-top, 0px)' }}
+        className="sticky self-start shrink-0 flex flex-col gap-1.5 mt-2 ml-2"
+      >
         <button
           onClick={e => { e.stopPropagation(); onDelete() }}
           className="text-ink-faint opacity-0 group-hover:opacity-100 hover:text-choice-kill transition-all duration-200"

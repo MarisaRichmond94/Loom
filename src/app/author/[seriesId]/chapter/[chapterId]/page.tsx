@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPencil, LuGitBranch, LuSplit, LuPlus, LuMusic, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute } from 'react-icons/lu'
+import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute } from 'react-icons/lu'
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
 import SidePanel, { minWidthForTab, type PanelTab } from '@/components/editor/SidePanel'
@@ -92,7 +92,10 @@ export default function ChapterEditorPage() {
   const [chapter, setChapter] = useState<Chapter | null>(null)
   const [characters, setCharacters] = useState<Character[]>([])
   const [titleDraft, setTitleDraft] = useState('')
-  const [addMenuOpen, setAddMenuOpen] = useState(false)
+  // The chapter header's ☰ action menu (Review / Preview / Copy / Path /
+  // Notes / Settings). It replaced the floating + add-block button, which was
+  // dead weight — blocks are added with ⌥⇧T/Q/C/S (KAN-30).
+  const [actionMenuOpen, setActionMenuOpen] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showChapterSettings, setShowChapterSettings] = useState(false)
   const [copyDone, setCopyDone] = useState(false)
@@ -110,7 +113,7 @@ export default function ChapterEditorPage() {
   // only — pinning captures the text as it is now so later edits don't shift it.
   const [pins, setPins] = useState<PinnedText[]>([])
   // Side-panel width, adjustable via its drag handle. Lifted here so the
-  // floating add-block button can offset by it and stay over the writing column.
+  // toast layer and the footer can offset by it and stay over the writing column.
   const [panelWidth, setPanelWidth] = useState(360)
   // The right-hand dock. Open state is explicit (and persisted) rather than
   // derived from the pin count, because notes live here too and always exist —
@@ -243,7 +246,7 @@ export default function ChapterEditorPage() {
     armDiscardOnUnmount: () => void
   } | null>(null)
   const currentBlocksRef = useRef<{ id: string; order: number; type: string; content?: string | null; baseContent?: string | null; condition?: string | null; choices?: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; condition?: string | null; endingMessage?: string | null; isBadEnding?: boolean; endsChapter?: boolean }[]; overrides?: { id: string; order: number; condition: string; content: string; endingMessage?: string | null; endsChapter?: boolean }[] }[] | null>(null)
-  const addMenuRef = useRef<HTMLDivElement>(null)
+  const actionMenuRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const povInputRef = useRef<HTMLInputElement>(null)
   const focusedPovRef = useRef<string | null>(null)
@@ -265,6 +268,25 @@ export default function ChapterEditorPage() {
   const currentBookIdRef = useRef<string | undefined>(undefined)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const footerRef = useRef<HTMLElement>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
+
+  // Publish the sticky chapter header's height as --loom-chapter-header-h.
+  // Every scrollIntoView in the editor (new block, deep link, jump to match,
+  // jump to cursor) would otherwise be free to park a block underneath it;
+  // globals.css turns this into a scroll-margin-top on each block row.
+  useEffect(() => {
+    const el = headerRef.current
+    if (!el) return
+    const publish = () => document.documentElement.style.setProperty('--loom-chapter-header-h', `${el.offsetHeight}px`)
+    publish()
+    const ro = new ResizeObserver(publish)
+    ro.observe(el)
+    return () => {
+      ro.disconnect()
+      document.documentElement.style.removeProperty('--loom-chapter-header-h')
+    }
+  // The header isn't in the DOM until the chapter loads past the skeleton.
+  }, [chapter?.id])
 
   // Publish the footer's height as --loom-footer-h so the reference panel can
   // stop exactly at the footer's top (the full-width footer sits beneath it).
@@ -325,8 +347,8 @@ export default function ChapterEditorPage() {
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
-        setAddMenuOpen(false)
+      if (actionMenuRef.current && !actionMenuRef.current.contains(e.target as Node)) {
+        setActionMenuOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
@@ -614,12 +636,15 @@ export default function ChapterEditorPage() {
     return () => { obs.disconnect(); document.documentElement.style.removeProperty('--loom-footer-h') }
   }, [])
 
-  // Keep ToastLayer positioned to the left of the floating add-block button
-  // (rather than stacked above it) and at the same height above the footer.
+  // Toasts sit in the bottom-right corner of the writing column. They used to
+  // be nudged 48px further left to clear the floating add-block button; that
+  // button is gone (KAN-30), so the only offset left is the reference panel —
+  // without it a toast would land on top of the panel instead of the prose.
+  // Bottom sits just above the sticky chapter-nav footer, which is as close to
+  // the corner as it can get without being covered by it.
   useEffect(() => {
-    const addBlockRight = (panelOpen ? panelWidth + 12 : 12) + 48
-    document.documentElement.style.setProperty('--loom-toast-right', `${addBlockRight}px`)
-    document.documentElement.style.setProperty('--loom-toast-bottom', '4rem')
+    document.documentElement.style.setProperty('--loom-toast-right', `${panelOpen ? panelWidth + 12 : 12}px`)
+    document.documentElement.style.setProperty('--loom-toast-bottom', 'calc(var(--loom-footer-h, 0px) + 12px)')
     return () => {
       document.documentElement.style.removeProperty('--loom-toast-right')
       document.documentElement.style.removeProperty('--loom-toast-bottom')
@@ -834,6 +859,13 @@ export default function ChapterEditorPage() {
   }
   createNextChapterRef.current = createNextChapter
 
+  // Open the reader on this chapter, with a return path back to the editor.
+  async function startPreview() {
+    const res = await fetch('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seriesId }) })
+    const session = await res.json()
+    router.push(`/read/${session.id}?returnTo=/author/${seriesId}/chapter/${chapterId}&startChapterId=${chapterId}`)
+  }
+
   function scrollToTop() {
     // The author layout's <main> is the scroll container; scrollTo it
     // directly so the chapter page glides back to the top.
@@ -845,7 +877,6 @@ export default function ChapterEditorPage() {
   }
 
   async function addBlock(type: string) {
-    setAddMenuOpen(false)
     const activeBlock = activeBlockId ? chapter?.blocks.find(b => b.id === activeBlockId) : null
     const insertAtOrder = activeBlock ? activeBlock.order + 1 : undefined
     await fetch(`/api/chapters/${chapterId}/blocks`, {
@@ -861,7 +892,7 @@ export default function ChapterEditorPage() {
     })
     await reloadBlocks()
     // Sidebar's CHOICES list keys off choice_point blocks; refresh on every
-    // create path (FAB, hotkey, sidebar "+") rather than only addChoiceBlock.
+    // create path (hotkey, sidebar "+") rather than only addChoiceBlock.
     if (type === 'choice_point') loadChoices()
   }
 
@@ -890,6 +921,13 @@ export default function ChapterEditorPage() {
   const prevChapter = currentIdx > 0 ? bookChapters[currentIdx - 1] : null
   const nextChapter = currentIdx >= 0 && currentIdx < bookChapters.length - 1 ? bookChapters[currentIdx + 1] : null
 
+  // "There is something here you can't see" — drives the dot on the collapsed
+  // ☰ button. Notes and reviews used to advertise themselves on their own
+  // header buttons; folded into a menu, that signal has to surface on the
+  // menu itself or it's invisible until you open it.
+  const notesUnseen = hasNotes && !(panelOpen && panelTab === 'notes')
+  const reviewUnseen = hasReview && !(panelOpen && panelTab === 'review')
+
   // Hand the same two jumps to the ⌥⇧←/→ handler, so the hotkey and the
   // footer buttons can never disagree about where the ends of the book are.
   goChapterRef.current = {
@@ -903,266 +941,264 @@ export default function ChapterEditorPage() {
     // lets it shrink (rather than overflow) when the panel takes its width.
     <div className="flex min-h-full">
     <div className="flex-1 min-w-0 px-8 min-h-full flex flex-col">
-      {/* Sticky action row — pr-6 matches the invisible hover-delete column
-          on block rows so the rightmost button aligns with the block card edge. */}
-      <div className="flex justify-end items-center gap-2 py-3 pr-6">
-        <button
-          onClick={() => setShowChapterSettings(true)}
-          title="Chapter settings"
-          className="text-ink-faint hover:text-ink transition flex items-center"
-        >
-          <LuSettings size={20} />
-        </button>
-        {/* Chapter notes. The dot means this chapter has notes you can't
-            currently see — it clears once the panel is showing them. */}
-        <button
-          onClick={() => togglePanelTab('notes')}
-          title="Chapter notes (⌥⇧3)"
-          aria-label="Chapter notes"
-          aria-pressed={panelOpen && panelTab === 'notes'}
-          className={`relative transition flex items-center ${panelOpen && panelTab === 'notes' ? 'text-ink' : 'text-ink-faint hover:text-ink'}`}
-        >
-          <PiNotebookThin size={20} />
-          {hasNotes && !(panelOpen && panelTab === 'notes') && (
-            <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-accent" />
-          )}
-        </button>
-        {/* Path lens — configure a context and the editor dims off-path text
-            (Copy and Preview follow the same path). When active, an inline ✕
-            clears it (⌥⇧W does the same from the keyboard). */}
-        <div className="relative group/pathbtn flex items-center">
-          <button
-            onClick={() => setShowPathConfig(true)}
-            className={`py-1.5 rounded-l text-xs border font-medium transition flex items-center gap-1.5 ${lensState ? 'pl-3 pr-2 border-accent/50 text-accent bg-accent/10' : 'px-3 rounded-r border-accent/20 text-ink-muted hover:border-accent/40 hover:text-ink'}`}
-          >
-            <LuRoute size={13} /> {lensState ? `Path · ${lensAnsweredCount}` : 'Path'}
-          </button>
-          {lensState && (
-            <button
-              onClick={clearLensRef.current}
-              title="Clear path (⌥⇧W)"
-              className="py-1.5 px-1.5 rounded-r text-xs border border-l-0 border-accent/50 text-accent bg-accent/10 hover:bg-accent/20 transition flex items-center"
-            >
-              <LuX size={12} />
-            </button>
-          )}
-          <div className="pointer-events-none absolute right-0 top-full mt-1.5 z-50 w-60 rounded border border-accent/20 bg-surface-overlay px-3 py-2 text-xs leading-snug text-ink-muted shadow-lg opacity-0 transition-opacity group-hover/pathbtn:opacity-100">
-            Configure a context path — the editor highlights the blocks and branches on that path and dims the rest. Copy and Preview follow the same path. Clear with ⌥⇧W.
+      <div className="pb-3 flex-1">
+        {/* Chapter header — sticky to the top of <main>'s scroll area so the
+            title, POV, date, find bar, collapse-all and ☰ action menu stay
+            reachable at any depth in the chapter (KAN-30).
+            - -mx-8 px-8 makes the opaque background span the full column so
+              prose scrolls under it rather than beside it.
+            - bg-surface-base tracks the theme through .light-body, which
+              redefines the token (unlike a hardcoded hex — see KAN-6/KAN-17).
+            - z-[45] clears the sticky footer (z-40) so the find-bar's replace
+              popover and the ☰ menu aren't clipped by it on a short window;
+              modals are fixed at z-50 and still win.
+            - pb-2 rather than a margin on the last row: a margin would collapse
+              out of the sticky box and let prose scroll flush against its edge. */}
+        <div ref={headerRef} className="sticky top-0 z-[45] -mx-8 px-8 pt-3 pb-2 bg-surface-base">
+          {/* Title + POV — centered */}
+          <div className="flex flex-col items-center mb-8">
+            <input
+              ref={titleInputRef}
+              value={titleDraft}
+              onChange={e => setTitleDraft(e.target.value)}
+              onBlur={handleTitleBlur}
+              className="w-full bg-transparent border-none outline-none text-center text-3xl font-bold uppercase text-ink tracking-wide focus:opacity-80 transition-opacity"
+            />
+            <input
+              ref={povInputRef}
+              value={povDraft}
+              onChange={handlePovChange}
+              onKeyDown={handlePovKeyDown}
+              onBlur={() => {
+                const committed = povDraft.trim()
+                // If the writer left without rejecting, accept the visible
+                // value (which may include the suggestion's tail).
+                if (committed !== (chapter.pov ?? '')) handleMetaChange('pov', committed)
+                typedPrefixRef.current = committed
+              }}
+              placeholder="POV"
+              className="mt-1 bg-surface-raised border border-accent/20 rounded-lg px-3 py-1 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent text-center w-48"
+            />
           </div>
-        </div>
-        <div className="relative group/copybtn">
-          <button
-            onClick={copyCanonText}
-            className="px-3 py-1.5 rounded text-xs border border-accent/20 text-ink-muted font-medium hover:border-accent/40 hover:text-ink transition"
-          >
-            <span className="flex items-center gap-1.5">
-              <PiCopySimpleThin size={14} />{copyDone ? 'Copied!' : 'Copy'}
-            </span>
-          </button>
-          <div className="pointer-events-none absolute right-0 top-full mt-1.5 z-50 w-56 rounded border border-accent/20 bg-surface-overlay px-3 py-2 text-xs leading-snug text-ink-muted shadow-lg opacity-0 transition-opacity group-hover/copybtn:opacity-100">
-            {lensState
-              ? "Copies this chapter's story text for the active path — the same text Preview renders with that context."
-              : "Copies this chapter's canon story text to your clipboard — the rendered text as it would appear in the published book."}
-          </div>
-        </div>
-        {/* Review opens the dock, it no longer opens WriteAI (KAN-22). The
-            round trip through a second tab was the whole painpoint; the
-            sparkle in the header remains the deliberate way over there, for
-            the things that genuinely live in WriteAI.
 
-            The dot marks a stored review for this chapter, so it is visible
-            without opening the panel. Increment 1 is read-only — running a
-            review from here is Increment 2. */}
-        <div className="relative group/reviewbtn">
-          <button
-            onClick={() => togglePanelTab('review')}
-            className="relative px-3 py-1.5 rounded text-xs border border-accent/40 text-accent font-medium hover:bg-accent/10 transition"
-          >
-            <span className="flex items-center gap-1.5"><LuScanText size={12} /> Review</span>
-            {hasReview && (
-              <span
-                aria-hidden
-                className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-accent ring-2 ring-surface-base"
-              />
-            )}
-          </button>
-          <div className="pointer-events-none absolute right-0 top-full mt-1.5 z-50 w-64 rounded border border-accent/20 bg-surface-overlay px-3 py-2 text-xs leading-snug text-ink-muted shadow-lg opacity-0 transition-opacity group-hover/reviewbtn:opacity-100">
-            {hasReview
-              ? 'Shows this chapter’s latest WriteAI review beside the editor, so you can revise against it without leaving Loom.'
-              : 'Opens the review panel. No review is stored for this chapter yet — start one in WriteAI via the sparkle in the header.'}
-          </div>
-        </div>
-        <button
-          onClick={async () => {
-            const res = await fetch('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seriesId }) })
-            const session = await res.json()
-            router.push(`/read/${session.id}?returnTo=/author/${seriesId}/chapter/${chapterId}&startChapterId=${chapterId}`)
-          }}
-          className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
-        >
-          <span className="flex items-center gap-1.5"><LuPlay size={12} /> Preview</span>
-        </button>
-      </div>
+          {/* Date · chapter search · collapse-all — all in one row.
+              Right padding matches the per-block delete/chevron column
+              (15px icon + ml-2 gap) so the toggle's right edge aligns with
+              each block's content right edge, not the outer container. */}
+          <div className="flex items-center gap-4">
+            <input
+              value={chapter.date ?? ''}
+              onChange={e => handleMetaChange('date', e.target.value)}
+              onFocus={e => e.target.setSelectionRange(0, 0)}
+              className="bg-surface-raised border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent w-60 shrink-0"
+            />
 
-      {/* Floating add-block button — bottom-right of viewport, lifted above
-          the chapter-nav footer (which sits sticky at the bottom). */}
-      <div
-        ref={addMenuRef}
-        className="fixed bottom-16 z-50 transition-[right] duration-200"
-        style={{ right: panelOpen ? panelWidth + 12 : 12 }}
-      >
-        {addMenuOpen && (
-          <div className="absolute right-0 bottom-full mb-2 bg-surface-raised border border-accent/20 rounded-lg shadow-xl overflow-hidden min-w-[180px]">
-            {([
-              { type: 'text',                icon: <LuPencil size={14} />,    label: 'Add Text' },
-              { type: 'choice_point',         icon: <LuGitBranch size={14} />, label: 'Ask A Question' },
-              { type: 'conditional_fragment', icon: <LuSplit size={14} />,     label: 'Add Conditional' },
-              { type: 'soundtrack',           icon: <LuMusic size={14} />,     label: 'Add Soundtrack' },
-            ] as { type: string; icon: React.ReactNode; label: string }[]).map(({ type, icon, label }) => (
-              <button
-                key={type}
-                onClick={() => addBlock(type)}
-                className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-ink-muted hover:text-ink hover:bg-surface-overlay transition text-left"
-              >
-                <span className="text-accent w-5 flex items-center justify-center">{icon}</span>
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-        <button
-          onClick={() => setAddMenuOpen(o => !o)}
-          className="bg-surface-raised border border-accent/20 hover:border-accent/40 text-ink-muted hover:text-ink transition w-9 h-9 flex items-center justify-center rounded-full shadow-lg"
-        >
-          <LuPlus size={14} strokeWidth={2.5} />
-        </button>
-      </div>
-      <div className="pb-8 flex-1">
-        {/* Title + POV — centered */}
-        <div className="flex flex-col items-center mb-8">
-          <input
-            ref={titleInputRef}
-            value={titleDraft}
-            onChange={e => setTitleDraft(e.target.value)}
-            onBlur={handleTitleBlur}
-            className="w-full bg-transparent border-none outline-none text-center text-3xl font-bold uppercase text-ink tracking-wide focus:opacity-80 transition-opacity"
-          />
-          <input
-            ref={povInputRef}
-            value={povDraft}
-            onChange={handlePovChange}
-            onKeyDown={handlePovKeyDown}
-            onBlur={() => {
-              const committed = povDraft.trim()
-              // If the writer left without rejecting, accept the visible
-              // value (which may include the suggestion's tail).
-              if (committed !== (chapter.pov ?? '')) handleMetaChange('pov', committed)
-              typedPrefixRef.current = committed
-            }}
-            placeholder="POV"
-            className="mt-1 bg-surface-raised border border-accent/20 rounded-lg px-3 py-1 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent text-center w-48"
-          />
-        </div>
-
-        {/* Date · chapter search · collapse-all — all in one row.
-            Right padding matches the per-block delete/chevron column
-            (15px icon + ml-2 gap) so the toggle's right edge aligns with
-            each block's content right edge, not the outer container. */}
-        <div className="flex items-center gap-4 mb-2 pr-[23px]">
-          <input
-            value={chapter.date ?? ''}
-            onChange={e => handleMetaChange('date', e.target.value)}
-            onFocus={e => e.target.setSelectionRange(0, 0)}
-            className="bg-surface-raised border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent w-60 shrink-0"
-          />
-
-          <div className="ml-auto flex items-center gap-4">
-            {/* Chapter-local find bar — always visible, styled like the global series search */}
-            <div className="relative flex items-center w-72">
-              <LuSearch size={12} className="absolute left-2 text-ink-faint pointer-events-none" />
-              <input
-                ref={localSearchInputRef}
-                value={localSearchQuery}
-                onChange={e => setLocalSearchQuery(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Escape') { setLocalSearchQuery(''); setLocalSearchReplaceMode(false); e.currentTarget.blur() }
-                  if (e.key === 'Enter') jumpToFirstMatchRef.current?.(localSearchQuery)
-                }}
-                placeholder="Find in chapter… (⌥⇧F)"
-                title="Find in chapter (⌥⇧F)"
-                className="w-full pl-7 pr-[104px] py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
-              />
-              <div className="absolute right-1.5 flex items-center gap-0.5">
-                {localSearchQuery && localSearchMatchCount > 0 && (
-                  <span className="text-[10px] text-ink-faint mr-0.5 tabular-nums">{localSearchMatchCount}</span>
-                )}
-                {localSearchQuery && (
-                  <button onClick={() => setLocalSearchQuery('')} className="text-ink-faint hover:text-ink p-0.5" title="Clear">
-                    <LuX size={12} />
-                  </button>
-                )}
-                <button
-                  onClick={toggleMatchCase}
-                  title="Match case"
-                  aria-pressed={matchCase}
-                  className={`p-0.5 rounded transition ${matchCase ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'}`}
-                >
-                  <LuCaseSensitive size={13} />
-                </button>
-                <button
-                  onClick={toggleMatchWord}
-                  title="Match whole word"
-                  aria-pressed={matchWord}
-                  className={`p-0.5 rounded transition ${matchWord ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'}`}
-                >
-                  <LuWholeWord size={13} />
-                </button>
-                <button
-                  onClick={() => setLocalSearchReplaceMode(m => !m)}
-                  title={localSearchReplaceMode ? 'Hide replace' : 'Find and replace'}
-                  className={`p-0.5 transition ${localSearchReplaceMode ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
-                >
-                  <LuReplace size={11} />
-                </button>
-              </div>
-
-              {/* Replace field — popover anchored below the search bar. */}
-              {localSearchReplaceMode && (
-                <div className="absolute top-full right-0 mt-1.5 z-50 w-72 bg-surface-raised border border-accent/20 rounded-xl shadow-xl p-2 flex items-center gap-2">
-                  <input
-                    value={localSearchReplace}
-                    onChange={e => setLocalSearchReplace(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Escape') { setLocalSearchReplaceMode(false); localSearchInputRef.current?.focus() } }}
-                    placeholder="Replace with…"
-                    autoFocus
-                    className="flex-1 px-3 py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
-                  />
+            <div className="ml-auto flex items-center gap-4">
+              {/* Chapter-local find bar — always visible, styled like the global series search */}
+              <div className="relative flex items-center w-72">
+                <LuSearch size={12} className="absolute left-2 text-ink-faint pointer-events-none" />
+                <input
+                  ref={localSearchInputRef}
+                  value={localSearchQuery}
+                  onChange={e => setLocalSearchQuery(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') { setLocalSearchQuery(''); setLocalSearchReplaceMode(false); e.currentTarget.blur() }
+                    if (e.key === 'Enter') jumpToFirstMatchRef.current?.(localSearchQuery)
+                  }}
+                  placeholder="Find in chapter… (⌥⇧F)"
+                  title="Find in chapter (⌥⇧F)"
+                  className="w-full pl-7 pr-[104px] py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
+                />
+                <div className="absolute right-1.5 flex items-center gap-0.5">
+                  {localSearchQuery && localSearchMatchCount > 0 && (
+                    <span className="text-[10px] text-ink-faint mr-0.5 tabular-nums">{localSearchMatchCount}</span>
+                  )}
+                  {localSearchQuery && (
+                    <button onClick={() => setLocalSearchQuery('')} className="text-ink-faint hover:text-ink p-0.5" title="Clear">
+                      <LuX size={12} />
+                    </button>
+                  )}
                   <button
-                    onClick={() => replaceAllRef.current?.(localSearchQuery, localSearchReplace)}
-                    disabled={!localSearchQuery}
-                    className="shrink-0 px-3 py-1.5 text-xs border border-accent/40 text-accent rounded-lg hover:bg-accent/10 transition disabled:opacity-40"
+                    onClick={toggleMatchCase}
+                    title="Match case"
+                    aria-pressed={matchCase}
+                    className={`p-0.5 rounded transition ${matchCase ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'}`}
                   >
-                    Replace All
+                    <LuCaseSensitive size={13} />
+                  </button>
+                  <button
+                    onClick={toggleMatchWord}
+                    title="Match whole word"
+                    aria-pressed={matchWord}
+                    className={`p-0.5 rounded transition ${matchWord ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'}`}
+                  >
+                    <LuWholeWord size={13} />
+                  </button>
+                  <button
+                    onClick={() => setLocalSearchReplaceMode(m => !m)}
+                    title={localSearchReplaceMode ? 'Hide replace' : 'Find and replace'}
+                    className={`p-0.5 transition ${localSearchReplaceMode ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
+                  >
+                    <LuReplace size={11} />
                   </button>
                 </div>
-              )}
-            </div>
 
-            {chapter.blocks.length > 0 && (() => {
-              const anyCollapsed = chapter.blocks.some(b => collapsedIds.has(b.id))
-              return (
+                {/* Replace field — popover anchored below the search bar. */}
+                {localSearchReplaceMode && (
+                  <div className="absolute top-full right-0 mt-1.5 z-50 w-72 bg-surface-raised border border-accent/20 rounded-xl shadow-xl p-2 flex items-center gap-2">
+                    <input
+                      value={localSearchReplace}
+                      onChange={e => setLocalSearchReplace(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Escape') { setLocalSearchReplaceMode(false); localSearchInputRef.current?.focus() } }}
+                      placeholder="Replace with…"
+                      autoFocus
+                      className="flex-1 px-3 py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
+                    />
+                    <button
+                      onClick={() => replaceAllRef.current?.(localSearchQuery, localSearchReplace)}
+                      disabled={!localSearchQuery}
+                      className="shrink-0 px-3 py-1.5 text-xs border border-accent/40 text-accent rounded-lg hover:bg-accent/10 transition disabled:opacity-40"
+                    >
+                      Replace All
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {chapter.blocks.length > 0 && (() => {
+                const anyCollapsed = chapter.blocks.some(b => collapsedIds.has(b.id))
+                return (
+                  <button
+                    onClick={() => {
+                      if (anyCollapsed) setCollapsedIds(new Set())
+                      else setCollapsedIds(new Set(chapter.blocks.map(b => b.id)))
+                    }}
+                    className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition shrink-0"
+                  >
+                    {anyCollapsed ? <LuChevronsUpDown size={12} /> : <LuChevronsDownUp size={12} />}
+                    {anyCollapsed ? 'Expand All' : 'Collapse All'}
+                  </button>
+                )
+              })()}
+
+              {/* ☰ chapter actions. Everything that used to be a row of buttons
+                  above the title now lives here (KAN-30). The button itself
+                  carries the state those buttons used to show at a glance: an
+                  accent tint while a path lens is active, and a dot when this
+                  chapter has notes or a stored review you can't currently see. */}
+              <div ref={actionMenuRef} className="relative shrink-0">
                 <button
-                  onClick={() => {
-                    if (anyCollapsed) setCollapsedIds(new Set())
-                    else setCollapsedIds(new Set(chapter.blocks.map(b => b.id)))
-                  }}
-                  className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition shrink-0"
+                  onClick={() => setActionMenuOpen(o => !o)}
+                  title="Chapter actions"
+                  aria-label="Chapter actions"
+                  aria-haspopup="menu"
+                  aria-expanded={actionMenuOpen}
+                  className={`relative flex items-center rounded p-1 transition ${
+                    lensState ? 'text-accent' : actionMenuOpen ? 'text-ink' : 'text-ink-muted hover:text-ink'
+                  }`}
                 >
-                  {anyCollapsed ? <LuChevronsUpDown size={12} /> : <LuChevronsDownUp size={12} />}
-                  {anyCollapsed ? 'Expand All' : 'Collapse All'}
+                  <LuMenu size={16} />
+                  {(notesUnseen || reviewUnseen) && !actionMenuOpen && (
+                    <span aria-hidden className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-accent" />
+                  )}
                 </button>
-              )
-            })()}
+
+                {actionMenuOpen && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full mt-2 z-50 min-w-[210px] overflow-hidden rounded-lg border border-accent/20 bg-surface-raised shadow-xl"
+                  >
+                    {/* Review opens the dock, it no longer opens WriteAI (KAN-22).
+                        The round trip through a second tab was the whole
+                        painpoint; the sparkle in the header remains the
+                        deliberate way over there. */}
+                    <button
+                      role="menuitem"
+                      onClick={() => { setActionMenuOpen(false); togglePanelTab('review') }}
+                      title={hasReview
+                        ? 'Shows this chapter’s latest WriteAI review beside the editor, so you can revise against it without leaving Loom.'
+                        : 'Opens the review panel. No review is stored for this chapter yet — start one in WriteAI via the sparkle in the header.'}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
+                    >
+                      <span className="flex w-5 items-center justify-center text-accent"><LuScanText size={14} /></span>
+                      <span className="flex-1">Review</span>
+                      {hasReview && <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧2</span>
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => { setActionMenuOpen(false); startPreview() }}
+                      title="Read this chapter in the reader, then come back here."
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
+                    >
+                      <span className="flex w-5 items-center justify-center text-accent"><LuPlay size={14} /></span>
+                      <span className="flex-1">Preview</span>
+                    </button>
+                    {/* Left open on click so the label's "Copied!" confirmation
+                        is actually visible — every other item closes the menu. */}
+                    <button
+                      role="menuitem"
+                      onClick={copyCanonText}
+                      title={lensState
+                        ? "Copies this chapter's story text for the active path — the same text Preview renders with that context."
+                        : "Copies this chapter's canon story text to your clipboard — the rendered text as it would appear in the published book."}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
+                    >
+                      <span className="flex w-5 items-center justify-center text-accent"><PiCopySimpleThin size={16} /></span>
+                      <span className="flex-1">{copyDone ? 'Copied!' : 'Copy'}</span>
+                    </button>
+                    {/* Path lens — configure a context and the editor dims
+                        off-path text (Copy and Preview follow the same path).
+                        When one is active the row shows how many questions it
+                        answers and grows an inline ✕ to clear it, exactly as the
+                        old header chip did. ⌥⇧W clears it from the keyboard. */}
+                    <div className={`flex items-center ${lensState ? 'bg-accent/5' : ''}`}>
+                      <button
+                        role="menuitem"
+                        onClick={() => { setActionMenuOpen(false); setShowPathConfig(true) }}
+                        title="Configure a context path — the editor highlights the blocks and branches on that path and dims the rest. Copy and Preview follow the same path."
+                        className={`flex flex-1 items-center gap-3 px-4 py-2.5 text-left text-sm transition hover:bg-surface-overlay hover:text-ink ${lensState ? 'text-accent' : 'text-ink-muted'}`}
+                      >
+                        <span className="flex w-5 items-center justify-center text-accent"><LuRoute size={14} /></span>
+                        <span className="flex-1">{lensState ? `Path · ${lensAnsweredCount}` : 'Path'}</span>
+                      </button>
+                      {lensState && (
+                        <button
+                          onClick={() => { setActionMenuOpen(false); clearLensRef.current() }}
+                          title="Clear path (⌥⇧W)"
+                          aria-label="Clear path"
+                          className="flex items-center px-3 py-2.5 text-accent transition hover:bg-surface-overlay"
+                        >
+                          <LuX size={13} />
+                        </button>
+                      )}
+                    </div>
+                    {/* The dot means this chapter has notes you can't currently
+                        see — it clears once the panel is showing them. */}
+                    <button
+                      role="menuitem"
+                      onClick={() => { setActionMenuOpen(false); togglePanelTab('notes') }}
+                      title="Chapter notes (⌥⇧3)"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
+                    >
+                      <span className="flex w-5 items-center justify-center text-accent"><PiNotebookThin size={16} /></span>
+                      <span className="flex-1">Notes</span>
+                      {hasNotes && <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧3</span>
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => { setActionMenuOpen(false); setShowChapterSettings(true) }}
+                      title="Chapter settings — numbering, visibility gate, delete"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
+                    >
+                      <span className="flex w-5 items-center justify-center text-accent"><LuSettings size={14} /></span>
+                      <span className="flex-1">Settings</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1174,6 +1210,12 @@ export default function ChapterEditorPage() {
           </div>
         )}
 
+        {/* Each block row reserves a 23px gutter on its right (8px gap + the
+            15px delete/collapse column), which made the cards sit 23px further
+            from the right edge of the page than the left. Pulling the rows out
+            over the column's right padding lands the card edges symmetrically
+            inside px-8 — the space the floating add button used to justify. */}
+        <div className="-mr-[23px]">
         <BlockEditor
           key={`${chapter.id}:${editorRevision}`}
           chapterId={chapterId}
@@ -1201,6 +1243,7 @@ export default function ChapterEditorPage() {
           onTextBlockBlur={handleTextBlockBlur}
           onPinText={handlePinText}
         />
+        </div>
       </div>
 
       {/* Bottom chapter nav. Mirrors the reader's prev/next footer so the
