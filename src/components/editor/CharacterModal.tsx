@@ -290,7 +290,22 @@ export default function CharacterModal({
 
           <div className="flex shrink-0 items-center gap-1">
             {saving && <span className="text-[10px] italic text-ink-faint">Saving…</span>}
-            {confirmingDelete ? (
+            {/* While creating there is nothing to delete — the character does
+                not exist yet — so the ✕ means what its icon has always looked
+                like it meant: close. Arming a delete here would fire a DELETE
+                for an id that was never saved. Only an existing character gets
+                the destructive version. */}
+            {creating ? (
+              <button
+                type="button"
+                onClick={onClose}
+                title="Close without saving"
+                aria-label="Close without saving"
+                className="rounded p-1 text-ink-faint transition hover:bg-accent/10 hover:text-ink"
+              >
+                <LuX size={15} />
+              </button>
+            ) : confirmingDelete ? (
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] text-ink-muted">Delete everywhere?</span>
                 <button
