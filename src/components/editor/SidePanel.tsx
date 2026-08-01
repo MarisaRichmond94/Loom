@@ -6,10 +6,16 @@ import { PiNotebookThin } from 'react-icons/pi'
 import { ReferenceList, type PinnedText } from './ReferencePanel'
 import NotesPanel from './NotesPanel'
 import ReviewPanel, { type ReviewSession } from './ReviewPanel'
+import { tabsFitLabelled } from '@/lib/panelTabs'
 
 export type PanelTab = 'notes' | 'refs' | 'review'
 
 const MIN_WIDTH = 280
+
+/** How many tabs the strip renders. Kept beside the tab list rather than
+ *  derived from it, because the label-fit calculation needs it before the
+ *  buttons are built. Bump when a tab is added (Events — LOOM-36). */
+const TAB_COUNT = 3
 
 /** Review needs materially more room than notes — it is a document, not a
  *  margin. A third of the viewport is the floor below which it stops being
@@ -83,9 +89,14 @@ export default function SidePanel({
     onWidthChange(Math.min(Math.max(window.innerWidth - e.clientX, min), Math.max(max, min)))
   }
 
-  // Labelled, not icon-only. Three destinations is past the point where icons
-  // alone are guessable — a pin and a notebook read as the same kind of thing
-  // until you have opened both.
+  // Labelled where there is room, icon-only where there is not (LOOM-41).
+  // Three destinations is past the point where icons alone are guessable — a
+  // pin and a notebook read as the same kind of thing until you have opened
+  // both — so labels are dropped reluctantly, only once the dock is too narrow
+  // to show them without wrapping. aria-label and title carry the name either
+  // way; collapsing costs the always-on hint, not the affordance.
+  const labelled = tabsFitLabelled(width, TAB_COUNT)
+
   function tabButton(value: PanelTab, icon: ReactNode, label: string, hint: string) {
     const active = tab === value
     return (
@@ -95,12 +106,14 @@ export default function SidePanel({
         aria-label={`${label} (${hint})`}
         title={`${label} (${hint})`}
         onClick={() => onTabChange(value)}
-        className={`flex items-center gap-1.5 h-7 rounded-md px-2 text-[11px] font-medium transition ${
+        className={`flex items-center gap-1.5 h-7 rounded-md text-[11px] font-medium transition ${
+          labelled ? 'px-2' : 'px-1.5'
+        } ${
           active ? 'bg-accent/15 text-accent' : 'text-ink-faint hover:text-ink hover:bg-surface-overlay'
         }`}
       >
         {icon}
-        {label}
+        {labelled && label}
       </button>
     )
   }
