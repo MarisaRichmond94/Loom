@@ -5,6 +5,7 @@ import { LuArrowUpDown, LuPencil, LuPlus, LuTag, LuUnlink, LuUsers } from 'react
 import { PanelEmpty, PanelEmptyState } from './PanelEmptyState'
 import { CharacterAvatar, characterPhotoHref } from './CharacterAvatar'
 import { RelationshipList } from './RelationshipList'
+import CharacterModal from './CharacterModal'
 import {
   CATEGORIES,
   aliasList,
@@ -112,12 +113,11 @@ function CharacterRow({
               card sit short of the panel's right edge to hold room for
               controls that were usually invisible.
 
-              Untag is an UNLINK, deliberately not an ✕: it severs this
-              chapter's tag and leaves the character alone. Delete — which
-              removes the character from WriteAI everywhere — is the ✕, and
-              lands to the right of this when LOOM-46 adds it. Two
-              destructive-looking ✕s side by side, one trivially reversible and
-              one not, is exactly the pair worth keeping distinct.
+              Untag is an UNLINK: it severs this chapter's tag and leaves the
+              character alone. Deleting a character deliberately does NOT live
+              here — it removes them from WriteAI everywhere, and putting that
+              a pixel from a trivially reversible untag is how it gets done by
+              accident. It lives in the edit modal, which you have to open.
 
               focus-within so the buttons are reachable by keyboard, where
               there is no hover to depend on. */}
@@ -230,8 +230,6 @@ export default function CharactersPanel({
   onRetry,
   bookId,
   pov,
-  onCreate,
-  onEdit,
 }: {
   characters: WriterCharacter[]
   tagged: TaggedCharacter[]
@@ -244,16 +242,36 @@ export default function CharactersPanel({
   bookId?: string
   /** The chapter's POV, as typed on the chapter. */
   pov?: string | null
-  /** Supplied by LOOM-46. Until then the create and edit affordances stay
-   *  hidden rather than shipping as dead controls. */
-  onCreate?: () => void
-  onEdit?: (character: WriterCharacter) => void
 }) {
   const [tagMode, setTagMode] = useState(false)
   const [query, setQuery] = useState('')
   const [direction, setDirection] = useState<'asc' | 'desc'>('asc')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  // null = closed; { character: undefined } = creating.
+  const [editorFor, setEditorFor] = useState<{ character?: WriterCharacter } | null>(null)
+  const [books, setBooks] = useState<string[]>([])
+  // Autosave fires on every edit, so without this a create session would
+  // re-tag on each keystroke pause. The POST is idempotent, but each one also
+  // re-reads the spread.
+  const taggedNewRef = useRef(false)
+
+  // Fetched when the modal first opens, not on mount: the book chips are the
+  // only thing that needs it, and the tab is opened far more often than the
+  // modal is.
+  function openEditor(character?: WriterCharacter) {
+    if (books.length === 0) {
+      void fetch('/api/writeai/books')
+        .then(r => (r.ok ? r.json() : null))
+        .then(d => setBooks(d?.books ?? []))
+        .catch(() => { /* chips render empty; everything else still saves */ })
+    }
+    taggedNewRef.current = false
+    setEditorFor({ character })
+  }
+
+  const onCreate = () => openEditor()
+  const onEdit = (character: WriterCharacter) => openEditor(character)
 
   useEffect(() => {
     if (tagMode) searchRef.current?.focus()
@@ -314,17 +332,15 @@ export default function CharactersPanel({
         <LuArrowUpDown size={15} />
       </button>
 
-      {onCreate && (
-        <button
-          type="button"
-          onClick={onCreate}
-          title="Create a character and tag them here"
-          aria-label="Create a character and tag them here"
-          className="shrink-0 text-ink-faint transition hover:text-ink"
-        >
-          <LuPlus size={17} />
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={onCreate}
+        title="Create a character and tag them here"
+        aria-label="Create a character and tag them here"
+        className="shrink-0 text-ink-faint transition hover:text-ink"
+      >
+        <LuPlus size={17} />
+      </button>
     </div>
   )
 
@@ -353,17 +369,14 @@ export default function CharactersPanel({
       if (tagMode) {
         return (
           <PanelEmptyState icon={<LuUsers size={26} />} title="No characters yet">
-            {onCreate
-              ? 'Create one with the + button, or add characters on WriteAI’s Plan page.'
-              : 'Add characters on WriteAI’s Plan page and they’ll show up here.'}
+            Create one with the + button, or add characters on WriteAI’s Plan page.
           </PanelEmptyState>
         )
       }
       return (
         <PanelEmptyState icon={<LuUsers size={26} />} title="No characters tagged yet">
-          {onCreate
-            ? 'Click the tag toggle to search characters and tag them to this chapter, or click the + button to create one and tag them here.'
-            : 'Click the tag toggle to search characters and tag them to this chapter.'}
+          Click the tag toggle to search characters and tag them to this chapter, or click the +
+          button to create one and tag them here.
         </PanelEmptyState>
       )
     }
@@ -388,7 +401,7 @@ export default function CharactersPanel({
                   : () => setExpandedId(id => (id === character.id ? null : character.id))
               }
               onUntag={tagMode ? undefined : () => onToggleTag(character.id, false)}
-              onEdit={onEdit && !tagMode ? () => onEdit(character) : undefined}
+              onEdit={tagMode ? undefined : () => onEdit(character)}
               onCategory={c => onSetCategory(character, c)}
             />
           )
@@ -401,6 +414,25 @@ export default function CharactersPanel({
     <div className="flex flex-1 flex-col min-h-0">
       {toolbar}
       <PanelEmpty>{body()}</PanelEmpty>
+      {editorFor && (
+        <CharacterModal
+          character={editorFor.character}
+          pool={characters}
+          books={books}
+          onSaved={async saved => {
+            // A newly created character is tagged here on their FIRST save.
+            // Creating one from a chapter and then having to go find them
+            // would be worse than not offering create at all.
+            if (!editorFor.character && !taggedNewRef.current) {
+              taggedNewRef.current = true
+              await onToggleTag(saved.id, true)
+            }
+            await onRetry()
+          }}
+          onDeleted={onRetry}
+          onClose={() => setEditorFor(null)}
+        />
+      )}
     </div>
   )
 }

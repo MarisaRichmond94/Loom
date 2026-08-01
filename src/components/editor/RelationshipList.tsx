@@ -1,5 +1,6 @@
 'use client'
 
+import { LuX } from 'react-icons/lu'
 import { CharacterAvatar, characterPhotoHref } from './CharacterAvatar'
 import type { WriterCharacter, WriterCharacterRelationship } from '@/lib/characterSearch'
 
@@ -19,11 +20,12 @@ export function RelationshipList({
   relationships,
   /** The character pool, for portraits. */
   pool,
-  onAdd,
+  onRemove,
 }: {
   relationships: WriterCharacterRelationship[]
   pool: WriterCharacter[]
-  onAdd?: () => void
+  /** Absent in read-only contexts, like the expanded card in the panel. */
+  onRemove?: (index: number) => void
 }) {
   // Relationships point at a character by NAME, not by id — the thing LOOM-45
   // is migrating. Looking the portrait up by name works today (every target
@@ -33,20 +35,9 @@ export function RelationshipList({
 
   return (
     <div>
-      <div className="flex items-baseline justify-between">
-        <p className="text-[9px] font-semibold uppercase tracking-widest text-ink-faint">
-          Relationships{relationships.length > 0 && ` (${relationships.length})`}
-        </p>
-        {onAdd && (
-          <button
-            type="button"
-            onClick={onAdd}
-            className="text-[10px] text-ink-faint transition hover:text-accent"
-          >
-            + Add Relationship
-          </button>
-        )}
-      </div>
+      <p className="text-[9px] font-semibold uppercase tracking-widest text-ink-faint">
+        Relationships{relationships.length > 0 && ` (${relationships.length})`}
+      </p>
 
       {relationships.length === 0 ? (
         <p className="mt-1.5 rounded-lg border border-accent/15 bg-surface-overlay/40 px-3 py-4 text-center text-[11px] italic text-ink-faint">
@@ -61,17 +52,28 @@ export function RelationshipList({
             <div
               key={`${r.target}-${r.nature}-${i}`}
               style={{ height: ROW_PX }}
-              className={`flex items-center gap-2.5 px-2.5 ${
+              className={`group/rel flex items-center gap-2.5 px-2.5 ${
                 i > 0 ? 'border-t border-accent/10' : ''
               }`}
             >
               <CharacterAvatar name={r.target} src={photoByName.get(r.target)} size={26} />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="truncate text-[11px] font-medium text-ink">{r.target}</div>
                 {r.nature && (
                   <div className="truncate text-[10px] italic text-ink-faint">{r.nature}</div>
                 )}
               </div>
+              {onRemove && (
+                <button
+                  type="button"
+                  onClick={() => onRemove(i)}
+                  title={`Remove ${r.target}`}
+                  aria-label={`Remove relationship with ${r.target}`}
+                  className="shrink-0 rounded p-1 text-ink-faint opacity-0 transition group-hover/rel:opacity-100 focus:opacity-100 hover:text-red-500"
+                >
+                  <LuX size={12} />
+                </button>
+              )}
             </div>
           ))}
         </div>

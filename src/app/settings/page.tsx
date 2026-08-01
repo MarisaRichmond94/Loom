@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { LuShield, LuPlay, LuFolderOpen, LuUser, LuX, LuCheck, LuArrowLeft, LuDatabaseBackup } from 'react-icons/lu'
 import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
+import { cropImageToBlob } from '@/lib/cropImage'
 import AppHeader from '@/components/AppHeader'
 import { useLightMode } from '@/lib/useLightMode'
 import ExportFormattingSection from '@/components/ExportFormattingSection'
@@ -14,22 +15,6 @@ import EditorColorsSection from '@/components/EditorColorsSection'
 import ToastLayer from '@/components/ToastLayer'
 import { showToast } from '@/lib/notifications'
 
-async function cropImageToBlob(imageSrc: string, pixelCrop: Area): Promise<Blob> {
-  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => resolve(img)
-    img.onerror = reject
-    img.src = imageSrc
-  })
-  const canvas = document.createElement('canvas')
-  canvas.width = pixelCrop.width
-  canvas.height = pixelCrop.height
-  const ctx = canvas.getContext('2d')!
-  ctx.drawImage(image, pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height, 0, 0, pixelCrop.width, pixelCrop.height)
-  return new Promise((resolve, reject) =>
-    canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas empty')), 'image/jpeg', 0.92)
-  )
-}
 
 type BackupSettings = {
   enabled: boolean
