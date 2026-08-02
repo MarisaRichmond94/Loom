@@ -1,9 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { notify } from '@/lib/notifications'
 import type { WriterCharacter } from '@/lib/characterSearch'
 import type { ChapterAppearance } from '@/lib/chapterTags'
+import type { CharacterOption } from '@/lib/writerCharacters'
+import { characterPhotoHref } from './CharacterAvatar'
 
 // The Characters tab's data (LOOM-33 / LOOM-44).
 //
@@ -183,6 +185,38 @@ export function useChapterCharacters(chapterId: string) {
     [characters],
   )
 
+  /**
+   * The same pool, in the two shapes the Events tab needs.
+   *
+   * Derived here rather than fetched there: the Events tab shows an event's
+   * cast as names and faces, but events store `wc-` ids (LOOM-45), so it needs
+   * this pool to render at all. It used to fetch its own copy lazily — on modal
+   * open and on card expand — because GET /api/plan/characters writes to disk,
+   * which meant every card read "Unknown character" until something was
+   * clicked. This hook already pays that cost on mount for the Characters tab,
+   * so sharing it fixes the blank names AND avoids a second concurrent caller
+   * of a write-on-read endpoint.
+   *
+   * An entry without an id is dropped: events reference ids, so a nameless or
+   * idless row could be neither resolved nor stored.
+   */
+  const named = useMemo(
+    () => characters.filter(c => c.id && typeof c.name === 'string' && c.name.length > 0),
+    [characters],
+  )
+  const characterPool: CharacterOption[] = useMemo(
+    () =>
+      named
+        .map(c => ({ id: c.id, name: c.name }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [named],
+  )
+  /** Keyed by NAME, which is what the row has in hand when it renders a face. */
+  const characterPhotos = useMemo(
+    () => Object.fromEntries(named.map(c => [c.name, characterPhotoHref(c.photo_url)])),
+    [named],
+  )
+
   const taggedSet = new Set(taggedIds)
   const nonCanonSet = new Set(nonCanonIds)
   const tagged: TaggedCharacter[] = characters
@@ -191,6 +225,8 @@ export function useChapterCharacters(chapterId: string) {
 
   return {
     characters,
+    characterPool,
+    characterPhotos,
     tagged,
     taggedIds: taggedSet,
     /** Counts RESOLVED tags, so the badge agrees with what the list shows

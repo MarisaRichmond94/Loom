@@ -245,7 +245,6 @@ export default function EventsPanel({
   locations,
   characterPool,
   characterPhotos,
-  loadCharacterPool,
   onRefresh,
 }: {
   events: WriterEvent[]
@@ -260,7 +259,6 @@ export default function EventsPanel({
   locations: string[]
   characterPool: CharacterOption[]
   characterPhotos: Record<string, string | null>
-  loadCharacterPool: () => void | Promise<void>
   onRefresh: () => void | Promise<void>
 }) {
   const [tagMode, setTagMode] = useState(false)
@@ -274,9 +272,6 @@ export default function EventsPanel({
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   function openEditor(event?: WriterEvent) {
-    // Fetched here rather than on mount because the characters endpoint writes
-    // to disk when read — see loadCharacterPool.
-    void loadCharacterPool()
     setEditorFor({ event })
   }
 
@@ -443,12 +438,7 @@ export default function EventsPanel({
               onActivate={
                 tagMode
                   ? () => onToggleTag(event.id, !isTagged)
-                  : () => {
-                      setExpandedId(id => (id === event.id ? null : event.id))
-                      // Portraits come from the character pool, which is not
-                      // fetched on mount because that endpoint writes on read.
-                      void loadCharacterPool()
-                    }
+                  : () => setExpandedId(id => (id === event.id ? null : event.id))
               }
               onUntag={tagMode ? undefined : () => onToggleTag(event.id, false)}
               nonCanon={(event as TaggedEvent).nonCanon}

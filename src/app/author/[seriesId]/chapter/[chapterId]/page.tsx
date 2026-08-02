@@ -1537,9 +1537,11 @@ export default function ChapterEditorPage() {
           loading: chapterEvents.loading,
           unreachable: chapterEvents.unreachable,
           locations: chapterEvents.locations,
-          characterPool: chapterEvents.characterPool,
-          characterPhotos: chapterEvents.characterPhotos,
-          loadCharacterPool: chapterEvents.loadCharacterPool,
+          // From the CHARACTERS hook, not the events one: an event's cast is
+          // stored as `wc-` ids, and that hook is already the page's single
+          // loader of the (write-on-read) character pool.
+          characterPool: chapterCharacters.characterPool,
+          characterPhotos: chapterCharacters.characterPhotos,
           onToggleTag: chapterEvents.setTagged,
           onSetNonCanon: chapterEvents.setNonCanon,
           onRetry: chapterEvents.refresh,

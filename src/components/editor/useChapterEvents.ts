@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { notify } from '@/lib/notifications'
 import type { WriterEvent } from '@/lib/eventSearch'
-import type { CharacterOption } from '@/lib/writerCharacters'
 
 // The Events tab's data (LOOM-32 / LOOM-36).
 //
@@ -37,8 +36,6 @@ export type TaggedEvent = WriterEvent & {
 export function useChapterEvents(chapterId: string) {
   const [events, setEvents] = useState<WriterEvent[]>([])
   const [locations, setLocations] = useState<string[]>([])
-  const [characterPool, setCharacterPool] = useState<CharacterOption[]>([])
-  const [characterPhotos, setCharacterPhotos] = useState<Record<string, string | null>>({})
   const [taggedIds, setTaggedIds] = useState<string[]>([])
   const [spread, setSpread] = useState<Record<string, EventAppearance[]>>({})
   const [nonCanonIds, setNonCanonIds] = useState<string[]>([])
@@ -86,47 +83,11 @@ export function useChapterEvents(chapterId: string) {
     setLocations(data?.locations ?? [])
   }, [])
 
-  /**
-   * WriteAI's writer-character names, for the modal's picker.
-   *
-   * Lazy and called on modal open, never on mount and never on a timer:
-   * GET /api/plan/characters WRITES TO DISK — it seeds from canon on first
-   * call, prunes entries canon has reclassified, and self-heals the `books`
-   * field, saving whenever any of that changes. Treating it as a cheap read is
-   * how a panel that merely opens starts rewriting writer data.
-   */
-  const loadCharacterPool = useCallback(async () => {
-    try {
-      const res = await fetch('/api/writeai/characters')
-      if (!res.ok) return
-      const data = await res.json()
-      const rows: { id?: string; name?: string; photo_url?: string | null }[] = data?.characters ?? []
-      // An entry without an id cannot be referenced at all now that events store
-      // ids (LOOM-45), so it is dropped from the pool rather than offered as a
-      // choice that could not be saved.
-      const named = rows.filter(
-        (c): c is { id: string; name: string; photo_url?: string | null } =>
-          typeof c.name === 'string' && c.name.length > 0 && typeof c.id === 'string' && !!c.id,
-      )
-      setCharacterPool(
-        named
-          .map(c => ({ id: c.id, name: c.name }))
-          .sort((a, b) => a.name.localeCompare(b.name)),
-      )
-      // WriteAI serves portraits from its own origin; rewrite to Loom's proxy
-      // so the browser never talks to :8000 and the no-cache header survives.
-      setCharacterPhotos(
-        Object.fromEntries(
-          named.map(c => {
-            const file = c.photo_url?.split('/').pop()
-            return [c.name, file ? `/api/writeai/photo/${file}` : null]
-          }),
-        ),
-      )
-    } catch {
-      // The picker degrades to "no characters found"; the form still saves.
-    }
-  }, [])
+  // The writer-character pool the Events tab renders casts with is NOT fetched
+  // here. GET /api/plan/characters writes to disk (it seeds, prunes and
+  // self-heals on read), and useChapterCharacters already calls it once on
+  // mount for the same page — so the pool is passed in from there rather than
+  // fetched a second time. See useChapterCharacters' characterPool.
 
   const refresh = useCallback(async () => {
     const id = chapterIdRef.current
@@ -234,9 +195,6 @@ export function useChapterEvents(chapterId: string) {
   return {
     events,
     locations,
-    characterPool,
-    characterPhotos,
-    loadCharacterPool,
     tagged,
     taggedIds: taggedSet,
     /** Tag count for the header badge. Counts RESOLVED tags, so it agrees with

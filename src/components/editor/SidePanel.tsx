@@ -87,8 +87,9 @@ export default function SidePanel({
     onSetCategory: (character: WriterCharacter, category: string) => void | Promise<void>
     onRetry: () => void
   }
-  /** Everything the Events tab needs, passed through whole — the shape is
-   *  exactly useChapterEvents' return, so the two cannot drift apart. */
+  /** Everything the Events tab needs. Mostly useChapterEvents' return, plus the
+   *  character pool, which comes from useChapterCharacters: events store `wc-`
+   *  ids and that hook already loads the write-on-read pool once per chapter. */
   events: {
     events: WriterEvent[]
     tagged: TaggedEvent[]
@@ -99,7 +100,6 @@ export default function SidePanel({
     locations: string[]
     characterPool: CharacterOption[]
     characterPhotos: Record<string, string | null>
-    loadCharacterPool: () => void | Promise<void>
     onToggleTag: (writerEventId: string, tagged: boolean) => void | Promise<void>
     onSetNonCanon: (writerEventId: string, nonCanon: boolean) => void | Promise<void>
     onRetry: () => void
