@@ -230,7 +230,14 @@ function SortableBlock({
                   {BLOCK_TYPE_LABEL[block.type] ?? block.type}
                 </span>
                 {summary && (
-                  <span className="flex-1 min-w-0 truncate text-xs text-ink-faint italic">{summary}</span>
+                  // Scales with the editor's text-block zoom (⌥⇧+ / ⌥⇧-) via
+                  // --loom-prose-scale, same as TextBlock's own prose.
+                  <span
+                    className="flex-1 min-w-0 truncate text-ink-faint italic"
+                    style={{ fontSize: 'calc(var(--loom-prose-scale, 1) * 0.75rem)' }}
+                  >
+                    {summary}
+                  </span>
                 )}
               </div>
             ) : (
