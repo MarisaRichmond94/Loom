@@ -1175,7 +1175,7 @@ export default function ChapterEditorPage() {
                 >
                   <LuMenu size={16} />
                   {(notesUnseen || reviewUnseen) && !actionMenuOpen && (
-                    <span aria-hidden className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-accent" />
+                    <span aria-hidden className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-accent" />
                   )}
                 </button>
 
