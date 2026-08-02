@@ -273,7 +273,7 @@ function ChoicePanel({
           </button>
 
           {menuOpen && !showCreate && !showAttach && (
-            <div className="absolute right-0 bottom-full mb-1 bg-surface-raised border border-accent/20 rounded-lg shadow-xl z-10 overflow-hidden min-w-[200px]">
+            <div className="absolute right-0 bottom-full mb-1 bg-surface-raised border border-accent/20 rounded-lg shadow-xl z-20 overflow-hidden min-w-[200px]">
               <button
                 onClick={() => { setShowCreate(true); setMenuOpen(false) }}
                 className="w-full px-4 py-2.5 text-sm text-ink-muted hover:text-ink hover:bg-surface-overlay transition text-left"
@@ -295,7 +295,7 @@ function ChoicePanel({
             const q = attachQuery.trim().toLowerCase()
             const filtered = q ? unattachedVars.filter(v => v.name.toLowerCase().includes(q)) : unattachedVars
             return (
-              <div className="absolute right-0 bottom-full mb-1 bg-surface-raised border border-accent/20 rounded-lg shadow-xl z-10 overflow-hidden min-w-[220px]">
+              <div className="absolute right-0 bottom-full mb-1 bg-surface-raised border border-accent/20 rounded-lg shadow-xl z-20 overflow-hidden min-w-[220px]">
                 <div className="px-2 py-1.5 border-b border-accent/10">
                   <input
                     ref={attachSearchRef}
