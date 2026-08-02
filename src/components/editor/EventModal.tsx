@@ -238,6 +238,7 @@ export default function EventModal({
   event,
   characterPool,
   locationPool,
+  defaultDate,
   onSaved,
   onDeleted,
   onClose,
@@ -246,6 +247,10 @@ export default function EventModal({
   event?: WriterEvent
   characterPool: CharacterOption[]
   locationPool: string[]
+  /** Date to prefill when creating — the last event created, so a run of
+   *  same-day entries doesn't need re-picking the date each time. Ignored
+   *  when editing an existing event. */
+  defaultDate?: string | null
   onSaved: (event: WriterEvent) => void | Promise<void>
   onDeleted: (id: string) => void | Promise<void>
   onClose: () => void
@@ -253,7 +258,9 @@ export default function EventModal({
   const editing = Boolean(event)
 
   const [title, setTitle] = useState(event?.title ?? '')
-  const [dateValue, setDateValue] = useState(toDateInputValue(event?.date))
+  const [dateValue, setDateValue] = useState(
+    toDateInputValue(event ? event.date : defaultDate),
+  )
   const [time, setTime] = useState(event?.time ?? '')
   const [description, setDescription] = useState(event?.description ?? '')
   const [characters, setCharacters] = useState<string[]>(event?.characters ?? [])
