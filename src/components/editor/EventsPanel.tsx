@@ -269,7 +269,21 @@ export default function EventsPanel({
   const [editorFor, setEditorFor] = useState<{ event?: WriterEvent } | null>(null)
   // Prefills the date field the next time an event is created, so entering a
   // run of same-day events doesn't mean re-picking the date every time.
-  const [lastCreatedDate, setLastCreatedDate] = useState<string | null>(null)
+  // Derived from `updated_at` (not `sortEvents`'s in-story order) so it
+  // survives a reload — it tracks when an event was last touched, not where
+  // it falls in the narrative.
+  const lastUpdatedDate = useMemo(() => {
+    let latest: WriterEvent | null = null
+    let latestAt = -Infinity
+    for (const event of events) {
+      const at = event.updated_at ? Date.parse(event.updated_at) : NaN
+      if (!Number.isNaN(at) && at > latestAt) {
+        latestAt = at
+        latest = event
+      }
+    }
+    return latest?.date ?? null
+  }, [events])
   // One card open at a time — the dock is narrow, and two expanded cards means
   // scrolling to compare things that no longer fit on screen together.
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -467,14 +481,13 @@ export default function EventsPanel({
           event={editorFor.event}
           characterPool={characterPool}
           locationPool={locations}
-          defaultDate={lastCreatedDate}
+          defaultDate={lastUpdatedDate}
           onSaved={async saved => {
             // A newly created event is tagged here immediately. Creating one
             // from a chapter and then having to go find it would be worse than
             // the timeline this exists to replace.
             if (!editorFor.event && saved?.id) {
               await onToggleTag(saved.id, true)
-              if (saved.date) setLastCreatedDate(saved.date)
             }
             // ALWAYS refresh, including after a create. Tagging only records an
             // id in Loom; the row is rendered by looking that id up in the list

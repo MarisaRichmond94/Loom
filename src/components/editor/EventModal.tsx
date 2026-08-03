@@ -247,9 +247,9 @@ export default function EventModal({
   event?: WriterEvent
   characterPool: CharacterOption[]
   locationPool: string[]
-  /** Date to prefill when creating — the last event created, so a run of
-   *  same-day entries doesn't need re-picking the date each time. Ignored
-   *  when editing an existing event. */
+  /** Date to prefill when creating — the most recently updated event's date,
+   *  so a run of same-day entries doesn't need re-picking the date each
+   *  time. Ignored when editing an existing event. */
   defaultDate?: string | null
   onSaved: (event: WriterEvent) => void | Promise<void>
   onDeleted: (id: string) => void | Promise<void>

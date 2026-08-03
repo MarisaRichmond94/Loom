@@ -19,6 +19,10 @@ export type WriterEvent = {
   description: string
   characters: string[]
   location: string | null
+  /** ISO timestamp of the last create/edit. Passed through unfiltered from
+   *  WriteAI (server/routers/writer_events.py); optional here because older
+   *  callers/tests construct events without it. */
+  updated_at?: string
 }
 
 const MONTHS = [
