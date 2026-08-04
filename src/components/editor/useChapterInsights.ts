@@ -18,7 +18,6 @@ export type ChapterInsights = {
   summaryText: string | null
   summary: string[]
   facts: { statement: string; category: string }[]
-  locations: string[]
   date: string | null
 }
 

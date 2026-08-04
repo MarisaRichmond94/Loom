@@ -7,8 +7,7 @@ import type { ChapterInsights, InsightsReason } from './useChapterInsights'
 // The Insights tab (LOOM-92): what WriteAI extracted for this chapter.
 //
 // Read-only, and deliberately so — this is WriteAI's reading of the prose, not
-// a second place to author it. Three sections: the summary, the facts, and the
-// locations.
+// a second place to author it. Two sections: the summary and the facts.
 //
 // Presentation is Loom's, not a copy of WriteAI's book drawer. The drawer wraps
 // facts in a sortable table with a type chip; both are chrome around a field
@@ -19,7 +18,8 @@ import type { ChapterInsights, InsightsReason } from './useChapterInsights'
 // tab, one along, shows the writer's own tags for the same people. The proxy
 // drops them before they reach this component.
 
-/** Section heading, matching the dock's existing small-caps labels. */
+/** Section heading, matching the dock's existing small-caps labels. Fixed size:
+ *  it is chrome, and chrome that grows with the prose just costs reading room. */
 function Section({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
   return (
     <div className="border-b border-accent/10 px-4 py-3 last:border-b-0">
@@ -29,6 +29,18 @@ function Section({ title, count, children }: { title: string; count?: number; ch
       </p>
       {children}
     </div>
+  )
+}
+
+/** One extracted line — a key event or a fact. Both are the same thing to read:
+ *  a single sentence WriteAI pulled out of the prose. */
+function Line({ children }: { children: React.ReactNode }) {
+  return (
+    <li className="flex gap-2 leading-relaxed text-ink-muted">
+      {/* em-sized so the bullet keeps its proportion as the text scales. */}
+      <span className="mt-[0.55em] size-[0.3em] shrink-0 rounded-full bg-accent/40" />
+      {children}
+    </li>
   )
 }
 
@@ -80,20 +92,28 @@ export default function InsightsPanel({
     }
 
     return (
-      <div className="flex flex-col">
+      // Scales with ⌥⇧+ / ⌥⇧- off the same --loom-prose-scale the editor, the
+      // pins panel and the review conversation read. One control for "make the
+      // words bigger", wherever the words are — and these words are prose about
+      // prose, read at the same distance as the manuscript beside them.
+      //
+      // Only the extracted text inherits it. Section labels, the count and the
+      // footer keep their own sizes: they are chrome, and chrome growing with
+      // the prose costs reading room without adding any.
+      <div
+        className="flex flex-col"
+        style={{ fontSize: 'calc(var(--loom-prose-scale, 1) * 0.6875rem)' }}
+      >
         <Section title="Summary">
           {insights.summaryText ? (
-            <p className="text-[11px] leading-relaxed text-ink-muted">{insights.summaryText}</p>
+            <p className="leading-relaxed text-ink-muted">{insights.summaryText}</p>
           ) : (
             // No enriched summary for this chapter. The key events are the same
             // reading at lower resolution, which beats an empty section — and
             // is what WriteAI's own drawer falls back to.
             <ul className="flex flex-col gap-1.5">
               {insights.summary.map((line, i) => (
-                <li key={i} className="flex gap-2 text-[11px] leading-relaxed text-ink-muted">
-                  <span className="mt-1.5 size-1 shrink-0 rounded-full bg-accent/40" />
-                  {line}
-                </li>
+                <Line key={i}>{line}</Line>
               ))}
             </ul>
           )}
@@ -105,10 +125,7 @@ export default function InsightsPanel({
           <Section title="Key events" count={insights.summary.length}>
             <ul className="flex flex-col gap-1.5">
               {insights.summary.map((line, i) => (
-                <li key={i} className="flex gap-2 text-[11px] leading-relaxed text-ink-muted">
-                  <span className="mt-1.5 size-1 shrink-0 rounded-full bg-accent/40" />
-                  {line}
-                </li>
+                <Line key={i}>{line}</Line>
               ))}
             </ul>
           </Section>
@@ -118,27 +135,9 @@ export default function InsightsPanel({
           <Section title="Facts" count={insights.facts.length}>
             <ul className="flex flex-col gap-1.5">
               {insights.facts.map((f, i) => (
-                <li key={i} className="flex gap-2 text-[11px] leading-relaxed text-ink-muted">
-                  <span className="mt-1.5 size-1 shrink-0 rounded-full bg-accent/40" />
-                  {f.statement}
-                </li>
+                <Line key={i}>{f.statement}</Line>
               ))}
             </ul>
-          </Section>
-        )}
-
-        {insights.locations.length > 0 && (
-          <Section title="Locations" count={insights.locations.length}>
-            <div className="flex flex-wrap gap-1">
-              {insights.locations.map((name, i) => (
-                <span
-                  key={i}
-                  className="rounded-full bg-surface-overlay px-2 py-0.5 text-[10px] text-ink-faint"
-                >
-                  {name}
-                </span>
-              ))}
-            </div>
           </Section>
         )}
 

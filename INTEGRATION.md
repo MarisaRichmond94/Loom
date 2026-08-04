@@ -109,7 +109,7 @@ The dock's Insights tab shows what WriteAI extracted for the open chapter.
 
 | Loom route | Proxies to | Purpose |
 |---|---|---|
-| `GET /api/writeai/insights` | `GET /api/books/{n}/chapters/{c}/extracted` | Enriched summary, key events, facts and locations for one chapter. |
+| `GET /api/writeai/insights` | `GET /api/books/{n}/chapters/{c}/extracted` | Enriched summary, key events and facts for one chapter. |
 
 Addressed the same way as the review: `reviewNumberForChapter()` for the canon
 chapter number, plus a title→number lookup for the book, since WriteAI's
@@ -132,7 +132,10 @@ being flattened into "nothing here yet".
 **The extracted `characters` array is dropped at the seam.** It is a
 chunk-derived, degraded view of the same people the Characters tab shows from
 the writer's own tags; carrying it would put two disagreeing rosters one tab
-apart, and dropping it here stops a second consumer growing on it.
+apart, and dropping it here stops a second consumer growing on it. `locations`
+is dropped for a plainer reason — it shipped as a third section and did not earn
+the space. WriteAI still returns both; Loom just stops at the seam, so the
+payload says exactly what the tab renders.
 
 ---
 

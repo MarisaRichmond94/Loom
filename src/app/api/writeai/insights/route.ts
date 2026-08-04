@@ -31,10 +31,15 @@ export type ChapterInsights = {
    *  `summaryText` is null, which is what WriteAI's own drawer does. */
   summary: string[]
   facts: Fact[]
-  locations: string[]
-  /** The chapter's date line, for showing how old the reading is. */
+  /** The chapter's date line. Not rendered today — see the panel's footer for
+   *  why it is NOT a "last read on" timestamp. */
   date: string | null
 }
+
+// `locations` was a third section, and is gone. It shipped provisionally to
+// find out whether a list of place names earned its space beside the summary
+// and the facts; it did not. Dropped at the seam as well as in the panel, so
+// the payload keeps saying exactly what the tab renders.
 
 type Payload =
   | { insights: ChapterInsights; chapter: number }
@@ -125,7 +130,6 @@ export async function GET(req: Request) {
     summary_text?: string | null
     summary?: unknown
     facts?: unknown
-    locations?: unknown
     date?: string | null
   }
 
@@ -141,12 +145,6 @@ export async function GET(req: Request) {
         }))
     : []
 
-  const locations = Array.isArray(data.locations)
-    ? (data.locations as { name?: unknown }[])
-        .map(l => l?.name)
-        .filter((n): n is string => typeof n === 'string' && n.trim() !== '')
-    : []
-
   const insights: ChapterInsights = {
     // Independently nullable: a WriteAI database predating LOOM-65's column
     // returns null here while the rest of the payload is fine.
@@ -155,17 +153,15 @@ export async function GET(req: Request) {
       : null,
     summary: strings(data.summary),
     facts,
-    locations,
     date: typeof data.date === 'string' && data.date.trim() !== '' ? data.date : null,
   }
 
   // Everything empty is indistinguishable from an unanalysed chapter, and the
-  // tab has a better sentence for that than three blank sections.
+  // tab has a better sentence for that than two blank sections.
   const empty =
     insights.summaryText === null &&
     insights.summary.length === 0 &&
-    insights.facts.length === 0 &&
-    insights.locations.length === 0
+    insights.facts.length === 0
   if (empty) {
     return NextResponse.json({ insights: null, reason: 'not-analyzed', chapter } satisfies Payload)
   }
