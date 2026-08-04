@@ -1,28 +1,30 @@
 'use client'
 
 import { useRef, useState, type ReactNode } from 'react'
-import { LuCalendarDays, LuPin, LuScanText, LuUsers, LuX } from 'react-icons/lu'
+import { LuCalendarDays, LuLightbulb, LuPin, LuScanText, LuUsers, LuX } from 'react-icons/lu'
 import { PiNotebookThin } from 'react-icons/pi'
 import { ReferenceList, type PinnedText } from './ReferencePanel'
 import NotesPanel from './NotesPanel'
 import ReviewPanel, { type ReviewSession } from './ReviewPanel'
 import EventsPanel from './EventsPanel'
 import CharactersPanel from './CharactersPanel'
+import InsightsPanel from './InsightsPanel'
 import { tabsFitLabelled } from '@/lib/panelTabs'
 import type { WriterEvent } from '@/lib/eventSearch'
 import type { TaggedEvent } from './useChapterEvents'
 import type { WriterCharacter } from '@/lib/characterSearch'
 import type { CharacterOption } from '@/lib/writerCharacters'
 import type { TaggedCharacter } from './useChapterCharacters'
+import type { ChapterInsights, InsightsReason } from './useChapterInsights'
 
-export type PanelTab = 'notes' | 'refs' | 'review' | 'events' | 'characters'
+export type PanelTab = 'notes' | 'refs' | 'review' | 'events' | 'characters' | 'insights'
 
 const MIN_WIDTH = 280
 
 /** How many tabs the strip renders. Kept beside the tab list rather than
  *  derived from it, because the label-fit calculation needs it before the
  *  buttons are built. Bump when a tab is added. */
-const TAB_COUNT = 5
+const TAB_COUNT = 6
 
 /** Review needs materially more room than notes — it is a document, not a
  *  margin. A third of the viewport is the floor below which it stops being
@@ -57,6 +59,7 @@ export default function SidePanel({
   chapterPov,
   events,
   characters,
+  insights,
   review,
   reviewLoading,
   reviewCtx,
@@ -104,6 +107,14 @@ export default function SidePanel({
     onSetNonCanon: (writerEventId: string, nonCanon: boolean) => void | Promise<void>
     onRetry: () => void
     onRefresh: () => void | Promise<void>
+  }
+  /** The Insights tab's data — useChapterInsights' return, passed through
+   *  whole. Read-only, so there is nothing here but state. */
+  insights: {
+    insights: ChapterInsights | null
+    reason: InsightsReason | null
+    loading: boolean
+    onRetry: () => void
   }
   review: { review: ReviewSession | null; reason?: string; total?: number; chapter?: number | null } | null
   reviewLoading: boolean
@@ -224,14 +235,17 @@ export default function SidePanel({
           behind. Two nested scrollers made that easy to hit. */}
       <div className="sticky top-0 h-[calc(100vh-3.75rem-var(--loom-footer-h,0px))] overflow-y-auto overscroll-contain flex flex-col">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-accent/10 shrink-0">
-          {/* All four, always, in the order they are reached for: the review
-              is the reason the panel is usually open, events and characters
-              sit beside it because all three answer "what is this chapter" —
-              and beside each other because they are the same kind of
+          {/* All six, always, in the order they are reached for: the review
+              is the reason the panel is usually open, events, characters and
+              insights sit beside it because all four answer "what is this
+              chapter" — and beside each other because they are the same kind of
               cross-app story data, notes are constant
               company, pins are occasional. Pins used to appear only when
               something was pinned, which meant the way to discover pinning was
               to already be doing it.
+              Insights sits last of the four because it is the only one that is
+              read-only: the other three are things you do to a chapter, this is
+              something the chapter tells you.
               This is also the cycle order for ⌥⇧< / ⌥⇧> (LOOM-56) — each tab
               used to carry its own ⌥⇧2–6 hotkey, but that grew unmanageable as
               tabs kept getting added, so the hints moved to the panel-level
@@ -240,6 +254,7 @@ export default function SidePanel({
             {tabButton('review', <LuScanText size={13} />, 'Reviews')}
             {tabButton('events', <LuCalendarDays size={13} />, 'Events', events.count)}
             {tabButton('characters', <LuUsers size={13} />, 'Characters', characters.count)}
+            {tabButton('insights', <LuLightbulb size={13} />, 'Insights')}
             {tabButton('notes', <PiNotebookThin size={14} />, 'Notes')}
             {tabButton('refs', <LuPin size={12} />, 'Pins')}
           </div>
@@ -276,7 +291,9 @@ export default function SidePanel({
               ? <EventsPanel {...events} bookId={reviewCtx.bookId} />
               : tab === 'characters'
                 ? <CharactersPanel {...characters} bookId={reviewCtx.bookId} pov={chapterPov} />
-                : <NotesPanel value={notes} onChange={onNotesChange} />}
+                : tab === 'insights'
+                  ? <InsightsPanel {...insights} />
+                  : <NotesPanel value={notes} onChange={onNotesChange} />}
       </div>
     </aside>
   )
