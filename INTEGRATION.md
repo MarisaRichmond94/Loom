@@ -103,6 +103,37 @@ displays at the point of action.
 
 WriteAI's own review pane is unchanged and remains fully usable.
 
+### Chapter insights (LOOM-91)
+
+The dock's Insights tab shows what WriteAI extracted for the open chapter.
+
+| Loom route | Proxies to | Purpose |
+|---|---|---|
+| `GET /api/writeai/insights` | `GET /api/books/{n}/chapters/{c}/extracted` | Enriched summary, key events, facts and locations for one chapter. |
+
+Addressed the same way as the review: `reviewNumberForChapter()` for the canon
+chapter number, plus a title→number lookup for the book, since WriteAI's
+per-book endpoints take the positional `book_number` even where the store
+behind them is keyed by cuid. That lookup lives in `src/lib/writeaiBooks.ts`
+and is shared with the outline proxy.
+
+Unlike `GET /api/plan/characters`, **the endpoint behind this is a pure read** —
+it seeds nothing and writes nothing, so it is safe to call on tab open. It is
+still not something to poll: what it returns only changes when an enrichment
+pass runs.
+
+Four outcomes, all at 200 — none of them is an error the writer must dismiss:
+`chapter-not-addressable` (unnumbered, non-prologue chapter, so WriteAI has no
+name for it), `not-analyzed` (addressable but not ingested/enriched yet — the
+ordinary state for anything written since the last pass), `writeai-unavailable`,
+and the payload itself. A genuine upstream fault keeps its 502 rather than
+being flattened into "nothing here yet".
+
+**The extracted `characters` array is dropped at the seam.** It is a
+chunk-derived, degraded view of the same people the Characters tab shows from
+the writer's own tags; carrying it would put two disagreeing rosters one tab
+apart, and dropping it here stops a second consumer growing on it.
+
 ---
 
 #### Legacy: the review deep link (Loom → WriteAI)
