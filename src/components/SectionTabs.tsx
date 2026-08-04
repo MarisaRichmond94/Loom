@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 
 // The book page's section switcher (LOOM-93).
 //
@@ -15,6 +15,26 @@ import { useEffect, useState, type ReactNode } from 'react'
 // The cost, worth being honest about: you can no longer see the cast and the
 // soundtrack at once. Nothing on this page related the two, so the loss is
 // small, but it is a real one and the collapsible version did not have it.
+
+/**
+ * Where a section can put its own header control.
+ *
+ * `action` on a Section covers the easy case — the page knows the button. It
+ * does not cover a section that owns its own data, like the outline: its "Add
+ * card" needs the hook that lives INSIDE the section, and lifting that hook to
+ * the page would fire the outline's write-on-read GET for every visitor who
+ * only came for the cast.
+ *
+ * So the strip exposes its header slot as a DOM node and the section portals
+ * into it. A ref rather than a callback, because passing JSX up through state
+ * re-renders the strip on every render of the child.
+ */
+const SectionActionSlot = createContext<HTMLElement | null>(null)
+
+/** The header node for the active section, or null before the strip mounts. */
+export function useSectionActionSlot() {
+  return useContext(SectionActionSlot)
+}
 
 export type Section = {
   /** Stable key for the persisted selection. Not the label — a heading is
@@ -40,6 +60,7 @@ export default function SectionTabs({
   className?: string
 }) {
   const [activeId, setActiveId] = useState(sections[0]?.id)
+  const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null)
 
   // Read in an effect rather than during render: the server has no
   // localStorage, and seeding state from it directly is a hydration mismatch.
@@ -101,13 +122,17 @@ export default function SectionTabs({
             )
           })}
         </div>
-        <div className="pb-2">{active?.action}</div>
+        {/* Both routes into this slot land in the same place, so a page-owned
+            action and a section-owned one are indistinguishable on screen. */}
+        <div ref={setActionSlot} className="flex items-center gap-2 pb-2">
+          {active?.action}
+        </div>
       </div>
 
       {/* Only the active section is mounted. These carry <img> and <audio>
           elements, and a section nobody is looking at should not be fetching
           portraits and album art. */}
-      {active?.content}
+      <SectionActionSlot.Provider value={actionSlot}>{active?.content}</SectionActionSlot.Provider>
     </div>
   )
 }
