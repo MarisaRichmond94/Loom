@@ -38,6 +38,9 @@ model Series {
   variables   StoryVariable[]
   sessions    ReaderSession[]
   characters  Character[]
+  // Loom's per-book overlay on WriteAI's characters. Replaces `characters`,
+  // which goes away with the Character model in LOOM-90.
+  writerCharacters WriterCharacterMeta[]
 }
 
 model Character {
@@ -83,6 +86,109 @@ model CharacterBookOverride {
   @@index([bookId])
 }
 
+// Loom's half of a WriteAI writer-character (LOOM-85, under LOOM-5).
+//
+// WriteAI owns who a character IS — name, category, aliases, traits, goals,
+// relationships, the default portrait. It has no concept of a book, so it has
+// nowhere to put the things below, every one of which is per-book narrative
+// state the reader's cast list is built out of. Those stay here, keyed by the
+// `wc-` id.
+//
+// Do not solve this by adding fields to WriteAI's record instead:
+// `PUT /api/plan/characters/{id}` stores the body verbatim with no model, so a
+// write that forgets a key deletes it. Loom's book knowledge does not belong
+// in a record Loom cannot safely round-trip.
+//
+// `writerCharacterId` is a plain string, not a foreign key — the referent
+// lives in another process. Same choice, for the same reason, as
+// ChapterCharacter and ChapterEvent. The book links ARE real relations,
+// because books are Loom's.
+model WriterCharacterMeta {
+  id                String                    @id @default(cuid())
+  seriesId          String
+  // "wc-<hex>" — WriteAI's id. No FK; see above.
+  writerCharacterId String
+  age               Int?
+  // Primary character marker. Not gated per book — once primary, always
+  // primary. Carried over from Character.starred.
+  starred           Boolean                   @default(false)
+  // The book this character first appears in. Books before it hide them from
+  // the cast list entirely.
+  firstBookId       String?
+  // The book in which this character dies. They appear normally in this book
+  // and every earlier one; in later books they're flagged "Deceased" but stay
+  // referenceable, so flashbacks and eulogies still resolve.
+  deathBookId       String?
+  // The last book the character appears in. Past it they're hidden from the
+  // reader's cast list — unlike deathBookId this doesn't imply death.
+  lastBookId        String?
+  series            Series                    @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  firstBook         Book?                     @relation("WriterCharacterFirstAppearsIn", fields: [firstBookId], references: [id], onDelete: SetNull)
+  deathBook         Book?                     @relation("WriterCharacterDiesIn", fields: [deathBookId], references: [id], onDelete: SetNull)
+  lastBook          Book?                     @relation("WriterCharacterLastAppearsIn", fields: [lastBookId], references: [id], onDelete: SetNull)
+  bookMeta          WriterCharacterBookMeta[]
+
+  @@unique([seriesId, writerCharacterId])
+  @@index([firstBookId])
+  @@index([deathBookId])
+  @@index([lastBookId])
+}
+
+// Per-book overrides on the above. Currently age only; the per-book PORTRAIT
+// is a file on disk (`<wc-id>-<bookId>.jpg`), not a column — see LOOM-87.
+//
+// Unlike its predecessor this hangs off the meta row rather than repeating the
+// `wc-` id, so deleting a character's Loom overlay takes its per-book rows with
+// it instead of orphaning them.
+model WriterCharacterBookMeta {
+  id       String              @id @default(cuid())
+  metaId   String
+  bookId   String
+  age      Int?
+  meta     WriterCharacterMeta @relation(fields: [metaId], references: [id], onDelete: Cascade)
+  book     Book                @relation("WriterCharacterBookOverrides", fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([metaId, bookId])
+  @@index([bookId])
+}
+
+// A local copy of WriteAI's writer-character pool (LOOM-86, under LOOM-5).
+//
+// ⚠️ This is a CACHE. WriteAI's `writer_characters.json` is the source of
+// truth for every column here, and a stale or damaged snapshot is repaired by
+// re-running the refresh — there is deliberately nothing in this table that
+// exists nowhere else. Keep it that way: Loom-owned character data goes in
+// WriterCharacterMeta, not here.
+//
+// It exists because `GET /api/plan/characters` WRITES TO DISK — it seeds from
+// canon, prunes entries canon reclassifies, and rewrites `books` from numbers
+// to names, saving whenever any of that changes. Reader and preview pages
+// render a cast list on every visit; rendering must not mutate another app's
+// data file. Availability is not the argument (both apps are local) — that is.
+//
+// List-shaped fields are JSON strings, matching Series.genres and the rest of
+// the schema. SQLite has no native list type.
+model WriterCharacterSnapshot {
+  // WriteAI's id IS the primary key — there is no Loom-side identity for a
+  // row that is purely a copy. Mostly "wc-<hex>", but at least one live record
+  // predates that convention ("draft-<ms>"), so nothing here assumes a shape.
+  writerCharacterId String   @id
+  name              String
+  category          String?
+  role              String?
+  // One comma-separated string, not a list — WriteAI's shape, preserved.
+  aliases           String?
+  traits            String   @default("[]")
+  arcNotes          String?
+  goals             String?
+  // JSON [{ target: "<wc-id>", nature: "..." }]. Targets are ids, not names.
+  relationships     String   @default("[]")
+  // JSON array of book TITLES (WriteAI's own shape — not Loom book ids).
+  books             String   @default("[]")
+  photoUrl          String?
+  syncedAt          DateTime @updatedAt
+}
+
 model Book {
   id                           String                  @id @default(cuid())
   seriesId                     String
@@ -107,6 +213,12 @@ model Book {
   charactersDyingHere          Character[]             @relation("DiesIn")
   charactersLastAppearingHere  Character[]             @relation("LastAppearsIn")
   characterOverrides           CharacterBookOverride[] @relation("CharacterOverrides")
+  // The writer-character equivalents of the four above. Both sets coexist
+  // until LOOM-90 retires the Character model.
+  writerCharactersFirstAppearingHere WriterCharacterMeta[]     @relation("WriterCharacterFirstAppearsIn")
+  writerCharactersDyingHere          WriterCharacterMeta[]     @relation("WriterCharacterDiesIn")
+  writerCharactersLastAppearingHere  WriterCharacterMeta[]     @relation("WriterCharacterLastAppearsIn")
+  writerCharacterOverrides           WriterCharacterBookMeta[] @relation("WriterCharacterBookOverrides")
   // Inverse of StoryVariable.originBook — set when this book is the
   // origin for a variable.
   originatingVariables         StoryVariable[]
