@@ -112,3 +112,37 @@ describe('povColorClass', () => {
     }
   })
 })
+
+// The year bug, found while fixing the weekday one in WriteAI (LOOM-97).
+//
+// The picker always formatted with its VIEW year, which is a real number even
+// when the value it was editing had none. So picking a day on a yearless story
+// date stamped it with the current real year — turning "Saturday, October 31st"
+// into "Saturday, October 31st, 2026" and quietly giving the story a calendar
+// it does not have. Both apps had it.
+//
+// The rule now: the existing value decides, an empty field falls back to the
+// caller's convention, and typing in the year field overrides both.
+describe('year handling follows the value, not the calendar view', () => {
+  function includeYear(value: string, defaultIncludeYear: boolean, yearTouched = false) {
+    return yearTouched || (value.trim() ? parseStoryDate(value).year !== null : defaultIncludeYear)
+  }
+
+  it('keeps a story date yearless when re-picking a day', () => {
+    expect(includeYear('Saturday, October 31st', false)).toBe(false)
+  })
+
+  it('keeps a real date’s year', () => {
+    // Writer-events are real dates on the real calendar; all 157 carry a year.
+    expect(includeYear('Saturday, January 2nd, 1943', true)).toBe(true)
+  })
+
+  it('falls back to the caller only for an empty field', () => {
+    expect(includeYear('', false)).toBe(false)
+    expect(includeYear('', true)).toBe(true)
+  })
+
+  it('lets the writer add a year to a story date deliberately', () => {
+    expect(includeYear('Saturday, October 31st', false, true)).toBe(true)
+  })
+})
