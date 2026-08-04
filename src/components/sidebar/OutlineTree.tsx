@@ -8,6 +8,7 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from 
 import type { DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { useCanonSave } from '@/components/editor/useCanonSave'
 
 type Chapter = { id: string; title: string; order: number }
 type Book = { id: string; title: string; order: number; inProgress?: boolean; chapters: Chapter[] }
@@ -121,6 +122,7 @@ function SortableChapter({ chapter, seriesId, isActive, scrollOnDefault, openMen
 export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, onInsertChapter }: Props) {
   const params = useParams()
   const router = useRouter()
+  const { saveCanonAfterStructuralChange } = useCanonSave(seriesId)
   // Default-open: the in-progress book (writer's currently-active work),
   // falling back to book 1 when nothing is flagged.
   const defaultBookId = books.find(b => b.inProgress)?.id ?? books[0]?.id ?? null
@@ -250,6 +252,13 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
       // on the server.
       body: JSON.stringify(reordered.map(c => ({ id: c.id, order: c.order, title: c.title }))),
     })
+    // A drag is the one structural change that alters no prose at all, so
+    // nothing downstream would ever notice it on its own: no blur fires, no
+    // word count moves, and the book's chapters simply mean different
+    // numbers than they did a second ago. Left unexported, WriteAI keeps
+    // answering about chapter 12 with chapter 11's scene until the next time
+    // the writer happens to type something in this book.
+    void saveCanonAfterStructuralChange(book.id)
   }
 
   function submitAdd(e: React.FormEvent) {

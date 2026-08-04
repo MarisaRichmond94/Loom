@@ -14,6 +14,7 @@ import { ShortcutsProvider } from '@/lib/shortcuts'
 import { useLightMode } from '@/lib/useLightMode'
 import { AuthorProvider, type AuthorSeries } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
+import { useCanonSave } from '@/components/editor/useCanonSave'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import BookSkeleton from '@/components/editor/BookSkeleton'
 import SeriesPageSkeleton from '@/components/editor/SeriesPageSkeleton'
@@ -103,6 +104,8 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
     if (res.ok) setKnownStringValues(await res.json())
   }, [seriesId])
 
+  const { saveCanonAfterStructuralChange } = useCanonSave(seriesId)
+
   useEffect(() => { loadSeries() }, [loadSeries])
   useEffect(() => { loadChoices() }, [loadChoices])
   useEffect(() => { loadKnownStringValues() }, [loadKnownStringValues, choiceQuestions])
@@ -124,6 +127,11 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
     })
     const chapter = await res.json()
     await loadSeries()
+    // Land the new chapter in the manuscript now — see the comment on
+    // saveCanonAfterStructuralChange. Not awaited: the export takes seconds
+    // and the writer should be typing by then, and `keepalive` carries it
+    // across the navigation below.
+    void saveCanonAfterStructuralChange(forBookId)
     router.push(`/author/${seriesId}/chapter/${chapter.id}?focus=pov`)
   }
 
@@ -135,6 +143,10 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
     })
     const chapter = await res.json()
     await loadSeries()
+    // Doubly worth doing on an insert: this is the case that renumbers every
+    // chapter below it, so the manifest is wrong about the whole tail of the
+    // book until the export lands.
+    void saveCanonAfterStructuralChange(forBookId)
     router.push(`/author/${seriesId}/chapter/${chapter.id}?focus=pov`)
   }
 
