@@ -14,8 +14,36 @@ const ExportBookModal = dynamic(() => import('@/components/editor/ExportBookModa
 import { useCanonSave } from '@/components/editor/useCanonSave'
 import { pinLabel } from '@/lib/pinLabel'
 import PinnedAudio from '@/components/PinnedAudio'
+import CollapsibleSection from '@/components/CollapsibleSection'
 import { writerPortraitUrl } from '@/lib/writerPortrait'
 import type { WriterCharacter } from '@/lib/characterSearch'
+
+// Section heights (LOOM-93).
+//
+// Derived, not measured and not hardcoded to a pixel total: the cap is stated
+// as a number of rows, so it stays that number of rows if a card is resized.
+// Half a row is deliberate — a section cut off mid-card reads as "there is
+// more", where one cut off cleanly between rows reads as the end of the list.
+
+const CARD_GAP = 8
+const CHARACTER_CARD_H = 146
+/** 2.5 character cards. */
+const CHARACTER_GRID_MAX_H = CHARACTER_CARD_H * 2.5 + CARD_GAP * 2
+
+/**
+ * One soundtrack row: a 40px thumbnail inside `py-3`.
+ *
+ * Unlike character cards this is a FLOOR, not a fixed height — a row whose pin
+ * range is set grows a second line, and the title can wrap. So the cap is "3.5
+ * rows of the ordinary kind"; a stretch of annotated rows shows slightly fewer.
+ *
+ * The alternative was pinning every row to a fixed height, which clips the pin
+ * label — losing information to make a scroll boundary land neatly is the wrong
+ * trade.
+ */
+const SOUNDTRACK_ROW_H = 40 + 12 * 2
+/** 3.5 soundtrack rows. */
+const SOUNDTRACK_MAX_H = SOUNDTRACK_ROW_H * 3.5 + CARD_GAP * 3
 
 // The Characters tab's own editor, reused rather than reimplemented — it is
 // the only place WriteAI-owned fields are edited, and it already knows the
@@ -490,24 +518,31 @@ export default function BookDetailPage() {
         </div>
 
         {/* Characters */}
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold uppercase tracking-widest text-ink">Character(s)</h2>
+        <CollapsibleSection
+          id="characters"
+          title="Character(s)"
+          count={characters.length}
+          maxHeight={CHARACTER_GRID_MAX_H}
+          action={
             <button
               onClick={openCreateModal}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
             >
               <LuPlus size={12} /> Add Character
             </button>
-          </div>
+          }
+        >
           {characters.length === 0 ? (
-            <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-accent/20" style={{ height: 300 }}>
+            // Shorter than the old 300px reservation: a capped section no
+            // longer needs to hold the page's shape open, and an empty state
+            // taller than the filled one reads as a bug.
+            <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-accent/20" style={{ height: 140 }}>
               <p className="text-sm text-ink-faint italic text-center px-8">No characters yet. Add one to start tagging appearances in your chapters.</p>
             </div>
           ) : (() => {
               const povNames = new Set(series.books.flatMap(b => b.chapters.map(ch => ch.pov)).filter(Boolean) as string[])
               return (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))', gap: 8, minHeight: 300, alignContent: 'start' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(112px, 1fr))`, gap: CARD_GAP, alignContent: 'start' }}>
               {characters.map(c => {
                 const isPov = povNames.has(c.name)
                 return (
@@ -517,7 +552,10 @@ export default function BookDetailPage() {
                   tabIndex={0}
                   onClick={() => openEditModal(c)}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEditModal(c) } }}
-                  className={`group/charcard relative flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border transition h-[146px] w-full cursor-pointer ${c.hidden ? 'opacity-60 ' : ''}${isPov ? 'border-accent hover:border-accent/70' : 'border-accent/10 hover:border-accent/30'}`}
+                  // Height comes from the constant the section's cap is derived
+                  // from, so "2.5 rows" stays 2.5 rows if the card changes.
+                  style={{ height: CHARACTER_CARD_H }}
+                  className={`group/charcard relative flex flex-col items-center gap-2 p-3 rounded-xl bg-surface-raised border transition w-full cursor-pointer ${c.hidden ? 'opacity-60 ' : ''}${isPov ? 'border-accent hover:border-accent/70' : 'border-accent/10 hover:border-accent/30'}`}
                 >
                   {/* Quick toggles. Active state stays visible permanently;
                       idle state fades in on card hover. stopPropagation so
@@ -559,11 +597,16 @@ export default function BookDetailPage() {
             </div>
               )
           })()}
-        </div>
+        </CollapsibleSection>
 
         {/* Soundtrack — every chapter's soundtrack blocks, in story order */}
-        <div className="mb-8">
-          <h2 className="text-sm font-semibold uppercase tracking-widest text-ink mb-2">Soundtrack</h2>
+        <CollapsibleSection
+          id="soundtrack"
+          title="Soundtrack"
+          count={soundtracks.length}
+          maxHeight={SOUNDTRACK_MAX_H}
+          className="mb-8"
+        >
           {soundtracks.length === 0 ? (
             <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-accent/20" style={{ height: 120 }}>
               <p className="text-sm text-ink-faint italic text-center px-8">
@@ -571,7 +614,7 @@ export default function BookDetailPage() {
               </p>
             </div>
           ) : (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col" style={{ gap: CARD_GAP }}>
               {soundtracks.map((s, idx) => {
                 const label = pinLabel(s.pinStart, s.pinEnd)
                 const chapterDisplay = s.chapterTitle?.trim() || `Chapter ${s.chapterOrder}`
@@ -623,7 +666,7 @@ export default function BookDetailPage() {
               })}
             </div>
           )}
-        </div>
+        </CollapsibleSection>
 
         {/* Front matter — spliced ahead of Chapter 1 in manuscript exports */}
         <div className="mb-8">
