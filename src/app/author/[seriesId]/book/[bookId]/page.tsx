@@ -14,6 +14,10 @@ const ExportBookModal = dynamic(() => import('@/components/editor/ExportBookModa
 import { useCanonSave } from '@/components/editor/useCanonSave'
 import { pinLabel } from '@/lib/pinLabel'
 import PinnedAudio from '@/components/PinnedAudio'
+import SectionTabs from '@/components/SectionTabs'
+// Loaded when the Outline tab is first opened, not with the page — it pulls in
+// the outline renderer for a section most page visits never look at.
+const OutlineSection = dynamic(() => import('@/components/OutlineSection'), { ssr: false })
 import { writerPortraitUrl } from '@/lib/writerPortrait'
 import type { WriterCharacter } from '@/lib/characterSearch'
 
@@ -379,7 +383,15 @@ export default function BookDetailPage() {
 
   return (
     <>
-      <div className="max-w-3xl mx-auto px-8 py-8">
+      {/* Wider than the 3xl it was: the outline is a board of cards, and at
+          768px it could only ever be one column, which is not an outline —
+          it is a list of chapters you have to scroll to compare. Everything
+          else on the page simply gets more room.
+          Capped rather than uncapped, because an ultrawide display would
+          otherwise stretch the synopsis into a single unreadable line; 1600px
+          is past the width of the laptops this is used on, so in practice the
+          page fills the window. */}
+      <div className="max-w-[1600px] mx-auto px-8 py-8">
         {/* Preview + Publish controls sit in their own row above the cover
             so they don't crowd the title or get hidden behind the synopsis. */}
         <div className="flex items-center justify-end gap-2 mb-6">
@@ -489,17 +501,31 @@ export default function BookDetailPage() {
           ))}
         </div>
 
-        {/* Characters */}
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold uppercase tracking-widest text-ink">Character(s)</h2>
-            <button
-              onClick={openCreateModal}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
-            >
-              <LuPlus size={12} /> Add Character
-            </button>
-          </div>
+        {/* Outline, Characters and Soundtrack, as tabs rather than a stack —
+            only one of them is ever the thing you came for, and stacked they
+            pushed each other off the screen.
+
+            Outline leads because it is the planning surface: it answers "what
+            is this book" where the other two answer "what is in it". */}
+        <SectionTabs
+          id="book"
+          sections={[{
+            id: 'outline',
+            label: 'Outline',
+            content: <OutlineSection seriesId={seriesId} bookId={bookId} />,
+          }, {
+            id: 'characters',
+            label: 'Character(s)',
+            action: (
+              <button
+                onClick={openCreateModal}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
+              >
+                <LuPlus size={12} /> Add Character
+              </button>
+            ),
+            content: (
+              <>
           {characters.length === 0 ? (
             <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-accent/20" style={{ height: 300 }}>
               <p className="text-sm text-ink-faint italic text-center px-8">No characters yet. Add one to start tagging appearances in your chapters.</p>
@@ -559,11 +585,14 @@ export default function BookDetailPage() {
             </div>
               )
           })()}
-        </div>
-
-        {/* Soundtrack — every chapter's soundtrack blocks, in story order */}
-        <div className="mb-8">
-          <h2 className="text-sm font-semibold uppercase tracking-widest text-ink mb-2">Soundtrack</h2>
+              </>
+            ),
+          }, {
+            // Every chapter's soundtrack blocks, in story order.
+            id: 'soundtrack',
+            label: 'Soundtrack',
+            content: (
+              <>
           {soundtracks.length === 0 ? (
             <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-accent/20" style={{ height: 120 }}>
               <p className="text-sm text-ink-faint italic text-center px-8">
@@ -623,7 +652,10 @@ export default function BookDetailPage() {
               })}
             </div>
           )}
-        </div>
+              </>
+            ),
+          }]}
+        />
 
         {/* Front matter — spliced ahead of Chapter 1 in manuscript exports */}
         <div className="mb-8">

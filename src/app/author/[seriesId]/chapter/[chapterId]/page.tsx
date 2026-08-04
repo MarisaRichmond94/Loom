@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers } from 'react-icons/lu'
+import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers, LuLightbulb } from 'react-icons/lu'
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
 import SidePanel, { minWidthForTab, type PanelTab } from '@/components/editor/SidePanel'
@@ -11,6 +11,7 @@ import { type PinnedText } from '@/components/editor/ReferencePanel'
 import { useChapterNotes } from '@/components/editor/useChapterNotes'
 import { useChapterEvents } from '@/components/editor/useChapterEvents'
 import { useChapterCharacters } from '@/components/editor/useChapterCharacters'
+import { useChapterInsights } from '@/components/editor/useChapterInsights'
 import { useRegisterShortcuts, type ShortcutGroup } from '@/lib/shortcuts'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import { notify, showToast } from '@/lib/notifications'
@@ -89,7 +90,7 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
 
 // The dock's tabs in the order they appear in the strip — also the order
 // ⌥⇧< / ⌥⇧> step through (LOOM-56).
-const PANEL_TAB_ORDER: PanelTab[] = ['review', 'events', 'characters', 'notes', 'refs']
+const PANEL_TAB_ORDER: PanelTab[] = ['review', 'events', 'characters', 'insights', 'notes', 'refs']
 
 function safeCondition(raw: string | null | undefined): Condition | null {
   if (!raw) return null
@@ -167,6 +168,15 @@ export default function ChapterEditorPage() {
     setData: setReviewData,
     refetch: refetchReview,
   } = useChapterReview(seriesId, reviewBookId, chapterId)
+  // Fetched only while the tab is actually open. Not a side-effect worry — the
+  // endpoint behind it is a pure read, unlike the character pool — but it is a
+  // WriteAI round trip per chapter, and the answer changes about once a day.
+  const chapterInsights = useChapterInsights(
+    seriesId,
+    reviewBookId,
+    chapterId,
+    panelOpen && panelTab === 'insights',
+  )
   useRegisterShortcuts('chapter', CHAPTER_SHORTCUTS)
 
   // Both setters persist (LOOM-56) — plain wrappers around setPanelTab /
@@ -1292,6 +1302,20 @@ export default function ChapterEditorPage() {
                       )}
                       <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧2</span>
                     </button>
+                    {/* No unseen-dot here, unlike its neighbours: theirs counts
+                        the writer's own tags, and a dot for "WriteAI has read
+                        this" would be permanently lit on every ingested
+                        chapter, which is no signal at all. */}
+                    <button
+                      role="menuitem"
+                      onClick={() => { setActionMenuOpen(false); togglePanelTab('insights') }}
+                      title="What WriteAI extracted from this chapter (⌥⇧2)"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
+                    >
+                      <span className="flex w-5 items-center justify-center text-accent"><LuLightbulb size={14} /></span>
+                      <span className="flex-1">Insights</span>
+                      <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧2</span>
+                    </button>
                     {/* The dot means this chapter has notes you can't currently
                         see — it clears once the panel is showing them. */}
                     <button
@@ -1569,6 +1593,7 @@ export default function ChapterEditorPage() {
           onSetCategory: chapterCharacters.setCategory,
           onRetry: chapterCharacters.refresh,
         }}
+        insights={chapterInsights}
         review={reviewData}
         reviewLoading={reviewLoading}
         reviewCtx={{
