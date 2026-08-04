@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import {
   DndContext,
   DragOverlay,
@@ -14,34 +13,50 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import {
-  LuCalendarDays,
-  LuExternalLink,
-  LuGripVertical,
-  LuPencil,
-  LuPlus,
-  LuTrash2,
-  LuTriangleAlert,
-} from 'react-icons/lu'
+import { LuPlus, LuTriangleAlert } from 'react-icons/lu'
 import ConfirmDialog from './ConfirmDialog'
-import OutlineCardModal from './editor/OutlineCardModal'
-import { htmlToParagraphs, outlineCardLabels } from '@/lib/outlineCards'
+import OutlineCard from './editor/OutlineCard'
+import { outlineCardLabels } from '@/lib/outlineCards'
 import { useBookOutline, type BookOutline } from './editor/useBookOutline'
-import type { OutlineCard } from '@/lib/writerOutline'
+import type { OutlineCard as Card } from '@/lib/writerOutline'
 
 // The book page's Outline section (LOOM-96, editable in LOOM-97).
 //
-// The same cards WriteAI's plan pane shows, over the same store — a port
+// The same board WriteAI's plan pane shows, over the same store — a port
 // against a shared spec rather than a shared component, because the two apps
 // are on different React majors and the epic's contract is shared tokens and
 // specs, not components, until Phase B.
 //
-// A BOARD, not a list. Cards sit in a grid three or more across, because the
-// point of an outline is comparing chapters at a glance.
-//
 // ⚠️ Every content edit is a whole-list PUT — WriteAI has no per-card update —
 // so the hook spreads changes over the existing card rather than rebuilding it,
 // and trusts the response over local state. See useBookOutline.
+
+/**
+ * A drag sensor that refuses to start inside an interactive region.
+ *
+ * The whole card is the drag handle, which is what makes the board feel
+ * physical — but the card is also full of inputs, and a text field you cannot
+ * click into because the tile stole the pointer is worse than no dragging at
+ * all. Anything marked `data-no-dnd="true"` (or inside something marked so)
+ * blocks activation.
+ *
+ * Ported from WriteAI's NoDndPointerSensor for exactly this reason.
+ */
+class NoDndPointerSensor extends PointerSensor {
+  static activators = [
+    {
+      eventName: 'onPointerDown' as const,
+      handler: ({ nativeEvent }: { nativeEvent: PointerEvent }) => {
+        let el: Element | null = nativeEvent.target as Element
+        while (el) {
+          if ((el as HTMLElement).dataset?.noDnd === 'true') return false
+          el = el.parentElement
+        }
+        return true
+      },
+    },
+  ]
+}
 
 function SyncBadge({ state }: { state: BookOutline['syncState'] }) {
   if (state === 'synced') return null
@@ -69,167 +84,28 @@ function SyncBadge({ state }: { state: BookOutline['syncState'] }) {
   )
 }
 
-function CardFace({
-  card,
-  label,
-  seriesId,
-  onEdit,
-  onDelete,
-  onInsertAfter,
-  dragHandle,
-}: {
-  card: OutlineCard
+function SortableOutlineCard(props: {
+  card: Card
   label: string
   seriesId: string
-  onEdit: () => void
+  povSuggestions: string[]
+  onSave: (changes: Partial<Card>) => void
   onDelete: () => void
-  onInsertAfter?: () => void
-  dragHandle?: React.ReactNode
+  disabled: boolean
 }) {
-  const paragraphs = htmlToParagraphs(card.writer_summary)
-  const planned = card.status === 'planned'
-  // `loom_id` is the chapter's cuid, so the link needs no number-to-chapter
-  // resolution and stays correct even when numbering drifts.
-  const href = card.loom_id ? `/author/${seriesId}/chapter/${card.loom_id}` : null
-  // A heading of "Chapter 1" beside a label of "Chapter 1" is the same word
-  // twice. Show the heading only when the chapter is actually named something.
-  const heading =
-    card.heading && card.heading.trim().toLowerCase() !== label.toLowerCase() ? card.heading : null
-
-  return (
-    <div
-      className={`group/card flex h-full flex-col rounded-lg border px-3 py-2.5 ${
-        planned
-          ? 'border-dashed border-accent/25 bg-surface-raised/50'
-          : 'border-accent/10 bg-surface-raised'
-      }`}
-    >
-      <div className="flex items-center gap-1.5">
-        {dragHandle}
-        <span className="text-xs font-semibold uppercase tracking-widest text-ink">{label}</span>
-        {planned && (
-          <span className="rounded-full bg-accent/15 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-accent">
-            Planned
-          </span>
-        )}
-
-        {/* Controls fade in on hover: three permanent icons on every tile is
-            more chrome than card, and this is meant to be read at a glance. */}
-        <div className="ml-auto flex shrink-0 items-center gap-1 opacity-0 transition group-hover/card:opacity-100 focus-within:opacity-100">
-          {onInsertAfter && (
-            <button
-              onClick={onInsertAfter}
-              title="Insert a planned card after this one"
-              aria-label={`Insert a card after ${label}`}
-              className="text-ink-faint transition hover:text-accent"
-            >
-              <LuPlus size={12} />
-            </button>
-          )}
-          <button
-            onClick={onEdit}
-            title="Edit this card"
-            aria-label={`Edit ${label}`}
-            className="text-ink-faint transition hover:text-accent"
-          >
-            <LuPencil size={12} />
-          </button>
-          <button
-            onClick={onDelete}
-            title="Delete this card"
-            aria-label={`Delete ${label}`}
-            className="text-ink-faint transition hover:text-choice-kill"
-          >
-            <LuTrash2 size={12} />
-          </button>
-          {href && (
-            <Link
-              href={href}
-              title="Open this chapter in Loom"
-              aria-label={`Open ${label} in Loom`}
-              className="text-ink-faint transition hover:text-accent"
-            >
-              <LuExternalLink size={12} />
-            </Link>
-          )}
-        </div>
-      </div>
-
-      {heading && <p className="mt-1 truncate text-sm text-ink">{heading}</p>}
-
-      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-ink-faint">
-        {card.pov && <span className="truncate">{card.pov}</span>}
-        {card.date && (
-          <span className="inline-flex items-center gap-1 italic">
-            <LuCalendarDays size={10} /> {card.date}
-          </span>
-        )}
-      </div>
-
-      {paragraphs.length > 0 && (
-        <p
-          // Clamped so the board stays a board. Cards of wildly different
-          // heights leave ragged holes, and the whole summary is a click away.
-          className="mt-2 text-[11px] leading-relaxed text-ink-muted"
-          style={{
-            display: '-webkit-box',
-            WebkitBoxOrient: 'vertical',
-            WebkitLineClamp: 8,
-            overflow: 'hidden',
-          }}
-        >
-          {paragraphs.join(' ')}
-        </p>
-      )}
-
-      {/* The extracted bullets are deliberately not on the card face. They are
-          per-chunk extraction detail — the same data the chapter's Insights tab
-          shows in full — and six per tile made the cards too tall to compare. */}
-      {card.extracted_bullets.length > 0 && (
-        <p className="mt-2 text-[10px] text-ink-faint/70">
-          {card.extracted_bullets.length} extracted event
-          {card.extracted_bullets.length === 1 ? '' : 's'}
-        </p>
-      )}
-    </div>
-  )
-}
-
-function SortableCard(props: {
-  card: OutlineCard
-  label: string
-  seriesId: string
-  onEdit: () => void
-  onDelete: () => void
-  onInsertAfter: () => void
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
     id: props.card.id,
   })
 
   return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
-    >
-      <CardFace
-        {...props}
-        dragHandle={
-          // A handle, not a draggable card: the card carries buttons and a
-          // link, and making the whole tile a drag target means every click
-          // starts a drag it has to decide not to be.
-          <button
-            {...attributes}
-            {...listeners}
-            title="Drag to reorder"
-            aria-label={`Reorder ${props.label}`}
-            className="cursor-grab text-ink-faint/50 transition hover:text-ink-faint active:cursor-grabbing"
-          >
-            <LuGripVertical size={12} />
-          </button>
-        }
-      />
-    </div>
+    <OutlineCard
+      {...props}
+      dragRef={setNodeRef}
+      dragAttributes={attributes as unknown as Record<string, unknown>}
+      dragListeners={listeners as unknown as Record<string, unknown>}
+      dragStyle={{ transform: CSS.Transform.toString(transform), transition }}
+      isDragging={isDragging}
+    />
   )
 }
 
@@ -247,13 +123,12 @@ export default function OutlineSection({
   const { outline, reason, loading, onRetry, saving, error, editCard, reorder, addCard, deleteCard } =
     useBookOutline(seriesId, bookId)
 
-  const [editing, setEditing] = useState<{ card: OutlineCard; label: string } | null>(null)
-  const [pendingDelete, setPendingDelete] = useState<{ card: OutlineCard; label: string } | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<{ card: Card; label: string } | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
 
-  // A small distance before a drag starts, so clicking the handle is still a
+  // A little distance before a drag starts, so a click on the card is still a
   // click and a stray twitch does not reorder the book.
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+  const sensors = useSensors(useSensor(NoDndPointerSensor, { activationConstraint: { distance: 4 } }))
 
   if (loading && !outline) {
     return <p className="px-1 py-8 text-center text-sm text-ink-faint italic">Loading outline…</p>
@@ -279,7 +154,9 @@ export default function OutlineSection({
   // Computed for the whole list at once, because a card's label depends on
   // every card before it — not on the card itself.
   const labels = outlineCardLabels(outline.cards)
-  const labelFor = (id: string) => labels[outline.cards.findIndex(c => c.id === id)] ?? 'Card'
+  // Every POV already used in this book, for the chip's autocomplete. Sorted so
+  // the list does not reshuffle as cards move.
+  const povSuggestions = [...new Set(outline.cards.map(c => c.pov).filter(Boolean))].sort()
 
   function onDragEnd(event: DragEndEvent) {
     setDraggingId(null)
@@ -296,25 +173,26 @@ export default function OutlineSection({
     void reorder(arrayMove(ids, from, to))
   }
 
-  /** Append after the last card. */
-  function addAtEnd() {
-    const last = outline?.cards.at(-1)?.position ?? 0
-    void addCard(last + 1, 'New chapter')
-  }
-
   /**
    * Insert after card `i`, at the midpoint between it and its neighbour.
    *
    * Fractional positions are the whole trick: a card lands between two others
    * without touching either, so nothing is renumbered and no written chapter's
-   * number is disturbed. At the end of the list there is no neighbour to split
-   * with, so it simply goes one past the last.
+   * number is disturbed. At the end there is no neighbour to split with, so it
+   * goes one past the last.
+   *
+   * The card arrives with no date, unlike WriteAI's, which seeds it from the
+   * card before. That is not an oversight: WriteAI inserts by rebuilding the
+   * whole list client-side with an id it invents, while this goes through the
+   * POST endpoint — one card, canonical `plan-…` id, no chance of losing the
+   * book to a partial body. Seeding the date would cost a second write to buy
+   * one click. The calendar is right there.
    */
   function insertAfter(i: number) {
     if (!outline) return
-    const here = outline.cards[i].position
-    const next = outline.cards[i + 1]?.position
-    void addCard(next === undefined ? here + 1 : (here + next) / 2, 'New chapter')
+    const here = outline.cards[i]
+    const next = outline.cards[i + 1]
+    void addCard(next === undefined ? here.position + 1 : (here.position + next.position) / 2, '')
   }
 
   const draggingCard = draggingId ? outline.cards.find(c => c.id === draggingId) : null
@@ -326,7 +204,7 @@ export default function OutlineSection({
         {saving && <span className="text-[10px] italic text-ink-faint">Saving…</span>}
         {error && <span className="text-[10px] text-choice-kill">{error}</span>}
         <button
-          onClick={addAtEnd}
+          onClick={() => addCard((outline.cards.at(-1)?.position ?? 0) + 1, '')}
           disabled={saving}
           className="ml-auto flex items-center gap-1.5 rounded bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50"
         >
@@ -350,26 +228,40 @@ export default function OutlineSection({
         >
           <SortableContext items={outline.cards.map(c => c.id)} strategy={rectSortingStrategy}>
             <div
-              // auto-fill rather than a column count: the board reflows with the
-              // window instead of committing to four columns and overflowing a
-              // laptop. 250px is the width at which a summary is still readable.
+              // auto-fill rather than a fixed column count: the board reflows
+              // with the window instead of overflowing a laptop.
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-                gap: 12,
-                alignItems: 'stretch',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                gap: 16,
+                alignItems: 'start',
               }}
             >
               {outline.cards.map((card, i) => (
-                <SortableCard
-                  key={card.id}
-                  card={card}
-                  label={labels[i]}
-                  seriesId={seriesId}
-                  onEdit={() => setEditing({ card, label: labels[i] })}
-                  onDelete={() => setPendingDelete({ card, label: labels[i] })}
-                  onInsertAfter={() => insertAfter(i)}
-                />
+                // The insert affordance lives on the gap between cards, not on
+                // the card: "add one after this" is about the seam, and a
+                // button floating in the seam is where the eye already is.
+                <div key={card.id} className="group/insert relative">
+                  <SortableOutlineCard
+                    card={card}
+                    label={labels[i]}
+                    seriesId={seriesId}
+                    povSuggestions={povSuggestions}
+                    onSave={changes => void editCard(card.id, changes)}
+                    onDelete={() => setPendingDelete({ card, label: labels[i] })}
+                    disabled={saving}
+                  />
+                  <button
+                    data-no-dnd="true"
+                    onClick={() => insertAfter(i)}
+                    disabled={saving}
+                    title="Insert a card here"
+                    aria-label={`Insert a card after ${labels[i]}`}
+                    className="absolute right-0 top-1/2 z-20 flex h-5 w-5 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-accent opacity-0 shadow-md transition-opacity hover:bg-accent/80 group-hover/insert:opacity-100 disabled:opacity-0"
+                  >
+                    <LuPlus size={12} className="text-white" />
+                  </button>
+                </div>
               ))}
             </div>
           </SortableContext>
@@ -378,27 +270,20 @@ export default function OutlineSection({
               dims, so it is obvious what is moving and where it will land. */}
           <DragOverlay>
             {draggingCard && (
-              <div className="w-[250px] opacity-90">
-                <CardFace
+              <div className="w-[260px] opacity-90">
+                <OutlineCard
                   card={draggingCard}
-                  label={labelFor(draggingCard.id)}
+                  label={labels[outline.cards.findIndex(c => c.id === draggingCard.id)] ?? ''}
                   seriesId={seriesId}
-                  onEdit={() => {}}
+                  povSuggestions={povSuggestions}
+                  onSave={() => {}}
                   onDelete={() => {}}
+                  disabled
                 />
               </div>
             )}
           </DragOverlay>
         </DndContext>
-      )}
-
-      {editing && (
-        <OutlineCardModal
-          card={editing.card}
-          label={editing.label}
-          onSave={changes => editCard(editing.card.id, changes)}
-          onClose={() => setEditing(null)}
-        />
       )}
 
       <ConfirmDialog
