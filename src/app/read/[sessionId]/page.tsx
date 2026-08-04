@@ -44,8 +44,12 @@ export default function ReaderPage() {
     name: string
     age: number | null
     hasAvatar: boolean
-    hasBookAvatar?: boolean
-    hasCanonicalAvatar?: boolean
+    hasBookAvatar: boolean
+    hasCanonicalAvatar: boolean
+    writerPhotoUrl: string | null
+    hasOverlay: boolean
+    taggedInBook: boolean
+    visible: boolean
     deceased?: boolean
   }[]>([])
   const [currentBookId, setCurrentBookId] = useState<string | null>(null)
@@ -144,8 +148,12 @@ export default function ReaderPage() {
   // card reflects per-book overrides (age, avatar) and respects firstBookId visibility.
   useEffect(() => {
     if (!seriesId || !currentBookId) return
-    fetch(`/api/series/${seriesId}/books/${currentBookId}/characters`)
+    fetch(`/api/series/${seriesId}/books/${currentBookId}/writer-characters`)
       .then(r => r.ok ? r.json() : [])
+      // Everyone resolvable stays in the list: this feeds the hover card,
+      // which is keyed by the id in a prose mark. Filtering it the way a cast
+      // GRID is filtered would break the card for a character who is tagged in
+      // the prose but not in the chapter tags.
       .then(setCharacters)
       .catch(() => { /* ignore */ })
   }, [seriesId, currentBookId])

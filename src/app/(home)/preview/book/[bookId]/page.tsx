@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { LuArrowRight, LuArrowLeft, LuBookOpen, LuChevronDown, LuUser, LuMusic, LuStar } from 'react-icons/lu'
 import PinnedAudio from '@/components/PinnedAudio'
 import { pinLabel } from '@/lib/pinLabel'
+import { writerPortraitUrl } from '@/lib/writerPortrait'
 import dynamic from 'next/dynamic'
 
 // Only rendered after the author byline is clicked — load on first open.
@@ -28,13 +29,19 @@ type Series = {
   genres: string[]
   keywords: string[]
 }
+// Resolved-for-this-book, from /writer-characters (LOOM-89). WriteAI owns the
+// identity, Loom owns everything book-shaped.
 type Character = {
   id: string
   name: string
   age: number | null
   hasAvatar: boolean
-  hasBookAvatar?: boolean
-  hasCanonicalAvatar?: boolean
+  hasBookAvatar: boolean
+  hasCanonicalAvatar: boolean
+  writerPhotoUrl: string | null
+  hasOverlay: boolean
+  taggedInBook: boolean
+  visible: boolean
   deceased?: boolean
   hidden?: boolean
   starred?: boolean
@@ -150,11 +157,14 @@ export default function PreviewBookPage() {
       // too. The Chapters section stays gated on `published` below — chapter
       // titles can give away the plot.
       const [charactersRes, soundtracksRes] = await Promise.all([
-        fetch(`/api/series/${bookData.seriesId}/books/${bookId}/characters`),
+        fetch(`/api/series/${bookData.seriesId}/books/${bookId}/writer-characters`),
         fetch(`/api/series/${bookData.seriesId}/books/${bookId}/soundtracks`),
       ])
       if (cancelled) return
-      if (charactersRes.ok) setCharacters(await charactersRes.json())
+      if (charactersRes.ok) {
+        const all = (await charactersRes.json()) as Character[]
+        setCharacters(all.filter(c => c.visible && (c.hasOverlay || c.taggedInBook)))
+      }
       if (soundtracksRes.ok) setSoundtracks(await soundtracksRes.json())
     }
     load()
@@ -202,14 +212,10 @@ export default function PreviewBookPage() {
 
   const orderedChapters = [...book.chapters].sort((a, b) => a.order - b.order)
 
-  // Resolves the per-book or canonical avatar URL the same way the author
-  // book page does. The reader doesn't have a cache-busting timestamp to
-  // worry about — covers and avatars are stable across the public visit.
-  function characterAvatarUrl(c: Character): string | null {
-    if (c.hasBookAvatar) return `/characters/${c.id}-${bookId}.jpg`
-    if (c.hasCanonicalAvatar || c.hasAvatar) return `/characters/${c.id}.jpg`
-    return null
-  }
+  // Per-book portrait, then the default. Shared with the author page and the
+  // dock so the three cannot drift about what a character looks like. No
+  // cache-buster: portraits are stable across a public visit.
+  const characterAvatarUrl = (c: Character) => writerPortraitUrl(c, bookId)
 
   return (
     <div>

@@ -10,6 +10,8 @@ import { TextStyle } from '@tiptap/extension-text-style'
 import Color from '@tiptap/extension-color'
 import { Footnote } from '@/lib/extensions/footnote'
 import { CharacterMark } from '@/lib/extensions/character'
+import { writerPortraitUrl } from '@/lib/writerPortrait'
+import { isPovCharacter } from '@/lib/characterSearch'
 import { resolveConditionalOverride, matchesCondition, applyChoice } from '@/lib/storyEngine'
 import { substituteVarTemplates } from '@/lib/templateVars'
 import { tryRenderRichContent } from '@/lib/renderRichContent'
@@ -43,11 +45,15 @@ type Block = {
   choices: Choice[]
   overrides: Override[]
 }
+// Resolved-for-this-book writer character (LOOM-89). The hover card is the
+// one place in the reader that touches a character id, and those ids now come
+// from the prose marks, which carry `wc-` ids after the remap.
 type Character = {
   id: string; name: string; age: number | null
   hasAvatar: boolean
-  hasBookAvatar?: boolean
-  hasCanonicalAvatar?: boolean
+  hasBookAvatar: boolean
+  hasCanonicalAvatar: boolean
+  writerPhotoUrl: string | null
   deceased?: boolean
 }
 type BookChapter = { id: string; title: string; order: number }
@@ -529,7 +535,11 @@ export default function ReaderView({
           {chapterPov && (
             <p className="text-accent text-base">
               {(() => {
-                const povChar = characters.find(c => c.name === chapterPov)
+                // Normalised match (NFC, curly apostrophes, case, spacing).
+                // Loom stores POV as free text and there is no id joining it
+                // to a character, so a miss stays silent — no badge, exactly
+                // as before.
+                const povChar = characters.find(c => isPovCharacter(c, chapterPov))
                 return povChar
                   ? <span className="character-ref cursor-default" data-character-id={povChar.id}>{chapterPov}</span>
                   : chapterPov
@@ -735,18 +745,14 @@ export default function ReaderView({
               background: lightMode ? '#ede9e0' : 'var(--color-surface-raised)',
             }}
           >
-            {charCard.character.hasAvatar
-              ? <img
-                  src={
-                    charCard.character.hasBookAvatar && currentBookId
-                      ? `/characters/${charCard.character.id}-${currentBookId}.jpg`
-                      : `/characters/${charCard.character.id}.jpg`
-                  }
-                  alt={charCard.character.name}
-                  className="w-full h-full object-cover"
-                />
-              : <LuUser size={28} style={{ color: lightMode ? '#888' : 'var(--color-ink-faint)' }} />
-            }
+{(() => {
+              // Same chain as the author page and the dock: this book's
+              // portrait, then the default, then WriteAI's.
+              const src = writerPortraitUrl(charCard.character, currentBookId ?? null)
+              return src
+                ? <img src={src} alt={charCard.character.name} className="w-full h-full object-cover" />
+                : <LuUser size={28} style={{ color: lightMode ? '#888' : 'var(--color-ink-faint)' }} />
+            })()}
           </div>
           <div>
             <p className="text-sm font-semibold" style={{ color: lightMode ? '#1a1a2a' : 'var(--color-ink)' }}>{charCard.character.name}</p>
