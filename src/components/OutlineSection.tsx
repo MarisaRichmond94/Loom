@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   DndContext,
   DragOverlay,
@@ -15,6 +16,7 @@ import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@d
 import { CSS } from '@dnd-kit/utilities'
 import { LuPlus, LuTriangleAlert } from 'react-icons/lu'
 import ConfirmDialog from './ConfirmDialog'
+import { useSectionActionSlot } from './SectionTabs'
 import OutlineCard from './editor/OutlineCard'
 import { outlineCardLabels } from '@/lib/outlineCards'
 import { useBookOutline, type BookOutline } from './editor/useBookOutline'
@@ -125,6 +127,7 @@ export default function OutlineSection({
 
   const [pendingDelete, setPendingDelete] = useState<{ card: Card; label: string } | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  const actionSlot = useSectionActionSlot()
 
   // A little distance before a drag starts, so a click on the card is still a
   // click and a stray twitch does not reorder the book.
@@ -199,18 +202,29 @@ export default function OutlineSection({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        {outline.syncState !== 'synced' && <SyncBadge state={outline.syncState} />}
-        {saving && <span className="text-[10px] italic text-ink-faint">Saving…</span>}
-        {error && <span className="text-[10px] text-choice-kill">{error}</span>}
-        <button
-          onClick={() => addCard((outline.cards.at(-1)?.position ?? 0) + 1, '')}
-          disabled={saving}
-          className="ml-auto flex items-center gap-1.5 rounded bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-        >
-          <LuPlus size={12} /> Add card
-        </button>
-      </div>
+      {/* "Add card" belongs beside the tab labels, where "Add Character"
+          already lives — same page, same kind of action, same place. It is
+          portalled up rather than passed down because the handler needs the
+          hook that lives in here. */}
+      {actionSlot &&
+        createPortal(
+          <button
+            onClick={() => addCard((outline.cards.at(-1)?.position ?? 0) + 1, '')}
+            disabled={saving}
+            className="flex items-center gap-1.5 rounded bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+          >
+            <LuPlus size={12} /> Add card
+          </button>,
+          actionSlot,
+        )}
+
+      {(outline.syncState !== 'synced' || saving || error) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {outline.syncState !== 'synced' && <SyncBadge state={outline.syncState} />}
+          {saving && <span className="text-[10px] italic text-ink-faint">Saving…</span>}
+          {error && <span className="text-[10px] text-choice-kill">{error}</span>}
+        </div>
+      )}
 
       {outline.cards.length === 0 ? (
         <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-accent/20 px-8 py-10">

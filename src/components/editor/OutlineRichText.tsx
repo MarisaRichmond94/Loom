@@ -78,7 +78,11 @@ export default function OutlineRichText({
   )
 
   return (
-    <div className="flex flex-1 min-h-0 flex-col overflow-hidden rounded border border-accent/10 bg-surface-overlay/40 transition focus-within:border-accent/40">
+    // The PAGE background over the card, not the overlay token — an input
+    // inset in a panel. In light mode that reads as a white field on cream
+    // (which is what WriteAI's `bg-surface/60` does, from identical values);
+    // in dark mode it correctly goes darker than the card rather than lighter.
+    <div className="flex flex-1 min-h-0 flex-col overflow-hidden rounded border border-accent/10 bg-surface-base/60 transition focus-within:border-accent/40">
       <div className="flex shrink-0 items-center gap-0.5 border-b border-accent/10 px-1 py-0.5">
         {btn(editor.isActive('bold'), () => editor.chain().focus().toggleBold().run(), 'Bold', <LuBold size={12} />)}
         {btn(editor.isActive('italic'), () => editor.chain().focus().toggleItalic().run(), 'Italic', <LuItalic size={12} />)}
