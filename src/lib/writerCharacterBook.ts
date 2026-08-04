@@ -13,6 +13,7 @@
 import { prisma } from '@/lib/prisma'
 import { publicDirFilenames } from '@/lib/publicAssets'
 import { resolveWriterCharacter, type ResolvedWriterCharacter } from '@/lib/resolveWriterCharacter'
+import { byCategoryThenName } from '@/lib/characterSearch'
 
 /**
  * Every writer character resolved for one book.
@@ -74,6 +75,7 @@ export async function resolveWriterCharactersForBook(
       })
     })
     .filter((c): c is ResolvedWriterCharacter => c !== null)
+    .sort(byCategoryThenName)
 
   return { characters }
 }

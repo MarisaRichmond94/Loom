@@ -369,6 +369,23 @@ export default function CharacterModal({
 
   const firstName = trimmedName.split(/\s+/)[0] || 'they'
 
+  /**
+   * What the "this book" portrait slot shows.
+   *
+   * Falls back to the MAIN portrait rather than to an empty camera icon,
+   * because that is what the book will actually render: no per-book file means
+   * the chain lands on WriteAI's photo. Showing a blank there suggested the
+   * character had no portrait in this book, which was never true.
+   *
+   * It follows the main portrait live, so uploading one while creating a
+   * character fills both slots at once — there is nothing to "also" set unless
+   * you want this book to differ.
+   */
+  const mainPortraitSrc = characterPhotoHref(draft.photo_url)
+  const bookPortraitSrc =
+    bookPhotoPreview ??
+    (clearBookPhoto ? mainPortraitSrc : bookContext?.overlay?.portraitUrl ?? mainPortraitSrc)
+
   if (!mounted) return null
 
   return createPortal(
@@ -385,8 +402,13 @@ export default function CharacterModal({
         role="dialog"
         aria-modal="true"
         aria-label={creating ? 'New character' : `Editing ${character!.name}`}
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-accent/20 bg-surface-raised p-5 shadow-2xl"
+        /* Three bands, not one scrolling box: a character with a family's worth
+           of relationships and a book section overflows, and when the whole
+           dialog scrolled, Save and the close X scrolled away with it. */
+        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-accent/20 bg-surface-raised shadow-2xl"
       >
+        {/* Header — portrait, name and the close/delete control. Pinned. */}
+        <div className="shrink-0 px-5 pb-3 pt-5">
         <div className="flex items-start gap-3">
           <button
             type="button"
@@ -481,13 +503,8 @@ export default function CharacterModal({
           </div>
         </div>
 
-        {duplicate && (
-          <p className="mt-2 text-[11px] text-red-500">
-            A character called “{trimmedName}” already exists. Names still link records together, so
-            they have to stay unique.
-          </p>
-        )}
-
+        {/* Narrative weight. Sticky with the name rather than scrolling away
+            with the detail fields — it is what the cast list sorts by. */}
         <div className="mt-3 flex flex-wrap gap-1.5">
           {CATEGORIES.map(c => (
             <button
@@ -505,6 +522,18 @@ export default function CharacterModal({
             </button>
           ))}
         </div>
+        </div>
+
+        {/* Body — the only part that scrolls. */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-1">
+
+        {duplicate && (
+          <p className="mt-2 text-[11px] text-red-500">
+            A character called “{trimmedName}” already exists. Names still link records together, so
+            they have to stay unique.
+          </p>
+        )}
+
 
         <textarea
           value={draft.goals ?? ''}
@@ -677,20 +706,20 @@ export default function CharacterModal({
                   title="Portrait for this book"
                   className="relative h-14 w-14 overflow-hidden rounded-full border border-accent/20 transition hover:border-accent"
                 >
-                  {bookPhotoPreview ?? (clearBookPhoto ? null : bookContext.overlay?.portraitUrl) ? (
+                  {bookPortraitSrc ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={bookPhotoPreview ?? bookContext.overlay!.portraitUrl!}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
+                    <img src={bookPortraitSrc} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <span className="flex h-full w-full items-center justify-center bg-surface-overlay">
                       <LuCamera size={14} className="text-ink-faint" />
                     </span>
                   )}
                 </button>
-                <span className="text-[9px] uppercase tracking-wider text-ink-faint">this book</span>
+                <span className="text-[9px] uppercase tracking-wider text-ink-faint">
+                  {bookPhotoPreview || (bookContext.overlay?.hasBookAvatar && !clearBookPhoto)
+                    ? 'this book'
+                    : 'default'}
+                </span>
                 {(bookPhotoPreview || (bookContext.overlay?.hasBookAvatar && !clearBookPhoto)) && (
                   <button
                     type="button"
@@ -810,7 +839,10 @@ export default function CharacterModal({
           </div>
         )}
 
-        <div className="mt-5 flex items-center gap-3 border-t border-accent/10 pt-4">
+        </div>
+
+        {/* Footer — pinned, so Save is reachable however tall the body gets. */}
+        <div className="flex shrink-0 items-center gap-3 border-t border-accent/10 px-5 py-4">
           {duplicate && (
             <span className="text-[11px] text-red-500">That name is taken</span>
           )}

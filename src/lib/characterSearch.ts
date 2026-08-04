@@ -95,3 +95,28 @@ export function isPovCharacter(
   const norm = (v: string) => v.normalize('NFC').replace(/[\u2018\u2019]/g, "'").trim().toLowerCase()
   return norm(character.name) === norm(pov)
 }
+
+/**
+ * Narrative weight first, then name — the CAST-LIST order (LOOM-88).
+ *
+ * A cast list is read top-down looking for someone specific, and "who matters
+ * in this book" is what makes that quick; alphabetical puts a one-scene
+ * teacher above the protagonist. Uncategorised characters sort last rather
+ * than first: no category means nobody has said yet, not "least important",
+ * and the top of the list is the part that has to stay meaningful.
+ *
+ * Deliberately NOT what `sortCharacters` above does. That list has a direction
+ * toggle, and sorting it by category made the toggle look inert, because every
+ * character in one chapter tends to share a category. Two lists, two jobs.
+ */
+const categoryWeight = (category: string | null | undefined) => {
+  const i = CATEGORIES.indexOf(category as Category)
+  return i === -1 ? CATEGORIES.length : i
+}
+
+export function byCategoryThenName(
+  a: { name: string; category: string | null },
+  b: { name: string; category: string | null },
+): number {
+  return categoryWeight(a.category) - categoryWeight(b.category) || a.name.localeCompare(b.name)
+}
