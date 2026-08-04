@@ -17,6 +17,10 @@ function shortenHome(p: string): string {
 
 export function useCanonSave(seriesId: string) {
   const busyRef = useRef(false)
+  // Autosave preference (Settings → Export), read lazily and remembered.
+  // Structural saves respect it for the same reason blur saves do: with
+  // autosave off, nothing may write to the writer's folder unprompted.
+  const autosaveRef = useRef<boolean | null>(null)
   // A save requested while one is in flight (the Pages round trip takes
   // seconds; blur autosaves fire faster than that) is coalesced here and
   // run once the current save finishes — never silently dropped.
@@ -64,5 +68,26 @@ export function useCanonSave(seriesId: string) {
     }
   }
 
-  return { saveCanon }
+  // Adding, inserting or deleting a chapter renumbers every chapter below it,
+  // which is a change to the manuscript that no keystroke will follow —
+  // creation navigates you into an empty chapter, so the blur autosave has
+  // nothing to fire on. Without this, the manifest on disk kept describing
+  // the OLD numbering until the next time the writer typed somewhere, and
+  // WriteAI stayed confidently wrong in the meantime.
+  //
+  // Safe to fire on an empty chapter: a heading with no prose produces no
+  // chunks downstream, so the export costs nothing but lands the renumbering.
+  async function saveCanonAfterStructuralChange(bookId: string | undefined) {
+    if (!bookId) return
+    if (autosaveRef.current === null) {
+      autosaveRef.current = await fetch('/api/settings/canon-export')
+        .then(r => r.ok ? r.json() : null)
+        .then((s: { autosave?: boolean } | null) => s?.autosave !== false)
+        .catch(() => false)   // can't read the preference — don't write to disk
+    }
+    if (!autosaveRef.current) return
+    await saveCanon(bookId, true)
+  }
+
+  return { saveCanon, saveCanonAfterStructuralChange }
 }
