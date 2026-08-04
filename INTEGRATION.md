@@ -238,18 +238,37 @@ minutes. The nightly scheduler (Settings → Sync) remains the
 reconciliation safety net when either app was closed.
 
 **Structural changes export immediately and sync in ~1 minute.** Adding,
-inserting, deleting or dragging a chapter renumbers every chapter below it —
-and is the one kind of change no keystroke follows, since creation lands you
-in an *empty* chapter and a drag alters no prose at all. The blur autosave
-therefore never fired, and the manifest kept describing the old numbering
-until the writer next typed in that book. Loom now fires a silent canon
-export from `addChapter`/`insertChapter` (`author/[seriesId]/layout.tsx`) and
-from the outline drag (`OutlineTree.tsx`), via
-`saveCanonAfterStructuralChange` — which respects the Settings → Export
-autosave preference exactly as the blur save does, and treats an unreadable
-preference as "don't write". Deleting a chapter and ⌥⇧N are already covered
-by the editor's unmount autosave. `tests/unit/structuralCanonSave.test.ts`
-pins all of it at source level, since the failure is invisible from Loom.
+inserting, deleting, dragging, **renaming** or **canonising** a chapter
+renumbers every chapter below it — and is the one kind of change no keystroke
+follows, since creation lands you in an *empty* chapter, a drag alters no prose
+at all, and a rename leaves the caret where it was. The blur autosave therefore
+never fired, and the manifest kept describing the old numbering until the writer
+next typed in that book. Loom now fires a silent canon export via
+`saveCanonAfterStructuralChange` from every site that changes which chapter a
+*number* means:
+
+| change | site |
+| --- | --- |
+| add / insert | `author/[seriesId]/layout.tsx` |
+| reorder (drag) | `OutlineTree.tsx` |
+| rename, numbered toggle | `author/[seriesId]/chapter/[chapterId]/page.tsx` |
+
+It respects the Settings → Export autosave preference exactly as the blur save
+does, and treats an unreadable preference as "don't write". Deleting a chapter
+and ⌥⇧N are already covered by the editor's unmount autosave.
+`tests/unit/structuralCanonSave.test.ts` pins all of it at source level, since
+the failure is invisible from Loom.
+
+> **Canonising a bonus chapter is a rename**, and it was the caller missing from
+> that list. "Bonus Chapter 1" becomes "13", every same-prefix sibling below it
+> is bumped, and until this landed none of that reached disk. The cost was not
+> merely staleness: enrichment that ran while the manifest lagged stamped fresh
+> summaries with the identities of the chapters they had *displaced*, so book 3
+> spent a day showing every outline card its predecessor's summary — and no
+> resync could fix it, because number and identity agreed with each other and
+> only the text disagreed with both. WriteAI now refuses to stamp identity when
+> its manifest and its indexed prose disagree (LOOM-98/99/100); this export is
+> the other half, and the half that keeps them from disagreeing at all.
 
 On the WriteAI side, a `chapter.created`/`chapter.deleted` marks the book so
 the `export.completed` that follows debounces for 60s instead of 600s. Those

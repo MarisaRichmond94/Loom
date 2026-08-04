@@ -18,16 +18,26 @@ function read(rel: string): string {
   return readFileSync(path.join(__dirname, '../../src', rel), 'utf8')
 }
 
-const SITES: Array<{ file: string; fn: string; what: string }> = [
+// `mutation` is the call that tells the server, and the export must come after
+// it — see the ordering test below.
+const CHAPTER_PAGE = 'app/author/[seriesId]/chapter/[chapterId]/page.tsx'
+
+const SITES: Array<{ file: string; fn: string; what: string; mutation?: string }> = [
   { file: 'app/author/[seriesId]/layout.tsx', fn: 'addChapter', what: 'appending a chapter' },
   { file: 'app/author/[seriesId]/layout.tsx', fn: 'insertChapter', what: 'inserting a chapter mid-book' },
   { file: 'components/sidebar/OutlineTree.tsx', fn: 'handleDragEnd', what: 'reordering chapters by drag' },
+  // Canonising a bonus chapter is a rename ("Bonus Chapter 1" -> "13"), and
+  // the numbered toggle decides whether a chapter takes a canon number at all.
+  // Both renumber the book and leave the caret where it was, so no blur
+  // autosave follows them (LOOM-99).
+  { file: CHAPTER_PAGE, fn: 'handleTitleBlur', what: 'renaming a chapter', mutation: 'patchChapter(' },
+  { file: CHAPTER_PAGE, fn: 'handleNumberedChange', what: 'toggling numbered', mutation: 'patchChapter(' },
 ]
 
-// The body of `async function <name>(…) { … }`, matched by brace balance so a
-// nested block can't end it early.
+// The body of `function <name>(…) { … }`, with or without `async`, matched by
+// brace balance so a nested block can't end it early.
 function functionBody(src: string, name: string): string {
-  const start = src.indexOf(`async function ${name}(`)
+  const start = src.search(new RegExp(`(?:async )?function ${name}\\(`))
   expect(start).toBeGreaterThan(-1)
   const open = src.indexOf('{', src.indexOf(')', start))
   let depth = 0
@@ -43,13 +53,16 @@ describe('structural chapter changes export canon', () => {
     expect(functionBody(read(file), fn)).toContain('saveCanonAfterStructuralChange')
   })
 
-  it.each(SITES)('$what saves AFTER the server has been told', ({ file, fn }) => {
+  it.each(SITES)('$what saves AFTER the server has been told', ({ file, fn, mutation }) => {
     // Exporting before the mutation lands writes the OLD numbering to disk and
     // announces it as a fresh snapshot — worse than not exporting at all,
-    // because the drift check then believes the index is current.
+    // because the drift check then believes the index is current. The export
+    // walks the book from the database, so it has to read the renumbering
+    // rather than race it.
     const body = functionBody(read(file), fn)
-    expect(body.indexOf('saveCanonAfterStructuralChange'))
-      .toBeGreaterThan(body.indexOf('await fetch('))
+    const told = body.indexOf(mutation ?? 'await fetch(')
+    expect(told).toBeGreaterThan(-1)
+    expect(body.indexOf('saveCanonAfterStructuralChange')).toBeGreaterThan(told)
   })
 
   it('respects the autosave preference', () => {
