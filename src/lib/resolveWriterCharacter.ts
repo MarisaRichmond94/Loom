@@ -63,6 +63,16 @@ export type ResolvedWriterCharacter = {
   // Age override present for this book — tells the UI whether "reset to series
   // default" means anything.
   hasOverride: boolean
+  // Loom holds an overlay row for this character — someone has said something
+  // about them (an age, a star, an appearance range) at some point.
+  hasOverlay: boolean
+  // Tagged in at least one chapter of THIS book.
+  //
+  // Together these two answer "does this character belong to this book's cast,
+  // or are they just someone WriteAI knows about?" WriteAI's pool spans the
+  // whole world of the series — 63 records against the 24 that the book grid
+  // used to show — so a grid that lists all of them is noise.
+  taggedInBook: boolean
   // False when firstBookId is set and this book sits before it in series
   // order. Callers filter these out.
   visible: boolean
@@ -110,6 +120,8 @@ export function resolveWriterCharacter(opts: {
   firstBookOrder: number | null
   deathBookOrder: number | null
   lastBookOrder: number | null
+  /** Is this character tagged in a chapter of this book? */
+  taggedInBook?: boolean
   // Filenames in /public/characters, listed once per request by the caller
   // (publicDirFilenames) — keeps this pure and avoids a sync fs stat per
   // character.
@@ -147,6 +159,8 @@ export function resolveWriterCharacter(opts: {
     hasCanonicalAvatar,
     writerPhotoUrl: snapshot.photoUrl,
     hasOverride: bookMeta != null,
+    hasOverlay: meta != null,
+    taggedInBook: opts.taggedInBook ?? false,
     visible,
     deceased,
     hidden,

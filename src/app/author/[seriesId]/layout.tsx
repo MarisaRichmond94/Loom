@@ -248,7 +248,17 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
         />
 
         <ToastLayer />
-        <div className="flex flex-1 overflow-hidden">
+        {/* --author-sidebar tells PORTALLED overlays how wide the sidebar
+            currently is. Modals portal into <main>, which is a child of this
+            row, so they inherit it — but they are `fixed`, which is measured
+            against the viewport, so without this they centre across the whole
+            window and sit visibly off to the left of the content they belong
+            to. A hard-coded 14rem would be wrong the moment the sidebar
+            collapses; this tracks it, transition included. */}
+        <div
+          className="flex flex-1 overflow-hidden"
+          style={{ '--author-sidebar': sidebarCollapsed ? '0.75rem' : '14rem' } as React.CSSProperties}
+        >
           {/* Sidebar wrapper — stays w-3 when collapsed so the hover zone persists at the edge */}
           <div
             className={`relative flex-shrink-0 transition-[width] duration-300 ease-in-out ${sidebarCollapsed ? 'w-3' : 'w-56'}`}

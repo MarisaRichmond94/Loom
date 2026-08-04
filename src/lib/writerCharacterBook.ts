@@ -34,7 +34,7 @@ export async function resolveWriterCharactersForBook(
   })
   if (!book) return { error: 'book-not-found' }
 
-  const [snapshots, metas, bookMetas, books, avatarFiles] = await Promise.all([
+  const [snapshots, metas, bookMetas, books, tags, avatarFiles] = await Promise.all([
     prisma.writerCharacterSnapshot.findMany({ orderBy: { name: 'asc' } }),
     prisma.writerCharacterMeta.findMany({ where: { seriesId: book.seriesId } }),
     prisma.writerCharacterBookMeta.findMany({
@@ -42,12 +42,21 @@ export async function resolveWriterCharactersForBook(
       include: { meta: { select: { writerCharacterId: true } } },
     }),
     prisma.book.findMany({ where: { seriesId: book.seriesId }, select: { id: true, order: true } }),
+    // Who is actually tagged in this book's chapters. nonCanon tags COUNT
+    // here: a character who only appears down a branch is still part of this
+    // book's cast as far as the writer is concerned — the exclusion of
+    // non-canon tags exists for WriteAI's benefit, not the author's grid.
+    prisma.chapterCharacter.findMany({
+      where: { chapter: { bookId } },
+      select: { writerCharacterId: true },
+    }),
     publicDirFilenames('characters'),
   ])
 
   const orderByBookId = new Map(books.map(b => [b.id, b.order]))
   const metaByWc = new Map(metas.map(m => [m.writerCharacterId, m]))
   const bookMetaByWc = new Map(bookMetas.map(b => [b.meta.writerCharacterId, b]))
+  const taggedIds = new Set(tags.map(t => t.writerCharacterId))
 
   const characters = snapshots
     .map(snapshot => {
@@ -60,6 +69,7 @@ export async function resolveWriterCharactersForBook(
         firstBookOrder: meta?.firstBookId ? orderByBookId.get(meta.firstBookId) ?? null : null,
         deathBookOrder: meta?.deathBookId ? orderByBookId.get(meta.deathBookId) ?? null : null,
         lastBookOrder: meta?.lastBookId ? orderByBookId.get(meta.lastBookId) ?? null : null,
+        taggedInBook: taggedIds.has(snapshot.writerCharacterId),
         avatarFiles,
       })
     })

@@ -55,6 +55,7 @@ export default function CharacterModal({
   onDeleted,
   onClose,
   allowDelete = true,
+  bookContext,
 }: {
   /** Absent when creating. */
   character?: WriterCharacter
@@ -77,6 +78,37 @@ export default function CharacterModal({
    * someone editing one book is asking for.
    */
   allowDelete?: boolean
+  /**
+   * Loom's half, when this modal is opened from a book (LOOM-88).
+   *
+   * Present: the modal also edits what the character is in THIS book — age,
+   * per-book portrait — and across the series: starred, first appearance,
+   * death, last appearance. Absent (the chapter dock): WriteAI's fields only,
+   * exactly as before.
+   *
+   * One modal rather than two stacked ones. The fields have different owners
+   * and different write rules, but they describe one person, and a dialog that
+   * opens a second dialog to finish the same edit is a seam showing through.
+   */
+  bookContext?: {
+    seriesId: string
+    bookId: string
+    bookTitle: string
+    books: { id: string; title: string; order: number }[]
+    overlay: {
+      age: number | null
+      starred: boolean
+      firstBookId: string | null
+      deathBookId: string | null
+      lastBookId: string | null
+      hasOverride: boolean
+      /** Already resolved through the portrait chain. */
+      portraitUrl: string | null
+      hasBookAvatar: boolean
+    } | null
+    /** Called after Loom's half is written, so the page can refetch. */
+    onOverlaySaved: () => void | Promise<void>
+  }
 }) {
   const creating = !character
   const [draft, setDraft] = useState<WriterCharacter>(
@@ -90,6 +122,24 @@ export default function CharacterModal({
   const [relTarget, setRelTarget] = useState<string | null>(null)
   const [relOpen, setRelOpen] = useState(false)
   const [pendingPhoto, setPendingPhoto] = useState<File | null>(null)
+
+  // Loom's half. Kept as its own draft so Cancel abandons both halves
+  // together, and so the WriteAI payload never accidentally carries a Loom
+  // field into a PUT that stores bodies verbatim.
+  const ov = bookContext?.overlay
+  const [bookAge, setBookAge] = useState(ov?.age != null ? String(ov.age) : '')
+  const [starred, setStarred] = useState(ov?.starred ?? false)
+  const [firstBookId, setFirstBookId] = useState(ov?.firstBookId ?? '')
+  const [deathBookId, setDeathBookId] = useState(ov?.deathBookId ?? '')
+  const [lastBookId, setLastBookId] = useState(ov?.lastBookId ?? '')
+  // A newly chosen per-book portrait, and the intent to drop the existing one.
+  const [bookPhoto, setBookPhoto] = useState<Blob | null>(null)
+  const [bookPhotoPreview, setBookPhotoPreview] = useState<string | null>(null)
+  const [clearingBookData, setClearingBookData] = useState(false)
+  const [clearBookPhoto, setClearBookPhoto] = useState(false)
+  const [pendingBookPhoto, setPendingBookPhoto] = useState<File | null>(null)
+  const bookPhotoRef = useRef<HTMLInputElement>(null)
+  const ageInvalid = bookAge.trim() !== '' && !/^\d+$/.test(bookAge.trim())
 
   const fileRef = useRef<HTMLInputElement>(null)
   const relSearchRef = useRef<HTMLInputElement>(null)
@@ -126,10 +176,20 @@ export default function CharacterModal({
   const duplicate =
     trimmedName.length > 0 &&
     pool.some(c => c.id !== draft.id && c.name.trim().toLowerCase() === trimmedName.toLowerCase())
-  const saveable = trimmedName.length > 0 && !duplicate
+  const saveable = trimmedName.length > 0 && !duplicate && !ageInvalid
 
   const draftRef = useRef(draft)
   draftRef.current = draft
+  // save() is memoised and bound to ⌥⇧⏎, so it reads Loom's fields through
+  // refs rather than being rebuilt on every keystroke.
+  const bookContextRef = useRef(bookContext); bookContextRef.current = bookContext
+  const ageRef = useRef(bookAge); ageRef.current = bookAge
+  const starredRef = useRef(starred); starredRef.current = starred
+  const firstBookRef = useRef(firstBookId); firstBookRef.current = firstBookId
+  const deathBookRef = useRef(deathBookId); deathBookRef.current = deathBookId
+  const lastBookRef = useRef(lastBookId); lastBookRef.current = lastBookId
+  const bookPhotoRefValue = useRef(bookPhoto); bookPhotoRefValue.current = bookPhoto
+  const clearPhotoRef = useRef(clearBookPhoto); clearPhotoRef.current = clearBookPhoto
 
   const save = useCallback(async () => {
     const body = draftRef.current
@@ -141,6 +201,49 @@ export default function CharacterModal({
         body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? String(res.status))
+
+      // Loom's half, after WriteAI's — the overlay is keyed by the character's
+      // id, so the record has to exist first. Sent as a PARTIAL patch: absent
+      // means "leave alone" here, the exact opposite of the verbatim PUT
+      // above, which is why the two payloads are built separately and never
+      // from one object.
+      const ctx = bookContextRef.current
+      if (ctx) {
+        const age = ageRef.current.trim() === '' ? null : Number(ageRef.current.trim())
+        await fetch(`/api/series/${ctx.seriesId}/writer-characters/${body.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            starred: starredRef.current,
+            firstBookId: firstBookRef.current || null,
+            deathBookId: deathBookRef.current || null,
+            lastBookId: lastBookRef.current || null,
+          }),
+        })
+        await fetch(`/api/series/${ctx.seriesId}/books/${ctx.bookId}/writer-characters/${body.id}/override`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ age }),
+        })
+        // "Use default" is applied on Save like every other field here, not
+        // the moment it is clicked — Cancel has to mean cancel.
+        if (clearPhotoRef.current) {
+          await fetch(`/api/series/${ctx.seriesId}/books/${ctx.bookId}/writer-characters/${body.id}/avatar`, {
+            method: 'DELETE',
+          })
+        }
+        const photo = bookPhotoRefValue.current
+        if (photo) {
+          const form = new FormData()
+          form.append('avatar', photo, 'avatar.jpg')
+          await fetch(`/api/series/${ctx.seriesId}/books/${ctx.bookId}/writer-characters/${body.id}/avatar`, {
+            method: 'POST',
+            body: form,
+          })
+        }
+        await ctx.onOverlaySaved()
+      }
+
       await onSaved(body)
       onClose()
     } catch (err) {
@@ -189,6 +292,30 @@ export default function CharacterModal({
       set({ photo_url: data?.photo_url ?? draft.photo_url })
     } catch (err) {
       notify('error', `Couldn't upload that portrait. ${err instanceof Error ? err.message : ''}`.trim())
+    }
+  }
+
+  /**
+   * Remove Loom's overlay — and only Loom's.
+   *
+   * The character survives in WriteAI with their traits, relationships and
+   * chapter tags, and keeps appearing in the cast un-aged. Deleting the record
+   * itself is the X at the top of this modal, which a book page does not
+   * offer: it would strip them out of every writer-event that names them and
+   * out of canon lookup.
+   */
+  async function clearBookData() {
+    const ctx = bookContext
+    if (!ctx) return
+    try {
+      await Promise.all([
+        fetch(`/api/series/${ctx.seriesId}/writer-characters/${draft.id}`, { method: 'DELETE' }),
+        fetch(`/api/series/${ctx.seriesId}/books/${ctx.bookId}/writer-characters/${draft.id}/avatar`, { method: 'DELETE' }),
+      ])
+      await ctx.onOverlaySaved()
+      onClose()
+    } catch {
+      notify('error', "Couldn't clear this character's book data.")
     }
   }
 
@@ -246,7 +373,12 @@ export default function CharacterModal({
 
   return createPortal(
     <div
+      /* Centred over the CONTENT, not the window: the overlay is `fixed`, so
+         without the sidebar's width as left padding the dialog sits visibly
+         left of the page it belongs to. --author-sidebar comes from the author
+         layout and follows the sidebar when it collapses. */
       className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 px-4"
+      style={{ paddingLeft: 'calc(var(--author-sidebar, 0px) + 1rem)' }}
       onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
@@ -519,6 +651,165 @@ export default function CharacterModal({
             )
           })}
         </div>
+        {/* ---------------------------------------------------------------
+            LOOM'S HALF. Only rendered when this modal was opened from a book.
+
+            Everything above belongs to WriteAI and is true of the character
+            everywhere. Everything below belongs to Loom and is true of them in
+            a BOOK — which is precisely what WriteAI has no field for, and why
+            the two halves cannot simply be merged into one record.
+            --------------------------------------------------------------- */}
+        {bookContext && (
+          <div className="mt-5 border-t border-accent/10 pt-4">
+            <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-ink-faint">
+              In {bookContext.bookTitle}
+            </h3>
+
+            <div className="flex items-start gap-4">
+              {/* Per-book portrait. The default portrait is the one at the top
+                  of this modal — WriteAI's — and this overrides it for this
+                  book only. Characters age across five books; one portrait for
+                  the series is wrong. */}
+              <div className="flex flex-col items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => bookPhotoRef.current?.click()}
+                  title="Portrait for this book"
+                  className="relative h-14 w-14 overflow-hidden rounded-full border border-accent/20 transition hover:border-accent"
+                >
+                  {bookPhotoPreview ?? (clearBookPhoto ? null : bookContext.overlay?.portraitUrl) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={bookPhotoPreview ?? bookContext.overlay!.portraitUrl!}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center bg-surface-overlay">
+                      <LuCamera size={14} className="text-ink-faint" />
+                    </span>
+                  )}
+                </button>
+                <span className="text-[9px] uppercase tracking-wider text-ink-faint">this book</span>
+                {(bookPhotoPreview || (bookContext.overlay?.hasBookAvatar && !clearBookPhoto)) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBookPhoto(null)
+                      setBookPhotoPreview(null)
+                      setClearBookPhoto(true)
+                    }}
+                    className="text-[9px] text-ink-faint underline underline-offset-2 transition hover:text-ink"
+                  >
+                    use default
+                  </button>
+                )}
+                <input
+                  ref={bookPhotoRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    e.target.value = ''
+                    if (file) setPendingBookPhoto(file)
+                  }}
+                />
+              </div>
+
+              <div className="flex-1 space-y-3">
+                <div>
+                  <label htmlFor="wc-book-age" className="mb-1 block text-[10px] uppercase tracking-widest text-ink-faint">
+                    Age in this book
+                  </label>
+                  <input
+                    id="wc-book-age"
+                    value={bookAge}
+                    onChange={e => setBookAge(e.target.value)}
+                    placeholder="—"
+                    className={`w-20 rounded-lg border bg-surface-overlay/40 px-2.5 py-1.5 text-xs text-ink outline-none transition focus:border-accent ${
+                      ageInvalid ? 'border-red-500' : 'border-accent/20'
+                    }`}
+                  />
+                  {ageInvalid && <p className="mt-1 text-[10px] text-red-500">Age must be a whole number</p>}
+                </div>
+
+                <label className="flex cursor-pointer items-center gap-2 text-xs text-ink">
+                  <input
+                    type="checkbox"
+                    checked={starred}
+                    onChange={e => setStarred(e.target.checked)}
+                    className="accent-accent"
+                  />
+                  Primary character
+                  <span className="text-[10px] text-ink-faint">(whole series)</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Appearance range — series-wide, but edited here because a book
+                page is where you notice it. */}
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {([
+                ['Appears from', firstBookId, setFirstBookId, '— every book —'],
+                ['Dies in', deathBookId, setDeathBookId, '— still alive —'],
+                ['Last appears', lastBookId, setLastBookId, '— never leaves —'],
+              ] as const).map(([label, value, setter, empty]) => (
+                <div key={label}>
+                  <label className="mb-1 block text-[10px] uppercase tracking-widest text-ink-faint">{label}</label>
+                  <select
+                    value={value}
+                    onChange={e => setter(e.target.value)}
+                    aria-label={label}
+                    className="w-full rounded-lg border border-accent/20 bg-surface-overlay/40 px-2 py-1.5 text-[11px] text-ink outline-none transition focus:border-accent"
+                  >
+                    <option value="">{empty}</option>
+                    {[...bookContext.books].sort((a, b) => a.order - b.order).map(b => (
+                      <option key={b.id} value={b.id}>{b.title}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[10px] italic text-ink-faint">
+              Dying marks them &ldquo;Deceased&rdquo; in later books — they still appear normally in the book chosen.
+            </p>
+
+            {/* Clears LOOM's data only. Deleting the character outright is the
+                X at the top, and is not offered from a book page. */}
+            {bookContext.overlay && (
+              clearingBookData ? (
+                <div className="mt-3 flex items-center gap-1.5">
+                  <span className="text-[10px] text-ink-muted">Clear this character&rsquo;s book data?</span>
+                  <button
+                    type="button"
+                    onClick={() => void clearBookData()}
+                    className="rounded bg-red-500/90 px-2 py-0.5 text-[10px] font-medium text-white transition hover:bg-red-500"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClearingBookData(false)}
+                    className="text-[10px] text-ink-faint transition hover:text-ink"
+                  >
+                    Keep
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setClearingBookData(true)}
+                  title="Removes the ages, star and appearance range Loom holds. The character, their traits and their chapter tags stay."
+                  className="mt-3 text-[10px] text-ink-faint underline underline-offset-2 transition hover:text-ink"
+                >
+                  Clear book data
+                </button>
+              )
+            )}
+          </div>
+        )}
+
         <div className="mt-5 flex items-center gap-3 border-t border-accent/10 pt-4">
           {duplicate && (
             <span className="text-[11px] text-red-500">That name is taken</span>
@@ -544,6 +835,22 @@ export default function CharacterModal({
           </div>
         </div>
       </div>
+
+      {pendingBookPhoto && (
+        <PhotoCropDialog
+          file={pendingBookPhoto}
+          onCancel={() => setPendingBookPhoto(null)}
+          onCropped={blob => {
+            // Held, not uploaded: the per-book portrait is written on Save
+            // with the rest of Loom's half. WriteAI's own portrait above
+            // uploads immediately because WriteAI owns that file either way.
+            setBookPhoto(blob)
+            setBookPhotoPreview(URL.createObjectURL(blob))
+            setClearBookPhoto(false)
+            setPendingBookPhoto(null)
+          }}
+        />
+      )}
 
       {pendingPhoto && (
         <PhotoCropDialog
