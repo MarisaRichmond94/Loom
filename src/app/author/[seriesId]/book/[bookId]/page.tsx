@@ -15,6 +15,9 @@ import { useCanonSave } from '@/components/editor/useCanonSave'
 import { pinLabel } from '@/lib/pinLabel'
 import PinnedAudio from '@/components/PinnedAudio'
 import SectionTabs from '@/components/SectionTabs'
+// Loaded when the Outline tab is first opened, not with the page — it pulls in
+// the outline renderer for a section most page visits never look at.
+const OutlineSection = dynamic(() => import('@/components/OutlineSection'), { ssr: false })
 import { writerPortraitUrl } from '@/lib/writerPortrait'
 import type { WriterCharacter } from '@/lib/characterSearch'
 
@@ -490,13 +493,19 @@ export default function BookDetailPage() {
           ))}
         </div>
 
-        {/* Characters and Soundtrack, as tabs rather than a stack — only one of
-            them is ever the thing you came for, and stacked they pushed each
-            other off the screen. The Outline section (LOOM-96) joins as a third
-            when it lands. */}
+        {/* Outline, Characters and Soundtrack, as tabs rather than a stack —
+            only one of them is ever the thing you came for, and stacked they
+            pushed each other off the screen.
+
+            Outline leads because it is the planning surface: it answers "what
+            is this book" where the other two answer "what is in it". */}
         <SectionTabs
           id="book"
           sections={[{
+            id: 'outline',
+            label: 'Outline',
+            content: <OutlineSection seriesId={seriesId} bookId={bookId} />,
+          }, {
             id: 'characters',
             label: 'Character(s)',
             action: (
