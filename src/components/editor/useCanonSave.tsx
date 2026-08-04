@@ -68,12 +68,27 @@ export function useCanonSave(seriesId: string) {
     }
   }
 
-  // Adding, inserting or deleting a chapter renumbers every chapter below it,
-  // which is a change to the manuscript that no keystroke will follow —
-  // creation navigates you into an empty chapter, so the blur autosave has
-  // nothing to fire on. Without this, the manifest on disk kept describing
-  // the OLD numbering until the next time the writer typed somewhere, and
-  // WriteAI stayed confidently wrong in the meantime.
+  // Renumbering the manuscript is a change to it that no keystroke will
+  // follow. Creation navigates you into an empty chapter, so the blur autosave
+  // has nothing to fire on; a drag in the outline tree alters no prose at all;
+  // renaming a chapter or toggling `numbered` leaves the caret where it was.
+  // Without this, the manifest on disk kept describing the OLD numbering until
+  // the next time the writer typed somewhere, and WriteAI stayed confidently
+  // wrong in the meantime.
+  //
+  // Call it for anything that changes which chapter a NUMBER means:
+  //
+  //   * add / insert                    layout.tsx
+  //   * reorder (drag)                  OutlineTree.tsx
+  //   * rename, and the numbered toggle chapter/[chapterId]/page.tsx
+  //
+  // Canonising a bonus chapter is the last of those, and it is the one that
+  // showed the cost of missing a caller: enrichment that ran while the manifest
+  // lagged stamped fresh summaries with the identities of the chapters they had
+  // displaced, and no resync could undo it (LOOM-98/99).
+  //
+  // Deleting a chapter and ⌥⇧N are deliberately NOT in that list: both navigate
+  // away from the editor, so the unmount autosave already covers them.
   //
   // Safe to fire on an empty chapter: a heading with no prose produces no
   // chunks downstream, so the export costs nothing but lands the renumbering.

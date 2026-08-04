@@ -550,9 +550,25 @@ export default function ChapterEditorPage() {
     patchChapter({ condition: next })
   }
 
+  // Both of these renumber the manuscript, and neither is followed by a
+  // keystroke that the blur autosave could ride out on (LOOM-99).
+  //
+  // `numbered` decides whether a chapter takes a canon number at all — the
+  // manifest reads `ch.numbered ? Number(ch.label) : …` — so toggling it
+  // shifts every chapter after this one. A title rename is how a chapter is
+  // canonised: "Bonus Chapter 1" becomes "13", and the server bumps every
+  // same-prefix sibling below it.
+  //
+  // Neither wrote to disk before. The sidebar renumbered instantly and looked
+  // right, while the manifest kept describing the old numbering until the
+  // writer next happened to type in that book — and WriteAI kept answering
+  // about chapter 13 with chapter 12's scene. Worse than stale: enrichment
+  // that ran in that window stamped fresh summaries with the identities of the
+  // chapters they had displaced (LOOM-98), which no resync could undo.
   function handleNumberedChange(next: boolean) {
     setChapter(prev => prev ? { ...prev, numbered: next } : null)
-    patchChapter({ numbered: next })
+    void patchChapter({ numbered: next })
+      .then(() => saveCanonAfterStructuralChange(currentBookIdRef.current))
   }
 
   async function handleTitleBlur() {
@@ -561,6 +577,9 @@ export default function ChapterEditorPage() {
     await patchChapter({ title: trimmed })
     setChapter(prev => prev ? { ...prev, title: trimmed } : null)
     loadSeries()
+    // After the PATCH, never alongside it: the export walks the book from the
+    // database, so it has to read the renumbering rather than race it.
+    void saveCanonAfterStructuralChange(currentBookIdRef.current)
   }
 
   const isInitialChapterLoadRef = useRef(true)
@@ -786,7 +805,7 @@ export default function ChapterEditorPage() {
 
   // ⌥⇧E — render the canon manuscript and save it to the book's folder on
   // disk (Settings → Export configures where).
-  const { saveCanon } = useCanonSave(seriesId)
+  const { saveCanon, saveCanonAfterStructuralChange } = useCanonSave(seriesId)
   saveCanonRef.current = async () => {
     await saveCanon(series.books.find(b => b.chapters.some(c => c.id === chapterId))?.id)
   }
