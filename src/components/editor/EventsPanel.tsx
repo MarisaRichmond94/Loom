@@ -361,6 +361,11 @@ export default function EventsPanel({
               e.stopPropagation()
               setTagMode(false)
               setQuery('')
+            } else if (e.key === 'Enter' && tagMode && visible.length > 0) {
+              e.preventDefault()
+              const top = visible[0]
+              if (!taggedIds.has(top.id)) onToggleTag(top.id, true)
+              setQuery('')
             }
           }}
           placeholder="Search events by title or character…"

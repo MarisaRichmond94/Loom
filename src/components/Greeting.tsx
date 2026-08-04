@@ -12,8 +12,13 @@ export default function Greeting() {
   const [text, setText] = useState('')
 
   useEffect(() => {
-    const name = (localStorage.getItem('loom-author-name') ?? '').trim()
-    setText(buildGreeting(name))
+    const update = () => {
+      const name = (localStorage.getItem('loom-author-name') ?? '').trim()
+      setText(buildGreeting(name))
+    }
+    update()
+    const interval = setInterval(update, 60_000)
+    return () => clearInterval(interval)
   }, [])
 
   if (!text) return null
