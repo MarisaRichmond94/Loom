@@ -23,7 +23,7 @@ import type { ChapterInsights, InsightsReason } from './useChapterInsights'
 function Section({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
   return (
     <div className="border-b border-accent/10 px-4 py-3 last:border-b-0">
-      <p className="mb-2 text-[9px] font-semibold uppercase tracking-widest text-ink-faint">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-ink-faint">
         {title}
         {count != null && <span className="ml-1 tabular-nums text-ink-faint/70">{count}</span>}
       </p>
@@ -100,9 +100,16 @@ export default function InsightsPanel({
       // Only the extracted text inherits it. Section labels, the count and the
       // footer keep their own sizes: they are chrome, and chrome growing with
       // the prose costs reading room without adding any.
+      //
+      // Base is 13px, not the 11px the tag lists next door use. Those are
+      // captions beside a face or a date; this is a paragraph and twenty
+      // sentences to actually read, and 11px made it look like a footnote to
+      // the chapter rather than a reading of it. Review made the same move for
+      // the same reason and went to 14px — a shade larger still, because a
+      // review is a document and this is a list.
       <div
         className="flex flex-col"
-        style={{ fontSize: 'calc(var(--loom-prose-scale, 1) * 0.6875rem)' }}
+        style={{ fontSize: 'calc(var(--loom-prose-scale, 1) * 0.8125rem)' }}
       >
         <Section title="Summary">
           {insights.summaryText ? (
