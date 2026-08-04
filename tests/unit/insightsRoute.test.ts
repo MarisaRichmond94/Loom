@@ -50,6 +50,17 @@ describe('empty states stay distinguishable', () => {
     },
   )
 
+  // Regression: an earlier refactor moved the book lookup behind the chapter
+  // lookup, and an unknown book id started answering 200
+  // "chapter-not-addressable" instead of 404 — technically true of a chapter
+  // that does not exist, and useless to whoever typed the wrong id.
+  it('404s an unknown book before deciding anything about the chapter', () => {
+    const unknownBook = routeSrc.indexOf("error: 'unknown book'")
+    const chapterLookup = routeSrc.indexOf('reviewNumberForChapter(seriesId')
+    expect(unknownBook).toBeGreaterThan(-1)
+    expect(chapterLookup).toBeGreaterThan(unknownBook)
+  })
+
   it('answers the unaddressable case without calling WriteAI', () => {
     // The early return must come before the first callWriteAi. A chapter with
     // no canon address cannot have been analysed, and asking anyway makes an
@@ -57,7 +68,7 @@ describe('empty states stay distinguishable', () => {
     // The RETURN, not the type declaration — hence the `reason:` prefix — and
     // the call site rather than the import.
     const unaddressable = routeSrc.indexOf("reason: 'chapter-not-addressable'")
-    const firstCall = routeSrc.indexOf('writeaiBookNumber(book.title)')
+    const firstCall = routeSrc.indexOf('writeaiBookNumber(title)')
     expect(unaddressable).toBeGreaterThan(-1)
     expect(firstCall).toBeGreaterThan(unaddressable)
   })

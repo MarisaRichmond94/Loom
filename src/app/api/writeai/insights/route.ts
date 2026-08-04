@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { reviewNumberForChapter } from '@/lib/crossAppJump'
-import { writeaiBookNumber } from '@/lib/writeaiBooks'
+import { loomBookTitle, writeaiBookNumber } from '@/lib/writeaiBooks'
 import { callWriteAi, UNREACHABLE } from '@/lib/writeaiProxy'
 
 // What WriteAI extracted for one chapter, for the editor's Insights tab
@@ -87,13 +86,12 @@ export async function GET(req: Request) {
     )
   }
 
-  const book = await prisma.book.findUnique({
-    where: { id: bookId },
-    select: { title: true, seriesId: true },
-  })
-  if (!book || book.seriesId !== seriesId) {
-    return NextResponse.json({ error: 'unknown book' }, { status: 404 })
-  }
+  // The book must exist before anything else is worth saying about it. An
+  // unknown id is a caller bug and keeps its 404 — reporting it as "this
+  // chapter has no address" would be true of a chapter that does not exist, and
+  // useless to whoever typed the wrong id.
+  const title = await loomBookTitle(seriesId, bookId)
+  if (title === null) return NextResponse.json({ error: 'unknown book' }, { status: 404 })
 
   // No canon address — an unnumbered chapter that is not the prologue — means
   // WriteAI has no name for this chapter and cannot have analysed it. Resolved
@@ -106,13 +104,14 @@ export async function GET(req: Request) {
     return NextResponse.json({ insights: null, reason: 'chapter-not-addressable' } satisfies Payload)
   }
 
-  const resolved = await writeaiBookNumber(book.title)
+  const resolved = await writeaiBookNumber(title)
   if ('response' in resolved) {
     const outcome = await classify(resolved.response, chapter)
     return 'payload' in outcome ? NextResponse.json(outcome.payload) : outcome.passthrough
   }
-  // WriteAI has never ingested this book. Same story as an unanalysed chapter
-  // from the writer's side, so it is not worth a fourth empty state.
+  // A book WriteAI has never ingested is not an error — from the writer's side
+  // it is the same story as an unanalysed chapter, and not worth a fourth empty
+  // state.
   if (resolved.number === null) {
     return NextResponse.json({ insights: null, reason: 'not-analyzed', chapter } satisfies Payload)
   }

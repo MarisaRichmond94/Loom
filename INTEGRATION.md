@@ -137,6 +137,59 @@ is dropped for a plainer reason — it shipped as a third section and did not ea
 the space. WriteAI still returns both; Loom just stops at the seam, so the
 payload says exactly what the tab renders.
 
+### Plan outline (LOOM-95)
+
+The book page edits the same outline as WriteAI's plan pane, over the same
+`plan_outline.json`. Workable because that store is keyed by **Loom's book
+cuid** (KAN-24) rather than by book number — both apps genuinely agree which
+outline belongs to which book instead of agreeing by position and drifting the
+first time a book is inserted.
+
+| Loom route | Proxies to | Purpose |
+|---|---|---|
+| `GET /api/writeai/outline` | `GET /api/plan/outline/{n}` | The book's cards + `sync_state`. |
+| `PUT /api/writeai/outline` | `PUT /api/plan/outline/{n}` | Replace the whole chapter list. |
+| `POST /api/writeai/outline/chapter` | `POST /api/plan/outline/{n}/chapter` | Append a planned card at a fractional `position`. |
+| `DELETE /api/writeai/outline/chapter?cardId=` | `DELETE /api/plan/outline/{n}/chapter/{id}` | Remove one card. |
+
+Book addressing is the same title→number lookup the insights proxy uses, shared
+in `src/lib/writeaiBooks.ts`.
+
+> **`GET /api/plan/outline/{book}` IS NOT A PURE READ.** It seeds a missing
+> outline from canon, runs `_auto_reconcile`, and **saves** — all on an ordinary
+> GET, like `GET /api/plan/characters` and unlike the insights endpoint. Fetch on
+> section open and after mutations; never on a timer, and never for a book nobody
+> is looking at. Opening the section for the first time legitimately writes to
+> WriteAI's store.
+
+> **`PUT /api/plan/outline/{book}` REPLACES THE WHOLE CHAPTER LIST** —
+> `outlines[key] = body.chapters`, no merge, and there is no per-card update
+> endpoint. Every field edit is a read-modify-write of the entire book. Loom's
+> proxy refuses an incomplete card, a duplicate id, or an empty list before any
+> of it reaches WriteAI (`src/lib/writerOutline.ts`).
+
+**Two card fields are load-bearing and appear in no WriteAI type**, found only
+by reading the live store. `loom_id` is the chapter's Loom cuid, which
+`_auto_reconcile` keys cards by (LOOM-65) — a card that loses it falls back to
+matching by chapter *number*, the positional matching the cuid exists to
+replace. `summary_source` is the machine-written summary that `writer_summary`
+is compared against, which is how WriteAI tells "the writer wrote this" from
+"nobody has touched the generated text". The validator therefore forwards cards
+**verbatim** rather than rebuilding them from a known-field list.
+
+**`writer_summary` is HTML**, not plain text — `<p>…</p>` with escaped entities,
+on every card in the live store. An editor that writes plain text into it
+silently strips the paragraph breaks the writer already has.
+
+> ⚠️ **ACCEPTED RISK: LAST WRITE WINS.** No locking on the store, no conditional
+> writes upstream. With the outline open in both apps, whichever saves second
+> silently overwrites the other's cards — no conflict, no error, no symptom until
+> planning turns up missing. Accepted deliberately rather than mitigated: the
+> guard would be a version the seam refuses to overwrite, which is not worth the
+> work for a single writer. Recorded so a future "my cards disappeared" is
+> recognised as this and not chased as a bug. The rule is: do not plan in both
+> windows at once.
+
 ---
 
 #### Legacy: the review deep link (Loom → WriteAI)

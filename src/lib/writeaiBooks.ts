@@ -16,6 +16,7 @@
 // Shared rather than per-route: the insights tab (LOOM-91) and the plan outline
 // (LOOM-95) both need it, and a second copy is how the two drift.
 
+import { prisma } from './prisma'
 import { callWriteAi } from './writeaiProxy'
 
 const norm = (s: string) =>
@@ -42,4 +43,54 @@ export async function writeaiBookNumber(
   }[]
   const match = rows.find(b => typeof b.name === 'string' && norm(b.name) === norm(title))
   return { number: typeof match?.id === 'number' ? match.id : null }
+}
+
+/**
+ * The book's title, or null if Loom has no such book in that series.
+ *
+ * Split out from `resolveWriteaiBook` because callers that do other work
+ * between the two halves need the cheap half on its own — the insights route
+ * answers "is this chapter even addressable?" before it is willing to talk to
+ * WriteAI, but must still 404 an unknown book id rather than reporting it as an
+ * unaddressable chapter.
+ *
+ * The series check is not ceremony: without it, any book id in the database
+ * resolves through any series in the URL.
+ */
+export async function loomBookTitle(seriesId: string, bookId: string): Promise<string | null> {
+  const book = await prisma.book.findUnique({
+    where: { id: bookId },
+    select: { title: true, seriesId: true },
+  })
+  return book && book.seriesId === seriesId ? book.title : null
+}
+
+/**
+ * A Loom book id → WriteAI's number for it, with the ownership check.
+ *
+ * The whole journey every per-book proxy makes: confirm the book exists and
+ * belongs to the series in the URL, then translate its title. Shared because
+ * both the insights tab (LOOM-91) and the plan outline (LOOM-95) make it, and
+ * two copies of a cross-app lookup is two places for the normalisation to drift.
+ *
+ * Four outcomes, deliberately distinct — the callers render three different
+ * sentences and pass the fourth through:
+ *
+ *   `{ number }`            resolved.
+ *   `{ missing: 'book' }`   Loom has no such book, or it is in another series.
+ *   `{ missing: 'writeai' }` WriteAI has never ingested it.
+ *   `{ response }`          WriteAI is down or errored; return it as-is.
+ */
+export async function resolveWriteaiBook(
+  seriesId: string,
+  bookId: string,
+): Promise<
+  { number: number } | { missing: 'book' | 'writeai' } | { response: Response }
+> {
+  const title = await loomBookTitle(seriesId, bookId)
+  if (title === null) return { missing: 'book' }
+
+  const resolved = await writeaiBookNumber(title)
+  if ('response' in resolved) return resolved
+  return resolved.number === null ? { missing: 'writeai' } : { number: resolved.number }
 }
