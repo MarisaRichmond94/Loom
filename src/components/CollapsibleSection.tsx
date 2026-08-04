@@ -3,16 +3,20 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { LuChevronDown } from 'react-icons/lu'
 
-// A book-page section that collapses and caps its own height (LOOM-93).
+// A book-page section that collapses (LOOM-93).
 //
 // The page stacks full-height sections, so a book with a large cast pushed the
-// soundtrack — and anything below it — off the first screen entirely. Rather
-// than paginate or truncate, each section keeps its own scroller: everything is
-// still there, and the page stays navigable as sections are added.
+// soundtrack — and anything below it — off the first screen entirely.
 //
-// One component rather than three copies. The caps differ only by a number, and
-// three hand-rolled versions would drift the moment one of them grew a header
-// control.
+// Collapsing alone fixes that, and an open section keeps its full height: a
+// height cap was tried and cut. Two scrollbars on one page is worse than a long
+// page, and a capped section makes you scroll inside a thing you are already
+// scrolling past. Collapsing is the same control with none of that — when you
+// want the soundtrack, you fold the cast away rather than squinting through a
+// window at it.
+//
+// One component rather than three copies, so the sections cannot drift apart
+// the moment one of them grows a header control.
 
 /**
  * Collapse state, persisted per section.
@@ -55,7 +59,6 @@ export default function CollapsibleSection({
   id,
   title,
   count,
-  maxHeight,
   action,
   className = 'mb-4',
   children,
@@ -67,9 +70,6 @@ export default function CollapsibleSection({
   /** Shown beside the title. The point of it is the COLLAPSED state: a section
    *  you cannot see should still tell you how much is in it. */
   count?: number
-  /** Open height in px, past which the section scrolls itself. Omit for
-   *  sections short enough to never need one. */
-  maxHeight?: number
   /** Header controls — "Add Character" and the like. A sibling of the toggle,
    *  never a child of it: nesting a button inside a button is invalid, and
    *  clicking Add would also collapse the thing you are adding to. */
@@ -107,18 +107,10 @@ export default function CollapsibleSection({
         {action}
       </div>
 
-      {!collapsed && (
-        <div
-          // overscroll-contain, or reaching the bottom of the section carries
-          // the wheel into the page behind it. The dock hit exactly this with
-          // its nested scrollers (SidePanel.tsx) — a scroller inside a
-          // scrolling page needs it every time.
-          className={maxHeight ? 'overflow-y-auto overscroll-contain' : undefined}
-          style={maxHeight ? { maxHeight } : undefined}
-        >
-          {children}
-        </div>
-      )}
+      {/* Unmounted rather than hidden. These sections carry <img> and <audio>
+          elements, and a collapsed section should not still be fetching
+          portraits and album art for something nobody is looking at. */}
+      {!collapsed && children}
     </div>
   )
 }
