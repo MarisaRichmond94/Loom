@@ -72,7 +72,10 @@ export default function SectionTabs({
   return (
     <div className={className}>
       <div className="flex items-center justify-between mb-2 border-b border-accent/10">
-        <div role="tablist" className="flex items-center gap-1">
+        {/* Spacing lives in the gap, not in each tab's padding: the underline
+            is only as wide as its label, so padding would stretch the marker
+            away from the word it marks. */}
+        <div role="tablist" className="flex items-center gap-6">
           {sections.map(s => {
             const isActive = s.id === active?.id
             return (
