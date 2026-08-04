@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { LuCalendarDays, LuTriangleAlert, LuUser } from 'react-icons/lu'
+import { LuCalendarDays, LuExternalLink, LuTriangleAlert } from 'react-icons/lu'
 import { htmlToParagraphs, outlineCardLabels } from '@/lib/outlineCards'
 import { useBookOutline, type BookOutline } from './editor/useBookOutline'
 
@@ -12,11 +12,12 @@ import { useBookOutline, type BookOutline } from './editor/useBookOutline'
 // are on different React majors and the epic's contract is shared tokens and
 // specs, not components, until Phase B.
 //
-// Read-only here. Editing, adding, reordering and deleting are LOOM-97.
+// A BOARD, not a list. Cards sit in a grid three or four across, because the
+// point of an outline is comparing chapters at a glance; one column of
+// full-height cards is just the manuscript again, with fewer words. That is
+// what widened the page from max-w-3xl.
 //
-// The one thing this copy does that WriteAI's cannot: a written chapter's card
-// links straight to the chapter in Loom. That is most of the reason to have the
-// outline on this page at all.
+// Read-only here. Editing, adding, reordering and deleting are LOOM-97.
 
 function SyncBadge({ state }: { state: BookOutline['syncState'] }) {
   if (state === 'synced') return null
@@ -93,97 +94,109 @@ export default function OutlineSection({
   const labels = outlineCardLabels(outline.cards)
 
   return (
-    <div className="flex flex-col gap-2">
-      {outline.syncState !== 'synced' && (
-        <div className="mb-1">
-          <SyncBadge state={outline.syncState} />
-        </div>
-      )}
+    <div className="flex flex-col gap-3">
+      {outline.syncState !== 'synced' && <SyncBadge state={outline.syncState} />}
 
-      {outline.cards.map((card, i) => {
-        const paragraphs = htmlToParagraphs(card.writer_summary)
-        const planned = card.status === 'planned'
-        // `loom_id` is the chapter's cuid, so a written card links straight to
-        // the chapter — no number-to-chapter resolution, and correct even for a
-        // book whose numbering has drifted.
-        const href = card.loom_id ? `/author/${seriesId}/chapter/${card.loom_id}` : null
+      <div
+        // auto-fill rather than a column count: the board reflows with the
+        // window instead of committing to four columns and overflowing a
+        // laptop. 250px is the width at which a summary is still readable.
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+          gap: 12,
+          alignItems: 'start',
+        }}
+      >
+        {outline.cards.map((card, i) => {
+          const paragraphs = htmlToParagraphs(card.writer_summary)
+          const planned = card.status === 'planned'
+          // `loom_id` is the chapter's cuid, so the link needs no number-to-
+          // chapter resolution and stays correct even when numbering drifts.
+          const href = card.loom_id ? `/author/${seriesId}/chapter/${card.loom_id}` : null
+          // A heading of "Chapter 1" beside a label of "Chapter 1" is the same
+          // word twice. Show the heading only when the writer has actually named
+          // the chapter something.
+          const heading =
+            card.heading && card.heading.trim().toLowerCase() !== labels[i].toLowerCase()
+              ? card.heading
+              : null
 
-        const body = (
-          <>
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <span className="text-xs font-semibold uppercase tracking-widest text-ink-faint">
-                {labels[i]}
-              </span>
-              <span className="text-sm text-ink">{card.heading || '(untitled)'}</span>
-              {planned && (
-                <span className="rounded-full bg-accent/15 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-accent">
-                  Planned
+          return (
+            <div
+              key={card.id}
+              className={`flex flex-col rounded-lg border px-3 py-2.5 ${
+                planned
+                  ? 'border-dashed border-accent/25 bg-surface-raised/50'
+                  : 'border-accent/10 bg-surface-raised'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold uppercase tracking-widest text-ink">
+                  {labels[i]}
                 </span>
-              )}
-            </div>
-
-            {(card.pov || card.date) && (
-              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-faint">
-                {card.pov && (
-                  <span className="inline-flex items-center gap-1">
-                    <LuUser size={11} /> {card.pov}
+                {planned && (
+                  <span className="rounded-full bg-accent/15 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-accent">
+                    Planned
                   </span>
                 )}
+                {/* An icon rather than the whole card: the card is something to
+                    read, and making all of it a link means every glance is one
+                    stray click from navigating away. */}
+                {href && (
+                  <Link
+                    href={href}
+                    title="Open this chapter in Loom"
+                    aria-label={`Open ${labels[i]} in Loom`}
+                    className="ml-auto shrink-0 text-ink-faint transition hover:text-accent"
+                  >
+                    <LuExternalLink size={12} />
+                  </Link>
+                )}
+              </div>
+
+              {heading && <p className="mt-1 truncate text-sm text-ink">{heading}</p>}
+
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-ink-faint">
+                {card.pov && <span className="truncate">{card.pov}</span>}
                 {card.date && (
                   <span className="inline-flex items-center gap-1 italic">
-                    <LuCalendarDays size={11} /> {card.date}
+                    <LuCalendarDays size={10} /> {card.date}
                   </span>
                 )}
               </div>
-            )}
 
-            {paragraphs.length > 0 && (
-              <div className="mt-2 flex flex-col gap-1.5">
-                {paragraphs.map((p, n) => (
-                  <p key={n} className="text-xs leading-relaxed text-ink-muted">
-                    {p}
-                  </p>
-                ))}
-              </div>
-            )}
+              {paragraphs.length > 0 && (
+                <p
+                  // Clamped so the board stays a board. Cards of wildly
+                  // different heights in a grid leave ragged holes, and the
+                  // whole summary is a click away in the chapter itself.
+                  className="mt-2 text-[11px] leading-relaxed text-ink-muted"
+                  style={{
+                    display: '-webkit-box',
+                    WebkitBoxOrient: 'vertical',
+                    WebkitLineClamp: 8,
+                    overflow: 'hidden',
+                  }}
+                >
+                  {paragraphs.join(' ')}
+                </p>
+              )}
 
-            {card.extracted_bullets.length > 0 && (
-              <ul className="mt-2 flex flex-col gap-1 border-t border-accent/10 pt-2">
-                {card.extracted_bullets.map((b, n) => (
-                  <li key={n} className="flex gap-2 text-[11px] leading-relaxed text-ink-faint">
-                    <span className="mt-[0.5em] size-1 shrink-0 rounded-full bg-accent/40" />
-                    {b}
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {card.notes && (
-              <p className="mt-2 border-t border-accent/10 pt-2 text-[11px] italic leading-relaxed text-ink-faint">
-                {card.notes}
-              </p>
-            )}
-          </>
-        )
-
-        const shell = `rounded-lg border px-4 py-3 transition ${
-          planned
-            ? 'border-dashed border-accent/25 bg-surface-raised/50'
-            : 'border-accent/10 bg-surface-raised'
-        }`
-
-        // A planned card has no chapter to open, so it is not a link. Dressing
-        // it as one and doing nothing on click is worse than plain text.
-        return href ? (
-          <Link key={card.id} href={href} className={`${shell} block hover:border-accent/40`}>
-            {body}
-          </Link>
-        ) : (
-          <div key={card.id} className={shell}>
-            {body}
-          </div>
-        )
-      })}
+              {/* The extracted bullets are deliberately not on the card face.
+                  They are per-chunk extraction detail — the same data the
+                  chapter's Insights tab shows in full — and putting six of them
+                  on every tile is what made the cards too tall to compare. */}
+              {card.extracted_bullets.length > 0 && (
+                <p className="mt-2 text-[10px] text-ink-faint/70">
+                  {card.extracted_bullets.length} extracted event
+                  {card.extracted_bullets.length === 1 ? '' : 's'}
+                </p>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

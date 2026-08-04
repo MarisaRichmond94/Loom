@@ -383,7 +383,11 @@ export default function BookDetailPage() {
 
   return (
     <>
-      <div className="max-w-3xl mx-auto px-8 py-8">
+      {/* Wider than the 3xl it was: the outline is a board of cards, and at
+          768px it could only ever be one column, which is not an outline —
+          it is a list of chapters you have to scroll to compare. Everything
+          else on the page simply gets more room. */}
+      <div className="max-w-6xl mx-auto px-8 py-8">
         {/* Preview + Publish controls sit in their own row above the cover
             so they don't crowd the title or get hidden behind the synopsis. */}
         <div className="flex items-center justify-end gap-2 mb-6">
