@@ -54,6 +54,7 @@ export default function CharacterModal({
   onSaved,
   onDeleted,
   onClose,
+  allowDelete = true,
 }: {
   /** Absent when creating. */
   character?: WriterCharacter
@@ -65,6 +66,17 @@ export default function CharacterModal({
   onSaved: (character: WriterCharacter) => void | Promise<void>
   onDeleted: () => void | Promise<void>
   onClose: () => void
+  /**
+   * Whether deleting the character outright is offered (LOOM-88).
+   *
+   * True in the Characters tab, where the cast is the subject and the
+   * consequence is in view. False when this modal is opened from a book page,
+   * which has its own "clear book data" control for Loom's overlay: deleting
+   * the WriteAI record from there would also strip the character out of every
+   * writer-event that names them and out of canon lookup, which is not what
+   * someone editing one book is asking for.
+   */
+  allowDelete?: boolean
 }) {
   const creating = !character
   const [draft, setDraft] = useState<WriterCharacter>(
@@ -305,7 +317,7 @@ export default function CharacterModal({
               >
                 <LuX size={15} />
               </button>
-            ) : confirmingDelete ? (
+            ) : !allowDelete ? null : confirmingDelete ? (
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] text-ink-muted">Delete everywhere?</span>
                 <button

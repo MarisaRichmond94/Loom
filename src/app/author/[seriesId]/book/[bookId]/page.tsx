@@ -17,13 +17,30 @@ const ExportBookModal = dynamic(() => import('@/components/editor/ExportBookModa
 import { useCanonSave } from '@/components/editor/useCanonSave'
 import { pinLabel } from '@/lib/pinLabel'
 import PinnedAudio from '@/components/PinnedAudio'
+import { writerPortraitUrl } from '@/lib/writerPortrait'
+import type { WriterCharacter } from '@/lib/characterSearch'
+
+// The Characters tab's own editor, reused rather than reimplemented — it is
+// the only place WriteAI-owned fields are edited, and it already knows the
+// verbatim-PUT rule. Loaded on demand: this page usually renders without it.
+const CharacterModal = dynamic(() => import('@/components/editor/CharacterModal'), { ssr: false })
 
 type Stats = { chapterCount: number; uniquePovs: number; choiceCount: number; wordCount: number }
 type Book = { id: string; title: string; synopsis: string; coverPath: string | null; published: boolean; stats: Stats }
-// Resolved-for-this-book shape returned by /api/series/[seriesId]/books/[bookId]/characters
+// Resolved-for-this-book shape from
+// /api/series/[seriesId]/books/[bookId]/writer-characters (LOOM-88).
+//
+// Two owners in one object: `name`, `category`, `role`, `aliases` and
+// `writerPhotoUrl` are WriteAI's and are read-only here — they are edited in
+// the Characters tab's own modal, which this page opens rather than
+// reimplementing. Everything else is Loom's overlay and is edited here.
 type Character = {
   id: string
   name: string
+  category: string | null
+  role: string | null
+  aliases: string | null
+  writerPhotoUrl: string | null
   age: number | null
   firstBookId: string | null
   deathBookId: string | null
@@ -33,6 +50,7 @@ type Character = {
   hasBookAvatar: boolean
   hasCanonicalAvatar: boolean
   hasOverride: boolean
+  visible: boolean
   deceased: boolean
   hidden: boolean
 }
@@ -91,7 +109,10 @@ export default function BookDetailPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Characters — list is resolved for THIS book (firstBookId filter + override merge)
   const [characters, setCharacters] = useState<Character[]>([])
-  const [charModal, setCharModal] = useState<'create' | Character | null>(null)
+  // Loom's overlay editor. No 'create' state any more: a character is created
+  // in WriteAI through CharacterModal, and this modal only ever edits one that
+  // already exists.
+  const [charModal, setCharModal] = useState<Character | null>(null)
   const [charName, setCharName] = useState('')
   const [charAge, setCharAge] = useState('')
   const [charFirstBookId, setCharFirstBookId] = useState<string>('')
@@ -105,6 +126,11 @@ export default function BookDetailPage() {
   const [savingChar, setSavingChar] = useState(false)
   const [charAvatarTs, setCharAvatarTs] = useState(0)
   const charFileInputRef = useRef<HTMLInputElement>(null)
+  // WriteAI's side: the pool (for the relationship picker and duplicate-name
+  // check inside CharacterModal) and whichever character that modal is
+  // editing. 'create' opens it empty.
+  const [writerPool, setWriterPool] = useState<WriterCharacter[]>([])
+  const [writerModal, setWriterModal] = useState<'create' | WriterCharacter | null>(null)
   const isInitialBookLoadRef = useRef(true)
   // Manuscript export + front matter (title page / copyright pages the
   // writer keeps in Pages; spliced ahead of Chapter 1 on export).
@@ -154,19 +180,27 @@ export default function BookDetailPage() {
   }, [seriesId, bookId])
 
   const loadCharacters = useCallback(async () => {
-    // Book-scoped: resolves overrides + filters by firstBookId.
-    const res = await fetch(`/api/series/${seriesId}/books/${bookId}/characters`)
-    if (res.ok) setCharacters(await res.json())
+    // Book-scoped: WriteAI's records joined to Loom's overlay for this book.
+    // The route returns characters hidden by a later first appearance too,
+    // flagged rather than dropped; the author's grid filters them here so the
+    // reader's page can make its own choice.
+    const res = await fetch(`/api/series/${seriesId}/books/${bookId}/writer-characters`)
+    if (res.ok) setCharacters(((await res.json()) as Character[]).filter(c => c.visible))
   }, [seriesId, bookId])
 
-  // Returns the avatar URL for a character resolved in this book context.
-  // Prefers the per-book file, falls back to the canonical, else null.
+  // Portrait for this book: per-book file, else the canonical file, else
+  // WriteAI's photo. The chain lives in writerPortraitUrl so the reader and
+  // the dock cannot drift from this page about what a character looks like.
   function avatarUrlFor(c: Character | null, ts: number): string | null {
-    if (!c) return null
-    if (c.hasBookAvatar) return `/characters/${c.id}-${bookId}.jpg?t=${ts}`
-    if (c.hasCanonicalAvatar) return `/characters/${c.id}.jpg?t=${ts}`
-    return null
+    return c ? writerPortraitUrl(c, bookId, ts) : null
   }
+
+  // WriteAI's pool, read from Loom's snapshot — never from
+  // /api/writeai/characters, which writes to disk on WriteAI's side.
+  const loadWriterPool = useCallback(async () => {
+    const res = await fetch('/api/writeai/characters/snapshot')
+    if (res.ok) setWriterPool(await res.json())
+  }, [])
 
   const loadSoundtracks = useCallback(async () => {
     const res = await fetch(`/api/series/${seriesId}/books/${bookId}/soundtracks`)
@@ -231,19 +265,34 @@ export default function BookDetailPage() {
   useEffect(() => { loadSoundtracks() }, [loadSoundtracks])
   useEffect(() => { loadBook() }, [loadBook])
   useEffect(() => { loadCharacters() }, [loadCharacters])
+  useEffect(() => { loadWriterPool() }, [loadWriterPool])
   useEffect(() => { loadFrontMatter() }, [loadFrontMatter])
 
+  // Creating a character means creating it in WriteAI — that is where a
+  // character now exists. Loom's overlay is added afterwards, in onSaved.
   function openCreateModal() {
-    setCharName('')
-    setCharAge('')
-    // New characters created from a book default to "first appears in" THIS book
-    // so they don't leak back into earlier books in the series.
-    setCharFirstBookId(bookId)
-    setCharDeathBookId('')
-    setCharLastBookId('')
-    setCharStarred(false)
-    setCharImageSrc(null)
-    setCharModal('create')
+    setWriterModal('create')
+  }
+
+  // Called by CharacterModal once WriteAI has the record. New characters
+  // created from a book default to "first appears in" THIS book so they don't
+  // leak back into earlier books; existing ones keep whatever overlay they
+  // already had.
+  async function onWriterCharacterSaved(saved: WriterCharacter) {
+    const isNew = !characters.some(c => c.id === saved.id)
+    if (isNew) {
+      await fetch(`/api/series/${seriesId}/writer-characters/${saved.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firstBookId: bookId }),
+      })
+    }
+    // The snapshot is Loom's copy of WriteAI's pool, so it has to be told a
+    // write happened — nothing refreshes it on a timer, by design.
+    await fetch('/api/writeai/characters/snapshot', { method: 'POST' })
+    await Promise.all([loadCharacters(), loadWriterPool()])
+    setCharAvatarTs(Date.now())
+    setWriterModal(null)
   }
 
   function openEditModal(c: Character) {
@@ -265,77 +314,56 @@ export default function BookDetailPage() {
     setCharZoom(1)
   }
 
+  // Saves LOOM's half only. The name, category, aliases, traits and the
+  // default portrait belong to WriteAI and are edited in the Characters tab's
+  // modal, which this page opens rather than duplicating — two editable homes
+  // for one field means one of them is a lie, and WriteAI's verbatim PUT makes
+  // the loser lose data rather than just an argument.
   async function saveCharacter() {
-    if (!charName.trim()) return
+    if (charModal === null) return
     if (charAge.trim() !== '' && isNaN(Number(charAge))) return
     setSavingChar(true)
     try {
       const age = charAge.trim() !== '' ? Number(charAge) : null
-      const firstBookId = charFirstBookId || null
-      const deathBookId = charDeathBookId || null
-      const lastBookId = charLastBookId || null
-      let characterId: string
+      const existing = charModal as Character
+      const characterId = existing.id
 
-      if (charModal === 'create') {
-        // Create: name + age + firstBookId + deathBookId + lastBookId +
-        // starred all canonical. Any uploaded photo also becomes the
-        // canonical avatar so future books inherit it.
-        const res = await fetch(`/api/series/${seriesId}/characters`, {
-          method: 'POST',
+      // Series-level overlay: everything that is true of the character across
+      // the whole series. Sent as a partial — absent means "leave alone" here,
+      // the opposite of the WriteAI rule.
+      const firstBookChanged = (charFirstBookId || null) !== (existing.firstBookId ?? null)
+      const deathBookChanged = (charDeathBookId || null) !== (existing.deathBookId ?? null)
+      const lastBookChanged = (charLastBookId || null) !== (existing.lastBookId ?? null)
+      const starredChanged = charStarred !== existing.starred
+      if (firstBookChanged || deathBookChanged || lastBookChanged || starredChanged) {
+        await fetch(`/api/series/${seriesId}/writer-characters/${characterId}`, {
+          method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: charName.trim(), age, firstBookId, deathBookId, lastBookId, starred: charStarred }),
+          body: JSON.stringify({
+            ...(firstBookChanged ? { firstBookId: charFirstBookId || null } : {}),
+            ...(deathBookChanged ? { deathBookId: charDeathBookId || null } : {}),
+            ...(lastBookChanged ? { lastBookId: charLastBookId || null } : {}),
+            ...(starredChanged ? { starred: charStarred } : {}),
+          }),
         })
-        if (!res.ok) return
-        const created = await res.json() as { id: string }
-        characterId = created.id
-
-        if (charImageSrc && charCroppedArea) {
-          const blob = await cropImageToBlob(charImageSrc, charCroppedArea)
-          const form = new FormData()
-          form.append('avatar', blob, 'avatar.jpg')
-          await fetch(`/api/series/${seriesId}/characters/${characterId}/avatar`, { method: 'POST', body: form })
-        }
-      } else {
-        // Edit on a book page: name + firstBookId are canonical, age and avatar
-        // get applied as a per-book override so other books are unaffected.
-        const existing = charModal as Character
-        characterId = existing.id
-
-        // Canonical patch (name + firstBookId + deathBookId + lastBookId + starred)
-        const nameChanged = charName.trim() !== existing.name
-        const firstBookChanged = (firstBookId ?? null) !== (existing.firstBookId ?? null)
-        const deathBookChanged = (deathBookId ?? null) !== (existing.deathBookId ?? null)
-        const lastBookChanged = (lastBookId ?? null) !== (existing.lastBookId ?? null)
-        const starredChanged = charStarred !== existing.starred
-        if (nameChanged || firstBookChanged || deathBookChanged || lastBookChanged || starredChanged) {
-          await fetch(`/api/series/${seriesId}/characters/${characterId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              ...(nameChanged ? { name: charName.trim() } : {}),
-              ...(firstBookChanged ? { firstBookId } : {}),
-              ...(deathBookChanged ? { deathBookId } : {}),
-              ...(lastBookChanged ? { lastBookId } : {}),
-              ...(starredChanged ? { starred: charStarred } : {}),
-            }),
-          })
-        }
-
-        // Book-specific override (age)
-        await fetch(`/api/series/${seriesId}/books/${bookId}/characters/${characterId}/override`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ age }),
-        })
-
-        // Book-specific avatar upload
-        if (charImageSrc && charCroppedArea) {
-          const blob = await cropImageToBlob(charImageSrc, charCroppedArea)
-          const form = new FormData()
-          form.append('avatar', blob, 'avatar.jpg')
-          await fetch(`/api/series/${seriesId}/books/${bookId}/characters/${characterId}/avatar`, { method: 'POST', body: form })
-        }
       }
+
+      // This book only: age…
+      await fetch(`/api/series/${seriesId}/books/${bookId}/writer-characters/${characterId}/override`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ age }),
+      })
+
+      // …and portrait. The one thing WriteAI cannot hold, because it has no
+      // concept of a book.
+      if (charImageSrc && charCroppedArea) {
+        const blob = await cropImageToBlob(charImageSrc, charCroppedArea)
+        const form = new FormData()
+        form.append('avatar', blob, 'avatar.jpg')
+        await fetch(`/api/series/${seriesId}/books/${bookId}/writer-characters/${characterId}/avatar`, { method: 'POST', body: form })
+      }
+
       await loadCharacters()
       setCharAvatarTs(Date.now())
       closeCharModal()
@@ -344,8 +372,12 @@ export default function BookDetailPage() {
     }
   }
 
+  // Removes LOOM's overlay — the ages, the star, the first/death/last book.
+  // The character survives in WriteAI with their traits, relationships and
+  // chapter tags, and keeps appearing in this cast list un-aged. Deleting them
+  // outright lives in the Characters tab, where that consequence is visible.
   async function deleteCharacter(id: string) {
-    await fetch(`/api/series/${seriesId}/characters/${id}`, { method: 'DELETE' })
+    await fetch(`/api/series/${seriesId}/writer-characters/${id}`, { method: 'DELETE' })
     await loadCharacters()
     closeCharModal()
   }
@@ -355,7 +387,7 @@ export default function BookDetailPage() {
   // ops. Both PATCH the canonical row and refetch the resolved list so
   // the dependent fields (`hidden`, `starred`) come back consistent.
   async function toggleStarred(c: Character) {
-    await fetch(`/api/series/${seriesId}/characters/${c.id}`, {
+    await fetch(`/api/series/${seriesId}/writer-characters/${c.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ starred: !c.starred }),
@@ -369,7 +401,7 @@ export default function BookDetailPage() {
     // lastBookId to THIS book — the character keeps appearing here and
     // disappears starting in the next book.
     const nextLastBookId = c.hidden ? null : bookId
-    await fetch(`/api/series/${seriesId}/characters/${c.id}`, {
+    await fetch(`/api/series/${seriesId}/writer-characters/${c.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lastBookId: nextLastBookId }),
@@ -377,12 +409,18 @@ export default function BookDetailPage() {
     await loadCharacters()
   }
 
-  // Wipes the per-book override row + per-book avatar for the character open
-  // in the modal; the book grid then snaps back to the canonical character.
+  // Wipes the per-book age and portrait for the character open in the modal;
+  // the grid then falls back to the series age and WriteAI's portrait. Two
+  // calls because the age is a row and the portrait is a file.
   async function resetOverridesForBook(characterId: string) {
-    await fetch(`/api/series/${seriesId}/books/${bookId}/characters/${characterId}/override`, {
-      method: 'DELETE',
-    })
+    await Promise.all([
+      fetch(`/api/series/${seriesId}/books/${bookId}/writer-characters/${characterId}/override`, {
+        method: 'DELETE',
+      }),
+      fetch(`/api/series/${seriesId}/books/${bookId}/writer-characters/${characterId}/avatar`, {
+        method: 'DELETE',
+      }),
+    ])
     await loadCharacters()
     setCharAvatarTs(Date.now())
     closeCharModal()
@@ -746,6 +784,27 @@ export default function BookDetailPage() {
         </div>
       </div>
 
+      {/* WriteAI's own character editor, opened from this page rather than
+          rebuilt in it. It owns name, category, aliases, traits, goals, arc
+          notes and relationships, and it already carries the rule that every
+          save must send the COMPLETE record — WriteAI's PUT stores bodies
+          verbatim, so a partial write deletes fields.
+
+          Deleting the WriteAI record is deliberately NOT offered here: it
+          would strip the character out of every writer-event that names them
+          and out of canon lookup, which is a Characters-tab decision. */}
+      {writerModal !== null && (
+        <CharacterModal
+          character={writerModal === 'create' ? undefined : writerModal}
+          pool={writerPool}
+          books={[...series.books].sort((a, b) => a.order - b.order).map(b => b.title)}
+          allowDelete={false}
+          onSaved={onWriterCharacterSaved}
+          onDeleted={() => setWriterModal(null)}
+          onClose={() => setWriterModal(null)}
+        />
+      )}
+
       {/* Character create/edit modal. Three-band layout so tall content
           (cropper + all the per-book selectors) doesn't push the action
           row off-screen on shorter viewports:
@@ -767,7 +826,7 @@ export default function BookDetailPage() {
             {/* Header: title + avatar + name. shrink-0 keeps it pinned. */}
             <div className="shrink-0 px-8 pt-8 pb-4 border-b border-accent/10">
               <h2 className="text-base font-bold text-ink mb-6 pr-6">
-                {charModal === 'create' ? 'New Character' : `Edit "${(charModal as Character).name}"`}
+                {`Edit "${(charModal as Character).name}"`}
               </h2>
 
               {/* Avatar */}
@@ -791,7 +850,6 @@ export default function BookDetailPage() {
                     className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-accent/20 bg-surface-overlay flex items-center justify-center cursor-pointer group"
                   >
                     {(() => {
-                      if (charModal === 'create') return <LuUser size={32} className="text-ink-faint" />
                       const url = avatarUrlFor(charModal as Character, charAvatarTs)
                       return url
                         ? <img src={url} alt="" className="w-full h-full object-cover" />
@@ -818,16 +876,24 @@ export default function BookDetailPage() {
                 />
               </div>
 
-              {/* Name */}
+              {/* Name — WriteAI's, and read-only here.
+                  Not a UI nicety: writer-events reference characters by NAME
+                  in at least one path, so a rename made in the wrong place
+                  silently orphans them (LOOM-45). One editor, one place. */}
               <div>
                 <label className="block text-xs text-ink-faint mb-1 uppercase tracking-widest">Name</label>
-                <input
-                  value={charName}
-                  onChange={e => setCharName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && saveCharacter()}
-                  placeholder="Character name"
-                  className="w-full bg-surface-overlay border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
-                />
+                <div className="w-full bg-surface-overlay/40 border border-accent/10 rounded-lg px-3 py-2 text-sm text-ink-muted">
+                  {charName}
+                </div>
+                <button
+                  onClick={() => {
+                    const record = writerPool.find(w => w.id === (charModal as Character).id)
+                    if (record) setWriterModal(record)
+                  }}
+                  className="mt-2 text-xs text-ink-muted hover:text-ink underline underline-offset-2 transition"
+                >
+                  Edit name, traits &amp; relationships…
+                </button>
               </div>
             </div>
 
@@ -837,7 +903,7 @@ export default function BookDetailPage() {
                 <div>
                   <label className="block text-xs text-ink-faint mb-1 uppercase tracking-widest">
                     Age <span className="normal-case">(optional)</span>
-                    {charModal !== 'create' && (charModal as Character).hasOverride && (
+                    {(charModal as Character).hasOverride && (
                       <span className="ml-2 normal-case text-ink-muted italic">overridden in this book</span>
                     )}
                   </label>
@@ -907,7 +973,7 @@ export default function BookDetailPage() {
                   />
                   <span>Primary character (starred)</span>
                 </label>
-                {charModal !== 'create' && (charModal as Character).hasOverride && (
+                {(charModal as Character).hasOverride && (
                   <button
                     type="button"
                     onClick={() => resetOverridesForBook((charModal as Character).id)}
@@ -922,19 +988,18 @@ export default function BookDetailPage() {
             {/* Footer band — buttons stay reachable no matter how tall the
                 scrollable area gets. */}
             <div className="shrink-0 px-8 py-4 border-t border-accent/10 flex items-center justify-between">
-              {charModal !== 'create' ? (
-                <button
-                  onClick={() => deleteCharacter((charModal as Character).id)}
-                  className="px-4 py-2 rounded-lg text-sm text-choice-kill hover:bg-choice-kill/10 transition"
-                >
-                  Delete
-                </button>
-              ) : <span />}
+              <button
+                onClick={() => deleteCharacter((charModal as Character).id)}
+                title="Clears the ages, star and appearance range this series holds for them. The character, their traits and their chapter tags stay — delete those from the Characters tab."
+                className="px-4 py-2 rounded-lg text-sm text-choice-kill hover:bg-choice-kill/10 transition"
+              >
+                Clear book data
+              </button>
               <div className="flex gap-2">
                 <button onClick={closeCharModal} className="px-4 py-2 rounded-lg text-ink-muted text-sm hover:text-ink transition">Cancel</button>
                 <button
                   onClick={saveCharacter}
-                  disabled={savingChar || !charName.trim() || (charAge.trim() !== '' && isNaN(Number(charAge)))}
+                  disabled={savingChar || (charAge.trim() !== '' && isNaN(Number(charAge)))}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50"
                 >
                   <LuCheck size={14} /> {savingChar ? 'Saving…' : 'Save'}
