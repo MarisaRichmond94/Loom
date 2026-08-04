@@ -18,6 +18,7 @@ import { LuPlus, LuTriangleAlert } from 'react-icons/lu'
 import ConfirmDialog from './ConfirmDialog'
 import { useSectionActionSlot } from './SectionTabs'
 import OutlineCard from './editor/OutlineCard'
+import OutlineBoardSkeleton from './editor/OutlineBoardSkeleton'
 import { outlineCardLabels } from '@/lib/outlineCards'
 import { useBookOutline, type BookOutline } from './editor/useBookOutline'
 import type { OutlineCard as Card } from '@/lib/writerOutline'
@@ -133,8 +134,15 @@ export default function OutlineSection({
   // click and a stray twitch does not reorder the book.
   const sensors = useSensors(useSensor(NoDndPointerSensor, { activationConstraint: { distance: 4 } }))
 
+  // The board's own shape while it loads, not a line of text: the tab is
+  // opened often, and a wait that already looks like the answer is a shorter
+  // wait than one that reflows into it.
   if (loading && !outline) {
-    return <p className="px-1 py-8 text-center text-sm text-ink-faint italic">Loading outline…</p>
+    return (
+      <div className="animate-pulse">
+        <OutlineBoardSkeleton />
+      </div>
+    )
   }
 
   if (!outline) {

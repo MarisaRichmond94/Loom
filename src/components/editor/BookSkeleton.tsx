@@ -1,8 +1,15 @@
+import OutlineBoardSkeleton from './OutlineBoardSkeleton'
+
 // Used both by the book detail page while its own data is loading and by the
 // author layout while the series fetch hasn't returned yet.
+//
+// KEEP THE WIDTH IN STEP WITH THE PAGE. It is max-w-[1600px] since the outline
+// board arrived (LOOM-96); left at the old max-w-3xl, this drew a 768px column
+// that snapped to full width the moment data landed — a bigger jump than no
+// skeleton at all.
 export default function BookSkeleton() {
   return (
-    <div className="max-w-3xl mx-auto px-8 py-8 animate-pulse">
+    <div className="max-w-[1600px] mx-auto px-8 py-8 animate-pulse">
       {/* Action row — Published/Draft, Backup, Save, Preview. This was missing
           entirely, so the cover and everything under it jumped up by the row's
           height plus its margin the moment data landed (KAN-19).
@@ -46,14 +53,35 @@ export default function BookSkeleton() {
           </div>
         ))}
       </div>
-      {/* Characters section header + placeholder grid */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="h-4 w-32 bg-surface-muted rounded" />
-          <div className="h-7 w-32 bg-accent/30 rounded" />
+      {/* Section tab strip — Outline / Character(s) / Soundtrack, plus the
+          active tab's action button.
+
+          KEEP THE LABEL WIDTHS ROUGHLY IN STEP with SectionTabs: they are
+          text-sm, uppercase, tracking-widest, separated by a 24px gap. The
+          underline under the first sits on the strip's own border, matching the
+          active tab. */}
+      <div className="mb-2 flex items-center justify-between border-b border-accent/10">
+        <div className="flex items-center gap-6">
+          <div className="-mb-px border-b-2 border-accent pb-2">
+            <div className="h-4 w-20 rounded bg-surface-muted" />
+          </div>
+          <div className="pb-2">
+            <div className="h-4 w-28 rounded bg-surface-overlay" />
+          </div>
+          <div className="pb-2">
+            <div className="h-4 w-24 rounded bg-surface-overlay" />
+          </div>
         </div>
-        <div className="rounded-xl border-2 border-dashed border-accent/20" style={{ height: 300 }} />
+        <div className="pb-2">
+          <div className="h-7 w-24 rounded bg-accent/30" />
+        </div>
       </div>
+
+      {/* The outline board, which is the default tab. A writer whose last tab
+          was Characters gets a board-shaped wait and then a grid of faces —
+          the alternative is storing the tab twice, in the skeleton and in the
+          strip, and having them disagree. */}
+      <OutlineBoardSkeleton />
     </div>
   )
 }
