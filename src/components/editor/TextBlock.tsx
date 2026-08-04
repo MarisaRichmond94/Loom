@@ -99,6 +99,8 @@ import {
 } from 'react-icons/lu'
 import { Footnote } from '@/lib/extensions/footnote'
 import { CharacterMark } from '@/lib/extensions/character'
+import { writeAiPhotoUrl } from '@/lib/writerPortrait'
+import { matchesQuery, type WriterCharacter } from '@/lib/characterSearch'
 import { VariableHighlight } from '@/lib/extensions/variableHighlight'
 import { SearchHighlight } from '@/lib/extensions/searchHighlight'
 import { ParagraphIndent } from '@/lib/extensions/paragraphIndent'
@@ -108,7 +110,18 @@ import { buildCharterClipboard } from '@/lib/clipboardFormatting'
 import { useEditorColors } from '@/lib/useEditorColors'
 import { DOMSerializer } from '@tiptap/pm/model'
 
-type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
+// The tag picker's pool, from Loom's snapshot of WriteAI's characters
+// (LOOM-88). `photoUrl` is WriteAI's own path and goes through the proxy
+// before it reaches an <img>; `aliases` is one comma-separated string, and
+// searching it is the point — "Maknae" is the name in the prose even when the
+// record says "Jared Gatlin".
+type Character = {
+  id: string
+  name: string
+  aliases?: string | null
+  photoUrl?: string | null
+  age?: number | null
+}
 type Variable = { id: string; name: string; type: string; defaultValue?: string | null }
 
 type Props = {
@@ -671,7 +684,9 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
               />
               <div className="overflow-y-auto" style={{ maxHeight: '144px' }}>
                 {(() => {
-                  const filtered = characters.filter(c => c.name.toLowerCase().includes(charSearch.toLowerCase()))
+                  const filtered = characters.filter(c =>
+                    matchesQuery({ name: c.name, aliases: c.aliases ?? null } as WriterCharacter, charSearch),
+                  )
                   if (characters.length === 0) return <span className="block px-3 py-2 text-xs text-ink-faint italic">No characters yet</span>
                   if (filtered.length === 0) return <span className="block px-3 py-2 text-xs text-ink-faint italic">No matches</span>
                   return filtered.map(c => (
@@ -680,11 +695,11 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
                       onClick={() => applyCharacter(c)}
                       className="w-full text-left px-3 py-2 text-xs text-ink-muted hover:text-ink hover:bg-surface-muted transition flex items-center gap-2"
                     >
-                      {c.hasAvatar
-                        ? <img src={`/characters/${c.id}.jpg`} className="w-5 h-5 rounded-full object-cover shrink-0" alt="" />
+                      {writeAiPhotoUrl(c.photoUrl ?? null)
+                        ? <img src={writeAiPhotoUrl(c.photoUrl ?? null)!} className="w-5 h-5 rounded-full object-cover shrink-0" alt="" />
                         : <span className="w-5 h-5 rounded-full bg-accent/20 flex items-center justify-center shrink-0"><LuUser size={10} /></span>
                       }
-                      {c.name}
+                      <span className="truncate">{c.name}</span>
                     </button>
                   ))
                 })()}
@@ -701,8 +716,9 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
             <>
               {(() => {
                 const char = characters.find(c => c.id === characterViewId)
-                return char?.hasAvatar
-                  ? <img src={`/characters/${characterViewId}.jpg`} className="w-5 h-5 rounded-full object-cover shrink-0 ml-2" alt="" />
+                const src = writeAiPhotoUrl(char?.photoUrl ?? null)
+                return src
+                  ? <img src={src} className="w-5 h-5 rounded-full object-cover shrink-0 ml-2" alt="" />
                   : <span className="w-5 h-5 rounded-full bg-accent/20 flex items-center justify-center ml-2 shrink-0"><LuUser size={10} className="text-accent" /></span>
               })()}
               <span className="px-2 py-1.5 text-xs text-accent truncate max-w-[160px]">{characterViewName}</span>

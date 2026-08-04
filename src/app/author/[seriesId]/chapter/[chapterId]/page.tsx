@@ -31,7 +31,10 @@ type Block = {
   overrides: { id: string; order: number; condition: string; content: string; endingMessage?: string | null; endsChapter?: boolean }[]
 }
 type Chapter = { id: string; title: string; pov: string | null; date: string | null; condition: string | null; numbered: boolean; blocks: Block[] }
-type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
+// The tag picker's pool. Loom's snapshot of WriteAI's characters, which is
+// now the ONE cast list in the app — the dock's Characters tab and this
+// picker draw on the same records (LOOM-88).
+type Character = { id: string; name: string; aliases?: string | null; photoUrl?: string | null; age?: number | null }
 
 // Published to the header's shortcut menu while this page is mounted. Module
 // level so the identity is stable across renders (it's an effect dependency).
@@ -676,7 +679,14 @@ export default function ChapterEditorPage() {
     setTitleDraft(prev => prev !== fresh.title ? fresh.title : prev)
   }, [series, chapterId])
   useEffect(() => {
-    fetch(`/api/series/${seriesId}/characters`).then(r => r.ok ? r.json() : []).then(setCharacters)
+    // The snapshot, never /api/writeai/characters — that endpoint writes to
+    // disk on WriteAI's side and this runs on every chapter open.
+    fetch('/api/writeai/characters/snapshot')
+      .then(r => r.ok ? r.json() : [])
+      .then((pool: { id: string; name: string; aliases: string | null; photo_url: string | null }[]) =>
+        setCharacters(pool.map(c => ({ id: c.id, name: c.name, aliases: c.aliases, photoUrl: c.photo_url }))),
+      )
+      .catch(() => { /* the picker simply shows no characters */ })
   }, [seriesId])
 
   // Keep --loom-footer-h in sync so ToastLayer can sit above the footer.

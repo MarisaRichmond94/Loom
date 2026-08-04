@@ -37,7 +37,14 @@ type Block = {
   overrides: Override[]
 }
 type Variable = { id: string; name: string; type: string; defaultValue?: string }
-type Character = { id: string; name: string; age?: number | null; hasAvatar?: boolean }
+// Passed straight through to TextBlock's tag picker — the snapshot's shape.
+type Character = {
+  id: string
+  name: string
+  aliases?: string | null
+  photoUrl?: string | null
+  age?: number | null
+}
 
 type Props = {
   chapterId: string
