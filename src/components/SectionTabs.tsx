@@ -21,9 +21,6 @@ export type Section = {
    *  wording and can be reworded; this is storage. */
   id: string
   label: string
-  /** Shown beside the label, on the tab itself, so an unopened section still
-   *  says how much is in it. */
-  count?: number
   /** Header control for this section — "Add Character" and the like. Rendered
    *  opposite the strip, and only while its own tab is showing: an Add button
    *  floating beside a list it does not add to is a trap. */
@@ -93,16 +90,10 @@ export default function SectionTabs({
                     : 'border-transparent text-ink-faint hover:text-ink-muted'
                 }`}
               >
+                {/* No count. A tab strip is a place to go, and a number on it
+                    is answering a question nobody asked on the way there — the
+                    list itself says how long it is once you arrive. */}
                 {s.label}
-                {s.count != null && s.count > 0 && (
-                  <span
-                    className={`text-xs font-medium tabular-nums normal-case tracking-normal ${
-                      isActive ? 'text-ink-faint' : 'text-ink-faint/60'
-                    }`}
-                  >
-                    ({s.count})
-                  </span>
-                )}
               </button>
             )
           })}

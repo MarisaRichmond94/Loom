@@ -499,7 +499,6 @@ export default function BookDetailPage() {
           sections={[{
             id: 'characters',
             label: 'Character(s)',
-            count: characters.length,
             action: (
               <button
                 onClick={openCreateModal}
@@ -575,7 +574,6 @@ export default function BookDetailPage() {
             // Every chapter's soundtrack blocks, in story order.
             id: 'soundtrack',
             label: 'Soundtrack',
-            count: soundtracks.length,
             content: (
               <>
           {soundtracks.length === 0 ? (
