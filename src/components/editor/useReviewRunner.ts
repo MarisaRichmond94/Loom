@@ -154,6 +154,7 @@ export function useReviewRunner(onPersisted: (s: ReviewSession) => void) {
         label: args.session?.label ?? `${args.bookTitle} (${chapterLabel}) - ${args.focus}`,
         book: args.bookTitle,
         chapter: args.chapter ?? 0,
+        chapterId: args.chapterId,
         focus: args.focus,
         draft: true,
         timestamp: new Date().toISOString(),

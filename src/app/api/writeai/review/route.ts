@@ -20,6 +20,9 @@ type ReviewSession = {
   label?: string
   book?: string
   chapter?: number
+  /** Stable chapter cuid (KAN-22 follow-up). Absent on sessions written
+   *  before this field existed, or by WriteAI's own review pane. */
+  chapterId?: string
   focus?: string
   draft?: boolean
   timestamp?: string
@@ -69,9 +72,21 @@ export async function GET(req: Request) {
     )
   }
 
-  const matches = (sessions.review ?? []).filter(
-    s => s.chapter === chapter && typeof s.book === 'string' && norm(s.book) === norm(book.title),
-  )
+  // A chapter's canon NUMBER is not stable — canonizing, inserting, or
+  // deleting a chapter elsewhere in the book reshuffles every number after
+  // it, so a review stored only as (book, chapter) can silently start
+  // matching a different chapter than the one it was written against. Prefer
+  // the stable chapterId when the session has one; fall back to (book,
+  // chapter) only for sessions written before that field existed.
+  const byId = chapterId
+    ? (sessions.review ?? []).filter(s => s.chapterId === chapterId)
+    : []
+  const matches = byId.length > 0
+    ? byId
+    : (sessions.review ?? []).filter(
+        s => !s.chapterId && s.chapter === chapter &&
+          typeof s.book === 'string' && norm(s.book) === norm(book.title),
+      )
   if (matches.length === 0) {
     return NextResponse.json({ review: null, reason: 'none', chapter })
   }

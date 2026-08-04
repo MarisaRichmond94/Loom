@@ -20,6 +20,9 @@ type Session = {
   label?: string
   book?: string
   chapter?: number
+  /** Stable chapter cuid, when the session was written by Loom (KAN-22
+   *  follow-up). Not required — sessions from WriteAI's own pane omit it. */
+  chapterId?: string
   focus?: string
   draft?: boolean
   timestamp?: string

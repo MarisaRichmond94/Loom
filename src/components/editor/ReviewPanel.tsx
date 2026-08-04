@@ -30,6 +30,11 @@ export type ReviewSession = {
   label?: string
   book?: string
   chapter?: number
+  /** Loom's stable chapter cuid, so a review stays bound to the chapter it was
+   *  written against even if canonization later reassigns its display number
+   *  (KAN-22 follow-up). Absent on sessions written before this field existed,
+   *  or by WriteAI's own review pane — those fall back to (book, chapter). */
+  chapterId?: string
   focus?: string
   draft?: boolean
   timestamp?: string
