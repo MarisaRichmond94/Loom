@@ -14,7 +14,7 @@ const ExportBookModal = dynamic(() => import('@/components/editor/ExportBookModa
 import { useCanonSave } from '@/components/editor/useCanonSave'
 import { pinLabel } from '@/lib/pinLabel'
 import PinnedAudio from '@/components/PinnedAudio'
-import CollapsibleSection from '@/components/CollapsibleSection'
+import SectionTabs from '@/components/SectionTabs'
 import { writerPortraitUrl } from '@/lib/writerPortrait'
 import type { WriterCharacter } from '@/lib/characterSearch'
 
@@ -490,20 +490,26 @@ export default function BookDetailPage() {
           ))}
         </div>
 
-        {/* Characters */}
-        <CollapsibleSection
-          id="characters"
-          title="Character(s)"
-          count={characters.length}
-          action={
-            <button
-              onClick={openCreateModal}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
-            >
-              <LuPlus size={12} /> Add Character
-            </button>
-          }
-        >
+        {/* Characters and Soundtrack, as tabs rather than a stack — only one of
+            them is ever the thing you came for, and stacked they pushed each
+            other off the screen. The Outline section (LOOM-96) joins as a third
+            when it lands. */}
+        <SectionTabs
+          id="book"
+          sections={[{
+            id: 'characters',
+            label: 'Character(s)',
+            count: characters.length,
+            action: (
+              <button
+                onClick={openCreateModal}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
+              >
+                <LuPlus size={12} /> Add Character
+              </button>
+            ),
+            content: (
+              <>
           {characters.length === 0 ? (
             <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-accent/20" style={{ height: 300 }}>
               <p className="text-sm text-ink-faint italic text-center px-8">No characters yet. Add one to start tagging appearances in your chapters.</p>
@@ -563,15 +569,15 @@ export default function BookDetailPage() {
             </div>
               )
           })()}
-        </CollapsibleSection>
-
-        {/* Soundtrack — every chapter's soundtrack blocks, in story order */}
-        <CollapsibleSection
-          id="soundtrack"
-          title="Soundtrack"
-          count={soundtracks.length}
-          className="mb-8"
-        >
+              </>
+            ),
+          }, {
+            // Every chapter's soundtrack blocks, in story order.
+            id: 'soundtrack',
+            label: 'Soundtrack',
+            count: soundtracks.length,
+            content: (
+              <>
           {soundtracks.length === 0 ? (
             <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-accent/20" style={{ height: 120 }}>
               <p className="text-sm text-ink-faint italic text-center px-8">
@@ -631,7 +637,10 @@ export default function BookDetailPage() {
               })}
             </div>
           )}
-        </CollapsibleSection>
+              </>
+            ),
+          }]}
+        />
 
         {/* Front matter — spliced ahead of Chapter 1 in manuscript exports */}
         <div className="mb-8">
