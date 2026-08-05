@@ -21,6 +21,13 @@ const OutlineSection = dynamic(() => import('@/components/OutlineSection'), { ss
 // Same treatment as the outline: the chart's SVG machinery should not ride in
 // the bundle for the many page visits that only open the cast.
 const TimelineSection = dynamic(() => import('@/components/timeline/TimelineSection'), { ssr: false })
+// Same treatment again, for a sharper reason: the panel pulls in the whole chat
+// surface AND issues its scope read on mount (LOOM-118).
+const ExplorePanel = dynamic(() => import('@/components/explore/ExplorePanel'), {
+  ssr: false,
+  loading: () => <ExplorePanelSkeleton />,
+})
+import ExplorePanelSkeleton from '@/components/editor/ExplorePanelSkeleton'
 import { useBookEvents } from '@/components/timeline/useBookEvents'
 import type { ChapterChoice } from '@/components/editor/EventModal'
 import { writerPortraitUrl } from '@/lib/writerPortrait'
@@ -711,6 +718,14 @@ export default function BookDetailPage() {
                 }}
               />
             ),
+          }, {
+            // Last in the strip, as on the series page. Scope is THIS BOOK AND
+            // EVERYTHING BEFORE IT — a book page can only draw on what a reader
+            // has already read, and the rule is enforced in the proxy rather
+            // than in the dropdown (LOOM-112/114).
+            id: 'explore',
+            label: 'Explore',
+            content: <ExplorePanel seriesId={seriesId} bookId={bookId} bookTitle={book.title} />,
           }]}
         />
 

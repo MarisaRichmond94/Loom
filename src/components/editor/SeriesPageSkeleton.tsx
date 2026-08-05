@@ -70,16 +70,22 @@ export default function SeriesPageSkeleton() {
         </div>
       </div>
 
-      {/* Tab strip — Book(s) / Character(s) / Timeline (LOOM-105).
+      {/* Tab strip — Book(s) / Character(s) / Timeline / Explore (LOOM-105,
+          Explore added by LOOM-118).
           Sized per label at text-sm uppercase tracking-widest with px-1, the
           same per-element discipline as the genre row: ~11px per character
           including tracking, plus 8px of padding. Height comes from pb-2 over a
           20px line box, and the bottom border is the strip's own — both
-          matching SectionTabs, so the content below starts at the right y. */}
+          matching SectionTabs, so the content below starts at the right y.
+
+          "Explore" is 7 characters, the same as "Book(s)", hence the repeated
+          86. Adding a tab and not adding a stub here is the exact drift this
+          file has already suffered twice — the strip would settle one tab
+          narrower and everything after it would shift sideways on hydration. */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-2 border-b border-accent/10">
           <div className="flex items-center gap-6">
-            {[86, 142, 98].map((w, i) => (
+            {[86, 142, 98, 86].map((w, i) => (
               <div key={i} className="pb-2">
                 <div className="h-5 bg-surface-muted rounded" style={{ width: w }} />
               </div>
