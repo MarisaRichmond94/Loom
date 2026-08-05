@@ -134,6 +134,82 @@ export function buildChapterLinks(
   return out
 }
 
+// ── Book-scoped tags (LOOM-101) ──────────────────────────────────────────────
+//
+// The reverse of buildChapterLinks. That one runs eventIds → chapters, for
+// WriteAI's timeline, which holds ids and wants links back. The book page's
+// Timeline tab needs bookId → the events tagged anywhere in this book.
+//
+// Ids only, no event bodies: the events live in WriteAI, and the client already
+// holds the full list for the same page. Joining them here would turn a local
+// query into one that fails when WriteAI is down, on a page that should still
+// render its other tabs.
+
+/** One chapter within the book that references an event. No book fields — the
+ *  book is the question being asked, so repeating it on every row is noise. */
+export type BookEventAppearance = {
+  chapterId: string
+  chapterTitle: string
+  /** Canon display number (0 = prologue), or null when the chapter has no
+   *  canon address. */
+  chapterNumber: number | null
+  /** Referenced here only on a non-canon branch (LOOM-78). */
+  nonCanon: boolean
+}
+
+export type BookEvent = {
+  writerEventId: string
+  appearances: BookEventAppearance[]
+}
+
+/** One ChapterEvent row for a book, as the book-scoped route reads it. */
+export type BookTagRow = {
+  writerEventId: string
+  chapterId: string
+  nonCanon?: boolean
+  chapter: { title: string }
+}
+
+/**
+ * Group a book's tag rows into one entry per distinct event.
+ *
+ * Non-canon tags are KEPT and flagged, unlike buildChapterLinks, which strips
+ * them. That route is the one WriteAI reads and WriteAI holds canon only; this
+ * one is Loom talking to Loom, and being able to see the branch-only story is
+ * the entire point of the badge it feeds (LOOM-107).
+ *
+ * Ordering is by canon position so the caller can render without re-sorting:
+ * numbered chapters ascending, unnumbered last rather than sorting as 0 and
+ * jumping the prologue.
+ */
+export function groupBookEvents(
+  rows: BookTagRow[],
+  numbers: Map<string, number | null>,
+): BookEvent[] {
+  const out = new Map<string, BookEventAppearance[]>()
+  for (const row of rows) {
+    const list = out.get(row.writerEventId) ?? []
+    list.push({
+      chapterId: row.chapterId,
+      chapterTitle: row.chapter.title,
+      chapterNumber: numbers.get(row.chapterId) ?? null,
+      nonCanon: row.nonCanon ?? false,
+    })
+    out.set(row.writerEventId, list)
+  }
+  for (const list of out.values()) {
+    list.sort(
+      (a, b) =>
+        (a.chapterNumber ?? Infinity) - (b.chapterNumber ?? Infinity) ||
+        a.chapterTitle.localeCompare(b.chapterTitle),
+    )
+  }
+  return [...out.entries()].map(([writerEventId, appearances]) => ({
+    writerEventId,
+    appearances,
+  }))
+}
+
 /** One ChapterEvent row joined to its chapter and book, as the route reads it. */
 export type SpreadRow = {
   writerEventId: string
