@@ -3,9 +3,22 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { LuDatabaseBackup, LuEye, LuPencilLine } from 'react-icons/lu'
+import dynamic from 'next/dynamic'
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import SeriesTagsEditor from '@/components/editor/SeriesTagsEditor'
+import SectionTabs from '@/components/SectionTabs'
+
+// Both loaded on tab open rather than with the page. Books is the default tab,
+// so most visits need neither — and the timeline pulls in the chart's SVG
+// machinery, which has no business in the bundle for someone opening a book.
+const SeriesCharactersSection = dynamic(
+  () => import('@/components/series/SeriesCharactersSection'),
+  { ssr: false },
+)
+const TimelineSection = dynamic(() => import('@/components/timeline/TimelineSection'), {
+  ssr: false,
+})
 
 type BookStats = { chapterCount: number; wordCount: number; uniquePovs: number; choiceCount: number; coverPath: string | null }
 
@@ -92,7 +105,13 @@ export default function AuthorSeriesPage() {
 
   return (
     <>
-      <div className="max-w-3xl mx-auto px-8 py-8">
+      {/* Widened to match the book page (LOOM-105). This was the last page
+          still on the old narrow shape, and moving between the two read as
+          moving between two products — which is what LOOM-5 exists to stop.
+          Capped rather than uncapped for the same reason recorded there: an
+          ultrawide display would otherwise stretch the description into a
+          single unreadable line. */}
+      <div className="max-w-[1600px] mx-auto px-8 py-8">
         {/* Action row rather than an absolutely-positioned Preview (KAN-19).
             Export used to live only on `/`, which the project switcher has
             replaced as the series list — this is the missing tier, since
@@ -150,6 +169,24 @@ export default function AuthorSeriesPage() {
             onChange={handleTagsChange}
           />
         </div>
+        {/* Everything above stays put — action row, title, by-author,
+            description, genres, keywords. That block is the series' IDENTITY,
+            not tab content: it answers "what is this", where the tabs answer
+            "what is in it".
+
+            Books leads, and is the default on load. It is what the page is for
+            and what every existing muscle-memory click expects; the other two
+            are new surfaces that nobody has yet formed a habit around.
+
+            `id="series"` namespaces the persisted selection so it cannot
+            collide with the book page's own `loom-tabs-book` key. */}
+        <SectionTabs
+          id="series"
+          sections={[{
+            id: 'books',
+            label: 'Book(s)',
+            content: (
+              <>
         {series.books.length === 0 ? (
           <p className="text-ink-faint text-sm text-center mt-16">No books yet. Add one from the outline.</p>
         ) : (
@@ -236,8 +273,25 @@ export default function AuthorSeriesPage() {
             })}
           </div>
         )}
+              </>
+            ),
+          }, {
+            id: 'characters',
+            label: 'Character(s)',
+            content: <SeriesCharactersSection seriesId={seriesId} />,
+          }, {
+            // Unfiltered, unlike the book page's — this IS WriteAI's timeline
+            // page, in Loom. No chapter picker either: nothing here is filtered
+            // by tag, so a new event cannot vanish from the view that made it.
+            id: 'timeline',
+            label: 'Timeline',
+            content: <TimelineSection id="series" />,
+          }]}
+        />
       </div>
 
+      {/* Outside the tab strip on purpose: this is a PAGE-level dialog, and a
+          modal owned by a tab dies the moment you switch tabs. */}
       {deleteTarget && (
         <div
           className="fixed inset-0 bg-black/60 flex items-start justify-center z-50"
