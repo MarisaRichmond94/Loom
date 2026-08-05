@@ -79,12 +79,16 @@ function EventListCard({
   onSelect,
   nameOf,
   appearances,
+  untagged,
 }: {
   event: WriterEvent
   selected: boolean
   onSelect: () => void
   nameOf: (id: string) => string
   appearances: BookEventAppearance[]
+  /** Created from this tab but tagged to no chapter, so it is not really part
+   *  of this book yet. Shown anyway — see `justCreated`. */
+  untagged: boolean
 }) {
   const when = formatEventWhen(event)
   return (
@@ -98,9 +102,22 @@ function EventListCard({
       }`}
     >
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-semibold text-ink">
-          {event.title || <span className="italic text-ink-faint">Untitled event</span>}
-        </p>
+        <div className="flex items-baseline gap-2">
+          <p className="truncate text-[13px] font-semibold text-ink">
+            {event.title || <span className="italic text-ink-faint">Untitled event</span>}
+          </p>
+          {/* Dashed, and deliberately NOT amber: amber means non-canon
+              (LOOM-78/107), which is a fact about the story. This is a fact
+              about the tag — the event simply is not part of this book yet. */}
+          {untagged && (
+            <span
+              title="Created here but tagged to no chapter, so it isn’t part of this book yet — and it won’t be here after a reload. Tag it from a chapter’s Events tab."
+              className="shrink-0 rounded-full border border-dashed border-ink-faint/50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-ink-faint"
+            >
+              Untagged
+            </span>
+          )}
+        </div>
         {event.characters.length > 0 && (
           <p className="truncate text-[11px] text-ink-muted">
             {event.characters.map(nameOf).join(', ')}
@@ -169,10 +186,30 @@ export default function TimelineSection({
   )
   const nameOf = useCallback((cid: string) => nameById.get(cid) ?? 'Unknown character', [nameById])
 
-  /** The tab's scope, before search: every event, or just the tagged ones. */
+  // Events created from THIS tab during this visit, tagged or not.
+  //
+  // A filtered tab has a hole in it: a new event has no tags, so it fails the
+  // filter and the create appears to do nothing at all — the modal closes and
+  // the list is unchanged. That reads as a bug even though the event was saved
+  // perfectly well, and is the one outcome LOOM-103 rules out.
+  //
+  // So a just-created event stays visible here, badged, until the page is left.
+  // Not persisted: it is a courtesy for the moment after the create, not a
+  // second definition of what belongs to this book — that stays the tag.
+  const [justCreated, setJustCreated] = useState<Set<string>>(new Set())
+
+  /** The tab's scope, before search: every event, or the tagged ones plus
+   *  anything just created here. */
   const inScope = useMemo(
-    () => (eventIds ? events.filter(e => eventIds.has(e.id)) : events),
-    [events, eventIds],
+    () =>
+      eventIds ? events.filter(e => eventIds.has(e.id) || justCreated.has(e.id)) : events,
+    [events, eventIds, justCreated],
+  )
+
+  /** In the list only because it was just created — the tag never happened. */
+  const isUntagged = useCallback(
+    (id: string) => Boolean(eventIds) && !eventIds!.has(id) && justCreated.has(id),
+    [eventIds, justCreated],
   )
 
   // Oldest first, matching WriteAI. Undated events sort last in both
@@ -297,6 +334,7 @@ export default function TimelineSection({
             onSelect={() => setEditorFor({ event })}
             nameOf={nameOf}
             appearances={appearances[event.id] ?? []}
+            untagged={isUntagged(event.id)}
           />
         ))}
       </div>
@@ -415,7 +453,13 @@ export default function TimelineSection({
             // The page tags FIRST, then both sides refresh — otherwise the
             // event list updates while the tagged-id set is still stale, and
             // the new event flickers in and back out of a filtered view.
-            if (!editorFor.event) await onEventCreated?.(saved, chapterId)
+            if (!editorFor.event) {
+              // Tracked whether or not it was tagged: if it WAS, the tag puts
+              // it in scope anyway and this is a harmless duplicate; if it was
+              // not, this is the only thing keeping it on screen.
+              setJustCreated(prev => new Set(prev).add(saved.id))
+              await onEventCreated?.(saved, chapterId)
+            }
             await refresh()
           }}
           onDeleted={refresh}
