@@ -261,6 +261,17 @@ mark.search-match,
   --color-choice-spare-bg: #a3c377;
   --color-choice-spare-border: #8aaa5e;
   --color-choice-spare: #1a5a1a;
+  /* Amber had no light values at all until the Explore staleness banner
+     (LOOM-117) became the first thing to use it outside the choice panels.
+     The dark `#2a2010` is a very deep brown: right as a panel on `#0f1117`,
+     but on the cream page it reads as a mud-coloured block rather than a
+     caution — the opposite of what a warning wants. Exactly the failure the
+     kill note above describes, just left unfixed because nothing had hit it. */
+  --color-choice-amber-bg: #f7ecc8;
+  --color-choice-amber-border: #d9c078;
+  /* Dark enough to carry body text on that background rather than merely
+     tint it — the banner names chapter numbers, so it has to be READ. */
+  --color-choice-amber: #6b5210;
 }
 
 .light-body .ProseMirror,

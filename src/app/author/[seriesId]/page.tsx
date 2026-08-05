@@ -19,6 +19,14 @@ const SeriesCharactersSection = dynamic(
 const TimelineSection = dynamic(() => import('@/components/timeline/TimelineSection'), {
   ssr: false,
 })
+// Same treatment, for a sharper reason: the panel pulls in the whole chat
+// surface AND issues its scope read on mount. Neither belongs in the payload
+// for someone who came to open a book (LOOM-118).
+const ExplorePanel = dynamic(() => import('@/components/explore/ExplorePanel'), {
+  ssr: false,
+  loading: () => <ExplorePanelSkeleton />,
+})
+import ExplorePanelSkeleton from '@/components/editor/ExplorePanelSkeleton'
 import { useSeriesEvents } from '@/components/timeline/useBookEvents'
 
 type BookStats = { chapterCount: number; wordCount: number; uniquePovs: number; choiceCount: number; coverPath: string | null }
@@ -310,6 +318,15 @@ export default function AuthorSeriesPage() {
             id: 'timeline',
             label: 'Timeline',
             content: <SeriesTimelineTab seriesId={seriesId} />,
+          }, {
+            // Last in the strip: it is the only tab that is a conversation
+            // rather than a list, and it is the one you go to deliberately.
+            // Every book in the series is in scope here — the prefix rule is a
+            // book-page constraint, and a series-wide question is the whole
+            // reason this exists at series level (LOOM-114).
+            id: 'explore',
+            label: 'Explore',
+            content: <ExplorePanel seriesId={seriesId} bookId={null} />,
           }]}
         />
       </div>

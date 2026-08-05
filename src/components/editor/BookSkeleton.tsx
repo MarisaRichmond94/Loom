@@ -53,13 +53,19 @@ export default function BookSkeleton() {
           </div>
         ))}
       </div>
-      {/* Section tab strip — Outline / Character(s) / Soundtrack, plus the
-          active tab's action button.
+      {/* Section tab strip — Outline / Character(s) / Soundtrack / Timeline /
+          Explore, plus the active tab's action button.
 
           KEEP THE LABEL WIDTHS ROUGHLY IN STEP with SectionTabs: they are
           text-sm, uppercase, tracking-widest, separated by a 24px gap. The
           underline under the first sits on the strip's own border, matching the
-          active tab. */}
+          active tab.
+
+          ⚠️ This strip had ALREADY drifted before Explore arrived: Timeline
+          landed on the page in LOOM-103 and never landed here, so the skeleton
+          has been drawing three tabs against a real row of four. Both are added
+          now. Sized the same way the series skeleton documents — roughly 11px
+          per character plus 8px of padding — rather than by eye. */}
       <div className="mb-2 flex items-center justify-between border-b border-accent/10">
         <div className="flex items-center gap-6">
           <div className="-mb-px border-b-2 border-accent pb-2">
@@ -70,6 +76,13 @@ export default function BookSkeleton() {
           </div>
           <div className="pb-2">
             <div className="h-4 w-24 rounded bg-surface-overlay" />
+          </div>
+          {/* Timeline (8 chars) and Explore (7 chars). */}
+          <div className="pb-2">
+            <div className="h-4 rounded bg-surface-overlay" style={{ width: 96 }} />
+          </div>
+          <div className="pb-2">
+            <div className="h-4 rounded bg-surface-overlay" style={{ width: 86 }} />
           </div>
         </div>
         <div className="pb-2">
