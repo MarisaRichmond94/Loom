@@ -106,10 +106,11 @@ export function useBookOutline(seriesId: string, bookId: string) {
         const returned: OutlineCard[] = Array.isArray(data?.outline?.chapters)
           ? data.outline.chapters
           : next
-        setOutline({
+        setOutline(o => ({
           cards: [...returned].sort((a, b) => a.position - b.position),
           syncState: data?.outline?.sync_state ?? 'unknown',
-        })
+          writeaiNumber: o?.writeaiNumber ?? -1,
+        }))
         // The response above is already fresh; this just keeps a later mount
         // (switching away from and back to this book) from reading the
         // pre-edit cache entry.

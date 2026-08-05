@@ -64,7 +64,10 @@ export async function GET(req: Request) {
 
   const result = await callWriteAi(`/api/plan/outline/${book.number}`, { cache: 'no-store' })
   if ('response' in result) return result.response
-  return Response.json({ outline: result.data })
+  // Handed back alongside the cards so the staleness banner can ask
+  // `/api/writeai/chat/sync` for this book's own detail without a second
+  // title→number resolution on the client.
+  return Response.json({ outline: result.data, writeaiNumber: book.number })
 }
 
 /**

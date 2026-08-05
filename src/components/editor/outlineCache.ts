@@ -18,6 +18,9 @@ export type BookOutline = {
   /** WriteAI returns this as `sync_state`; normalised here so the component
    *  never has to know which side of the seam it came from. */
   syncState: OutlineSyncState
+  /** WriteAI's number for this book, resolved server-side. Always present
+   *  when an outline exists — the route only returns one after resolving it. */
+  writeaiNumber: number
 }
 
 export type OutlineReason = 'book-not-in-writeai' | 'writeai-unavailable'
@@ -56,6 +59,7 @@ async function fetchOutline(seriesId: string, bookId: string): Promise<OutlineRe
         // place here.
         cards: [...cards].sort((a, b) => a.position - b.position),
         syncState: data.outline.sync_state ?? 'unknown',
+        writeaiNumber: typeof data.writeaiNumber === 'number' ? data.writeaiNumber : -1,
       },
       reason: null,
     }

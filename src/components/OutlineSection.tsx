@@ -14,13 +14,14 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { LuPlus, LuTriangleAlert } from 'react-icons/lu'
+import { LuPlus } from 'react-icons/lu'
 import ConfirmDialog from './ConfirmDialog'
 import { useSectionActionSlot } from './SectionTabs'
 import OutlineCard from './editor/OutlineCard'
 import OutlineBoardSkeleton from './editor/OutlineBoardSkeleton'
+import OutlineStalenessBanner from './editor/OutlineStalenessBanner'
 import { outlineCardLabels } from '@/lib/outlineCards'
-import { useBookOutline, type BookOutline } from './editor/useBookOutline'
+import { useBookOutline } from './editor/useBookOutline'
 import type { OutlineCard as Card } from '@/lib/writerOutline'
 
 // The book page's Outline section (LOOM-96, editable in LOOM-97).
@@ -59,32 +60,6 @@ class NoDndPointerSensor extends PointerSensor {
       },
     },
   ]
-}
-
-function SyncBadge({ state }: { state: BookOutline['syncState'] }) {
-  if (state === 'synced') return null
-
-  // "behind" and "unknown" are different problems and get different words.
-  // `unknown` in particular means WriteAI could not read Loom's manifest, so its
-  // auto-reconcile is INERT — chapter numbering will not self-correct after
-  // edits. WriteAI surfaces that deliberately rather than letting it be a
-  // silent no-op, and hiding it here would undo that.
-  const behind = state === 'behind'
-  return (
-    <span
-      title={
-        behind
-          ? 'WriteAI has not ingested your latest chapters, so these cards may lag the manuscript.'
-          : 'WriteAI cannot read this book’s manifest, so it cannot correct chapter numbering. Export the canon manuscript to restore it.'
-      }
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-        behind ? 'bg-amber-500/20 text-amber-400' : 'bg-choice-kill/15 text-choice-kill'
-      }`}
-    >
-      <LuTriangleAlert size={10} />
-      {behind ? 'Behind the manuscript' : 'Numbering not syncing'}
-    </span>
-  )
 }
 
 function SortableOutlineCard(props: {
@@ -226,9 +201,18 @@ export default function OutlineSection({
           actionSlot,
         )}
 
-      {(outline.syncState !== 'synced' || saving || error) && (
+      {outline.syncState !== 'synced' && (
+        <OutlineStalenessBanner
+          seriesId={seriesId}
+          bookId={bookId}
+          writeaiNumber={outline.writeaiNumber}
+          syncState={outline.syncState}
+          onSynced={onRetry}
+        />
+      )}
+
+      {(saving || error) && (
         <div className="flex flex-wrap items-center gap-2">
-          {outline.syncState !== 'synced' && <SyncBadge state={outline.syncState} />}
           {saving && <span className="text-[10px] italic text-ink-faint">Saving…</span>}
           {error && <span className="text-[10px] text-choice-kill">{error}</span>}
         </div>
