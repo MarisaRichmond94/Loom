@@ -27,6 +27,7 @@ const ExplorePanel = dynamic(() => import('@/components/explore/ExplorePanel'), 
   loading: () => <ExplorePanelSkeleton />,
 })
 import ExplorePanelSkeleton from '@/components/editor/ExplorePanelSkeleton'
+import { prefetchScope } from '@/components/explore/scopeCache'
 import { useSeriesEvents } from '@/components/timeline/useBookEvents'
 
 type BookStats = { chapterCount: number; wordCount: number; uniquePovs: number; choiceCount: number; coverPath: string | null }
@@ -89,6 +90,30 @@ export default function AuthorSeriesPage() {
   useEffect(() => { setTitleDraft(series.title) }, [series.title])
   useEffect(() => { setDescriptionDraft(series.description ?? '') }, [series.description])
   useEffect(() => { setAuthorName(localStorage.getItem('loom-author-name') ?? '') }, [])
+
+  // Warms the Explore tab's own scope read (and JS chunk) after the page's
+  // own load has settled, so opening it usually finds its content already
+  // there instead of popping in after the tab strip has already animated —
+  // see SectionTabs' height-pin/scroll-hold effects, which only cover a
+  // switch's SYNCHRONOUS part, not data that lands later. Idle rather than
+  // immediate: this page's own fetches above should not compete with a tab
+  // the writer may never open.
+  useEffect(() => {
+    const idle = window.requestIdleCallback
+    const cancel = window.cancelIdleCallback
+    const warm = () => {
+      void prefetchScope(seriesId, null)
+      void import('@/components/explore/ExplorePanel')
+    }
+    if (idle) {
+      const handle = idle(warm)
+      return () => cancel?.(handle)
+    }
+    // Safari has no requestIdleCallback. A short timer is the same intent:
+    // after the paint that matters, not during it.
+    const handle = window.setTimeout(warm, 200)
+    return () => window.clearTimeout(handle)
+  }, [seriesId])
 
   async function handleTitleBlur() {
     const trimmed = titleDraft.trim()

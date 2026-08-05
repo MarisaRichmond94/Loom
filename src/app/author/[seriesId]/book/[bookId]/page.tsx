@@ -28,6 +28,8 @@ const ExplorePanel = dynamic(() => import('@/components/explore/ExplorePanel'), 
   loading: () => <ExplorePanelSkeleton />,
 })
 import ExplorePanelSkeleton from '@/components/editor/ExplorePanelSkeleton'
+import { prefetchBookOutline } from '@/components/editor/outlineCache'
+import { prefetchScope } from '@/components/explore/scopeCache'
 import { useBookEvents } from '@/components/timeline/useBookEvents'
 import type { ChapterChoice } from '@/components/editor/EventModal'
 import { writerPortraitUrl } from '@/lib/writerPortrait'
@@ -308,6 +310,33 @@ export default function BookDetailPage() {
   useEffect(() => { loadCharacters() }, [loadCharacters])
   useEffect(() => { loadWriterPool() }, [loadWriterPool])
   useEffect(() => { loadFrontMatter() }, [loadFrontMatter])
+
+  // Warms the Outline and Explore tabs' own data (and JS chunks) after the
+  // page's own load has settled, so opening either tab usually finds its
+  // content already there instead of popping in after the tab strip has
+  // already animated — see SectionTabs' height-pin/scroll-hold effects,
+  // which only cover a switch's SYNCHRONOUS part, not data that lands later.
+  // Idle rather than immediate: this page's own fetches above should not
+  // compete with two tabs the writer may never open.
+  useEffect(() => {
+    const idle = window.requestIdleCallback
+    const cancel = window.cancelIdleCallback
+    const warm = () => {
+      void prefetchBookOutline(seriesId, bookId)
+      void prefetchScope(seriesId, bookId)
+      void prefetchScope(seriesId, null) // Explore's "later books" read
+      void import('@/components/OutlineSection')
+      void import('@/components/explore/ExplorePanel')
+    }
+    if (idle) {
+      const handle = idle(warm)
+      return () => cancel?.(handle)
+    }
+    // Safari has no requestIdleCallback. A short timer is the same intent:
+    // after the paint that matters, not during it.
+    const handle = window.setTimeout(warm, 200)
+    return () => window.clearTimeout(handle)
+  }, [seriesId, bookId])
 
   // Creating a character means creating it in WriteAI — that is where a
   // character now exists. Loom's overlay is added afterwards, in onSaved.

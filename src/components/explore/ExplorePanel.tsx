@@ -15,7 +15,8 @@ import ExploreHistory, { type SessionSummary } from './ExploreHistory'
 import ExploreSources from './ExploreSources'
 import ExploreStalenessBanner from './ExploreStalenessBanner'
 import { useExploreChat } from './useExploreChat'
-import type { Citation, ExploreBook, ExploreMode, ExplorePov, ExploreSession } from './types'
+import { prefetchScope, type ScopePayload } from './scopeCache'
+import type { Citation, ExploreMode, ExploreSession } from './types'
 
 // The Explore tab (LOOM-114..119).
 //
@@ -29,15 +30,13 @@ import type { Citation, ExploreBook, ExploreMode, ExplorePov, ExploreSession } f
 // generation. `_build_bible` runs once per selected book per message, so the
 // series page with five books injects five condensed bibles into every prompt;
 // the cost per message is not flat, and a stray auto-fire is not cheap.
+//
+// The scope read itself IS now started ahead of the tab open — the book/series
+// page kicks it off on idle (see prefetchScope in scopeCache.ts) so this
+// effect usually finds the cache already warm instead of paying the round
+// trip after the tab strip has already animated in.
 
 const citationKey = (c: Citation) => `${c.book}__${c.chapter}__${c.chunk_index}`
-
-type ScopePayload = {
-  status: 'ok' | 'not-analyzed'
-  books?: ExploreBook[]
-  povs?: ExplorePov[]
-  lastSynced?: string | null
-}
 
 export default function ExplorePanel({
   seriesId, bookId, bookTitle,
@@ -106,23 +105,11 @@ export default function ExplorePanel({
   // ── Scope (pure read; safe on mount) ──────────────────────────────────────
   useEffect(() => {
     let cancelled = false
-    const params = new URLSearchParams({ seriesId })
-    if (bookId) params.set('bookId', bookId)
-
-    fetch(`/api/writeai/chat/scope?${params}`)
-      .then(async r => {
-        if (r.status === 503) { if (!cancelled) setScopeState('offline'); return null }
-        if (!r.ok) { if (!cancelled) setScopeState('error'); return null }
-        return r.json() as Promise<ScopePayload>
-      })
-      .then(data => {
-        if (cancelled || !data) return
-        if (data.status === 'not-analyzed') { setScopeState('not-analyzed'); return }
-        setScope(data)
-        setScopeState('ready')
-      })
-      .catch(() => { if (!cancelled) setScopeState('error') })
-
+    prefetchScope(seriesId, bookId).then(({ state, data }) => {
+      if (cancelled) return
+      setScopeState(state)
+      if (data) setScope(data)
+    })
     return () => { cancelled = true }
   }, [seriesId, bookId])
 
@@ -131,14 +118,11 @@ export default function ExplorePanel({
   useEffect(() => {
     if (!bookId) { setLaterBooks([]); return }
     let cancelled = false
-    fetch(`/api/writeai/chat/scope?seriesId=${seriesId}`)
-      .then(r => (r.ok ? r.json() : null))
-      .then((all: ScopePayload | null) => {
-        if (cancelled || !all?.books || !scope?.books) return
-        const allowed = new Set(scope.books.map(b => b.id))
-        setLaterBooks(all.books.filter(b => !allowed.has(b.id)).map(b => ({ id: b.id, title: b.title })))
-      })
-      .catch(() => { /* the disabled list is a nicety, not load-bearing */ })
+    prefetchScope(seriesId, null).then(({ data: all }) => {
+      if (cancelled || !all?.books || !scope?.books) return
+      const allowed = new Set(scope.books.map(b => b.id))
+      setLaterBooks(all.books.filter(b => !allowed.has(b.id)).map(b => ({ id: b.id, title: b.title })))
+    })
     return () => { cancelled = true }
   }, [seriesId, bookId, scope])
 

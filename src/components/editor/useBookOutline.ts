@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OutlineCard } from '@/lib/writerOutline'
+import { invalidateOutlineCache, prefetchBookOutline } from './outlineCache'
+import type { BookOutline, OutlineReason } from './outlineCache'
+
+export type { OutlineSyncState, BookOutline, OutlineReason } from './outlineCache'
 
 // The Outline section's data (LOOM-96).
 //
@@ -11,22 +15,12 @@ import type { OutlineCard } from '@/lib/writerOutline'
 // Opening the section for a book that has never been planned legitimately
 // creates its outline; that is WriteAI's design, not an accident here.
 
-export type OutlineSyncState = 'synced' | 'behind' | 'unknown'
-
-export type BookOutline = {
-  cards: OutlineCard[]
-  /** WriteAI returns this as `sync_state`; normalised here so the component
-   *  never has to know which side of the seam it came from. */
-  syncState: OutlineSyncState
-}
-
-export type OutlineReason = 'book-not-in-writeai' | 'writeai-unavailable'
-
 /**
- * Fetches on mount, which IS the gate: the book page's tab strip mounts only
- * the active section, so this hook does not run until the Outline tab is
- * opened. That matters more than usual here — see the write-on-read warning
- * above. Nothing takes an `active` flag because nothing needs one.
+ * Fetches on mount, going through outlineCache's `prefetchBookOutline` so a
+ * page-level idle prefetch (kicked off before the Outline tab is ever
+ * clicked, to avoid the pop-in of content arriving after the tab strip
+ * animation has already settled) and this hook's own mount land on the same
+ * request rather than firing the GET twice.
  */
 export function useBookOutline(seriesId: string, bookId: string) {
   const [outline, setOutline] = useState<BookOutline | null>(null)
@@ -39,35 +33,16 @@ export function useBookOutline(seriesId: string, bookId: string) {
   bookIdRef.current = bookId
 
   const load = useCallback(
-    async (id: string) => {
+    // `fresh` bypasses the cache — used after a retry or a mutation, where
+    // serving back whatever a prefetch happened to capture would be stale.
+    async (id: string, opts?: { fresh?: boolean }) => {
       setLoading(true)
       try {
-        const res = await fetch(`/api/writeai/outline?seriesId=${seriesId}&bookId=${id}`)
-        const data = await res.json().catch(() => null)
+        if (opts?.fresh) invalidateOutlineCache(seriesId, id)
+        const { outline: fetched, reason: fetchedReason } = await prefetchBookOutline(seriesId, id)
         if (bookIdRef.current !== id) return
-
-        if (!res.ok) {
-          setOutline(null)
-          setReason('writeai-unavailable')
-          return
-        }
-        // The proxy answers "WriteAI has never ingested this book" at 200 with a
-        // reason, because it is a state rather than a failure.
-        if (!data?.outline) {
-          setOutline(null)
-          setReason(data?.reason === 'book-not-in-writeai' ? 'book-not-in-writeai' : 'writeai-unavailable')
-          return
-        }
-
-        const cards: OutlineCard[] = Array.isArray(data.outline.chapters) ? data.outline.chapters : []
-        setOutline({
-          // Position, not array order: the store is a list WriteAI appends to,
-          // so a card added between two others arrives last and sorts into
-          // place here. Getting this wrong shows every inserted card at the end.
-          cards: [...cards].sort((a, b) => a.position - b.position),
-          syncState: data.outline.sync_state ?? 'unknown',
-        })
-        setReason(null)
+        setOutline(fetched)
+        setReason(fetchedReason)
       } catch {
         if (bookIdRef.current !== id) return
         setOutline(null)
@@ -84,7 +59,7 @@ export function useBookOutline(seriesId: string, bookId: string) {
   }, [bookId, load])
 
   const onRetry = useCallback(() => {
-    void load(bookIdRef.current)
+    void load(bookIdRef.current, { fresh: true })
   }, [load])
 
   // ── Mutations (LOOM-97) ───────────────────────────────────────────────────
@@ -135,6 +110,10 @@ export function useBookOutline(seriesId: string, bookId: string) {
           cards: [...returned].sort((a, b) => a.position - b.position),
           syncState: data?.outline?.sync_state ?? 'unknown',
         })
+        // The response above is already fresh; this just keeps a later mount
+        // (switching away from and back to this book) from reading the
+        // pre-edit cache entry.
+        invalidateOutlineCache(seriesId, id)
         return true
       } catch {
         if (bookIdRef.current !== id) return false
@@ -202,7 +181,7 @@ export function useBookOutline(seriesId: string, bookId: string) {
           setError(data?.error ?? 'Could not add the card.')
           return false
         }
-        await load(id)
+        await load(id, { fresh: true })
         return true
       } catch {
         setError('WriteAI isn’t reachable, so nothing was added.')
@@ -231,7 +210,7 @@ export function useBookOutline(seriesId: string, bookId: string) {
           setError(data?.error ?? 'Could not delete the card.')
           return false
         }
-        await load(id)
+        await load(id, { fresh: true })
         return true
       } catch {
         setError('WriteAI isn’t reachable, so nothing was deleted.')

@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 
 // The book page's section switcher (LOOM-93).
 //
@@ -36,10 +36,6 @@ export function useSectionActionSlot() {
   return useContext(SectionActionSlot)
 }
 
-/** Breathing room left above the tab strip when a click scrolls it into place.
- *  The strip must be VISIBLE at the top, not flush against the edge. */
-const STRIP_GAP = 16
-
 export type Section = {
   /** Stable key for the persisted selection. Not the label — a heading is
    *  wording and can be reworded; this is storage. */
@@ -65,13 +61,14 @@ export default function SectionTabs({
 }) {
   const [activeId, setActiveId] = useState(sections[0]?.id)
   const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null)
-  const stripRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  /** Set by an explicit click, cleared once the scroll is done. Never set on
-   *  mount or on the localStorage restore — a page that scrolls itself on load
-   *  is worse than one that never scrolls. */
-  const pendingScroll = useRef(false)
-  const [scrollNonce, setScrollNonce] = useState(0)
+  /** Content height right before a tab switch, so the swap can animate FROM
+   *  it. Null until the first switch — the initial mount has no "before". */
+  const prevHeightRef = useRef<number | null>(null)
+  /** Scroll position right before a tab switch, so it can be held in place
+   *  while the new section's own data arrives. Same null-until-first-switch
+   *  rule as the height above. */
+  const prevScrollTopRef = useRef<number | null>(null)
 
   /** The page's own scroller — `<main>` in author/[seriesId]/layout.tsx, not
    *  the window. Found rather than assumed, so this component stays usable if
@@ -84,100 +81,109 @@ export default function SectionTabs({
     return null
   }
 
-  // ── Why the strip could not reach the top on some tabs ─────────────────────
+  // ── Why tab switches animate height instead of snapping ────────────────────
   //
-  // To park the strip at the top of the viewport, the page needs at least a
-  // viewport's worth of content BELOW it. Outline's card board is tall enough,
-  // so it always worked; the Explore panel is a fixed 560px, so on a tall
-  // window there was simply nothing left to scroll and the browser stopped
-  // partway — which read as "each tab does this differently".
+  // The content div swaps its child synchronously on click — the outgoing
+  // section unmounts and the next one mounts in the same commit. Without this
+  // effect, the page's scrollHeight collapses or grows in that same instant —
+  // a visible jolt even though the scroll position itself is left alone.
   //
-  // Giving the content area a floor equal to the scroller's own height makes
-  // every tab able to do the same thing. Measured rather than guessed at with
-  // `100vh`: `<main>` is shorter than the viewport (there is a header above
-  // it), so vh units would overshoot and add dead space to every page.
-  useEffect(() => {
+  // Pinning the OLD height the instant the new content lands, then animating
+  // to the new one, turns that into a smooth resize instead. Pixel heights
+  // rather than the grid-template-rows 0fr→1fr trick used elsewhere
+  // (EventsPanel, CharactersPanel): that trick needs a known boolean target,
+  // and here the target is whatever the next section's natural height is.
+  useLayoutEffect(() => {
     const content = contentRef.current
-    const strip = stripRef.current
-    if (!content || !strip) return
-    const scroller = scrollParent(strip)
-    if (!scroller) return
+    const prev = prevHeightRef.current
+    if (!content || prev == null) return
 
-    const apply = () => {
-      // Everything the strip does NOT occupy once it is parked at the top:
-      // the scroller's own height, less the gap above the strip and the strip
-      // itself. Without this floor a short section cannot scroll far enough to
-      // put the strip up there at all — which is why Outline (a tall card
-      // board) was the only tab that ever looked right.
-      content.style.minHeight =
-        `${Math.max(0, scroller.clientHeight - strip.offsetHeight - STRIP_GAP)}px`
+    const next = content.getBoundingClientRect().height
+    content.style.height = `${prev}px`
+    content.style.overflow = 'hidden'
+    // Forces the pinned height to land in its own paint. Without this the
+    // browser coalesces it with the next line and there is nothing to
+    // animate FROM.
+    void content.offsetHeight
+    const raf = requestAnimationFrame(() => {
+      content.style.height = `${next}px`
+    })
+
+    const release = () => {
+      content.style.height = ''
+      content.style.overflow = ''
     }
-    apply()
-    const ro = new ResizeObserver(apply)
-    ro.observe(scroller)
-    return () => ro.disconnect()
-  }, [])
+    // Matches the div's `duration-200` below, plus a small margin.
+    const timer = setTimeout(release, 240)
+    return () => {
+      cancelAnimationFrame(raf)
+      clearTimeout(timer)
+      release()
+    }
+  }, [activeId])
 
-  // ── Why the scroll had to move out of the click handler ───────────────────
+  // ── Why scroll position needs holding, not just the height pin above ──────
   //
-  // `select()` ran the scroll synchronously, before React had committed the
-  // new section — so it was measured against the OUTGOING tab's layout. Worst
-  // on Explore's first click, where the content arrives in three stages: the
-  // old section is still mounted when the scroll fires, then the lazy chunk's
-  // skeleton, then the panel itself, then the staleness banner once its fetch
-  // resolves. Each stage changes the page height and the browser re-clamps.
+  // The height pin only covers the SYNCHRONOUS part of a tab switch — the
+  // moment the old section unmounts and the new one mounts. Outline and
+  // Explore both fetch their own data on mount (deliberately — see
+  // useBookOutline and ExplorePanel's own comments) rather than having it
+  // ready at the page level like Characters or Soundtrack. So their content
+  // renders small (or empty) first and pops in taller once that fetch
+  // resolves, well after the height pin's short window has already released.
   //
-  // So: scroll after the commit, then re-assert for a short grace window while
-  // the section is still settling. The re-assert is instant rather than smooth
-  // — a second animation chasing the first is what jitter looks like — and any
-  // real scroll by the writer cancels the whole thing, because the moment she
-  // takes the wheel she is the one deciding where the page sits.
-  useEffect(() => {
-    if (!pendingScroll.current) return
-    pendingScroll.current = false
-
-    const strip = stripRef.current
-    const scroller = strip ? scrollParent(strip) : null
-    if (!strip || !scroller) return
-
-    // Measured with rects, NOT `offsetTop`. `offsetTop` is relative to the
-    // nearest POSITIONED ancestor, which is not the scroller — so it included
-    // the header above `<main>` and overshot by exactly that much, scrolling
-    // the strip off the top of the screen instead of to it.
-    //
-    // This form is independent of where the offsetParent happens to be: how
-    // far the strip currently sits below the scroller's top edge is precisely
-    // how far the scroller must move to close the gap.
-    const target = () => Math.max(
-      0,
-      scroller.scrollTop
-        + strip.getBoundingClientRect().top
-        - scroller.getBoundingClientRect().top
-        - STRIP_GAP,
-    )
-    scroller.scrollTo({ top: target(), behavior: 'smooth' })
+  // When the page shrinks in between, the browser clamps scrollTop down to
+  // fit — and does not put it back once the content grows again. That clamp,
+  // not any deliberate scroll call, is what reads as "jumped to the top".
+  //
+  // So: hold the pre-switch scrollTop for as long as this section's content
+  // keeps resizing, and stop the moment either the resizing quiets down or
+  // the writer scrolls on her own — same cancel-on-input rule as any other
+  // scroll-preserving effect, because the instant she takes the wheel she is
+  // the one deciding where the page sits.
+  useLayoutEffect(() => {
+    const content = contentRef.current
+    const target = prevScrollTopRef.current
+    if (!content || target == null) return
+    const scroller = scrollParent(content)
+    if (!scroller) return
 
     let cancelled = false
     const release = () => { cancelled = true }
-    // `wheel`/`touchmove` rather than `scroll`: our own smooth scroll fires
-    // `scroll` events, so listening for those would cancel us immediately.
     scroller.addEventListener('wheel', release, { passive: true })
     scroller.addEventListener('touchmove', release, { passive: true })
 
+    let settleTimer: ReturnType<typeof setTimeout>
+    const scheduleSettle = () => {
+      clearTimeout(settleTimer)
+      // No resize for this long means the async fetch (if any) has landed
+      // and laid out — stop holding, so a real scroll right after isn't
+      // fighting a stale reassertion.
+      settleTimer = setTimeout(release, 400)
+    }
+
     const ro = new ResizeObserver(() => {
       if (cancelled) return
-      scroller.scrollTo({ top: target(), behavior: 'auto' })
+      scroller.scrollTop = target
+      scheduleSettle()
     })
-    if (contentRef.current) ro.observe(contentRef.current)
+    ro.observe(content)
+    scroller.scrollTop = target
+    scheduleSettle()
 
-    const stop = setTimeout(release, 1200)
+    // Outer bound in case something keeps resizing indefinitely — holding
+    // scroll hostage past a few seconds would be worse than the jump this
+    // effect exists to prevent.
+    const stop = setTimeout(release, 4000)
     return () => {
+      cancelled = true
+      clearTimeout(settleTimer)
       clearTimeout(stop)
       ro.disconnect()
       scroller.removeEventListener('wheel', release)
       scroller.removeEventListener('touchmove', release)
     }
-  }, [scrollNonce])
+  }, [activeId])
 
   // Read in an effect rather than during render: the server has no
   // localStorage, and seeding state from it directly is a hydration mismatch.
@@ -197,26 +203,24 @@ export default function SectionTabs({
   }, [id])
 
   function select(sectionId: string) {
+    if (contentRef.current) {
+      prevHeightRef.current = contentRef.current.getBoundingClientRect().height
+      const scroller = scrollParent(contentRef.current)
+      prevScrollTopRef.current = scroller?.scrollTop ?? null
+    }
     setActiveId(sectionId)
     try {
       localStorage.setItem(`loom-tabs-${id}`, sectionId)
     } catch {
       /* ignore */
     }
-    // Ask for the scroll; the effect below performs it AFTER the new section
-    // has laid out. Doing it here ran against the OLD layout — see the effect.
-    pendingScroll.current = true
-    setScrollNonce(n => n + 1)
   }
 
   const active = sections.find(s => s.id === activeId) ?? sections[0]
 
   return (
     <div className={className}>
-      <div
-        ref={stripRef}
-        className="scroll-mt-4 flex items-center justify-between mb-2 border-b border-accent/10"
-      >
+      <div className="flex items-center justify-between mb-2 border-b border-accent/10">
         {/* Spacing lives in the gap, not in each tab's padding: the underline
             is only as wide as its label, so padding would stretch the marker
             away from the word it marks. */}
@@ -256,7 +260,7 @@ export default function SectionTabs({
       {/* Only the active section is mounted. These carry <img> and <audio>
           elements, and a section nobody is looking at should not be fetching
           portraits and album art. */}
-      <div ref={contentRef}>
+      <div ref={contentRef} className="transition-[height] duration-200 ease-out motion-reduce:transition-none">
         <SectionActionSlot.Provider value={actionSlot}>{active?.content}</SectionActionSlot.Provider>
       </div>
     </div>
