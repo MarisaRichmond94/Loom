@@ -22,6 +22,12 @@ export type ScopeState = 'loading' | 'ready' | 'not-analyzed' | 'offline' | 'err
 export type ScopeResult = { state: ScopeState; data: ScopePayload | null }
 
 const cache = new Map<string, Promise<ScopeResult>>()
+// Resolved values alongside the in-flight promises, so a component can read
+// a synchronous answer for its OWN first render (a lazy useState initializer)
+// instead of always mounting empty and waiting for an effect — that empty
+// first paint, even when the effect resolves near-instantly off an already-
+// warm cache, is what produced the tab-switch flash.
+const resolved = new Map<string, ScopeResult>()
 
 function key(seriesId: string, bookId: string | null) {
   return `${seriesId}:${bookId ?? ''}`
@@ -49,7 +55,16 @@ export function prefetchScope(seriesId: string, bookId: string | null) {
   const k = key(seriesId, bookId)
   const existing = cache.get(k)
   if (existing) return existing
-  const promise = fetchScope(seriesId, bookId)
+  const promise = fetchScope(seriesId, bookId).then(result => {
+    resolved.set(k, result)
+    return result
+  })
   cache.set(k, promise)
   return promise
+}
+
+/** Synchronous read of whatever `prefetchScope` has already resolved for
+ *  this pair, or undefined if nothing has landed yet. */
+export function getCachedScope(seriesId: string, bookId: string | null): ScopeResult | undefined {
+  return resolved.get(key(seriesId, bookId))
 }

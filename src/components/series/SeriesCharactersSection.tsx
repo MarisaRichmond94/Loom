@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { LuUser } from 'react-icons/lu'
 import { writerPortraitUrl } from '@/lib/writerPortrait'
 import type { SeriesWriterCharacter } from '@/lib/writerCharacterSeries'
+import { getCachedSeriesCharacters, prefetchSeriesCharacters } from './seriesCharactersCache'
 
 // The series page's Characters tab — LOOM-105, over LOOM-104's route.
 //
@@ -66,19 +67,22 @@ function CharacterCard({ character }: { character: SeriesWriterCharacter }) {
 }
 
 export default function SeriesCharactersSection({ seriesId }: { seriesId: string }) {
-  const [characters, setCharacters] = useState<SeriesWriterCharacter[] | null>(null)
-  const [failed, setFailed] = useState(false)
+  // Lazy initializers, not `useState(null)` + effect: if the page's idle
+  // prefetch already landed by the time this tab mounts (the common case),
+  // this renders WITH the real roster on the very first paint — no empty
+  // stage, no resize once the effect below catches up.
+  const [characters, setCharacters] = useState<SeriesWriterCharacter[] | null>(
+    () => getCachedSeriesCharacters(seriesId) ?? null,
+  )
+  const [failed, setFailed] = useState(() => getCachedSeriesCharacters(seriesId) === null)
 
   useEffect(() => {
     let cancelled = false
-    fetch(`/api/series/${seriesId}/writer-characters`)
-      .then(res => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
-      .then(data => {
-        if (!cancelled) setCharacters(data)
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true)
-      })
+    prefetchSeriesCharacters(seriesId).then(data => {
+      if (cancelled) return
+      if (data) setCharacters(data)
+      else setFailed(true)
+    })
     return () => {
       cancelled = true
     }

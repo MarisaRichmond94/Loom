@@ -137,10 +137,20 @@ export default function SectionTabs({
   // not any deliberate scroll call, is what reads as "jumped to the top".
   //
   // So: hold the pre-switch scrollTop for as long as this section's content
-  // keeps resizing, and stop the moment either the resizing quiets down or
-  // the writer scrolls on her own — same cancel-on-input rule as any other
+  // keeps resizing, and stop only when the writer scrolls on her own or the
+  // outer bound below is hit — same cancel-on-input rule as any other
   // scroll-preserving effect, because the instant she takes the wheel she is
   // the one deciding where the page sits.
+  //
+  // Deliberately NOT released on a "no resize for Nms" quiet timer. That was
+  // tried and is exactly what let the jump back in: a slow fetch (WriteAI
+  // calls routinely clear 400ms, prefetched or not) leaves a gap with no
+  // resize, the quiet timer fires and gives up, and the ResizeObserver KEEPS
+  // OBSERVING but its callback silently no-ops from then on — so the resize
+  // that actually mattered, the one when the real data finally lands, goes
+  // uncorrected. Holding all the way to the outer bound costs nothing when
+  // nothing resizes late; it only matters for exactly the case this effect
+  // exists for.
   useLayoutEffect(() => {
     const content = contentRef.current
     const target = prevScrollTopRef.current
@@ -153,23 +163,12 @@ export default function SectionTabs({
     scroller.addEventListener('wheel', release, { passive: true })
     scroller.addEventListener('touchmove', release, { passive: true })
 
-    let settleTimer: ReturnType<typeof setTimeout>
-    const scheduleSettle = () => {
-      clearTimeout(settleTimer)
-      // No resize for this long means the async fetch (if any) has landed
-      // and laid out — stop holding, so a real scroll right after isn't
-      // fighting a stale reassertion.
-      settleTimer = setTimeout(release, 400)
-    }
-
     const ro = new ResizeObserver(() => {
       if (cancelled) return
       scroller.scrollTop = target
-      scheduleSettle()
     })
     ro.observe(content)
     scroller.scrollTop = target
-    scheduleSettle()
 
     // Outer bound in case something keeps resizing indefinitely — holding
     // scroll hostage past a few seconds would be worse than the jump this
@@ -177,7 +176,6 @@ export default function SectionTabs({
     const stop = setTimeout(release, 4000)
     return () => {
       cancelled = true
-      clearTimeout(settleTimer)
       clearTimeout(stop)
       ro.disconnect()
       scroller.removeEventListener('wheel', release)

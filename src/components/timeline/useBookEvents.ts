@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import type { BookEvent, BookEventAppearance } from '@/lib/chapterEvents'
+import type { BookEventAppearance } from '@/lib/chapterEvents'
+import { getCachedTaggedEvents, invalidateTaggedEvents, prefetchTaggedEvents } from './taggedEventsCache'
 
 // Loom's side of a timeline surface (LOOM-103, extended in LOOM-107).
 //
@@ -28,18 +29,29 @@ export type TaggedEvents = {
 }
 
 function useTaggedEvents(url: string | null): TaggedEvents {
-  const [eventIds, setEventIds] = useState<Set<string>>(new Set())
-  const [appearances, setAppearances] = useState<Record<string, BookEventAppearance[]>>({})
-  const [loading, setLoading] = useState(true)
+  // Lazy initializers, not empty-then-effect: if the page's idle prefetch
+  // already landed by the time this tab mounts (the common case), this
+  // renders WITH the real join on the very first paint — no empty stage, no
+  // resize once the effect below catches up.
+  const cachedInitial = url ? getCachedTaggedEvents(url) : undefined
+  const [eventIds, setEventIds] = useState<Set<string>>(() => cachedInitial?.eventIds ?? new Set())
+  const [appearances, setAppearances] = useState<Record<string, BookEventAppearance[]>>(
+    () => cachedInitial?.appearances ?? {},
+  )
+  const [loading, setLoading] = useState(() => !cachedInitial)
 
-  const load = useCallback(async () => {
-    if (!url) return
-    const res = await fetch(url)
-    if (!res.ok) return
-    const data: { events: BookEvent[] } = await res.json()
-    setEventIds(new Set(data.events.map(e => e.writerEventId)))
-    setAppearances(Object.fromEntries(data.events.map(e => [e.writerEventId, e.appearances])))
-  }, [url])
+  // `fresh` bypasses the cache — used by `refresh()` after a tag/untag, where
+  // serving back whatever a prefetch happened to capture would be stale.
+  const load = useCallback(
+    async (opts?: { fresh?: boolean }) => {
+      if (!url) return
+      if (opts?.fresh) invalidateTaggedEvents(url)
+      const data = await prefetchTaggedEvents(url)
+      setEventIds(data.eventIds)
+      setAppearances(data.appearances)
+    },
+    [url],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -55,7 +67,9 @@ function useTaggedEvents(url: string | null): TaggedEvents {
     }
   }, [load])
 
-  return { eventIds, appearances, loading, refresh: load }
+  const refresh = useCallback(() => load({ fresh: true }), [load])
+
+  return { eventIds, appearances, loading, refresh }
 }
 
 /** Tags within one book — the book page's Timeline tab. */
@@ -66,4 +80,10 @@ export function useBookEvents(seriesId: string, bookId: string): TaggedEvents {
 /** Tags across a whole series — the series page's Timeline tab. */
 export function useSeriesEvents(seriesId: string): TaggedEvents {
   return useTaggedEvents(`/api/series/${seriesId}/events`)
+}
+
+/** Warms the series-wide tagged-events read ahead of the Timeline tab being
+ *  opened — see taggedEventsCache.ts. */
+export function prefetchSeriesEvents(seriesId: string) {
+  return prefetchTaggedEvents(`/api/series/${seriesId}/events`)
 }

@@ -15,7 +15,7 @@ import ExploreHistory, { type SessionSummary } from './ExploreHistory'
 import ExploreSources from './ExploreSources'
 import ExploreStalenessBanner from './ExploreStalenessBanner'
 import { useExploreChat } from './useExploreChat'
-import { prefetchScope, type ScopePayload } from './scopeCache'
+import { getCachedScope, prefetchScope, type ScopePayload } from './scopeCache'
 import type { Citation, ExploreMode, ExploreSession } from './types'
 
 // The Explore tab (LOOM-114..119).
@@ -49,8 +49,15 @@ export default function ExplorePanel({
   const actionSlot = useSectionActionSlot()
   const router = useRouter()
 
-  const [scope, setScope] = useState<ScopePayload | null>(null)
-  const [scopeState, setScopeState] = useState<'loading' | 'ready' | 'not-analyzed' | 'offline' | 'error'>('loading')
+  // Lazy initializers, not `useState(null)` + effect: if the page's idle
+  // prefetch already landed by the time this tab mounts (the common case),
+  // this renders WITH the real data on the very first paint — no skeleton
+  // stage, no resize once the effect below catches up, no flash for the
+  // scroll-hold effect in SectionTabs to react to.
+  const [scope, setScope] = useState<ScopePayload | null>(() => getCachedScope(seriesId, bookId)?.data ?? null)
+  const [scopeState, setScopeState] = useState<'loading' | 'ready' | 'not-analyzed' | 'offline' | 'error'>(
+    () => getCachedScope(seriesId, bookId)?.state ?? 'loading',
+  )
   const [laterBooks, setLaterBooks] = useState<{ id: string; title: string }[]>([])
 
   const [selectedBooks, setSelectedBooks] = useState<Set<string>>(new Set())

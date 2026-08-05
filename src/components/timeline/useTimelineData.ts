@@ -4,6 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { writeAiPhotoUrl } from '@/lib/writerPortrait'
 import type { WriterEvent } from '@/lib/eventSearch'
 import type { CharacterOption } from '@/lib/writerCharacters'
+import {
+  getCachedTimelineData,
+  invalidateTimelineData,
+  prefetchTimelineData,
+  type WriterCharacterRow,
+} from './timelineDataCache'
 
 // The WriteAI side of a timeline surface (LOOM-102).
 //
@@ -21,8 +27,6 @@ import type { CharacterOption } from '@/lib/writerCharacters'
 // this the hard way (see useChapterCharacters): fetching it lazily per card was
 // both wrong on screen and a second concurrent caller of a write-on-read route.
 
-type WriterCharacterRow = { id?: string; name?: string; photo_url?: string | null }
-
 export type TimelineData = {
   events: WriterEvent[]
   locations: string[]
@@ -37,52 +41,35 @@ export type TimelineData = {
 }
 
 export function useTimelineData(): TimelineData {
-  const [events, setEvents] = useState<WriterEvent[]>([])
-  const [locations, setLocations] = useState<string[]>([])
-  const [characters, setCharacters] = useState<WriterCharacterRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [unreachable, setUnreachable] = useState(false)
+  // Lazy initializers, not empty-then-effect: if the page's idle prefetch
+  // already landed by the time this tab mounts (the common case), this
+  // renders WITH the real data on the very first paint — no empty stage, no
+  // resize once the effect below catches up.
+  const cachedInitial = getCachedTimelineData()
+  const [events, setEvents] = useState<WriterEvent[]>(() => cachedInitial?.events ?? [])
+  const [locations, setLocations] = useState<string[]>(() => cachedInitial?.locations ?? [])
+  const [characters, setCharacters] = useState<WriterCharacterRow[]>(() => cachedInitial?.characters ?? [])
+  const [loading, setLoading] = useState(() => !cachedInitial)
+  const [unreachable, setUnreachable] = useState(() => cachedInitial?.unreachable ?? false)
 
-  const loadEvents = useCallback(async () => {
-    const res = await fetch('/api/writeai/events')
-    const data = await res.json().catch(() => null)
-    if (!res.ok) {
-      // 503 means WriteAI is not running — a state the section renders
-      // explicitly. Anything else is a bug on our side and should be loud.
-      if (res.status === 503 || data?.unreachable) {
-        setUnreachable(true)
-        setEvents([])
-        return
-      }
-      throw new Error(`events ${res.status}`)
-    }
-    setUnreachable(false)
-    setEvents(data?.events ?? [])
-    setLocations(data?.locations ?? [])
+  // `fresh` bypasses the cache — used by `refresh()` after a mutation, where
+  // serving back whatever a prefetch happened to capture would be stale.
+  const load = useCallback(async (opts?: { fresh?: boolean }) => {
+    if (opts?.fresh) invalidateTimelineData()
+    const data = await prefetchTimelineData()
+    setUnreachable(data.unreachable)
+    setEvents(data.events)
+    setLocations(data.locations)
+    setCharacters(data.characters)
   }, [])
 
-  const loadCharacters = useCallback(async () => {
-    const res = await fetch('/api/writeai/characters')
-    if (!res.ok) return // names degrade to "Unknown character"; the timeline still renders
-    const data = await res.json().catch(() => null)
-    setCharacters(Array.isArray(data) ? data : (data?.characters ?? []))
-  }, [])
-
-  const refresh = useCallback(async () => {
-    try {
-      await Promise.all([loadEvents(), loadCharacters()])
-    } catch {
-      setUnreachable(true)
-    }
-  }, [loadEvents, loadCharacters])
+  const refresh = useCallback(() => load({ fresh: true }), [load])
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
-        await Promise.all([loadEvents(), loadCharacters()])
-      } catch {
-        if (!cancelled) setUnreachable(true)
+        await load()
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -90,7 +77,7 @@ export function useTimelineData(): TimelineData {
     return () => {
       cancelled = true
     }
-  }, [loadEvents, loadCharacters])
+  }, [load])
 
   // An entry without an id is dropped: events reference ids, so a nameless or
   // idless row could be neither resolved nor stored. Same rule as the dock's.

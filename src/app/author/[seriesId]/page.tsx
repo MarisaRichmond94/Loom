@@ -28,7 +28,9 @@ const ExplorePanel = dynamic(() => import('@/components/explore/ExplorePanel'), 
 })
 import ExplorePanelSkeleton from '@/components/editor/ExplorePanelSkeleton'
 import { prefetchScope } from '@/components/explore/scopeCache'
-import { useSeriesEvents } from '@/components/timeline/useBookEvents'
+import { prefetchSeriesCharacters } from '@/components/series/seriesCharactersCache'
+import { prefetchSeriesEvents, useSeriesEvents } from '@/components/timeline/useBookEvents'
+import { prefetchTimelineData } from '@/components/timeline/timelineDataCache'
 
 type BookStats = { chapterCount: number; wordCount: number; uniquePovs: number; choiceCount: number; coverPath: string | null }
 
@@ -91,18 +93,23 @@ export default function AuthorSeriesPage() {
   useEffect(() => { setDescriptionDraft(series.description ?? '') }, [series.description])
   useEffect(() => { setAuthorName(localStorage.getItem('loom-author-name') ?? '') }, [])
 
-  // Warms the Explore tab's own scope read (and JS chunk) after the page's
-  // own load has settled, so opening it usually finds its content already
-  // there instead of popping in after the tab strip has already animated —
-  // see SectionTabs' height-pin/scroll-hold effects, which only cover a
-  // switch's SYNCHRONOUS part, not data that lands later. Idle rather than
-  // immediate: this page's own fetches above should not compete with a tab
-  // the writer may never open.
+  // Warms Characters, Timeline, and Explore's own data (and JS chunks) after
+  // the page's own load has settled, so opening any of them usually finds
+  // its content already there instead of popping in after the tab strip has
+  // already animated — see SectionTabs' height-pin/scroll-hold effects,
+  // which only cover a switch's SYNCHRONOUS part, not data that lands later.
+  // Idle rather than immediate: this page's own fetches above should not
+  // compete with three tabs the writer may never open.
   useEffect(() => {
     const idle = window.requestIdleCallback
     const cancel = window.cancelIdleCallback
     const warm = () => {
+      void prefetchSeriesCharacters(seriesId)
+      void prefetchSeriesEvents(seriesId)
+      void prefetchTimelineData()
       void prefetchScope(seriesId, null)
+      void import('@/components/series/SeriesCharactersSection')
+      void import('@/components/timeline/TimelineSection')
       void import('@/components/explore/ExplorePanel')
     }
     if (idle) {
