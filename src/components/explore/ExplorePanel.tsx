@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { LuGitBranch, LuSquarePen } from 'react-icons/lu'
+import { useRouter } from 'next/navigation'
+import { LuGitBranch, LuPlus } from 'react-icons/lu'
 
 import { ReviewMarkdown } from '@/components/editor/reviewMarkdown'
 import { useSectionActionSlot } from '@/components/SectionTabs'
@@ -47,6 +48,7 @@ export default function ExplorePanel({
   bookTitle?: string
 }) {
   const actionSlot = useSectionActionSlot()
+  const router = useRouter()
 
   const [scope, setScope] = useState<ScopePayload | null>(null)
   const [scopeState, setScopeState] = useState<'loading' | 'ready' | 'not-analyzed' | 'offline' | 'error'>('loading')
@@ -68,7 +70,7 @@ export default function ExplorePanel({
   const [chapterLinks, setChapterLinks] = useState<Record<string, string>>({})
   const [scopeNote, setScopeNote] = useState<string | null>(null)
 
-  const streamEndRef = useRef<HTMLDivElement>(null)
+  const streamRef = useRef<HTMLDivElement>(null)
 
   const scopeLabel = bookId ? (bookTitle ?? 'This book') : 'Series'
 
@@ -173,9 +175,21 @@ export default function ExplorePanel({
     if (still.length !== selectedPovs.size) setSelectedPovs(new Set(still))
   }, [scope, selectedPovs])
 
+  // Keep the conversation pinned to the newest message by moving ITS OWN
+  // scrollTop — never `scrollIntoView`, which walks every scrollable ancestor
+  // and therefore scrolled the whole book page. That was the jump when opening
+  // a chat from history: the messages changed, and the page went with them.
+  //
+  // `smooth` only while streaming, where it reads as the answer arriving.
+  // Loading a thread should land already at the bottom, not animate there.
   useEffect(() => {
-    streamEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [chat.messages])
+    const el = streamRef.current
+    if (!el) return
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: chat.isStreaming ? 'smooth' : 'auto',
+    })
+  }, [chat.messages, chat.isStreaming])
 
   // ── Citation → editor links ───────────────────────────────────────────────
   useEffect(() => {
@@ -203,6 +217,13 @@ export default function ExplorePanel({
     const key = `${c.book.normalize('NFC').replace(/[‘’]/g, "'").trim().toLowerCase()}::${c.chapter}`
     return chapterLinks[key] ?? null
   }, [chapterLinks])
+
+  // Client-side navigation, so leaving for the editor does not tear down and
+  // rebuild the whole page (and lose both scroll positions on the way).
+  const openChapter = useCallback((c: Citation): (() => void) | null => {
+    const href = resolveChapterHref(c)
+    return href ? () => router.push(href) : null
+  }, [resolveChapterHref, router])
 
   const bookNumberFor = useCallback((c: Citation): number | null => {
     const norm = (s: string) => s.normalize('NFC').replace(/[‘’]/g, "'").trim().toLowerCase()
@@ -315,12 +336,16 @@ export default function ExplorePanel({
       {/* "New chat" lives in the tab strip's action slot — the same slot the
           outline's Add button uses, so nothing new is introduced to the page. */}
       {actionSlot && createPortal(
+        // Styled as the strip's other action buttons ("Add Character", "Add
+        // Event") rather than as its own thing — same classes, same LuPlus,
+        // same "Add X" wording. A header control that looks different from its
+        // neighbours reads as a different KIND of control.
         <button
           type="button"
           onClick={newChat}
-          className="flex items-center gap-1.5 rounded-md border border-accent/25 bg-surface-raised px-2.5 py-1 text-xs text-ink-muted transition-colors hover:border-accent hover:text-accent"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
         >
-          <LuSquarePen size={11} /> New chat
+          <LuPlus size={12} /> Add Chat
         </button>,
         actionSlot,
       )}
@@ -363,7 +388,7 @@ export default function ExplorePanel({
           )}
 
           <div className="flex min-h-0 flex-1">
-            <div className="flex min-w-0 flex-1 flex-col overflow-y-auto px-4 py-4">
+            <div ref={streamRef} className="flex min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-4">
               {chat.messages.length === 0 ? (
                 <div className="m-auto max-w-md text-center">
                   <p className="text-sm font-semibold text-ink">
@@ -379,7 +404,7 @@ export default function ExplorePanel({
                   {chat.messages.map(m => (
                     m.role === 'user' ? (
                       <div key={m.id} className="self-end max-w-[75%] rounded-xl rounded-br-sm bg-surface-overlay px-3.5 py-2">
-                        <p className="whitespace-pre-wrap text-[13px] text-ink">{m.content}</p>
+                        <p className="whitespace-pre-wrap text-[15px] text-ink">{m.content}</p>
                       </div>
                     ) : (
                       <div key={m.id} className="max-w-[92%] self-start">
@@ -393,8 +418,8 @@ export default function ExplorePanel({
                         )}
                         <div className={
                           m.mode === 'alternate' && !m.starved
-                            ? 'border-l-2 border-accent pl-3 text-[13.5px] leading-relaxed text-ink-muted italic'
-                            : 'text-[13.5px] leading-relaxed text-ink'
+                            ? 'border-l-2 border-accent pl-3 text-[15px] leading-relaxed text-ink-muted italic'
+                            : 'text-[15px] leading-relaxed text-ink'
                         }>
                           {m.content
                             ? <ReviewMarkdown text={m.content} />
@@ -408,7 +433,7 @@ export default function ExplorePanel({
                             activeKey={activeCitation ? citationKey(activeCitation) : null}
                             onOpen={c => setActiveCitation(prev =>
                               prev && citationKey(prev) === citationKey(c) ? null : c)}
-                            resolveChapterHref={resolveChapterHref}
+                            onOpenChapterHref={openChapter}
                           />
                         )}
 
@@ -421,7 +446,6 @@ export default function ExplorePanel({
                       </div>
                     )
                   ))}
-                  <div ref={streamEndRef} />
                 </div>
               )}
 

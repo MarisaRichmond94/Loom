@@ -152,14 +152,18 @@ function CitationCard({
 }
 
 export default function ExploreSources({
-  citations, answer, activeKey, onOpen, resolveChapterHref,
+  citations, answer, activeKey, onOpen, onOpenChapterHref,
 }: {
   citations: Citation[]
   answer: string
   activeKey: string | null
   onOpen: (c: Citation) => void
-  /** Editor href for a citation, or null when Loom cannot resolve it. */
-  resolveChapterHref: (c: Citation) => string | null
+  /** Client-side navigation to the chapter, or null when unresolvable.
+   *  A FUNCTION rather than an href the card assigns to `window.location`:
+   *  that was a full document reload, which threw away the whole panel — the
+   *  conversation, the scroll position, the page's own scroll — to move
+   *  somewhere Next can route to without a round trip. */
+  onOpenChapterHref: (c: Citation) => (() => void) | null
 }) {
   const [open, setOpen] = useState(false)
   const quotes = useMemo(() => quotedSpans(answer), [answer])
@@ -189,20 +193,17 @@ export default function ExploreSources({
 
       {open && (
         <div className="flex flex-col gap-1.5">
-          {sorted.map((c, i) => {
-            const href = resolveChapterHref(c)
-            return (
-              <CitationCard
-                key={`${c.book}__${c.chapter}__${c.chunk_index}`}
-                citation={c}
-                index={i + 1}
-                quotes={quotes}
-                isActive={activeKey === `${c.book}__${c.chapter}__${c.chunk_index}`}
-                onOpen={() => onOpen(c)}
-                onOpenChapter={href ? () => { window.location.href = href } : null}
-              />
-            )
-          })}
+          {sorted.map((c, i) => (
+            <CitationCard
+              key={`${c.book}__${c.chapter}__${c.chunk_index}`}
+              citation={c}
+              index={i + 1}
+              quotes={quotes}
+              isActive={activeKey === `${c.book}__${c.chapter}__${c.chunk_index}`}
+              onOpen={() => onOpen(c)}
+              onOpenChapter={onOpenChapterHref(c)}
+            />
+          ))}
         </div>
       )}
     </div>

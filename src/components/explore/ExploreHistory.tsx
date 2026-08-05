@@ -163,7 +163,9 @@ export default function ExploreHistory({
             />
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto pb-3">
+          {/* `overscroll-contain` — reaching the end of the thread list must
+              not hand the wheel to the page behind the drawer. */}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-3">
             {loading ? (
               <p className="px-3 py-3 text-xs text-ink-faint">Loading…</p>
             ) : groups.length === 0 ? (

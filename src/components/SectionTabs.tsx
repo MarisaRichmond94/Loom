@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 
 // The book page's section switcher (LOOM-93).
 //
@@ -36,6 +36,10 @@ export function useSectionActionSlot() {
   return useContext(SectionActionSlot)
 }
 
+/** Breathing room left above the tab strip when a click scrolls it into place.
+ *  The strip must be VISIBLE at the top, not flush against the edge. */
+const STRIP_GAP = 16
+
 export type Section = {
   /** Stable key for the persisted selection. Not the label — a heading is
    *  wording and can be reworded; this is storage. */
@@ -61,6 +65,119 @@ export default function SectionTabs({
 }) {
   const [activeId, setActiveId] = useState(sections[0]?.id)
   const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null)
+  const stripRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  /** Set by an explicit click, cleared once the scroll is done. Never set on
+   *  mount or on the localStorage restore — a page that scrolls itself on load
+   *  is worse than one that never scrolls. */
+  const pendingScroll = useRef(false)
+  const [scrollNonce, setScrollNonce] = useState(0)
+
+  /** The page's own scroller — `<main>` in author/[seriesId]/layout.tsx, not
+   *  the window. Found rather than assumed, so this component stays usable if
+   *  it is ever mounted somewhere with a different scroll parent. */
+  function scrollParent(el: HTMLElement | null): HTMLElement | null {
+    for (let n = el?.parentElement ?? null; n; n = n.parentElement) {
+      const overflow = getComputedStyle(n).overflowY
+      if (overflow === 'auto' || overflow === 'scroll') return n
+    }
+    return null
+  }
+
+  // ── Why the strip could not reach the top on some tabs ─────────────────────
+  //
+  // To park the strip at the top of the viewport, the page needs at least a
+  // viewport's worth of content BELOW it. Outline's card board is tall enough,
+  // so it always worked; the Explore panel is a fixed 560px, so on a tall
+  // window there was simply nothing left to scroll and the browser stopped
+  // partway — which read as "each tab does this differently".
+  //
+  // Giving the content area a floor equal to the scroller's own height makes
+  // every tab able to do the same thing. Measured rather than guessed at with
+  // `100vh`: `<main>` is shorter than the viewport (there is a header above
+  // it), so vh units would overshoot and add dead space to every page.
+  useEffect(() => {
+    const content = contentRef.current
+    const strip = stripRef.current
+    if (!content || !strip) return
+    const scroller = scrollParent(strip)
+    if (!scroller) return
+
+    const apply = () => {
+      // Everything the strip does NOT occupy once it is parked at the top:
+      // the scroller's own height, less the gap above the strip and the strip
+      // itself. Without this floor a short section cannot scroll far enough to
+      // put the strip up there at all — which is why Outline (a tall card
+      // board) was the only tab that ever looked right.
+      content.style.minHeight =
+        `${Math.max(0, scroller.clientHeight - strip.offsetHeight - STRIP_GAP)}px`
+    }
+    apply()
+    const ro = new ResizeObserver(apply)
+    ro.observe(scroller)
+    return () => ro.disconnect()
+  }, [])
+
+  // ── Why the scroll had to move out of the click handler ───────────────────
+  //
+  // `select()` ran the scroll synchronously, before React had committed the
+  // new section — so it was measured against the OUTGOING tab's layout. Worst
+  // on Explore's first click, where the content arrives in three stages: the
+  // old section is still mounted when the scroll fires, then the lazy chunk's
+  // skeleton, then the panel itself, then the staleness banner once its fetch
+  // resolves. Each stage changes the page height and the browser re-clamps.
+  //
+  // So: scroll after the commit, then re-assert for a short grace window while
+  // the section is still settling. The re-assert is instant rather than smooth
+  // — a second animation chasing the first is what jitter looks like — and any
+  // real scroll by the writer cancels the whole thing, because the moment she
+  // takes the wheel she is the one deciding where the page sits.
+  useEffect(() => {
+    if (!pendingScroll.current) return
+    pendingScroll.current = false
+
+    const strip = stripRef.current
+    const scroller = strip ? scrollParent(strip) : null
+    if (!strip || !scroller) return
+
+    // Measured with rects, NOT `offsetTop`. `offsetTop` is relative to the
+    // nearest POSITIONED ancestor, which is not the scroller — so it included
+    // the header above `<main>` and overshot by exactly that much, scrolling
+    // the strip off the top of the screen instead of to it.
+    //
+    // This form is independent of where the offsetParent happens to be: how
+    // far the strip currently sits below the scroller's top edge is precisely
+    // how far the scroller must move to close the gap.
+    const target = () => Math.max(
+      0,
+      scroller.scrollTop
+        + strip.getBoundingClientRect().top
+        - scroller.getBoundingClientRect().top
+        - STRIP_GAP,
+    )
+    scroller.scrollTo({ top: target(), behavior: 'smooth' })
+
+    let cancelled = false
+    const release = () => { cancelled = true }
+    // `wheel`/`touchmove` rather than `scroll`: our own smooth scroll fires
+    // `scroll` events, so listening for those would cancel us immediately.
+    scroller.addEventListener('wheel', release, { passive: true })
+    scroller.addEventListener('touchmove', release, { passive: true })
+
+    const ro = new ResizeObserver(() => {
+      if (cancelled) return
+      scroller.scrollTo({ top: target(), behavior: 'auto' })
+    })
+    if (contentRef.current) ro.observe(contentRef.current)
+
+    const stop = setTimeout(release, 1200)
+    return () => {
+      clearTimeout(stop)
+      ro.disconnect()
+      scroller.removeEventListener('wheel', release)
+      scroller.removeEventListener('touchmove', release)
+    }
+  }, [scrollNonce])
 
   // Read in an effect rather than during render: the server has no
   // localStorage, and seeding state from it directly is a hydration mismatch.
@@ -86,13 +203,20 @@ export default function SectionTabs({
     } catch {
       /* ignore */
     }
+    // Ask for the scroll; the effect below performs it AFTER the new section
+    // has laid out. Doing it here ran against the OLD layout — see the effect.
+    pendingScroll.current = true
+    setScrollNonce(n => n + 1)
   }
 
   const active = sections.find(s => s.id === activeId) ?? sections[0]
 
   return (
     <div className={className}>
-      <div className="flex items-center justify-between mb-2 border-b border-accent/10">
+      <div
+        ref={stripRef}
+        className="scroll-mt-4 flex items-center justify-between mb-2 border-b border-accent/10"
+      >
         {/* Spacing lives in the gap, not in each tab's padding: the underline
             is only as wide as its label, so padding would stretch the marker
             away from the word it marks. */}
@@ -132,7 +256,9 @@ export default function SectionTabs({
       {/* Only the active section is mounted. These carry <img> and <audio>
           elements, and a section nobody is looking at should not be fetching
           portraits and album art. */}
-      <SectionActionSlot.Provider value={actionSlot}>{active?.content}</SectionActionSlot.Provider>
+      <div ref={contentRef}>
+        <SectionActionSlot.Provider value={actionSlot}>{active?.content}</SectionActionSlot.Provider>
+      </div>
     </div>
   )
 }

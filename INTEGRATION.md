@@ -459,6 +459,97 @@ start showing chapters from a story it should not know exists.
 > Nothing errors; the extracted data simply goes quiet. Rename to match the
 > manuscript, or expect to lose the canon tie-in for that character.
 
+### 7. Explore chat (Loom ↔ WriteAI)
+
+WriteAI's Explore chat, as a tab on Loom's series and book pages (LOOM-114).
+**WriteAI owns the index, the model call and the spend; Loom owns the scope.**
+
+| Loom route | Proxies to | Purpose |
+|---|---|---|
+| `POST /api/writeai/chat/run` | `POST /api/chat/stream` | The conversation. SSE straight through, unbuffered. |
+| `GET /api/writeai/chat/scope` | `GET /api/books` | Books + POVs the page may offer. |
+| `GET /api/writeai/chat/models` | `GET /api/models` | The chat models on offer, and the default. |
+| `GET/PUT/DELETE /api/writeai/chat/sessions` | `/api/sessions[/chat/{id}]` | Shared chat history. |
+| `GET /api/writeai/chat/chapter` | `GET /api/books/{n}/chapters/{c}/text` | The cited chapter, for the viewer. |
+| `POST /api/writeai/chat/chapter-link` | — (Loom-only) | Citation → chapter cuid, via the canon walk. |
+| `GET/POST /api/writeai/chat/sync` | `/api/sync/status`, `/api/ingest/{preview,run,status}` | Freshness, and the guarded resync. |
+
+**Spend stays WriteAI's**, as with the review pane: it makes the Anthropic call
+and books it under `surface="chat"`. `ANTHROPIC_API_KEY` exists only in
+WriteAI's `.env`, so Loom cannot spend even by accident.
+
+> **The book-page scope rule is enforced in the proxy, not the dropdown.** A
+> series page may search every book; a **book page may search that book and
+> every book before it**, by Loom's `Book.order`. The filter bar shows later
+> books disabled with a reason, but `clampBookSelection` in
+> `src/lib/exploreScope.ts` is what enforces it — a hand-edited request naming
+> a later book has it dropped. The failure being prevented is the feature
+> spoiling the writer's own series back to her, in a way that reads exactly
+> like a correct answer.
+>
+> Note the fallback: a selection naming ONLY forbidden books clamps to the
+> allowed set rather than to `[]`, because an empty `book_filter` reads to
+> WriteAI as "the whole series" — the precise spoiler the clamp exists to stop.
+
+> ⚠️ **Filter data comes from `GET /api/books`, never `GET /api/plan/characters`.**
+> That endpoint seeds, prunes and **saves to disk on a GET** (§5), and a
+> character list is exactly what reaches for it by instinct. `/api/books` is a
+> pure sqlite read, safe to call when the tab opens.
+> `tests/unit/exploreScope.test.ts` pins this at source level.
+
+**Books cross the seam by TITLE**, through the same normalisation the insights
+and outline proxies use. Do not join `Book.order` to `book_number` — they agree
+today only because nobody has inserted a book.
+
+**Chat history is SHARED** (LOOM-116). Threads written from Loom appear in
+WriteAI's Explore sidebar and vice versa, in `writer_data/sessions.json` under
+`chat`. Loom adds one field WriteAI does not write, `loomScope`, recording
+where the thread was asked — a thread asked on the book-3 page and one asked in
+WriteAI across five books are not the same question, and reopening one without
+restoring its scope silently changes what the model can see. A thread whose
+scope exceeds the current page is **clamped, with a visible note**.
+
+> ⚠️ **`PUT /api/sessions/{kind}/{sid}` REPLACES the whole session object** —
+> the fourth endpoint in this file with that shape. Loom's proxy refuses an
+> incomplete body, an empty `messages` array, or a thread whose messages are
+> all empty. Reading history writes nothing: a thread opened and not added to
+> is never saved.
+>
+> `GET /api/sessions` returns the entire file (~800 KB, both kinds). Loom's
+> proxy filters and reduces server-side; a thread's conversation body is
+> fetched only when that thread is opened.
+
+**Staleness is reported, never fixed silently** (LOOM-117). Unlike the review
+pane, which passes the live editor text, chat answers strictly from the last
+ingest — so it will deny a scene written this morning, confidently. The banner
+reads `GET /api/sync/status` and **names the missing chapters**.
+`manifest_found: false` means *unknown*, not stale, and is never rendered as
+drift. The Sync button **canon-exports from Loom first** (re-ingesting without
+exporting just re-reads the same stale files), shows the cost estimate from
+`GET /api/ingest/preview`, waits for confirmation, and runs books **one at a
+time** because WriteAI refuses concurrent ingests. It never offers `--full`.
+
+**Citations resolve through the canon WALK, never the canon EXPORT**
+(`canonNumbersForBook`). The export returns the same numbers but writes
+`.pages`/`.txt`/`.docx` on the way — wiring it here would rewrite the
+manuscript on every citation click. Pinned by
+`tests/unit/exploreCitationLink.test.ts`. A citation Loom cannot resolve stays
+**visible but unlinked, with the reason**: that is the index and the manuscript
+disagreeing, which is precisely what the writer wants to know.
+
+**The tab mounts inert.** The only requests on open are the two pure reads
+above. Nothing billable happens until the writer presses send — worth holding
+to, because `_build_bible` runs once per selected book per message, so the
+series page with five books injects five bibles into every prompt.
+
+**Two model lists must not fork.** `GET /api/models` is the single source; Loom
+hard-codes nothing. WriteAI keeps the list in `server/routers/settings.py` (the
+API) and `frontend/src/lib/models.ts` (its own pane), pinned to each other and
+to `PRICING_PER_MTOK` by `tests/test_model_pricing.py`. The reason is a live
+bug this replaced: the backend has no model allowlist, so an id missing from
+the pricing table is still **called**, and only its cost is wrong — cheaply,
+which is the direction that makes a feature look affordable.
+
 ## Identity
 
 **Loom's cuids are the identity of a series and a book across both apps.**

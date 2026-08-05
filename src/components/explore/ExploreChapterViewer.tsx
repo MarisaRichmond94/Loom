@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useEffect, useRef, useState } from 'react'
 import { LuX, LuPencilLine } from 'react-icons/lu'
 
 import type { Citation } from './types'
@@ -25,6 +26,8 @@ export default function ExploreChapterViewer({
 }) {
   const [text, setText] = useState<string | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const hitRef = useRef<HTMLParagraphElement>(null)
 
   useEffect(() => {
     if (bookNumber === null) { setState('error'); return }
@@ -43,6 +46,19 @@ export default function ExploreChapterViewer({
 
     return () => { cancelled = true }
   }, [bookNumber, citation.chapter, citation.chunk_index])
+
+  // Centre the cited paragraph by moving THIS column's scrollTop — never with
+  // scrollIntoView, which walks every scrollable ancestor and would drag the
+  // whole book page along with it. Runs once per loaded chapter rather than on
+  // every render: the old version was a ref callback, so it re-fired (and
+  // re-scrolled) on each keystroke in the composer.
+  useEffect(() => {
+    if (state !== 'ready') return
+    const body = bodyRef.current
+    const hit = hitRef.current
+    if (!body || !hit) return
+    body.scrollTop = hit.offsetTop - body.clientHeight / 2 + hit.clientHeight / 2
+  }, [state, citation.chunk_index, citation.chapter])
 
   const chapterLabel = citation.chapter === 0 ? 'Prologue' : `Chapter ${citation.chapter}`
 
@@ -74,7 +90,10 @@ export default function ExploreChapterViewer({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      {/* `overscroll-contain`: reaching the end of this column must not hand
+          the wheel to the page behind it. Without it, reading to the bottom of
+          a cited chapter silently starts scrolling the book page. */}
+      <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
         {state === 'loading' && (
           <div className="space-y-2" aria-hidden>
             {Array.from({ length: 7 }).map((_, i) => (
@@ -99,9 +118,7 @@ export default function ExploreChapterViewer({
                 <p
                   key={i}
                   className={i === hitIndex ? 'rounded bg-accent/20 px-1 py-0.5 text-ink' : undefined}
-                  ref={i === hitIndex
-                    ? el => el?.scrollIntoView({ block: 'center' })
-                    : undefined}
+                  ref={i === hitIndex ? hitRef : undefined}
                 >
                   {p}
                 </p>
@@ -113,12 +130,15 @@ export default function ExploreChapterViewer({
 
       <div className="border-t border-accent/10 p-2.5">
         {editorHref ? (
-          <a
+          // Link, not a bare <a>: this is an in-app route, and a full document
+          // load to reach it would throw away the conversation and both scroll
+          // positions on the way.
+          <Link
             href={editorHref}
             className="flex w-full items-center justify-center gap-1.5 rounded-md border border-accent/25 bg-surface-raised px-3 py-1.5 text-xs text-ink-muted transition-colors hover:border-accent hover:text-accent"
           >
             <LuPencilLine size={11} /> Open in the editor
-          </a>
+          </Link>
         ) : (
           // Visible but unlinked, with the reason. Dropping the action would
           // hide that the index and the manuscript disagree, which is exactly

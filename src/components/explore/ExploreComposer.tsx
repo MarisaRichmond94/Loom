@@ -73,7 +73,7 @@ export default function ExploreComposer({
             }
           }}
           placeholder={placeholder}
-          className="flex-1 resize-none bg-transparent text-sm text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
+          className="flex-1 resize-none bg-transparent text-[15px] text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
         />
         {isStreaming ? (
           <button

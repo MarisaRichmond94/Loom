@@ -175,6 +175,89 @@ describe('the Explore tab cannot write to WriteAI or spend without asking', () =
   })
 })
 
+describe('every colour the Explore UI uses has a light-mode value', () => {
+  // The staleness banner shipped rendering a near-black brown on Loom's cream
+  // page, because `--color-choice-amber-*` existed only in the dark @theme
+  // block — `.light-body` overrode kill and spare and never amber, since
+  // nothing outside the choice panels had used it.
+  //
+  // The failure mode is the reason this is pinned: it is INVISIBLE in dark
+  // mode, which is where a token gets eyeballed, and the author pages are used
+  // in light mode day to day. A missing override is not a broken build, a
+  // failed test, or a console warning — it is just the wrong colour, in the
+  // one theme the developer was not looking at.
+  const css = readFileSync(
+    path.join(__dirname, '../../src/app/globals.css'), 'utf8',
+  )
+  const lightBlocks = [...css.matchAll(/\.light-body\s*\{([\s\S]*?)\}/g)]
+    .map(m => m[1])
+    .join('\n')
+
+  // Everything ExploreStalenessBanner and ExploreSources resolve through.
+  const used = [
+    '--color-choice-amber-bg',
+    '--color-choice-amber-border',
+    '--color-choice-amber',
+    '--color-choice-kill-bg',
+    '--color-choice-kill-border',
+    '--color-choice-kill',
+    '--color-choice-spare',
+  ]
+
+  it.each(used)('%s is redefined for light mode', token => {
+    // `token:` rather than a bare match, so `--color-choice-amber` is not
+    // satisfied by `--color-choice-amber-bg` happening to contain it.
+    expect(lightBlocks).toContain(`${token}:`)
+  })
+})
+
+describe('the Explore panel does not scroll the page out from under the writer', () => {
+  // Three separate bugs presented as one symptom — "the page jumps around":
+  //
+  //  1. `scrollIntoView` walks EVERY scrollable ancestor, so pinning the
+  //     conversation to its newest message also scrolled `<main>`. Opening a
+  //     chat from history changed the messages, and the page went with them.
+  //  2. The chapter viewer centred its cited paragraph from a ref CALLBACK,
+  //     which re-fires on every render — so it re-scrolled on each keystroke
+  //     in the composer.
+  //  3. The citation card navigated with `window.location.href`, a full
+  //     document load that threw away the conversation to reach a route Next
+  //     can push to client-side.
+  //
+  // All three are invisible in a unit test of behaviour and obvious in the
+  // source, so they are pinned here.
+  const panels = [
+    'components/explore/ExplorePanel.tsx',
+    'components/explore/ExploreChapterViewer.tsx',
+    'components/explore/ExploreSources.tsx',
+    'components/explore/ExploreHistory.tsx',
+  ]
+
+  it.each(panels)('%s never calls scrollIntoView', file => {
+    const src = read(file).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    expect(src).not.toContain('scrollIntoView')
+  })
+
+  it.each(panels)('%s never assigns window.location', file => {
+    const src = read(file).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    expect(src).not.toContain('window.location')
+  })
+
+  it('scrolls the conversation by its own scrollTop', () => {
+    expect(read('components/explore/ExplorePanel.tsx')).toContain('streamRef.current')
+  })
+
+  it.each([
+    ['the conversation', 'components/explore/ExplorePanel.tsx'],
+    ['the chapter viewer', 'components/explore/ExploreChapterViewer.tsx'],
+    ['the history drawer', 'components/explore/ExploreHistory.tsx'],
+  ])('%s contains its own overscroll', (_name, file) => {
+    // Without this, reaching the end of an inner scroller hands the wheel to
+    // the page behind it — the "strange movement" of two nested scrollers.
+    expect(read(file)).toContain('overscroll-contain')
+  })
+})
+
 describe('the scope route is safe to call on tab open', () => {
   it('is a GET only', () => {
     expect(scopeRouteSrc).toContain('export async function GET')

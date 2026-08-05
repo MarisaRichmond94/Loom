@@ -179,8 +179,11 @@ export default function ExploreStalenessBanner({
   const totalChapters = preview?.reduce((sum, p) => sum + p.chapters, 0) ?? 0
 
   return (
-    <div className="mx-4 mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-choice-amber-border bg-choice-amber-bg px-3 py-2 text-[12.5px] text-choice-amber">
-      <LuTriangleAlert size={13} className="shrink-0" />
+    // Full width, flush with the panel below it — no `mx-4`. The banner is
+    // about the panel, so an inset made it look like a floating aside rather
+    // than a header for the thing it describes.
+    <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-choice-amber-border bg-choice-amber-bg px-4 py-2.5 text-sm text-choice-amber">
+      <LuTriangleAlert size={15} className="shrink-0" />
 
       <div className="min-w-0 flex-1">
         {phase === 'confirming' && preview ? (
@@ -213,34 +216,34 @@ export default function ExploreStalenessBanner({
         <button
           type="button"
           onClick={askPreview}
-          className="shrink-0 rounded-md border border-choice-amber-border px-2.5 py-1 text-[11.5px] font-medium transition-colors hover:brightness-110"
+          className="shrink-0 rounded-md border border-choice-amber-border px-2.5 py-1 text-xs font-medium transition-colors hover:brightness-110"
         >
           Sync now
         </button>
       )}
       {phase === 'previewing' && (
-        <span className="shrink-0 text-[11.5px] opacity-80">Estimating…</span>
+        <span className="shrink-0 text-xs opacity-80">Estimating…</span>
       )}
       {phase === 'confirming' && (
         <span className="flex shrink-0 gap-1.5">
           <button
             type="button"
             onClick={() => { setPhase('idle'); setPreview(null) }}
-            className="rounded-md px-2 py-1 text-[11.5px] opacity-70 transition-opacity hover:opacity-100"
+            className="rounded-md px-2 py-1 text-xs opacity-70 transition-opacity hover:opacity-100"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={runSync}
-            className="flex items-center gap-1 rounded-md border border-choice-amber-border px-2.5 py-1 text-[11.5px] font-medium transition-colors hover:brightness-110"
+            className="flex items-center gap-1 rounded-md border border-choice-amber-border px-2.5 py-1 text-xs font-medium transition-colors hover:brightness-110"
           >
-            <LuRefreshCw size={10} /> Export &amp; sync
+            <LuRefreshCw size={11} /> Export &amp; sync
           </button>
         </span>
       )}
       {phase === 'syncing' && (
-        <LuRefreshCw size={12} className="shrink-0 animate-spin" />
+        <LuRefreshCw size={13} className="shrink-0 animate-spin" />
       )}
     </div>
   )
