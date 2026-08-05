@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers, LuLightbulb, LuChartNoAxesColumn } from 'react-icons/lu'
+import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers, LuLightbulb, LuChartNoAxesColumn, LuSlidersHorizontal } from 'react-icons/lu'
 import { computeChapterStats } from '@/lib/chapterStats'
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
@@ -62,6 +62,7 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
       { keys: '⌥⇧O', label: 'Toggle path config' },
       { keys: '⌥⇧F', label: 'Find in chapter' },
       { keys: '⌥⇧0', label: 'Toggle chapter stats' },
+      { keys: '⌥⇧9', label: 'Collapse / expand all blocks' },
       { keys: '⌥⇧→ / ←', label: 'Next / previous match (while searching)' },
       { keys: '⌥⇧← / →', label: 'Previous / next chapter' },
       { keys: '⌥⇧K', label: 'Clear chapter search' },
@@ -115,6 +116,9 @@ export default function ChapterEditorPage() {
   const [actionMenuOpen, setActionMenuOpen] = useState(false)
   // Chapter stats panel (LOOM-109) — toggled by its header button or ⌥⇧0.
   const [statsOpen, setStatsOpen] = useState(false)
+  // Below 576px the search bar's case/word/replace toggles move into this
+  // popover (opened via a single icon) so the input itself keeps its width.
+  const [searchOptionsOpen, setSearchOptionsOpen] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showChapterSettings, setShowChapterSettings] = useState(false)
   const [copyDone, setCopyDone] = useState(false)
@@ -245,6 +249,15 @@ export default function ChapterEditorPage() {
   // below), matching the "all uncollapsed on initial load" rule.
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
   useEffect(() => { setCollapsedIds(new Set()) }, [chapterId])
+  // ⌥⇧9 — mirrors the collapse-all button: collapse everything, or expand
+  // everything if any block is already collapsed.
+  function toggleCollapseAll() {
+    if (!chapter) return
+    const anyCollapsed = chapter.blocks.some(b => collapsedIds.has(b.id))
+    setCollapsedIds(anyCollapsed ? new Set() : new Set(chapter.blocks.map(b => b.id)))
+  }
+  const toggleCollapseAllRef = useRef(toggleCollapseAll)
+  toggleCollapseAllRef.current = toggleCollapseAll
 
   // Restore this chapter's saved path lens on navigation; reset when the
   // chapter has none so a path from a previous chapter never carries over.
@@ -320,6 +333,7 @@ export default function ChapterEditorPage() {
   const currentBlocksRef = useRef<{ id: string; order: number; type: string; content?: string | null; baseContent?: string | null; condition?: string | null; choices?: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; condition?: string | null; endingMessage?: string | null; isBadEnding?: boolean; endsChapter?: boolean }[]; overrides?: { id: string; order: number; condition: string; content: string; endingMessage?: string | null; endsChapter?: boolean }[] }[] | null>(null)
   const actionMenuRef = useRef<HTMLDivElement>(null)
   const statsMenuRef = useRef<HTMLDivElement>(null)
+  const searchOptionsRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const povInputRef = useRef<HTMLInputElement>(null)
   const focusedPovRef = useRef<string | null>(null)
@@ -359,6 +373,21 @@ export default function ChapterEditorPage() {
       document.documentElement.style.removeProperty('--loom-chapter-header-h')
     }
   // The header isn't in the DOM until the chapter loads past the skeleton.
+  }, [chapter?.id])
+
+  // Below 576px of header width, the search bar's case/word/replace toggles
+  // move into a popover (behind one icon) so the input keeps a usable width.
+  // Tracks the header's own width, not the viewport's, so it lines up with
+  // the @container/@max-[576px] rules applied to the same element.
+  const [compactSearch, setCompactSearch] = useState(false)
+  useEffect(() => {
+    const el = headerRef.current
+    if (!el) return
+    const check = () => setCompactSearch(el.offsetWidth < 576)
+    check()
+    const ro = new ResizeObserver(check)
+    ro.observe(el)
+    return () => ro.disconnect()
   }, [chapter?.id])
 
   // Publish the footer's height as --loom-footer-h so the reference panel can
@@ -425,6 +454,9 @@ export default function ChapterEditorPage() {
       }
       if (statsMenuRef.current && !statsMenuRef.current.contains(e.target as Node)) {
         setStatsOpen(false)
+      }
+      if (searchOptionsRef.current && !searchOptionsRef.current.contains(e.target as Node)) {
+        setSearchOptionsOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
@@ -787,6 +819,7 @@ export default function ChapterEditorPage() {
         case 'KeyK': e.preventDefault(); setLocalSearchQuery(''); setLocalSearchReplaceMode(false); break
         case 'KeyW': e.preventDefault(); clearLensRef.current(); break
         case 'Digit0': case 'Numpad0': e.preventDefault(); setStatsOpen(v => !v); break
+        case 'Digit9': case 'Numpad9': e.preventDefault(); toggleCollapseAllRef.current(); break
         // An active chapter search owns these keys; with the search bar empty
         // they fall through to the footer's prev/next chapter navigation.
         case 'ArrowRight':
@@ -1083,7 +1116,7 @@ export default function ChapterEditorPage() {
             - If you change this block's structure, update ChapterSkeleton.tsx's
               header placeholder to match — it drifted silently after KAN-30
               until LOOM-49 caught it. */}
-        <div ref={headerRef} className="sticky top-0 z-[45] -mx-8 px-8 pt-3 pb-2 bg-surface-base">
+        <div ref={headerRef} className="@container sticky top-0 z-[45] -mx-8 px-8 pt-3 pb-2 bg-surface-base">
           {/* Title + POV — centered */}
           <div className="flex flex-col items-center mb-8">
             <input
@@ -1119,12 +1152,14 @@ export default function ChapterEditorPage() {
               value={chapter.date ?? ''}
               onChange={e => handleMetaChange('date', e.target.value)}
               onFocus={e => e.target.setSelectionRange(0, 0)}
-              className="bg-surface-raised border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent w-60 shrink-0"
+              className="bg-surface-raised border border-accent/20 rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent w-60 @max-[820px]:w-40 shrink-0"
             />
 
-            <div className="ml-auto flex items-center gap-4">
-              {/* Chapter-local find bar — always visible, styled like the global series search */}
-              <div className="relative flex items-center w-72">
+            <div className="ml-auto flex items-center gap-4 min-w-0">
+              {/* Chapter-local find bar — always visible, styled like the global series search.
+                  flex-1 + min-w lets it actually shrink with the row instead of holding a fixed
+                  width and forcing the collapse/stats buttons off-screen. */}
+              <div className="relative flex items-center flex-1 min-w-32 max-w-72 @max-[820px]:max-w-56">
                 <LuSearch size={12} className="absolute left-2 text-ink-faint pointer-events-none" />
                 <input
                   ref={localSearchInputRef}
@@ -1134,9 +1169,9 @@ export default function ChapterEditorPage() {
                     if (e.key === 'Escape') { setLocalSearchQuery(''); setLocalSearchReplaceMode(false); e.currentTarget.blur() }
                     if (e.key === 'Enter') jumpToFirstMatchRef.current?.(localSearchQuery)
                   }}
-                  placeholder="Find in chapter… (⌥⇧F)"
+                  placeholder={compactSearch ? 'Search…' : 'Find in chapter… (⌥⇧F)'}
                   title="Find in chapter (⌥⇧F)"
-                  className="w-full pl-7 pr-[104px] py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
+                  className={`w-full pl-7 py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50 ${compactSearch ? 'pr-14' : 'pr-[104px]'}`}
                 />
                 <div className="absolute right-1.5 flex items-center gap-0.5">
                   {localSearchQuery && localSearchMatchCount > 0 && (
@@ -1147,29 +1182,78 @@ export default function ChapterEditorPage() {
                       <LuX size={12} />
                     </button>
                   )}
-                  <button
-                    onClick={toggleMatchCase}
-                    title="Match case"
-                    aria-pressed={matchCase}
-                    className={`p-0.5 rounded transition ${matchCase ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'}`}
-                  >
-                    <LuCaseSensitive size={13} />
-                  </button>
-                  <button
-                    onClick={toggleMatchWord}
-                    title="Match whole word"
-                    aria-pressed={matchWord}
-                    className={`p-0.5 rounded transition ${matchWord ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'}`}
-                  >
-                    <LuWholeWord size={13} />
-                  </button>
-                  <button
-                    onClick={() => setLocalSearchReplaceMode(m => !m)}
-                    title={localSearchReplaceMode ? 'Hide replace' : 'Find and replace'}
-                    className={`p-0.5 transition ${localSearchReplaceMode ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
-                  >
-                    <LuReplace size={11} />
-                  </button>
+                  {compactSearch ? (
+                    <div ref={searchOptionsRef} className="relative">
+                      <button
+                        onClick={() => setSearchOptionsOpen(o => !o)}
+                        title="Search options"
+                        aria-haspopup="menu"
+                        aria-expanded={searchOptionsOpen}
+                        className={`p-0.5 rounded transition ${
+                          matchCase || matchWord || localSearchReplaceMode || searchOptionsOpen ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'
+                        }`}
+                      >
+                        <LuSlidersHorizontal size={12} />
+                      </button>
+                      {searchOptionsOpen && (
+                        <div
+                          role="menu"
+                          className="absolute top-full right-0 mt-1.5 z-50 w-44 bg-surface-raised border border-accent/20 rounded-xl shadow-xl p-1 flex flex-col"
+                        >
+                          <button
+                            onClick={toggleMatchCase}
+                            aria-pressed={matchCase}
+                            className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-left transition ${matchCase ? 'text-accent bg-accent/10' : 'text-ink-muted hover:text-ink hover:bg-surface-base'}`}
+                          >
+                            <LuCaseSensitive size={13} className="shrink-0" />
+                            Match case
+                          </button>
+                          <button
+                            onClick={toggleMatchWord}
+                            aria-pressed={matchWord}
+                            className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-left transition ${matchWord ? 'text-accent bg-accent/10' : 'text-ink-muted hover:text-ink hover:bg-surface-base'}`}
+                          >
+                            <LuWholeWord size={13} className="shrink-0" />
+                            Match whole word
+                          </button>
+                          <button
+                            onClick={() => { setLocalSearchReplaceMode(m => !m); setSearchOptionsOpen(false) }}
+                            aria-pressed={localSearchReplaceMode}
+                            className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-left transition ${localSearchReplaceMode ? 'text-accent bg-accent/10' : 'text-ink-muted hover:text-ink hover:bg-surface-base'}`}
+                          >
+                            <LuReplace size={12} className="shrink-0" />
+                            Find and replace
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={toggleMatchCase}
+                        title="Match case"
+                        aria-pressed={matchCase}
+                        className={`p-0.5 rounded transition ${matchCase ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'}`}
+                      >
+                        <LuCaseSensitive size={13} />
+                      </button>
+                      <button
+                        onClick={toggleMatchWord}
+                        title="Match whole word"
+                        aria-pressed={matchWord}
+                        className={`p-0.5 rounded transition ${matchWord ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'}`}
+                      >
+                        <LuWholeWord size={13} />
+                      </button>
+                      <button
+                        onClick={() => setLocalSearchReplaceMode(m => !m)}
+                        title={localSearchReplaceMode ? 'Hide replace' : 'Find and replace'}
+                        className={`p-0.5 transition ${localSearchReplaceMode ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
+                      >
+                        <LuReplace size={11} />
+                      </button>
+                    </>
+                  )}
                 </div>
 
                 {/* Replace field — popover anchored below the search bar. */}
@@ -1202,10 +1286,11 @@ export default function ChapterEditorPage() {
                       if (anyCollapsed) setCollapsedIds(new Set())
                       else setCollapsedIds(new Set(chapter.blocks.map(b => b.id)))
                     }}
+                    title={`${anyCollapsed ? 'Expand' : 'Collapse'} all (⌥⇧9)`}
                     className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition shrink-0"
                   >
                     {anyCollapsed ? <LuChevronsUpDown size={12} /> : <LuChevronsDownUp size={12} />}
-                    {anyCollapsed ? 'Expand All' : 'Collapse All'}
+                    <span className="@max-[820px]:hidden">{anyCollapsed ? 'Expand All' : 'Collapse All'}</span>
                   </button>
                 )
               })()}
@@ -1226,7 +1311,7 @@ export default function ChapterEditorPage() {
                   }`}
                 >
                   <LuChartNoAxesColumn size={13} className="text-accent shrink-0" />
-                  <span className="tabular-nums">{chapterStats.words.toLocaleString()} words</span>
+                  <span className="tabular-nums @max-[820px]:hidden">{chapterStats.words.toLocaleString()} words</span>
                 </button>
 
                 {statsOpen && (
