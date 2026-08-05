@@ -132,28 +132,28 @@ export default function AppHeader({
         </a>
       )}
 
-      <div className="ml-auto flex items-center gap-3 shrink-0">
+      <div className="ml-auto flex items-center gap-3 min-w-0">
         {loading ? (
           <>
             {(hasTools || tools) && (
-              <div className="flex items-center gap-2 animate-pulse">
+              <div className="flex items-center gap-2 animate-pulse shrink-0">
                 <Bar className="w-4 h-4" />
                 <Bar className="h-7 w-72 rounded-lg" />
               </div>
             )}
-            <Bar className={`h-4 w-28${compactGreeting ? ' hidden lg:block' : ''}`} />
-            <div className="flex items-center gap-1.5 animate-pulse">
+            <Bar className={`h-4 w-28 shrink-0${compactGreeting ? ' hidden lg:block' : ''}`} />
+            <div className="flex items-center gap-1.5 animate-pulse shrink-0">
               <Bar className="w-3.5 h-3.5 rounded-full" />
               <Bar className="w-9 h-5 rounded-full" />
               <Bar className="w-3.5 h-3.5 rounded-full" />
             </div>
-            {showBell && <Bar className="w-4 h-4" />}
-            <Bar className="w-10 h-10 rounded-full" />
+            {showBell && <Bar className="w-4 h-4 shrink-0" />}
+            <Bar className="w-10 h-10 rounded-full shrink-0" />
           </>
         ) : (
           <>
             {tools}
-            <div className={compactGreeting ? 'hidden lg:block' : undefined}>
+            <div className={`shrink-0${compactGreeting ? ' hidden lg:block' : ''}`}>
               <Greeting />
             </div>
             <button
@@ -161,7 +161,7 @@ export default function AppHeader({
               aria-checked={lightMode}
               onClick={onToggleLightMode}
               title={lightMode ? 'Switch to dark mode' : 'Switch to light mode'}
-              className="flex items-center gap-1.5 text-ink-faint hover:text-ink transition"
+              className="flex items-center gap-1.5 text-ink-faint hover:text-ink transition shrink-0"
             >
               <LuMoon size={14} />
               <span
@@ -177,8 +177,8 @@ export default function AppHeader({
               </span>
               <LuSun size={14} />
             </button>
-            {showBell && <NotificationBell />}
-            <AvatarButton />
+            {showBell && <div className="shrink-0"><NotificationBell /></div>}
+            <div className="shrink-0"><AvatarButton /></div>
           </>
         )}
       </div>

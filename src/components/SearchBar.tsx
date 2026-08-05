@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams, usePathname, useRouter } from 'next/navigation'
-import { LuSearch, LuX, LuReplace, LuCaseSensitive, LuWholeWord } from 'react-icons/lu'
+import { LuSearch, LuX, LuReplace, LuCaseSensitive, LuWholeWord, LuSlidersHorizontal } from 'react-icons/lu'
 import { FaBookOpen } from 'react-icons/fa'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { flushPendingProse, publishProseReplaced } from '@/lib/proseSync'
@@ -52,6 +52,20 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
   const [open, setOpen] = useState(false)
   const [bookFilter, setBookFilter] = useState<Set<string>>(new Set())  // empty = all books
   const [showFilter, setShowFilter] = useState(false)
+  // Below 852px of viewport width, everything except the book filter (clear,
+  // match case, match word, replace) folds into a popover behind one icon.
+  // The header spans the full viewport (no sidebar-scoped container like the
+  // chapter page's), so this tracks window width directly rather than a
+  // ResizeObserver on an ancestor.
+  const [compactSearch, setCompactSearch] = useState(false)
+  const [showOptions, setShowOptions] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 852px)')
+    setCompactSearch(mq.matches)
+    const onChange = (e: MediaQueryListEvent) => setCompactSearch(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
   // Match-case / whole-word toggles, persisted (shared with the chapter
   // find bar via the same localStorage keys) so it's one preference.
   const [matchCase, setMatchCase] = useState(false)
@@ -81,6 +95,7 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         setOpen(false)
         setShowFilter(false)
+        setShowOptions(false)
       }
     }
     document.addEventListener('mousedown', onDown)
@@ -287,55 +302,113 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
       : `Filter: ${bookFilter.size} books`
 
   return (
-    <div ref={rootRef} className="relative flex items-center min-w-0">
+    <div ref={rootRef} className="relative flex items-center flex-1 min-w-0">
       {/* Single fixed-width input with search icon on the left and book-
           filter + clear buttons on the right. Keeping every interactive
           element inside the input prevents the surrounding header from
           reflowing when the filter label changes width. */}
-      <div className="relative flex items-center w-72">
+      <div className="relative flex items-center flex-1 min-w-32 max-w-72">
         <LuSearch size={12} className="absolute left-2 text-ink-faint pointer-events-none" />
         <input
           ref={inputRef}
           value={query}
           onChange={e => { setQuery(e.target.value); setOpen(true) }}
           onFocus={() => setOpen(true)}
-          placeholder="Search the series… (⌥⇧G)"
+          placeholder={compactSearch ? 'Search…' : 'Search the series… (⌥⇧G)'}
           title="Search the series (⌥⇧G)"
-          className="w-full pl-7 pr-[92px] py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50"
+          className={`w-full pl-7 py-1.5 text-xs bg-surface-base border border-accent/20 rounded-lg text-ink placeholder:text-ink-faint outline-none focus:border-accent/50 ${compactSearch ? 'pr-14' : 'pr-[92px]'}`}
         />
         <div className="absolute right-1.5 flex items-center gap-0.5">
-          {query && (
-            <button
-              onClick={clearQuery}
-              className="text-ink-faint hover:text-ink p-0.5"
-              title="Clear"
-            >
-              <LuX size={12} />
-            </button>
+          {compactSearch ? (
+            <div className="relative">
+              <button
+                onClick={() => setShowOptions(o => !o)}
+                title="Search options"
+                aria-haspopup="menu"
+                aria-expanded={showOptions}
+                className={`p-0.5 rounded transition ${
+                  query || matchCase || matchWord || replaceMode || showOptions ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'
+                }`}
+              >
+                <LuSlidersHorizontal size={12} />
+              </button>
+              {showOptions && (
+                <div
+                  role="menu"
+                  className="absolute top-full right-0 mt-1.5 z-50 w-44 bg-surface-raised border border-accent/20 rounded-xl shadow-xl p-1 flex flex-col"
+                >
+                  {query && (
+                    <button
+                      onClick={() => { clearQuery(); setShowOptions(false) }}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-left text-ink-muted hover:text-ink hover:bg-surface-base transition"
+                    >
+                      <LuX size={13} className="shrink-0" />
+                      Clear
+                    </button>
+                  )}
+                  <button
+                    onClick={toggleMatchCase}
+                    aria-pressed={matchCase}
+                    className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-left transition ${matchCase ? 'text-accent bg-accent/10' : 'text-ink-muted hover:text-ink hover:bg-surface-base'}`}
+                  >
+                    <LuCaseSensitive size={13} className="shrink-0" />
+                    Match case
+                  </button>
+                  <button
+                    onClick={toggleMatchWord}
+                    aria-pressed={matchWord}
+                    className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-left transition ${matchWord ? 'text-accent bg-accent/10' : 'text-ink-muted hover:text-ink hover:bg-surface-base'}`}
+                  >
+                    <LuWholeWord size={13} className="shrink-0" />
+                    Match whole word
+                  </button>
+                  <button
+                    onClick={() => { setReplaceMode(o => !o); setOpen(true); setShowOptions(false) }}
+                    aria-pressed={replaceMode}
+                    className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-left transition ${replaceMode ? 'text-accent bg-accent/10' : 'text-ink-muted hover:text-ink hover:bg-surface-base'}`}
+                  >
+                    <LuReplace size={12} className="shrink-0" />
+                    Find and replace
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              {query && (
+                <button
+                  onClick={clearQuery}
+                  className="text-ink-faint hover:text-ink p-0.5"
+                  title="Clear"
+                >
+                  <LuX size={12} />
+                </button>
+              )}
+              <button
+                onClick={toggleMatchCase}
+                title="Match case"
+                aria-pressed={matchCase}
+                className={`p-0.5 rounded transition ${matchCase ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'}`}
+              >
+                <LuCaseSensitive size={13} />
+              </button>
+              <button
+                onClick={toggleMatchWord}
+                title="Match whole word"
+                aria-pressed={matchWord}
+                className={`p-0.5 rounded transition ${matchWord ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'}`}
+              >
+                <LuWholeWord size={13} />
+              </button>
+              <button
+                onClick={() => { setReplaceMode(o => !o); setOpen(true) }}
+                title={replaceMode ? 'Hide replace input' : 'Find and replace'}
+                className={`p-0.5 transition ${replaceMode ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
+              >
+                <LuReplace size={11} />
+              </button>
+            </>
           )}
-          <button
-            onClick={toggleMatchCase}
-            title="Match case"
-            aria-pressed={matchCase}
-            className={`p-0.5 rounded transition ${matchCase ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'}`}
-          >
-            <LuCaseSensitive size={13} />
-          </button>
-          <button
-            onClick={toggleMatchWord}
-            title="Match whole word"
-            aria-pressed={matchWord}
-            className={`p-0.5 rounded transition ${matchWord ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-ink'}`}
-          >
-            <LuWholeWord size={13} />
-          </button>
-          <button
-            onClick={() => { setReplaceMode(o => !o); setOpen(true) }}
-            title={replaceMode ? 'Hide replace input' : 'Find and replace'}
-            className={`p-0.5 transition ${replaceMode ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
-          >
-            <LuReplace size={11} />
-          </button>
           <button
             onClick={() => setShowFilter(o => !o)}
             title={filterTitle}

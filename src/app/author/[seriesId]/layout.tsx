@@ -244,8 +244,8 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
             /* Shortcuts sits 8px from the search bar rather than the header's
                usual 12px — the tighter seam reads as one "find things" cluster
                and keeps the menu visually owned by the bar it documents. */
-            <div className="flex items-center gap-2">
-              <ShortcutsMenu />
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="shrink-0"><ShortcutsMenu /></div>
               <SearchBar
                 seriesId={seriesId}
                 books={series.books.map(b => ({ id: b.id, title: b.title }))}

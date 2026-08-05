@@ -51,6 +51,19 @@ export default function ProjectSwitcher({ active }: Props) {
   const [projects, setProjects] = useState<SwitcherProject[] | null>(null)
   const [showNew, setShowNew] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
+  const nameRef = useRef<HTMLAnchorElement>(null)
+  // Only offer the tooltip once the truncated name is actually clipping —
+  // otherwise every hover over a short title would pop up a redundant label.
+  const [truncated, setTruncated] = useState(false)
+  useEffect(() => {
+    const el = nameRef.current
+    if (!el) return
+    const check = () => setTruncated(el.scrollWidth > el.clientWidth)
+    check()
+    const ro = new ResizeObserver(check)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [active.title])
 
   // Fetched on first open rather than on mount: the list is only needed when
   // the writer actually reaches for it, and this renders on every author page.
@@ -84,7 +97,7 @@ export default function ProjectSwitcher({ active }: Props) {
 
   return (
     <>
-      <div ref={rootRef} className="relative flex items-center shrink-0">
+      <div ref={rootRef} className="relative flex items-center min-w-0">
         {/* The project name takes the LOOM wordmark's slot and size, but not
             its weight or colour: ink at medium rather than accent at bold. The
             wordmark was styled to read as a logo; this is a title, and it
@@ -93,11 +106,17 @@ export default function ProjectSwitcher({ active }: Props) {
             resolves to #e8eaf0.
 
             Truncated because a long title would otherwise push the right-hand
-            cluster off. */}
+            cluster off.
+
+            Hidden below 700px — the name and the logo were the two widest
+            things fighting for room in the nav row, and the dropdown (still
+            reachable via the caret) already lists the active project as a
+            link, so nothing becomes unreachable. */}
         <Link
+          ref={nameRef}
           href={projectHref(active)}
-          title={`${active.title} — open ${noun}`}
-          className="text-ink font-normal tracking-wider text-xl leading-none self-center truncate max-w-[420px] hover:opacity-80 transition"
+          title={truncated ? `${active.title} — open ${noun}` : undefined}
+          className="max-[700px]:hidden text-ink font-normal tracking-wider text-xl leading-none self-center truncate min-w-0 max-w-[420px] hover:opacity-80 transition"
         >
           {active.title}
         </Link>
