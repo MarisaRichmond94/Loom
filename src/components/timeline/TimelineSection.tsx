@@ -130,7 +130,8 @@ export default function TimelineSection({
   chapterChoices,
   onEventCreated,
 }: TimelineSectionProps) {
-  const { events, locations, characterPool, loading, unreachable, refresh } = useTimelineData()
+  const { events, locations, characterPool, characterPhotos, loading, unreachable, refresh } =
+    useTimelineData()
   const actionSlot = useSectionActionSlot()
 
   const [view, setView] = useState<'list' | 'chart'>('list')
@@ -359,6 +360,13 @@ export default function TimelineSection({
           locationPool={locations}
           defaultDate={lastUpdatedDate}
           chapterChoices={chapterChoices}
+          // Clicking a card here is how you READ an event — this surface has
+          // no expand-in-place the way the dock's list does, so without a view
+          // mode the only way to look at one is to open its editor. Creating
+          // still goes straight to the form.
+          initialMode="view"
+          appearances={editorFor.event ? (appearances[editorFor.event.id] ?? []) : []}
+          characterPhotos={characterPhotos}
           onSaved={async (saved, chapterId) => {
             // The page tags FIRST, then both sides refresh — otherwise the
             // event list updates while the tagged-id set is still stale, and
