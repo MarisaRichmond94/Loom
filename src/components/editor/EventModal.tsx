@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LuCalendar, LuCheck, LuClock, LuMapPin, LuPlus, LuSearch, LuTrash2, LuX } from 'react-icons/lu'
+import { LuBookOpen, LuCalendar, LuCheck, LuClock, LuMapPin, LuPlus, LuSearch, LuTrash2, LuX } from 'react-icons/lu'
 import { notify } from '@/lib/notifications'
 import { fromDateInputValue, toDateInputValue, type WriterEvent } from '@/lib/eventSearch'
 import { portalHost } from '@/lib/portalHost'
@@ -234,11 +234,15 @@ function LocationCombobox({
   )
 }
 
+/** A chapter this event can be tagged to on create (LOOM-103). */
+export type ChapterChoice = { id: string; title: string; number: number | null }
+
 export default function EventModal({
   event,
   characterPool,
   locationPool,
   defaultDate,
+  chapterChoices,
   onSaved,
   onDeleted,
   onClose,
@@ -251,7 +255,22 @@ export default function EventModal({
    *  so a run of same-day entries doesn't need re-picking the date each
    *  time. Ignored when editing an existing event. */
   defaultDate?: string | null
-  onSaved: (event: WriterEvent) => void | Promise<void>
+  /** Chapters this event can be tagged to as it is created (LOOM-103).
+   *
+   *  Absent from the dock's create flow, which is already open ON a chapter
+   *  and tags implicitly — a second, redundant picker there would be asking a
+   *  question it has already answered. Present only where the caller cannot
+   *  infer a chapter: the book page's Timeline tab, which is filtered BY tag,
+   *  so an untagged new event would be created and immediately vanish.
+   *
+   *  Optional even when offered. An event with no chapter yet is legitimate,
+   *  and blocking the save to force a tag would be worse than the vanishing it
+   *  prevents — the caller handles the unset case instead. */
+  chapterChoices?: ChapterChoice[]
+  /** `chapterId` is the picker's choice, present only when `chapterChoices`
+   *  was offered and used. The caller does the tagging: this modal talks to
+   *  WriteAI, and the chapter join is Loom's. */
+  onSaved: (event: WriterEvent, chapterId?: string) => void | Promise<void>
   onDeleted: (id: string) => void | Promise<void>
   onClose: () => void
 }) {
@@ -267,6 +286,11 @@ export default function EventModal({
   const [location, setLocation] = useState(event?.location ?? '')
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [busy, setBusy] = useState(false)
+  // '' = no chapter. Only ever offered when creating: tagging an EXISTING
+  // event is the Events tab's job, and doing it from here as a side effect of
+  // an edit would be a second, invisible mutation.
+  const [chapterId, setChapterId] = useState('')
+  const showChapterPicker = !editing && (chapterChoices?.length ?? 0) > 0
 
   const titleRef = useRef<HTMLInputElement>(null)
   useEffect(() => { titleRef.current?.focus() }, [])
@@ -300,7 +324,7 @@ export default function EventModal({
       )
       const data = await res.json().catch(() => null)
       if (!res.ok) throw new Error(data?.error ?? String(res.status))
-      await onSaved(data as WriterEvent)
+      await onSaved(data as WriterEvent, showChapterPicker && chapterId ? chapterId : undefined)
       onClose()
     } catch (err) {
       setBusy(false)
@@ -464,6 +488,29 @@ export default function EventModal({
           </div>
 
           <LocationCombobox value={location} pool={locationPool} onChange={setLocation} />
+
+          {/* Only where the caller cannot infer a chapter — see chapterChoices.
+              A plain <select> rather than the comboboxes above: the list is
+              this book's chapters, closed and ordered, where locations are
+              free text and characters are a long searchable pool. */}
+          {showChapterPicker && (
+            <label className="flex items-center gap-2 rounded-lg border border-accent/20 bg-surface-overlay/40 px-3 py-2 transition focus-within:border-accent">
+              <LuBookOpen size={13} className="shrink-0 text-ink-faint" />
+              <select
+                value={chapterId}
+                onChange={e => setChapterId(e.target.value)}
+                aria-label="Tag this event to a chapter"
+                className="w-full bg-transparent text-sm text-ink outline-none"
+              >
+                <option value="">Not tagged to a chapter yet</option>
+                {chapterChoices!.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.number === null ? c.title : `Ch. ${c.number} — ${c.title}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
 
         <div className="flex items-center gap-2 border-t border-accent/10 px-5 py-4">

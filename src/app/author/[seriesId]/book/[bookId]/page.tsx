@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { LuUser, LuCheck, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff, LuDownload, LuFileText, LuSave, LuDatabaseBackup } from 'react-icons/lu'
 import { useAuthor } from '@/lib/authorContext'
@@ -18,6 +18,11 @@ import SectionTabs from '@/components/SectionTabs'
 // Loaded when the Outline tab is first opened, not with the page — it pulls in
 // the outline renderer for a section most page visits never look at.
 const OutlineSection = dynamic(() => import('@/components/OutlineSection'), { ssr: false })
+// Same treatment as the outline: the chart's SVG machinery should not ride in
+// the bundle for the many page visits that only open the cast.
+const TimelineSection = dynamic(() => import('@/components/timeline/TimelineSection'), { ssr: false })
+import { useBookEvents } from '@/components/timeline/useBookEvents'
+import type { ChapterChoice } from '@/components/editor/EventModal'
 import { writerPortraitUrl } from '@/lib/writerPortrait'
 import type { WriterCharacter } from '@/lib/characterSearch'
 
@@ -117,6 +122,27 @@ export default function BookDetailPage() {
   // are the same dialog — a dialog that opens a second dialog to finish one
   // edit is a seam showing through.
   const [charAvatarTs, setCharAvatarTs] = useState(0)
+  // Loom's side of the Timeline tab (LOOM-103): which events are tagged here.
+  // Cheap — one query plus one canon walk — and the tab is filtered by it.
+  const bookEvents = useBookEvents(seriesId, bookId)
+  // Chapters a newly created event can be tagged to, so it does not vanish
+  // from a tab filtered by tag.
+  //
+  // Labelled by TITLE, with no number. authorContext carries Chapter.order,
+  // which is NOT the canon display number — the canon walk skips unnumbered
+  // chapters and counts the prologue as 0, so `order` and the number printed in
+  // the manuscript diverge. Showing `order` here would put a number on screen
+  // that disagrees with the book, which is the exact class of bug LOOM-98/100
+  // dealt with. Getting the real numbers means the walk, and that is not worth
+  // a page-load for a picker whose chapters are already titled "Chapter 8".
+  const chapterChoices: ChapterChoice[] = useMemo(
+    () =>
+      (series.books.find(b => b.id === bookId)?.chapters ?? [])
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map(c => ({ id: c.id, title: c.title, number: null })),
+    [series.books, bookId],
+  )
   // WriteAI's side: the pool (for the relationship picker and duplicate-name
   // check inside CharacterModal) and whichever character that modal is
   // editing. 'create' opens it empty.
@@ -653,6 +679,37 @@ export default function BookDetailPage() {
             </div>
           )}
               </>
+            ),
+          }, {
+            // Last, deliberately. LOOM-93 put Outline first because it is the
+            // planning surface — "what is this book" — where the others answer
+            // "what is in it". Timeline is squarely in the second group and is
+            // the newest, so it takes the end rather than displacing anything.
+            id: 'timeline',
+            label: 'Timeline',
+            content: (
+              <TimelineSection
+                id="book"
+                eventIds={bookEvents.eventIds}
+                appearances={bookEvents.appearances}
+                chapterChoices={chapterChoices}
+                emptyTitle="No events tagged to this book"
+                emptyBody="Events exist in WriteAI but none are tagged to a chapter here yet. Tag them from a chapter’s Events tab, or add one above and pick a chapter."
+                onEventCreated={async (created, chapterId) => {
+                  // Creating from a tag-filtered view: without a tag the new
+                  // event fails this tab's own filter and vanishes. The dock
+                  // tags implicitly because it is open ON a chapter; here the
+                  // writer picks one, and may legitimately pick none.
+                  if (chapterId) {
+                    await fetch(`/api/chapters/${chapterId}/events`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ writerEventId: created.id }),
+                    })
+                  }
+                  await bookEvents.refresh()
+                }}
+              />
             ),
           }]}
         />
