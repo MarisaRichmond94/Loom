@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LuCalendar, LuCheck, LuClock, LuMapPin, LuPlus, LuSearch, LuTrash2, LuX } from 'react-icons/lu'
+import { LuBookOpen, LuCalendar, LuCheck, LuClock, LuMapPin, LuPencil, LuPlus, LuSearch, LuTrash2, LuX } from 'react-icons/lu'
 import { notify } from '@/lib/notifications'
-import { fromDateInputValue, toDateInputValue, type WriterEvent } from '@/lib/eventSearch'
+import { formatEventWhen, fromDateInputValue, toDateInputValue, type WriterEvent } from '@/lib/eventSearch'
 import { portalHost } from '@/lib/portalHost'
 import type { CharacterOption } from '@/lib/writerCharacters'
 import { AnchoredPopover, LIST_MAX_HEIGHT, useClickOutside } from './AnchoredPopover'
+import { CharacterAvatar } from './CharacterAvatar'
+import type { BookEventAppearance } from '@/lib/chapterEvents'
 
 // Create or edit a WriteAI writer-event, without leaving Loom (LOOM-37).
 //
@@ -234,11 +236,18 @@ function LocationCombobox({
   )
 }
 
+/** A chapter this event can be tagged to on create (LOOM-103). */
+export type ChapterChoice = { id: string; title: string; number: number | null }
+
 export default function EventModal({
   event,
   characterPool,
   locationPool,
   defaultDate,
+  chapterChoices,
+  initialMode = 'edit',
+  appearances = [],
+  characterPhotos = {},
   onSaved,
   onDeleted,
   onClose,
@@ -251,7 +260,40 @@ export default function EventModal({
    *  so a run of same-day entries doesn't need re-picking the date each
    *  time. Ignored when editing an existing event. */
   defaultDate?: string | null
-  onSaved: (event: WriterEvent) => void | Promise<void>
+  /** Chapters this event can be tagged to as it is created (LOOM-103).
+   *
+   *  Absent from the dock's create flow, which is already open ON a chapter
+   *  and tags implicitly — a second, redundant picker there would be asking a
+   *  question it has already answered. Present only where the caller cannot
+   *  infer a chapter: the book page's Timeline tab, which is filtered BY tag,
+   *  so an untagged new event would be created and immediately vanish.
+   *
+   *  Optional even when offered. An event with no chapter yet is legitimate,
+   *  and blocking the save to force a tag would be worse than the vanishing it
+   *  prevents — the caller handles the unset case instead. */
+  chapterChoices?: ChapterChoice[]
+  /** How the dialog opens on an EXISTING event.
+   *
+   *  'edit' is the default, and is right where the click already MEANT edit —
+   *  the dock's pencil, which sits beside a card that has already expanded to
+   *  show the same content. Landing in the form there is the whole point.
+   *
+   *  'view' is for surfaces where clicking the event is how you READ it. The
+   *  timeline has no expand-in-place, so without this the only way to look at
+   *  an event is to open its editor, which puts every field one stray
+   *  keystroke from a change you did not intend to make.
+   *
+   *  Ignored when creating: there is nothing to view yet. */
+  initialMode?: 'view' | 'edit'
+  /** Chapters referencing this event, shown in view mode. Loom-side data, so
+   *  it is passed in rather than fetched — the caller already has it. */
+  appearances?: BookEventAppearance[]
+  /** Portraits keyed by character NAME, for the cast in view mode. */
+  characterPhotos?: Record<string, string | null>
+  /** `chapterId` is the picker's choice, present only when `chapterChoices`
+   *  was offered and used. The caller does the tagging: this modal talks to
+   *  WriteAI, and the chapter join is Loom's. */
+  onSaved: (event: WriterEvent, chapterId?: string) => void | Promise<void>
   onDeleted: (id: string) => void | Promise<void>
   onClose: () => void
 }) {
@@ -267,9 +309,20 @@ export default function EventModal({
   const [location, setLocation] = useState(event?.location ?? '')
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [busy, setBusy] = useState(false)
+  // '' = no chapter. Only ever offered when creating: tagging an EXISTING
+  // event is the Events tab's job, and doing it from here as a side effect of
+  // an edit would be a second, invisible mutation.
+  const [chapterId, setChapterId] = useState('')
+  const showChapterPicker = !editing && (chapterChoices?.length ?? 0) > 0
+  // Creating is always the form — there is nothing to view yet.
+  const [mode, setMode] = useState<'view' | 'edit'>(editing ? initialMode : 'edit')
+  const viewing = mode === 'view'
 
   const titleRef = useRef<HTMLInputElement>(null)
-  useEffect(() => { titleRef.current?.focus() }, [])
+  // Focuses on entering the form, not just on mount: opening in view mode and
+  // then pressing Edit must land the caret in the title the same way opening
+  // straight into the form does.
+  useEffect(() => { if (!viewing) titleRef.current?.focus() }, [viewing])
 
   // Portals need a DOM to target, so nothing renders until mounted.
   const [mounted, setMounted] = useState(false)
@@ -300,7 +353,7 @@ export default function EventModal({
       )
       const data = await res.json().catch(() => null)
       if (!res.ok) throw new Error(data?.error ?? String(res.status))
-      await onSaved(data as WriterEvent)
+      await onSaved(data as WriterEvent, showChapterPicker && chapterId ? chapterId : undefined)
       onClose()
     } catch (err) {
       setBusy(false)
@@ -344,7 +397,8 @@ export default function EventModal({
         else onClose()
         return
       }
-      if (modified && e.code === 'Enter') void save()
+      // Save is the form's shortcut, so it does nothing while reading.
+      if (modified && e.code === 'Enter' && !viewing) void save()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -364,12 +418,29 @@ export default function EventModal({
         aria-label={editing ? `Editing ${event!.title}` : 'New event'}
         className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-xl border border-accent/20 bg-surface-raised shadow-2xl"
       >
-        <div className="flex items-start justify-between gap-4 border-b border-accent/10 px-5 py-4">
-          <div className="min-w-0">
+        <div className="flex items-center justify-between gap-4 border-b border-accent/10 px-5 py-4">
+          {/* The pencil replaced an "Editing event details" subtitle, which
+              described the dialog you were already looking at and cost a line
+              of the header to do it. The control that changes something is
+              worth that space; the caption was not.
+
+              Beside the title rather than in the footer: it acts ON the title
+              and the fields under it, and the footer already carries Close. */}
+          <div className="flex min-w-0 items-center gap-2">
             <h2 className="truncate text-sm font-semibold text-ink">
               {editing ? event!.title : 'New Event'}
             </h2>
-            {editing && <p className="mt-0.5 text-[11px] text-ink-faint">Editing event details</p>}
+            {editing && viewing && (
+              <button
+                type="button"
+                onClick={() => setMode('edit')}
+                title="Edit this event"
+                aria-label={`Edit event: ${event!.title}`}
+                className="shrink-0 rounded p-1 text-ink-faint transition hover:bg-accent/10 hover:text-ink"
+              >
+                <LuPencil size={13} />
+              </button>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -381,6 +452,83 @@ export default function EventModal({
           </button>
         </div>
 
+        {viewing ? (
+          /* Read mode (LOOM-103 review feedback). Clicking an event on the
+             timeline is how you READ it — opening straight into the editor put
+             every field one stray keystroke from an unintended change. Mirrors
+             the dock's expanded card rather than inventing a third layout for
+             the same facts. */
+          <div className="flex flex-col gap-4 p-5">
+            {formatEventWhen({ date: event!.date, time: event!.time }) && (
+              <p className="flex items-center gap-1.5 text-xs text-ink-muted">
+                <LuCalendar size={13} className="shrink-0 text-ink-faint" />
+                {formatEventWhen({ date: event!.date, time: event!.time })}
+              </p>
+            )}
+
+            {event!.location && (
+              <p className="flex items-center gap-1.5 text-xs text-ink-muted">
+                <LuMapPin size={13} className="shrink-0 text-ink-faint" />
+                {event!.location}
+              </p>
+            )}
+
+            {event!.description ? (
+              <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink-muted">
+                {event!.description}
+              </p>
+            ) : (
+              <p className="text-[13px] italic text-ink-faint">No description yet.</p>
+            )}
+
+            {event!.characters.length > 0 && (
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">
+                  Character(s) ({event!.characters.length})
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {event!.characters.map(id => {
+                    // Stored as an id, shown by name — and the photo map is
+                    // keyed by the RESOLVED name, not the raw reference.
+                    const label = characterPool.find(c => c.id === id)?.name ?? 'Unknown character'
+                    return (
+                      <span
+                        key={id}
+                        className="flex items-center gap-1.5 rounded-lg border border-accent/15 bg-surface-overlay/60 py-1 pl-1 pr-2.5"
+                      >
+                        <CharacterAvatar name={label} src={characterPhotos[label]} size={28} />
+                        <span className="text-[11px] font-medium text-ink">{label}</span>
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {appearances.length > 0 && (
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">
+                  Referenced in
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {appearances.map(a => (
+                    <span
+                      key={a.chapterId}
+                      title={a.nonCanon ? 'Referenced here only on a non-canon branch' : undefined}
+                      className={`rounded-full border px-2.5 py-1 text-[11px] ${
+                        a.nonCanon
+                          ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
+                          : 'border-accent/20 bg-surface-overlay/60 text-ink-muted'
+                      }`}
+                    >
+                      {a.chapterNumber === null ? a.chapterTitle : `Ch. ${a.chapterNumber}`}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
         <div className="flex flex-col gap-4 p-5">
           <input
             ref={titleRef}
@@ -464,14 +612,41 @@ export default function EventModal({
           </div>
 
           <LocationCombobox value={location} pool={locationPool} onChange={setLocation} />
+
+          {/* Only where the caller cannot infer a chapter — see chapterChoices.
+              A plain <select> rather than the comboboxes above: the list is
+              this book's chapters, closed and ordered, where locations are
+              free text and characters are a long searchable pool. */}
+          {showChapterPicker && (
+            <label className="flex items-center gap-2 rounded-lg border border-accent/20 bg-surface-overlay/40 px-3 py-2 transition focus-within:border-accent">
+              <LuBookOpen size={13} className="shrink-0 text-ink-faint" />
+              <select
+                value={chapterId}
+                onChange={e => setChapterId(e.target.value)}
+                aria-label="Tag this event to a chapter"
+                className="w-full bg-transparent text-sm text-ink outline-none"
+              >
+                <option value="">Not tagged to a chapter yet</option>
+                {chapterChoices!.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.number === null ? c.title : `Ch. ${c.number} — ${c.title}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
+        )}
 
         <div className="flex items-center gap-2 border-t border-accent/10 px-5 py-4">
           {/* Two-stage rather than a nested confirm dialog: deleting here
               removes the event from WriteAI ENTIRELY — every chapter and every
               timeline, not just this chapter's tag. That deserves a second
               press, and a modal on top of a modal deserves nothing. */}
-          {editing && !confirmingDelete && (
+          {/* Edit mode only. Delete removes the event from WriteAI entirely,
+              which is not something a dialog you opened to READ should be
+              offering — Edit is one click away and says what you are doing. */}
+          {editing && !viewing && !confirmingDelete && (
             <button
               type="button"
               onClick={() => setConfirmingDelete(true)}
@@ -481,7 +656,7 @@ export default function EventModal({
               <LuTrash2 size={13} /> Delete
             </button>
           )}
-          {editing && confirmingDelete && (
+          {editing && !viewing && confirmingDelete && (
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-ink-muted">Delete everywhere?</span>
               <button
@@ -510,17 +685,25 @@ export default function EventModal({
               disabled={busy}
               className="text-xs text-ink-muted transition hover:text-ink disabled:opacity-50"
             >
-              Cancel
+              {/* "Close" while reading: nothing has been entered, so "Cancel"
+                  would imply discarding something. */}
+              {viewing ? 'Close' : 'Cancel'}
             </button>
-            <button
-              type="button"
-              onClick={save}
-              disabled={!canSave}
-              title={title.trim() ? undefined : 'An event needs a title'}
-              className="rounded-lg bg-accent px-4 py-1.5 text-xs font-medium text-white transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {busy ? 'Saving…' : 'Save'}
-            </button>
+            {/* No Edit button here — the pencil beside the title is that
+                control, and two ways into the form in a dialog this size is
+                clutter rather than convenience. So view mode's footer is just
+                Close, and the primary action stays the one that WRITES. */}
+            {!viewing && (
+              <button
+                type="button"
+                onClick={save}
+                disabled={!canSave}
+                title={title.trim() ? undefined : 'An event needs a title'}
+                className="rounded-lg bg-accent px-4 py-1.5 text-xs font-medium text-white transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {busy ? 'Saving…' : 'Save'}
+              </button>
+            )}
           </div>
         </div>
       </div>
