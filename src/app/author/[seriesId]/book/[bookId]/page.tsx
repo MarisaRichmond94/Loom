@@ -568,9 +568,9 @@ export default function BookDetailPage() {
             pushed each other off the screen.
 
             Outline leads because it is the planning surface: it answers "what
-            is this book" where the other two answer "what is in it". */}
+            is this book" where the other two answer "what is in it". Always
+            the default on load — no persisted "last tab". */}
         <SectionTabs
-          id="book"
           sections={[{
             id: 'outline',
             label: 'Outline',

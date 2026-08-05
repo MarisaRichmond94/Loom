@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 
 // The book page's section switcher (LOOM-93).
 //
@@ -37,8 +37,8 @@ export function useSectionActionSlot() {
 }
 
 export type Section = {
-  /** Stable key for the persisted selection. Not the label — a heading is
-   *  wording and can be reworded; this is storage. */
+  /** Stable key for the active tab. Not the label — a heading is wording and
+   *  can be reworded; this is identity. */
   id: string
   label: string
   /** Header control for this section — "Add Character" and the like. Rendered
@@ -49,13 +49,9 @@ export type Section = {
 }
 
 export default function SectionTabs({
-  id,
   sections,
   className = 'mb-8',
 }: {
-  /** Namespace for the persisted selection, so two pages using this do not
-   *  fight over one key. */
-  id: string
   sections: Section[]
   className?: string
 }) {
@@ -183,23 +179,6 @@ export default function SectionTabs({
     }
   }, [activeId])
 
-  // Read in an effect rather than during render: the server has no
-  // localStorage, and seeding state from it directly is a hydration mismatch.
-  // Same habit as the dock's tab and width.
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(`loom-tabs-${id}`)
-      // Guarded against a section that no longer exists — a stale key must not
-      // leave the page with nothing selected.
-      if (saved && sections.some(s => s.id === saved)) setActiveId(saved)
-    } catch {
-      /* private mode, or storage disabled — first section wins */
-    }
-    // Deliberately once per page: re-running when `sections` changes identity
-    // (it is rebuilt every render) would fight the writer's clicks.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
-
   function select(sectionId: string) {
     if (contentRef.current) {
       prevHeightRef.current = contentRef.current.getBoundingClientRect().height
@@ -207,11 +186,6 @@ export default function SectionTabs({
       prevScrollTopRef.current = scroller?.scrollTop ?? null
     }
     setActiveId(sectionId)
-    try {
-      localStorage.setItem(`loom-tabs-${id}`, sectionId)
-    } catch {
-      /* ignore */
-    }
   }
 
   const active = sections.find(s => s.id === activeId) ?? sections[0]

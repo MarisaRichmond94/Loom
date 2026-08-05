@@ -238,14 +238,11 @@ export default function AuthorSeriesPage() {
             not tab content: it answers "what is this", where the tabs answer
             "what is in it".
 
-            Books leads, and is the default on load. It is what the page is for
-            and what every existing muscle-memory click expects; the other two
-            are new surfaces that nobody has yet formed a habit around.
-
-            `id="series"` namespaces the persisted selection so it cannot
-            collide with the book page's own `loom-tabs-book` key. */}
+            Books leads, and is always the default on load — no persisted
+            "last tab" here. It is what the page is for and what every
+            existing muscle-memory click expects; the other two are new
+            surfaces that nobody has yet formed a habit around. */}
         <SectionTabs
-          id="series"
           sections={[{
             id: 'books',
             label: 'Book(s)',
