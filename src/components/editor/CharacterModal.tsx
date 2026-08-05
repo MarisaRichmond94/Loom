@@ -10,6 +10,7 @@ import { RelationshipList } from './RelationshipList'
 import { PhotoCropDialog } from './PhotoCropDialog'
 import { AnchoredPopover, useClickOutside } from './AnchoredPopover'
 import { CATEGORIES, type WriterCharacter } from '@/lib/characterSearch'
+import { invalidateAllSeriesCharacters } from '@/components/series/seriesCharactersCache'
 
 // Create or edit a WriteAI writer-character from Loom (LOOM-33 / LOOM-46).
 //
@@ -323,6 +324,13 @@ export default function CharacterModal({
     try {
       const res = await fetch(`/api/writeai/characters/${draft.id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error(String(res.status))
+      // Loom's snapshot of WriteAI's pool (LOOM-86) only refreshes on an
+      // explicit write, never on a timer — a delete IS one, same as a save.
+      // Done here rather than left to each caller's `onDeleted`, so every
+      // path through this modal keeps the snapshot honest, not just the ones
+      // whose author remembered to.
+      await fetch('/api/writeai/characters/snapshot', { method: 'POST' })
+      invalidateAllSeriesCharacters()
       await onDeleted()
       onClose()
     } catch {

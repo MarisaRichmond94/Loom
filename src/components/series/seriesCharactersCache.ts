@@ -43,3 +43,17 @@ export function prefetchSeriesCharacters(seriesId: string) {
 export function getCachedSeriesCharacters(seriesId: string): SeriesWriterCharacter[] | null | undefined {
   return resolved.get(seriesId)
 }
+
+/**
+ * Drops every cached series' roster, so the next read of any of them is
+ * genuine. A character write can happen from the chapter dock or the book
+ * page, neither of which knows (or should have to know) which series-page
+ * cache entries it might be sitting under — clearing everything is simpler
+ * and safer than threading a seriesId through call sites that don't
+ * otherwise need one, and this cache exists purely to save a redundant GET,
+ * not as a source of truth.
+ */
+export function invalidateAllSeriesCharacters() {
+  cache.clear()
+  resolved.clear()
+}
