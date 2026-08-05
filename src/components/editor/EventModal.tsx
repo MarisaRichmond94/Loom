@@ -418,12 +418,29 @@ export default function EventModal({
         aria-label={editing ? `Editing ${event!.title}` : 'New event'}
         className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-xl border border-accent/20 bg-surface-raised shadow-2xl"
       >
-        <div className="flex items-start justify-between gap-4 border-b border-accent/10 px-5 py-4">
-          <div className="min-w-0">
+        <div className="flex items-center justify-between gap-4 border-b border-accent/10 px-5 py-4">
+          {/* The pencil replaced an "Editing event details" subtitle, which
+              described the dialog you were already looking at and cost a line
+              of the header to do it. The control that changes something is
+              worth that space; the caption was not.
+
+              Beside the title rather than in the footer: it acts ON the title
+              and the fields under it, and the footer already carries Close. */}
+          <div className="flex min-w-0 items-center gap-2">
             <h2 className="truncate text-sm font-semibold text-ink">
               {editing ? event!.title : 'New Event'}
             </h2>
-            {editing && <p className="mt-0.5 text-[11px] text-ink-faint">Editing event details</p>}
+            {editing && viewing && (
+              <button
+                type="button"
+                onClick={() => setMode('edit')}
+                title="Edit this event"
+                aria-label={`Edit event: ${event!.title}`}
+                className="shrink-0 rounded p-1 text-ink-faint transition hover:bg-accent/10 hover:text-ink"
+              >
+                <LuPencil size={13} />
+              </button>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -672,15 +689,11 @@ export default function EventModal({
                   would imply discarding something. */}
               {viewing ? 'Close' : 'Cancel'}
             </button>
-            {viewing ? (
-              <button
-                type="button"
-                onClick={() => setMode('edit')}
-                className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-1.5 text-xs font-medium text-white transition hover:bg-accent/90"
-              >
-                <LuPencil size={12} /> Edit
-              </button>
-            ) : (
+            {/* No Edit button here — the pencil beside the title is that
+                control, and two ways into the form in a dialog this size is
+                clutter rather than convenience. So view mode's footer is just
+                Close, and the primary action stays the one that WRITES. */}
+            {!viewing && (
               <button
                 type="button"
                 onClick={save}
