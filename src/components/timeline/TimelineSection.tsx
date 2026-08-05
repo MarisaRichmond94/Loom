@@ -187,6 +187,50 @@ export default function TimelineSection({
     return sorted.filter(e => matchesQuery(e, q, nameOf))
   }, [sorted, query, nameOf])
 
+  // Warm the portrait cache once the tab's data has landed.
+  //
+  // The character POOL is already fetched on mount, beside the events — the
+  // pop-in on first card click was never the data, it was the <img> elements,
+  // which do not exist until the modal opens. So the first open pays a
+  // round-trip per cast member at exactly the moment you are looking at them.
+  //
+  // Only the portraits this tab can actually show: the cast of the events IN
+  // SCOPE, not all 63 characters. On a filtered book tab that is a fraction of
+  // the pool, and pulling the rest would trade one visible wait for a pile of
+  // invisible ones.
+  //
+  // Idle-time, so it never competes with the render it is meant to smooth.
+  // Note the proxy sets Cache-Control: no-cache deliberately (portraits are
+  // overwritten in place under a stable filename), so this does not skip the
+  // later request — it makes it a cheap revalidation against bytes already
+  // decoded rather than a fresh download.
+  useEffect(() => {
+    if (loading || unreachable) return
+    const names = new Set<string>()
+    for (const event of inScope) for (const id of event.characters) names.add(nameOf(id))
+    const urls = [...names]
+      .map(name => characterPhotos[name])
+      .filter((url): url is string => Boolean(url))
+    if (urls.length === 0) return
+
+    const idle = window.requestIdleCallback
+    const cancel = window.cancelIdleCallback
+    const warm = () => {
+      for (const url of urls) {
+        const img = new window.Image()
+        img.src = url
+      }
+    }
+    if (idle) {
+      const handle = idle(warm)
+      return () => cancel?.(handle)
+    }
+    // Safari has no requestIdleCallback. A short timer is the same intent:
+    // after the paint that matters, not during it.
+    const handle = window.setTimeout(warm, 200)
+    return () => window.clearTimeout(handle)
+  }, [loading, unreachable, inScope, characterPhotos, nameOf])
+
   // Prefills the date when creating, so a run of same-day events doesn't mean
   // re-picking the date every time. Derived from `updated_at` rather than
   // in-story order so it survives a reload — it tracks when an event was last
