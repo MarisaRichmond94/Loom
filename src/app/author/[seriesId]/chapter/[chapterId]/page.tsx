@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers, LuLightbulb } from 'react-icons/lu'
+import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers, LuLightbulb, LuChartNoAxesColumn } from 'react-icons/lu'
+import { computeChapterStats } from '@/lib/chapterStats'
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
 import SidePanel, { minWidthForTab, type PanelTab } from '@/components/editor/SidePanel'
@@ -60,6 +61,7 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
       { keys: '⌥⇧`', label: 'Chapter settings' },
       { keys: '⌥⇧O', label: 'Toggle path config' },
       { keys: '⌥⇧F', label: 'Find in chapter' },
+      { keys: '⌥⇧0', label: 'Toggle chapter stats' },
       { keys: '⌥⇧→ / ←', label: 'Next / previous match (while searching)' },
       { keys: '⌥⇧← / →', label: 'Previous / next chapter' },
       { keys: '⌥⇧K', label: 'Clear chapter search' },
@@ -111,6 +113,8 @@ export default function ChapterEditorPage() {
   // Notes / Settings). It replaced the floating + add-block button, which was
   // dead weight — blocks are added with ⌥⇧T/Q/C/S (KAN-30).
   const [actionMenuOpen, setActionMenuOpen] = useState(false)
+  // Chapter stats panel (LOOM-109) — toggled by its header button or ⌥⇧0.
+  const [statsOpen, setStatsOpen] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showChapterSettings, setShowChapterSettings] = useState(false)
   const [copyDone, setCopyDone] = useState(false)
@@ -315,6 +319,7 @@ export default function ChapterEditorPage() {
   } | null>(null)
   const currentBlocksRef = useRef<{ id: string; order: number; type: string; content?: string | null; baseContent?: string | null; condition?: string | null; choices?: { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; condition?: string | null; endingMessage?: string | null; isBadEnding?: boolean; endsChapter?: boolean }[]; overrides?: { id: string; order: number; condition: string; content: string; endingMessage?: string | null; endsChapter?: boolean }[] }[] | null>(null)
   const actionMenuRef = useRef<HTMLDivElement>(null)
+  const statsMenuRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const povInputRef = useRef<HTMLInputElement>(null)
   const focusedPovRef = useRef<string | null>(null)
@@ -417,6 +422,9 @@ export default function ChapterEditorPage() {
     function handleClick(e: MouseEvent) {
       if (actionMenuRef.current && !actionMenuRef.current.contains(e.target as Node)) {
         setActionMenuOpen(false)
+      }
+      if (statsMenuRef.current && !statsMenuRef.current.contains(e.target as Node)) {
+        setStatsOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
@@ -778,6 +786,7 @@ export default function ChapterEditorPage() {
         case 'KeyJ': e.preventDefault(); scrollToCursorRef.current?.(); break
         case 'KeyK': e.preventDefault(); setLocalSearchQuery(''); setLocalSearchReplaceMode(false); break
         case 'KeyW': e.preventDefault(); clearLensRef.current(); break
+        case 'Digit0': case 'Numpad0': e.preventDefault(); setStatsOpen(v => !v); break
         // An active chapter search owns these keys; with the search bar empty
         // they fall through to the footer's prev/next chapter navigation.
         case 'ArrowRight':
@@ -1047,6 +1056,11 @@ export default function ChapterEditorPage() {
     next: nextChapter ? () => router.push(`/author/${seriesId}/chapter/${nextChapter.id}`) : null,
   }
 
+  // Chapter stats (LOOM-109) — resolved off the same live editor state and
+  // path lens as Copy/Review (buildCanonText), so the numbers agree with
+  // what those already show for the active path.
+  const chapterStats = computeChapterStats(buildCanonText())
+
   return (
     // flex row: the writing column fills the layout's <main> scroll container;
     // an optional reference panel docks to its right. min-w-0 on the column
@@ -1195,6 +1209,74 @@ export default function ChapterEditorPage() {
                   </button>
                 )
               })()}
+
+              {/* Chapter stats (LOOM-109) — word count, reading time, and
+                  (heuristic) dialogue % / filter-word count for the resolved
+                  chapter text. Word count always shows on the collapsed
+                  button so it's readable without opening the panel. */}
+              <div ref={statsMenuRef} className="relative shrink-0">
+                <button
+                  onClick={() => setStatsOpen(o => !o)}
+                  title="Chapter stats (⌥⇧0)"
+                  aria-label="Chapter stats"
+                  aria-haspopup="menu"
+                  aria-expanded={statsOpen}
+                  className={`flex items-center gap-1.5 h-[26px] px-2.5 rounded-lg border text-xs font-medium transition ${
+                    statsOpen ? 'border-accent/40 text-ink bg-surface-raised' : 'border-accent/20 text-ink-muted hover:text-ink hover:border-accent/40'
+                  }`}
+                >
+                  <LuChartNoAxesColumn size={13} className="text-accent shrink-0" />
+                  <span className="tabular-nums">{chapterStats.words.toLocaleString()} words</span>
+                </button>
+
+                {statsOpen && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full mt-2 z-50 w-[276px] rounded-xl border border-accent/20 bg-surface-raised shadow-xl p-3.5"
+                  >
+                    <div className="flex items-center justify-between mb-3 px-0.5">
+                      <span className="text-[11px] font-bold uppercase tracking-widest text-ink-faint">Chapter Stats</span>
+                      <span className="flex gap-0.5 text-[10px] font-semibold text-ink-faint">
+                        <kbd className="rounded border border-b-2 border-accent/10 bg-surface-muted px-1 py-px text-ink-muted">⌥</kbd>
+                        <kbd className="rounded border border-b-2 border-accent/10 bg-surface-muted px-1 py-px text-ink-muted">⇧</kbd>
+                        <kbd className="rounded border border-b-2 border-accent/10 bg-surface-muted px-1 py-px text-ink-muted">0</kbd>
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex flex-col gap-0.5 rounded-lg border border-accent/10 bg-surface-base px-3 py-2.5">
+                        <span className="text-[17px] font-bold tabular-nums text-ink">{chapterStats.words.toLocaleString()}</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Words</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5 rounded-lg border border-accent/10 bg-surface-base px-3 py-2.5">
+                        <span className="text-[17px] font-bold tabular-nums text-ink">{chapterStats.readingMinutes} min</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Reading time</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5 rounded-lg border border-accent/10 bg-surface-base px-3 py-2.5">
+                        <span className="text-[17px] font-bold tabular-nums text-accent">
+                          {chapterStats.dialoguePercent === null ? '—' : `${chapterStats.dialoguePercent}%`}
+                        </span>
+                        <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+                          <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-accent" />
+                          Dialogue
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-0.5 rounded-lg border border-accent/10 bg-surface-base px-3 py-2.5">
+                        <span className="text-[17px] font-bold tabular-nums text-accent">{chapterStats.filterWordCount}</span>
+                        <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+                          <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-accent" />
+                          Filter words
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="mt-2.5 px-0.5 text-[10.5px] leading-relaxed text-ink-faint">
+                      <span aria-hidden className="mr-1 inline-block h-1 w-1 -translate-y-px rounded-full bg-accent" />
+                      Dialogue and filter-word counts are estimates.
+                    </p>
+                  </div>
+                )}
+              </div>
 
               {/* ☰ chapter actions. Everything that used to be a row of buttons
                   above the title now lives here (KAN-30). The button itself

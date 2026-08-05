@@ -19,12 +19,13 @@ export default function ChapterSkeleton() {
           <div className="h-9 w-72 bg-surface-muted rounded mb-3" />
           <div className="h-7 w-48 bg-surface-raised border border-accent/20 rounded-lg" />
         </div>
-        {/* Date · chapter find bar · Collapse All · ☰ chapter-actions menu */}
+        {/* Date · chapter find bar · Collapse All · stats toggle · ☰ chapter-actions menu */}
         <div className="flex items-center gap-4">
           <div className="h-9 w-60 bg-surface-raised border border-accent/20 rounded-lg shrink-0" />
           <div className="ml-auto flex items-center gap-4">
             <div className="h-7 w-72 bg-surface-base border border-accent/20 rounded-lg" />
             <div className="h-4 w-20 bg-surface-muted rounded shrink-0" />
+            <div className="h-[26px] w-24 bg-surface-raised border border-accent/20 rounded-lg shrink-0" />
             <div className="w-4 h-4 rounded bg-surface-muted shrink-0" />
           </div>
         </div>
