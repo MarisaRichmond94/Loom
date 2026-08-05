@@ -145,8 +145,7 @@ export function buildChapterLinks(
 // query into one that fails when WriteAI is down, on a page that should still
 // render its other tabs.
 
-/** One chapter within the book that references an event. No book fields — the
- *  book is the question being asked, so repeating it on every row is noise. */
+/** One chapter that references an event. */
 export type BookEventAppearance = {
   chapterId: string
   chapterTitle: string
@@ -155,6 +154,13 @@ export type BookEventAppearance = {
   chapterNumber: number | null
   /** Referenced here only on a non-canon branch (LOOM-78). */
   nonCanon: boolean
+  /** Which book — present only at SERIES scope (LOOM-107), where appearances
+   *  span books and "Ch. 3" alone is ambiguous. Absent on the book route,
+   *  where the book is the question being asked and repeating it on every row
+   *  would be noise. */
+  bookId?: string
+  bookTitle?: string
+  bookOrder?: number
 }
 
 export type BookEvent = {
@@ -200,6 +206,51 @@ export function groupBookEvents(
   for (const list of out.values()) {
     list.sort(
       (a, b) =>
+        (a.chapterNumber ?? Infinity) - (b.chapterNumber ?? Infinity) ||
+        a.chapterTitle.localeCompare(b.chapterTitle),
+    )
+  }
+  return [...out.entries()].map(([writerEventId, appearances]) => ({
+    writerEventId,
+    appearances,
+  }))
+}
+
+/** One ChapterEvent row for a series, as the series-scoped route reads it. */
+export type SeriesTagRow = BookTagRow & {
+  chapter: { title: string; bookId: string; book: { title: string; order: number } }
+}
+
+/**
+ * The series-scope sibling of groupBookEvents (LOOM-107).
+ *
+ * Same collapse, but appearances carry their book, because at series scope
+ * "Ch. 3" does not identify a chapter — five books have one.
+ *
+ * Ordering is by book then canon position, so the chips read in reading order.
+ */
+export function groupSeriesEvents(
+  rows: SeriesTagRow[],
+  numbers: Map<string, number | null>,
+): BookEvent[] {
+  const out = new Map<string, BookEventAppearance[]>()
+  for (const row of rows) {
+    const list = out.get(row.writerEventId) ?? []
+    list.push({
+      chapterId: row.chapterId,
+      chapterTitle: row.chapter.title,
+      chapterNumber: numbers.get(row.chapterId) ?? null,
+      nonCanon: row.nonCanon ?? false,
+      bookId: row.chapter.bookId,
+      bookTitle: row.chapter.book.title,
+      bookOrder: row.chapter.book.order,
+    })
+    out.set(row.writerEventId, list)
+  }
+  for (const list of out.values()) {
+    list.sort(
+      (a, b) =>
+        (a.bookOrder ?? 0) - (b.bookOrder ?? 0) ||
         (a.chapterNumber ?? Infinity) - (b.chapterNumber ?? Infinity) ||
         a.chapterTitle.localeCompare(b.chapterTitle),
     )

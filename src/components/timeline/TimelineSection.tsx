@@ -55,15 +55,37 @@ type TimelineSectionProps = {
   onEventCreated?: (event: WriterEvent, chapterId?: string) => void | Promise<void>
 }
 
+/** "Ch. 3", or "B2 Ch. 3" at series scope where five books each have one. */
+export function appearanceLabel(a: BookEventAppearance): string {
+  const where = a.chapterNumber === null ? a.chapterTitle : `Ch. ${a.chapterNumber}`
+  return a.bookOrder === undefined ? where : `B${a.bookOrder} ${where}`
+}
+
+/**
+ * Is this event referenced ONLY on non-canon branches, within this scope?
+ *
+ * The definition that matters, and the one easy to get wrong: an event canon in
+ * one chapter and branch-only in another is CANON. The badge answers "does this
+ * happen in the real story", and mixed means yes.
+ *
+ * Scope-dependent by construction — the caller passes the appearances for the
+ * tab being rendered. An event branch-only in book 2 but canon in book 4 is
+ * correctly badged on book 2's tab and unbadged on the series tab.
+ *
+ * No appearances at all is NEITHER: the event exists in WriteAI and is
+ * referenced nowhere in Loom. Untagged, not branch-only.
+ */
+export function isBranchOnly(appearances: BookEventAppearance[]): boolean {
+  return appearances.length > 0 && appearances.every(a => a.nonCanon)
+}
+
 function ChapterLine({ appearances }: { appearances: BookEventAppearance[] }) {
   if (appearances.length === 0) return null
   // Numbers where there are numbers, titles where there are not — an
   // unnumbered chapter has no canon address but is still a real appearance,
   // and dropping it would under-report the spread.
   const shown = appearances.slice(0, 3)
-  const label = shown
-    .map(a => (a.chapterNumber === null ? a.chapterTitle : `Ch. ${a.chapterNumber}`))
-    .join(', ')
+  const label = shown.map(appearanceLabel).join(', ')
   const rest = appearances.length - shown.length
   return (
     <span className="text-[10px] text-ink-faint">
@@ -80,6 +102,7 @@ function EventListCard({
   nameOf,
   appearances,
   untagged,
+  branchOnly,
 }: {
   event: WriterEvent
   selected: boolean
@@ -89,6 +112,8 @@ function EventListCard({
   /** Created from this tab but tagged to no chapter, so it is not really part
    *  of this book yet. Shown anyway — see `justCreated`. */
   untagged: boolean
+  /** Referenced only on non-canon branches, in this tab's scope. */
+  branchOnly: boolean
 }) {
   const when = formatEventWhen(event)
   return (
@@ -115,6 +140,16 @@ function EventListCard({
               className="shrink-0 rounded-full border border-dashed border-ink-faint/50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-ink-faint"
             >
               Untagged
+            </span>
+          )}
+          {/* Amber, matching the dock's own branch pill (EventsPanel), so the
+              two surfaces do not teach different colours for the same fact. */}
+          {branchOnly && (
+            <span
+              title="Referenced only on non-canon branches — hidden from WriteAI"
+              className="shrink-0 rounded-full bg-amber-500/20 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-400"
+            >
+              Branch
             </span>
           )}
         </div>
@@ -153,6 +188,7 @@ export default function TimelineSection({
 
   const [view, setView] = useState<'list' | 'chart'>('list')
   const [query, setQuery] = useState('')
+  const [canonFilter, setCanonFilter] = useState<'all' | 'canon' | 'branch'>('all')
   // null = closed; { event: undefined } = creating.
   const [editorFor, setEditorFor] = useState<{ event?: WriterEvent } | null>(null)
 
@@ -216,13 +252,36 @@ export default function TimelineSection({
   // directions — an undated event is unplaced, not "the oldest".
   const sorted = useMemo(() => sortEvents(inScope, 'asc'), [inScope])
 
+  /** Branch-only within THIS tab's scope — see isBranchOnly. */
+  const branchOnlyIds = useMemo(() => {
+    const out = new Set<string>()
+    for (const event of inScope) {
+      if (isBranchOnly(appearances[event.id] ?? [])) out.add(event.id)
+    }
+    return out
+  }, [inScope, appearances])
+
+  // The canon filter applies to BOTH views, unlike search. Search is a way of
+  // finding one event, which the chart cannot usefully express; this is a way
+  // of looking at a different story, which it can.
+  //
+  // "Canon" means "not badged" rather than "provably canon": an untagged event
+  // is referenced nowhere in Loom, so it is not branch-only either, and hiding
+  // it under a canon filter would make events disappear for a reason nobody
+  // asked about.
+  const canonVisible = useMemo(() => {
+    if (canonFilter === 'all') return sorted
+    if (canonFilter === 'branch') return sorted.filter(e => branchOnlyIds.has(e.id))
+    return sorted.filter(e => !branchOnlyIds.has(e.id))
+  }, [sorted, canonFilter, branchOnlyIds])
+
   // Search is LIST-ONLY, as in WriteAI: the chart reads as a continuous
   // sequence, and filtering it produces a sequence with holes in it.
   const visible = useMemo(() => {
     const q = query.trim()
-    if (!q) return sorted
-    return sorted.filter(e => matchesQuery(e, q, nameOf))
-  }, [sorted, query, nameOf])
+    if (!q) return canonVisible
+    return canonVisible.filter(e => matchesQuery(e, q, nameOf))
+  }, [canonVisible, query, nameOf])
 
   // Warm the portrait cache once the tab's data has landed.
   //
@@ -297,9 +356,24 @@ export default function TimelineSection({
         </PanelEmptyState>
       )
     }
-    // Four different nothings, and conflating them is how a working tab gets
+    // Five different nothings, and conflating them is how a working tab gets
     // read as a broken one.
     if (visible.length === 0) {
+      // Checked before search: with both active, the filter is the one the
+      // writer just clicked, and "no events match your search" would send them
+      // hunting through a query that is not the problem.
+      if (canonFilter !== 'all' && canonVisible.length === 0) {
+        return (
+          <PanelEmptyState
+            icon={<LuCalendarDays size={26} />}
+            title={canonFilter === 'branch' ? 'No branch-only events' : 'No canon events'}
+          >
+            {canonFilter === 'branch'
+              ? 'Nothing here is referenced solely on a non-canon branch.'
+              : 'Everything here is referenced only on non-canon branches.'}
+          </PanelEmptyState>
+        )
+      }
       if (query.trim()) {
         return (
           <PanelEmptyState icon={<LuCalendarDays size={26} />} title="No events match">
@@ -335,6 +409,7 @@ export default function TimelineSection({
             nameOf={nameOf}
             appearances={appearances[event.id] ?? []}
             untagged={isUntagged(event.id)}
+            branchOnly={branchOnlyIds.has(event.id)}
           />
         ))}
       </div>
@@ -364,6 +439,36 @@ export default function TimelineSection({
             </button>
           ))}
         </div>
+
+        {/* Shown only once something is branch-only. A three-way filter for a
+            distinction the story does not currently make is a control that can
+            only ever do nothing, and it would sit here on every book. */}
+        {branchOnlyIds.size > 0 && (
+          <div className="flex items-center overflow-hidden rounded border border-accent/20">
+            {(
+              [
+                ['all', 'All', 'Every event'],
+                ['canon', 'Canon', 'Hide events referenced only on non-canon branches'],
+                ['branch', 'Branch', 'Only events referenced solely on non-canon branches'],
+              ] as const
+            ).map(([value, label, hint]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setCanonFilter(value)}
+                title={hint}
+                aria-pressed={canonFilter === value}
+                className={`px-3 py-1 text-[11px] font-medium transition ${
+                  canonFilter === value
+                    ? 'bg-accent/20 text-accent'
+                    : 'bg-surface-overlay/40 text-ink-faint hover:text-ink'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Kept mounted and faded rather than unmounted in chart view: the row
             would otherwise reflow every time the view is toggled. */}
@@ -410,11 +515,13 @@ export default function TimelineSection({
           </div>
         )
       ) : view === 'chart' ? (
-        sorted.length === 0 ? (
+        // canonVisible, not `sorted`: the canon filter applies to both views.
+        // Search does not — see `visible`.
+        canonVisible.length === 0 ? (
           <div style={{ height: 340 }}>{listBody()}</div>
         ) : (
           <TimelineChart
-            events={sorted}
+            events={canonVisible}
             selectedId={editorFor?.event?.id ?? null}
             onSelect={event => setEditorFor({ event })}
           />

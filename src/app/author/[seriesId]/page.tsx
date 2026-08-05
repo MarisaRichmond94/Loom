@@ -19,8 +19,32 @@ const SeriesCharactersSection = dynamic(
 const TimelineSection = dynamic(() => import('@/components/timeline/TimelineSection'), {
   ssr: false,
 })
+import { useSeriesEvents } from '@/components/timeline/useBookEvents'
 
 type BookStats = { chapterCount: number; wordCount: number; uniquePovs: number; choiceCount: number; coverPath: string | null }
+
+/**
+ * The series Timeline tab.
+ *
+ * A component rather than inline JSX because it needs a hook, and only the
+ * active tab mounts — calling useSeriesEvents in the page body would fetch the
+ * series' tags for everyone who came to open a book.
+ *
+ * It passes `appearances` but NOT `eventIds`: the series timeline shows every
+ * event, tagged or not. The tags are here only so branch-only events can be
+ * badged and filtered (LOOM-107), which needs series-wide scope to be correct —
+ * an event branch-only in book 2 and canon in book 4 is canon here.
+ */
+function SeriesTimelineTab({ seriesId }: { seriesId: string }) {
+  const { appearances, refresh } = useSeriesEvents(seriesId)
+  return (
+    <TimelineSection
+      id="series"
+      appearances={appearances}
+      onEventCreated={() => refresh()}
+    />
+  )
+}
 
 export default function AuthorSeriesPage() {
   const { seriesId } = useParams() as { seriesId: string }
@@ -285,7 +309,7 @@ export default function AuthorSeriesPage() {
             // by tag, so a new event cannot vanish from the view that made it.
             id: 'timeline',
             label: 'Timeline',
-            content: <TimelineSection id="series" />,
+            content: <SeriesTimelineTab seriesId={seriesId} />,
           }]}
         />
       </div>
