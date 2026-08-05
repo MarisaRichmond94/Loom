@@ -120,3 +120,28 @@ export function byCategoryThenName(
 ): number {
   return categoryWeight(a.category) - categoryWeight(b.category) || a.name.localeCompare(b.name)
 }
+
+/**
+ * The Characters tab's tagged-list order: POV pinned first, then category,
+ * then name (reversible).
+ *
+ * POV is pulled out before the category sort rather than folded into it as a
+ * weight, because it is not a fourth category — a POV character is still
+ * "main" or "secondary" for the pill on their card, and pinning them ahead of
+ * the sort is the only way "always at the top no matter what" holds even when
+ * the direction toggle flips.
+ */
+export function sortTaggedCharacters<T extends WriterCharacter>(
+  characters: T[],
+  pov: string | null | undefined,
+  direction: 'asc' | 'desc',
+): T[] {
+  const sign = direction === 'asc' ? 1 : -1
+  const povIndex = characters.findIndex(c => isPovCharacter(c, pov))
+  const povChar = povIndex === -1 ? null : characters[povIndex]
+  const rest = povChar === null ? characters : characters.filter((_, i) => i !== povIndex)
+  const sorted = [...rest].sort(
+    (a, b) => categoryWeight(a.category) - categoryWeight(b.category) || a.name.localeCompare(b.name) * sign,
+  )
+  return povChar === null ? sorted : [povChar, ...sorted]
+}

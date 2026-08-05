@@ -12,6 +12,7 @@ import {
   isPovCharacter,
   matchesQuery,
   sortCharacters,
+  sortTaggedCharacters,
   type WriterCharacter,
 } from '@/lib/characterSearch'
 import type { ChapterAppearance } from '@/lib/chapterTags'
@@ -316,9 +317,9 @@ export default function CharactersPanel({
   }, [tagMode])
 
   const visible = useMemo(() => {
-    const pool = tagMode ? characters.filter(c => matchesQuery(c, query)) : tagged
-    return sortCharacters(pool, direction)
-  }, [tagMode, characters, tagged, query, direction])
+    if (tagMode) return sortCharacters(characters.filter(c => matchesQuery(c, query)), direction)
+    return sortTaggedCharacters(tagged, pov, direction)
+  }, [tagMode, characters, tagged, query, direction, pov])
 
   const toolbar = (
     <div className="flex items-center gap-2 px-4 py-3 shrink-0">
@@ -368,7 +369,13 @@ export default function CharactersPanel({
       <button
         type="button"
         onClick={() => setDirection(d => (d === 'asc' ? 'desc' : 'asc'))}
-        title={direction === 'asc' ? 'A–Z — click for Z–A' : 'Z–A — click for A–Z'}
+        title={
+          tagMode
+            ? direction === 'asc' ? 'A–Z — click for Z–A' : 'Z–A — click for A–Z'
+            : direction === 'asc'
+              ? 'By type, A–Z within — click for Z–A'
+              : 'By type, Z–A within — click for A–Z'
+        }
         aria-label={direction === 'asc' ? 'Sorted A to Z' : 'Sorted Z to A'}
         className="shrink-0 text-ink-faint transition hover:text-ink"
       >
