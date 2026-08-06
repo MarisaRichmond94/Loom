@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { LuCircleCheck, LuTriangleAlert, LuCircleSlash, LuArrowRight } from 'react-icons/lu'
+import { useEffect, useState, type ReactNode } from 'react'
+import { LuCircleCheck, LuTriangleAlert, LuCircleSlash, LuExternalLink } from 'react-icons/lu'
 import type { Finding, ReachabilityReport } from '@/lib/reachability'
 
 // The Paths tab (LOOM-122) — every branch no reader can reach.
@@ -34,66 +33,121 @@ const TONE = {
   },
 } as const
 
+/**
+ * A condition, in words.
+ *
+ * The stored form is JSON, and that is what a writer had to decode here
+ * before: `{"didNoahUseSteroids":true,"isNoahUsingSteroids":true}`. The
+ * variable names are the writer's own and worth keeping verbatim — so they
+ * stay in mono — but the braces, quotes and colons carry nothing she needs,
+ * and reading them is work. The sentence carries the same information.
+ */
+function ConditionText({ raw }: { raw: string }) {
+  let parsed: unknown
+  try { parsed = JSON.parse(raw) } catch { return <>{raw}</> }
+  if (!parsed || typeof parsed !== 'object') return <>{raw}</>
+
+  const name = (n: string) => (
+    <span key={n} className="font-mono text-[11.5px] text-ink">{n}</span>
+  )
+  const value = (v: unknown) => (
+    <span className="font-mono text-[11.5px] text-ink">{typeof v === 'string' ? `"${v}"` : String(v)}</span>
+  )
+  const CMP: Record<string, string> = {
+    '=': 'is', '>': 'is above', '<': 'is below', '>=': 'is at least', '<=': 'is at most',
+  }
+
+  const compound = parsed as { op?: string; clauses?: { var: string; value: unknown; cmp?: string }[]; mode?: string }
+  const clauses: { var: string; value: unknown; cmp?: string }[] = Array.isArray(compound.clauses)
+    ? compound.clauses
+    : Object.entries(parsed as Record<string, unknown>).map(([k, v]) => ({ var: k, value: v }))
+
+  if (clauses.length === 0) return <span className="text-ink-muted">always</span>
+
+  const joiner = compound.op === 'or' ? ' or ' : ' and '
+  const parts: ReactNode[] = []
+  clauses.forEach((cl, i) => {
+    if (i > 0) parts.push(<span key={`j${i}`} className="text-ink-muted">{joiner}</span>)
+    parts.push(
+      <span key={`c${i}`}>
+        {name(cl.var)} <span className="text-ink-muted">{CMP[cl.cmp ?? '='] ?? 'is'}</span> {value(cl.value)}
+      </span>,
+    )
+  })
+
+  // 'hide' flips the polarity of the whole condition, so it changes the lead-in
+  // rather than adding to it — "Hidden when x is true", never "Shows when
+  // hidden when x is true".
+  return (
+    <>
+      <span className="text-ink-muted">{compound.mode === 'hide' ? 'Hidden when ' : 'Shows when '}</span>
+      {parts}
+    </>
+  )
+}
+
 function FindingRow({ finding, seriesId }: { finding: Finding; seriesId: string }) {
-  const router = useRouter()
   const tone = TONE[finding.severity]
   const Icon = tone.icon
   // Variable-level findings (a name written but never created, or one nothing
-  // reads) belong to the series, not to any one chapter — so there is nowhere
-  // to send the writer and the row is deliberately not clickable.
+  // reads) belong to the series, not to any one chapter — there is nowhere to
+  // send the writer, so the row says so rather than looking clickable and
+  // doing nothing.
   const target = finding.chapterId ? `/author/${seriesId}/chapter/${finding.chapterId}` : null
 
   return (
-    <div
-      onClick={target ? () => router.push(target) : undefined}
-      role={target ? 'button' : undefined}
-      tabIndex={target ? 0 : undefined}
-      onKeyDown={target ? e => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(target) }
-      } : undefined}
-      className={`group rounded-lg border ${tone.border} ${tone.bg} p-4 transition-all ${
-        target
-          ? 'cursor-pointer hover:scale-[1.005] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent'
-          : ''
-      }`}
-    >
+    <div className={`rounded-lg border ${tone.border} ${tone.bg} p-4`}>
       <div className="flex items-start gap-3">
         <Icon size={15} className={`${tone.text} mt-0.5 shrink-0`} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <span className="text-sm font-semibold text-ink">{finding.title}</span>
             {finding.bookTitle && (
-              <span className="text-xs text-ink-faint">
+              <span className="text-xs text-ink-muted">
                 {finding.bookTitle}
                 {finding.chapterOrder != null && ` · Chapter ${finding.chapterOrder}`}
               </span>
             )}
           </div>
 
-          <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">{finding.detail}</p>
+          <p className="mt-1.5 text-xs leading-relaxed text-ink">{finding.detail}</p>
 
           {finding.condition && (
-            <pre className="mt-2 overflow-x-auto rounded border border-accent/10 bg-surface-base px-2.5 py-1.5 font-mono text-[11px] text-ink-muted">
-              {finding.condition}
-            </pre>
-          )}
-
-          {/* The evidence. "0 of 8 states" is a proof — the analyzer walked all
-              eight states that reach this gate and none satisfied it. A finding
-              without this number is one nobody should have to take on faith. */}
-          {finding.evaluated > 0 && (
-            <p className="mt-2 font-mono text-[11px] text-ink-faint">
-              {finding.matched} of {finding.evaluated} possible {finding.evaluated === 1 ? 'path' : 'paths'} reach it
+            <p className="mt-2 overflow-x-auto rounded border border-accent/10 bg-surface-base px-2.5 py-2 text-xs leading-relaxed">
+              <ConditionText raw={finding.condition} />
             </p>
           )}
-        </div>
 
-        {target && (
-          <LuArrowRight
-            size={14}
-            className="mt-0.5 shrink-0 text-ink-faint opacity-0 transition-opacity group-hover:opacity-100"
-          />
-        )}
+          {/* The evidence. "0 of 8" is a proof — the analyzer walked all eight
+              states that reach this gate and none satisfied it. A finding
+              without this number is one nobody should have to take on faith. */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+            {finding.evaluated > 0 && (
+              <span className="text-[11px] text-ink-muted">
+                <span className="font-mono text-ink">{finding.matched} of {finding.evaluated}</span>
+                {' '}possible {finding.evaluated === 1 ? 'path reaches' : 'paths reach'} it
+              </span>
+            )}
+
+            {/* An explicit control rather than a clickable card. The card was
+                only clickable on rows that HAD a chapter, so the same gesture
+                worked on some rows and silently did nothing on others. Opens
+                in a new tab: this is a worklist, and following a finding
+                should not cost you your place in it. */}
+            {target ? (
+              <a
+                href={target}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-auto inline-flex items-center gap-1.5 rounded border border-accent/30 bg-surface-overlay px-2.5 py-1 text-[11px] font-medium text-ink transition hover:border-accent/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                Open Chapter {finding.chapterOrder} <LuExternalLink size={11} />
+              </a>
+            ) : (
+              <span className="ml-auto text-[11px] text-ink-muted">Series-wide — no single chapter</span>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )
