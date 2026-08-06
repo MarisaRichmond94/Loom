@@ -65,6 +65,14 @@ export type WalkedBlock = {
   pinEnd?: number | null
   /** The ContentBlock this came from, for tracing back into Loom. */
   sourceBlockId: string
+  /**
+   * Story state at the moment this block was emitted.
+   *
+   * Publish renders `{{var}}` / `{{cond ? a : b}}` templates against it, so the
+   * reader receives prose with nothing left to resolve. Mid-chapter, since a
+   * choice earlier in the same chapter can change what a later paragraph says.
+   */
+  state: StoryState
 }
 
 export type ManuscriptChapter = {
@@ -244,7 +252,7 @@ export function walkBook(
     const emitText = (content: string, id: string, sourceBlockId: string, displayType: string | null = null) => {
       out.contents.push(content)
       out.stateByContent.push({ ...state })
-      out.blocks.push({ id, type: 'text', content, displayType, sourceBlockId })
+      out.blocks.push({ id, type: 'text', content, displayType, sourceBlockId, state: { ...state } })
     }
 
     let jumpToChapterId: string | null = null
@@ -276,6 +284,7 @@ export function walkBook(
             title: block.prompt ?? null,
             pinStart: block.pinStart ?? null,
             pinEnd: block.pinEnd ?? null,
+            state: { ...state },
           })
         }
         continue

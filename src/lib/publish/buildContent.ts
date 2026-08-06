@@ -11,6 +11,7 @@ import {
   type VariableIn,
 } from '@/lib/manuscript/walk'
 import { narrationHash, narrationSegments, type NarrationBlock } from '@/lib/narration/text'
+import { renderProseHtml } from '@/lib/publish/renderProse'
 import { publishAssets, type AssetReport, type AssetRef } from '@/lib/publish/assets'
 
 /**
@@ -512,7 +513,21 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
               chapterId: ch.id,
               order: bIdx + 1,
               type: b.type,
-              content: b.content,
+              // TEXT IS PUBLISHED AS HTML, not TipTap JSON.
+              //
+              // The reader tier would otherwise need TipTap, StarterKit and
+              // four Loom editor extensions just to display a paragraph — an
+              // editor's toolchain shipped to an app that cannot edit. Worse,
+              // rendering needs story state to resolve {{templates}}, and the
+              // whole point of the reader tier is that it has no state and no
+              // engine.
+              //
+              // So prose is resolved here, against the state at the moment the
+              // block was emitted, and arrives with nothing left to compute.
+              // Character marks survive as <span class="character-ref"
+              // data-character-id data-character-name>, which is all the hover
+              // card needs.
+              content: b.type === 'text' ? renderProseHtml(b.content, b.state) : b.content,
               displayType: b.displayType,
               sourceBlockId: b.sourceBlockId,
               title: b.title ?? null,
