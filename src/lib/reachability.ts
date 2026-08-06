@@ -91,6 +91,12 @@ export type Finding = {
   chapterId?: string
   chapterTitle?: string
   chapterOrder?: number
+  /** The block that holds this finding — the conditional fragment, the choice
+   *  point, or the gated block itself. Feeds the editor's existing
+   *  `?block=<id>` deep link, so a finding can be opened at the thing it is
+   *  about rather than at the top of a long chapter. Absent for chapter-level
+   *  and series-level findings, which have no single block. */
+  blockId?: string
   /** How many reachable states reached this gate, and how many satisfied it.
    *  The evidence — a finding without it is one nobody should believe. */
   evaluated: number
@@ -416,7 +422,8 @@ export function analyzeReachability(input: ReachabilityInput): ReachabilityRepor
     const undeclared = undeclaredIn(cond)
     const base = {
       id: o.id, severity: 'dead' as const, targetType: 'override' as const,
-      condition: o.condition, evaluated: ev, matched: mt, ...loc,
+      condition: o.condition, evaluated: ev, matched: mt,
+      blockId: o.conditionalFragmentId, ...loc,
     }
 
     if (undeclared.length > 0) {
@@ -497,7 +504,8 @@ export function analyzeReachability(input: ReachabilityInput): ReachabilityRepor
       detail: undeclared.length
         ? `Its condition reads ${undeclared.map(v => `"${v}"`).join(', ')}, which ${undeclared.length > 1 ? 'are' : 'is'} not a story variable.`
         : `All ${ev} states that reach this block were checked and none satisfied its condition.`,
-      condition: b.condition ?? undefined, evaluated: ev, matched: 0, ...place(b.chapterId),
+      condition: b.condition ?? undefined, evaluated: ev, matched: 0,
+      blockId: b.id, ...place(b.chapterId),
     })
   }
 
@@ -514,7 +522,8 @@ export function analyzeReachability(input: ReachabilityInput): ReachabilityRepor
       detail: undeclared.length
         ? `Its condition reads ${undeclared.map(v => `"${v}"`).join(', ')}, which ${undeclared.length > 1 ? 'are' : 'is'} not a story variable.`
         : `All ${ev} states that reach this choice point were checked and none unlocked this option.`,
-      condition: c.condition ?? undefined, evaluated: ev, matched: 0, ...place(frag?.chapterId),
+      condition: c.condition ?? undefined, evaluated: ev, matched: 0,
+      blockId: c.choicePointId, ...place(frag?.chapterId),
     })
   }
 
@@ -534,7 +543,7 @@ export function analyzeReachability(input: ReachabilityInput): ReachabilityRepor
         targetType: 'override',
         title: `Two overrides share position #${order}`,
         detail: 'The first match wins, but these two are tied — which one a reader gets is not defined. Give them distinct positions.',
-        evaluated: 0, matched: 0, ...place(frag?.chapterId),
+        evaluated: 0, matched: 0, blockId: fragId, ...place(frag?.chapterId),
       })
     }
   }

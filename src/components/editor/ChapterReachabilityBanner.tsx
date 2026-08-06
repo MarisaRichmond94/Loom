@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { LuTriangleAlert, LuCircleSlash, LuChevronDown, LuExternalLink } from 'react-icons/lu'
+import { useRouter, usePathname } from 'next/navigation'
+import { LuTriangleAlert, LuCircleSlash, LuChevronDown, LuExternalLink, LuLocate } from 'react-icons/lu'
 import type { Finding, ReachabilityReport } from '@/lib/reachability'
 import ConditionSentence from '@/components/editor/ConditionSentence'
+import { subscribeReachabilityChanged } from '@/lib/reachabilitySync'
 
 // Reachability for the chapter you are actually writing (LOOM-122).
 //
@@ -28,11 +30,45 @@ export default function ChapterReachabilityBanner({
 }) {
   const [findings, setFindings] = useState<Finding[] | null>(null)
   const [open, setOpen] = useState(false)
+  // Bumped when a structural save lands, to re-ask the server.
+  const [revision, setRevision] = useState(0)
+  const router = useRouter()
+  const pathname = usePathname()
+
+  /**
+   * Scroll the offending block into view.
+   *
+   * Reuses the editor's existing `?block=<id>` deep link (BlockEditor reads it
+   * from the query string and scrolls that block to centre) rather than
+   * reaching into the DOM from here — the Context modal's Origin link already
+   * navigates this way, so there is one mechanism to keep working.
+   *
+   * `replace`, not `push`: jumping to a block is not a place in history the
+   * writer wants Back to walk her through. `scroll: false` because the target
+   * is the block, not the top of the page.
+   */
+  function onJumpToBlock(blockId: string) {
+    router.replace(`${pathname}?block=${blockId}`, { scroll: false })
+  }
+
+  // Re-check after any edit that can change the answer, so fixing a branch
+  // clears its warning without a reload. Debounced: a condition row can fire
+  // several saves as the writer attaches clauses, and the answer only matters
+  // once she stops.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const unsubscribe = subscribeReachabilityChanged(() => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => setRevision(r => r + 1), 600)
+    })
+    return () => { if (timer) clearTimeout(timer); unsubscribe() }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
-    setFindings(null)
-    setOpen(false)
+    // Only blank the banner on a real chapter change. Clearing it on every
+    // re-check would flash the warning away and back while the writer is
+    // still editing the condition it is about.
     fetch(`/api/series/${seriesId}/reachability`)
       .then(r => (r.ok ? r.json() : null))
       .then((data: ReachabilityReport | null) => {
@@ -43,7 +79,9 @@ export default function ChapterReachabilityBanner({
       // thrown across the page you came here to write in.
       .catch(() => {})
     return () => { cancelled = true }
-  }, [seriesId, chapterId])
+  }, [seriesId, chapterId, revision])
+
+  useEffect(() => { setFindings(null); setOpen(false) }, [chapterId])
 
   if (!findings || findings.length === 0) return null
 
@@ -112,6 +150,19 @@ export default function ChapterReachabilityBanner({
                     <span className="font-mono text-ink">{f.matched} of {f.evaluated}</span>
                     {' '}possible {f.evaluated === 1 ? 'path reaches' : 'paths reach'} it
                   </p>
+                )}
+                {/* Scrolls the offending block into view and makes it active,
+                    via the editor's existing ?block= deep link. Without it,
+                    "override #1 in this chapter" is still a hunt through a
+                    long page. */}
+                {f.blockId && (
+                  <button
+                    type="button"
+                    onClick={() => onJumpToBlock(f.blockId!)}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded border border-accent/30 bg-surface-overlay px-2 py-0.5 text-[11px] font-medium text-ink transition hover:border-accent/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    <LuLocate size={10} /> Show me
+                  </button>
                 )}
               </div>
             ))}

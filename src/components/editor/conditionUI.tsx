@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { LuX } from 'react-icons/lu'
+import { LuX, LuTriangleAlert } from 'react-icons/lu'
 import { useAuthor } from '@/lib/authorContext'
 import type { ConditionCmp } from '@/lib/storyEngine'
 
@@ -252,6 +252,21 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
   const attachedVars = variables.filter(v => attachedNames.has(v.name))
   const unattachedVars = variables.filter(v => !attachedNames.has(v.name))
 
+  // Clauses naming a variable that no longer exists (LOOM-122).
+  //
+  // The rows above are built by filtering the DECLARED variables, so a clause
+  // whose variable was renamed, deleted, or mistyped rendered as nothing at
+  // all — the condition looked clean while the stored JSON still carried the
+  // clause, and every edit here wrote it straight back out (save() folds the
+  // parsed `clauses`, not the rendered rows).
+  //
+  // That is not a harmless leftover: the engine compares `storyState[name]`
+  // against the value, an undeclared name is always `undefined`, and so the
+  // whole condition can never match. It is exactly how one override in this
+  // series went dead and stayed invisible. Show them, so they can be removed.
+  const declaredNames = new Set(variables.map(v => v.name))
+  const ghostClauses = clauses.filter(c => !declaredNames.has(c.var))
+
   function save(nextOp: ConditionOp, nextClauses: ConditionClause[], nextPolarity: ConditionPolarity = polarity) {
     onChange(stringifyCondition(nextOp, nextClauses.filter(c => c.value !== undefined), nextPolarity))
   }
@@ -334,6 +349,35 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
               <ValueSetter v={v} currentVal={valueByName[v.name]} onChange={val => setVal(v.name, val)} suggestions={knownStringValues[v.name]} />
             </div>
             <button onClick={() => detach(v.name)} className="text-ink-muted hover:text-choice-kill transition shrink-0">
+              <LuX size={11} />
+            </button>
+          </div>
+        </div>
+      ))}
+      {/* Broken clauses, shown after the real ones. Read-only apart from the
+          remove button: there is no variable to offer a typed value editor
+          for, and the only useful action is to take it out (or recreate the
+          variable it names). */}
+      {ghostClauses.map((c, g) => (
+        <div key={`ghost:${c.var}`} className="flex items-center gap-2">
+          {attachedVars.length + g > 0 && (
+            <OpToggle value={op} onChange={undefined} disabled />
+          )}
+          <div
+            title={`"${c.var}" is not a story variable, so this clause never matches and this condition can never be true. Remove it, or create a variable with that name.`}
+            className="flex items-center gap-1 rounded border border-choice-kill/50 bg-choice-kill/10 px-2 py-0.5"
+          >
+            <LuTriangleAlert size={10} className="text-choice-kill shrink-0" />
+            <span className="text-xs text-choice-kill line-through">{c.var}</span>
+            <span className="text-xs text-ink-faint">=</span>
+            <span className="text-xs text-ink-muted">
+              {typeof c.value === 'string' ? `"${c.value}"` : String(c.value)}
+            </span>
+            <button
+              onClick={() => detach(c.var)}
+              title="Remove this clause"
+              className="text-ink-muted transition hover:text-choice-kill shrink-0"
+            >
               <LuX size={11} />
             </button>
           </div>

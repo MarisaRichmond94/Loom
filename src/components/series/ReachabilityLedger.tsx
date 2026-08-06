@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { LuCircleCheck, LuTriangleAlert, LuCircleSlash, LuExternalLink } from 'react-icons/lu'
 import type { Finding, ReachabilityReport } from '@/lib/reachability'
 import ConditionSentence from '@/components/editor/ConditionSentence'
+import { subscribeReachabilityChanged } from '@/lib/reachabilitySync'
 
 // The Paths tab (LOOM-122) — every branch no reader can reach.
 //
@@ -41,7 +42,13 @@ function FindingRow({ finding, seriesId }: { finding: Finding; seriesId: string 
   // reads) belong to the series, not to any one chapter — there is nowhere to
   // send the writer, so the row says so rather than looking clickable and
   // doing nothing.
-  const target = finding.chapterId ? `/author/${seriesId}/chapter/${finding.chapterId}` : null
+  // Deep-link to the offending block where there is one, using the editor's
+  // existing ?block= parameter — landing at the top of a long chapter still
+  // leaves the writer hunting for the override the finding is about.
+  const target = finding.chapterId
+    ? `/author/${seriesId}/chapter/${finding.chapterId}` +
+      (finding.blockId ? `?block=${finding.blockId}` : '')
+    : null
 
   return (
     <div className={`rounded-lg border ${tone.border} ${tone.bg} p-4`}>
@@ -110,6 +117,19 @@ function FindingRow({ finding, seriesId }: { finding: Finding; seriesId: string 
 export default function ReachabilityLedger({ seriesId }: { seriesId: string }) {
   const [report, setReport] = useState<ReachabilityReport | null>(null)
   const [failed, setFailed] = useState(false)
+  const [revision, setRevision] = useState(0)
+
+  // Re-ask after any edit that can change the answer, so a branch fixed in
+  // another tab stops being listed here. Debounced — a condition row fires
+  // several saves as clauses are attached.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const unsubscribe = subscribeReachabilityChanged(() => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => setRevision(r => r + 1), 600)
+    })
+    return () => { if (timer) clearTimeout(timer); unsubscribe() }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -118,7 +138,7 @@ export default function ReachabilityLedger({ seriesId }: { seriesId: string }) {
       .then(data => { if (!cancelled) setReport(data) })
       .catch(() => { if (!cancelled) setFailed(true) })
     return () => { cancelled = true }
-  }, [seriesId])
+  }, [seriesId, revision])
 
   if (failed) {
     return (
