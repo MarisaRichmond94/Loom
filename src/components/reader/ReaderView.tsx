@@ -28,7 +28,7 @@ import InlineBadEnding from './InlineBadEnding'
 const ChoiceConfigModal = dynamic(() => import('./ChoiceConfigModal'), { ssr: false })
 const BadEndingModal = dynamic(() => import('./BadEndingModal'), { ssr: false })
 import AppHeader from '@/components/AppHeader'
-import { useLightMode } from '@/lib/useLightMode'
+import { useLightMode } from '@shared/useLightMode'
 import PinnedAudio from '@/components/PinnedAudio'
 import NarrationBar from './NarrationBar'
 import { stripEmptyParagraphs, htmlToPlainText, inlineParagraphStyles, educateHtml, educateQuotes, PASTE_FONT_FAMILY } from '@/lib/clipboardFormatting'

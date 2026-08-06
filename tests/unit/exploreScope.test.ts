@@ -186,9 +186,14 @@ describe('every colour the Explore UI uses has a light-mode value', () => {
   // in light mode day to day. A missing override is not a broken build, a
   // failed test, or a console warning — it is just the wrong colour, in the
   // one theme the developer was not looking at.
-  const css = readFileSync(
-    path.join(__dirname, '../../src/app/globals.css'), 'utf8',
-  )
+  // The light-mode palette moved to shared/light.css when the reader app began
+  // importing it (LOOM-131) — both apps resolve against one copy rather than
+  // drifting. Read both files so this guard follows the values wherever they
+  // live: globals.css still carries the editor-only .light-body rules.
+  const css = [
+    path.join(__dirname, '../../src/app/globals.css'),
+    path.join(__dirname, '../../shared/light.css'),
+  ].map(p => readFileSync(p, 'utf8')).join('\n')
   const lightBlocks = [...css.matchAll(/\.light-body\s*\{([\s\S]*?)\}/g)]
     .map(m => m[1])
     .join('\n')

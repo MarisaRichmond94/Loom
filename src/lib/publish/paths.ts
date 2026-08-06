@@ -36,6 +36,19 @@ export const LOOM_PUBLIC_ROOT = path.join(repoRoot, 'public')
 
 /**
  * The reader tier's media root. Publish PRUNES here, so it must never overlap
- * LOOM_PUBLIC_ROOT — `publishAssets` refuses outright if it ever does.
+ * a source root — `publishAssets` refuses outright if it ever does.
  */
 export const READER_ASSET_ROOT = path.join(repoRoot, 'reader', `public${suffix}`)
+
+/**
+ * WriteAI's photo directory. READ-ONLY, and the only source for most character
+ * portraits — Loom holds 7 of 36 locally, WriteAI holds 47.
+ *
+ * Overridable because it is a path into ANOTHER REPO: if WriteAI moves or
+ * renames writer_data/, portraits stop resolving and publish reports them
+ * missing rather than failing. That is the accepted cost of not making
+ * publishing depend on WriteAI being *running*.
+ */
+export const WRITEAI_PHOTO_ROOT =
+  process.env.WRITEAI_PHOTO_ROOT
+  ?? path.join(repoRoot, '..', 'WriteAi', 'writer_data', 'photos')

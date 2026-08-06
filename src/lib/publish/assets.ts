@@ -2,23 +2,27 @@ import { copyFileSync, existsSync, linkSync, mkdirSync, readdirSync, rmSync, sta
 import path from 'node:path'
 
 /**
- * Copies the media published content references into the reader tier, and
- * prunes what it no longer references (LOOM-128).
+ * Links the media published content references into the reader tier, and prunes
+ * what it no longer references (LOOM-128/131).
  *
- * WHITELIST BY REFERENCE, NOT BY DIRECTORY. Mirroring `public/covers/`
- * wholesale would put an unpublished book's cover on the reader tier, and a
- * cover is a spoiler. Only files named by published, canon-reachable content
- * cross over.
+ * Callers hand over resolved pairs — the reader-facing URL and the absolute
+ * file it comes from. That indirection exists because the sources are no longer
+ * all in one place: covers, soundtracks and narration live in Loom's public/,
+ * while most character portraits live in the WriteAI repo. Resolution is the
+ * publisher's job; this module only links and prunes.
  *
- * THE PRUNE IS THE DANGEROUS PART. It deletes files, driven by paths that come
- * out of the database. WriteAI has already lost real portraits to a glob-then-
- * unlink over an unvalidated path parameter, and this is the same shape of
- * code. So every delete is bounded by `assertInside`, and the tests aim
- * adversarial paths at it rather than assuming intent.
+ * THE PRUNE IS THE DANGEROUS PART. It deletes files, driven by paths that came
+ * out of a database. WriteAI has already lost real portraits to a glob-then-
+ * unlink over an unvalidated path parameter, so every delete is bounded by
+ * `assertInside`, and the tests aim hostile paths at it rather than assuming
+ * intent.
  */
 
-/** Media roots, relative to a public/ directory. Anything outside is not ours. */
+/** Media roots, relative to the reader's asset root. Anything else is not ours. */
 const MEDIA_DIRS = ['covers', 'characters', 'music', 'narration'] as const
+
+/** A reader-facing URL and the file it should be linked from. */
+export type AssetRef = { url: string; source: string }
 
 export type AssetReport = {
   /** Hardlinked — the normal case, and free. */
@@ -35,10 +39,10 @@ export type AssetReport = {
 /**
  * Resolve `rel` under `root` and refuse anything that escapes.
  *
- * Guards `..`, absolute paths, and symlink-ish trickery by comparing the
- * RESOLVED path against the resolved root. Returns null rather than throwing so
- * callers can report a bad reference and continue — one malformed row should
- * not abort a publish.
+ * Guards `..`, absolute paths and root escapes by comparing the RESOLVED path
+ * against the resolved root. Returns null rather than throwing so a caller can
+ * report a bad reference and continue — one malformed row should not abort a
+ * publish.
  */
 export function resolveInside(root: string, rel: string): string | null {
   if (!rel) return null
@@ -78,85 +82,85 @@ function listExisting(readerRoot: string): Set<string> {
   return out
 }
 
-/**
- * @param referenced Media paths as stored in the database ("/covers/x.jpg").
- *                   Query strings are tolerated — soundtrack paths carry a
- *                   cache-busting `?t=` that is not part of the filename.
- */
 export function publishAssets(opts: {
-  publicRoot: string
   readerRoot: string
-  referenced: Iterable<string>
+  referenced: Iterable<AssetRef>
+  /**
+   * Directories the sources come from. Used ONLY to refuse an overlapping
+   * reader root — never to resolve anything.
+   */
+  sourceRoots: string[]
 }): AssetReport {
   // THE GUARD THAT MATTERS MOST IN THIS FILE.
   //
   // The prune deletes every file under readerRoot's media dirs that publish did
-  // not just reference. If readerRoot were ever pointed at Loom's own public/ —
-  // a copy-pasted config, an unset env var falling back to a default, a typo —
-  // that would delete the author's unreferenced covers, portraits, music and
-  // narration. public/narration alone is 2.6 GB of generated audiobook.
-  //
-  // Overlapping roots are never legitimate, so refuse rather than proceed.
-  const publicAbs = path.resolve(opts.publicRoot)
+  // not just reference. If readerRoot were ever pointed at Loom's public/ — a
+  // copy-pasted config, an unset env var, a typo — that would delete the
+  // author's unreferenced covers, portraits, music and narration.
+  // public/narration alone is 2.6 GB of generated audiobook. And with the
+  // WriteAI photo directory now a source too, the same mistake would reach
+  // another repo's files.
   const readerAbs = path.resolve(opts.readerRoot)
-  if (
-    publicAbs === readerAbs ||
-    readerAbs.startsWith(publicAbs + path.sep) ||
-    publicAbs.startsWith(readerAbs + path.sep)
-  ) {
-    throw new Error(
-      `Refusing to publish assets: reader root and public root overlap.\n` +
-      `  public: ${publicAbs}\n  reader: ${readerAbs}\n` +
-      `The prune deletes unreferenced files under the reader root; an overlap would delete the author's media.`,
-    )
+  for (const root of opts.sourceRoots) {
+    const srcAbs = path.resolve(root)
+    if (
+      srcAbs === readerAbs ||
+      readerAbs.startsWith(srcAbs + path.sep) ||
+      srcAbs.startsWith(readerAbs + path.sep)
+    ) {
+      throw new Error(
+        `Refusing to publish assets: reader root overlaps a source root.\n` +
+        `  source: ${srcAbs}\n  reader: ${readerAbs}\n` +
+        `The prune deletes unreferenced files under the reader root; an overlap would delete originals.`,
+      )
+    }
   }
 
   const report: AssetReport = { linked: 0, copied: 0, pruned: 0, missing: [], bytes: 0 }
 
-  const wanted = new Set<string>()
+  const wanted = new Map<string, string>() // reader-relative path -> source
   for (const ref of opts.referenced) {
-    const src = resolveInside(opts.publicRoot, ref)
-    if (!src) { report.missing.push(ref); continue }
-    if (!existsSync(src)) { report.missing.push(ref); continue }
-    wanted.add(path.relative(path.resolve(opts.publicRoot), src))
+    const dest = resolveInside(readerAbs, ref.url)
+    if (!dest || !ref.source || !existsSync(ref.source)) {
+      report.missing.push(ref.url)
+      continue
+    }
+    wanted.set(path.relative(readerAbs, dest), ref.source)
   }
 
-  const existing = listExisting(opts.readerRoot)
+  const existing = listExisting(readerAbs)
 
-  for (const rel of wanted) {
-    const src = path.join(opts.publicRoot, rel)
-    const dest = path.join(opts.readerRoot, rel)
-    assertInside(opts.readerRoot, dest)
+  for (const [rel, src] of wanted) {
+    const dest = path.join(readerAbs, rel)
+    assertInside(readerAbs, dest)
     mkdirSync(path.dirname(dest), { recursive: true })
 
     const srcStat = statSync(src)
     if (existsSync(dest)) {
       const destStat = statSync(dest)
-      // Already the same inode: this is the hardlink from a previous publish.
-      // Nothing to do, and the check is exact rather than heuristic.
+      // Already the same inode: the hardlink from a previous publish. Exact
+      // rather than heuristic.
       if (destStat.dev === srcStat.dev && destStat.ino === srcStat.ino) continue
-      // A stale copy (or a link to a replaced file) — clear it and relink.
+      // A stale copy, or a link to a replaced file — clear it and relink.
       rmSync(dest, { force: true })
     }
 
     // HARDLINK, not copy. public/narration alone is 2.6 GB, and duplicating it
-    // per publish would be pure waste — a hardlink is a second name for the
-    // same inode and costs nothing.
+    // per publish would be waste — a hardlink is a second name for one inode.
     //
-    // Safe for the prune: rmSync on a hardlink drops that name only. The
-    // source keeps its own, and the data survives until every name is gone.
-    // So "the reader tier can delete its own files" stays true.
+    // Safe for the prune: rmSync drops that NAME only, and the data survives
+    // while any name remains. So "the reader tier may delete its own files"
+    // stays true even though those files are the author's originals.
     //
-    // The one rule this imposes: the reader tier must treat its assets as
-    // READ-ONLY. Writing through a hardlink writes the author's file too,
-    // because there is only one inode. Nothing on the reader side writes media
-    // — it serves it — but that is now load-bearing rather than incidental.
+    // The rule this imposes: the reader tier treats its assets as READ-ONLY.
+    // Writing through a hardlink writes the original too.
     try {
       linkSync(src, dest)
       report.linked += 1
     } catch {
-      // Different filesystem (EXDEV), or a filesystem without hardlinks. Copy
-      // instead — correct, just not free.
+      // Different filesystem (EXDEV), or one without hardlinks. Copy instead —
+      // correct, just not free. The WriteAI repo could plausibly be on another
+      // volume, so this path is not hypothetical.
       copyFileSync(src, dest)
       report.copied += 1
       report.bytes += srcStat.size
@@ -165,11 +169,10 @@ export function publishAssets(opts: {
 
   for (const rel of existing) {
     if (wanted.has(rel)) continue
-    const target = path.join(opts.readerRoot, rel)
-    // The line that matters. A path derived from a directory listing should
-    // always be inside the root — but "should" is what the WriteAI portrait
-    // bug also assumed.
-    assertInside(opts.readerRoot, target)
+    const target = path.join(readerAbs, rel)
+    // A path derived from a directory listing should always be inside the root
+    // — but "should" is what the WriteAI portrait bug also assumed.
+    assertInside(readerAbs, target)
     rmSync(target, { force: true })
     report.pruned += 1
   }

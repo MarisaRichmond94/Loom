@@ -21,6 +21,8 @@
 /reader/.next-stale-*/
 /reader/out/
 /reader/node_modules/
+# Generated mirror of shared/ — regenerated on every reader dev/build.
+/reader/src/shared/
 
 # production
 /build

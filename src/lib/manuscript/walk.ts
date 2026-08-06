@@ -59,6 +59,10 @@ export type WalkedBlock = {
   /** TipTap doc JSON for text; the media path for soundtrack. */
   content: string
   displayType: string | null
+  /** soundtrack only: track name and the chapter range it is pinned to. */
+  title?: string | null
+  pinStart?: number | null
+  pinEnd?: number | null
   /** The ContentBlock this came from, for tracing back into Loom. */
   sourceBlockId: string
 }
@@ -118,6 +122,9 @@ type BlockIn = {
   prompt: string | null
   /** Presentation hint the reader needs; irrelevant to the manuscript export. */
   displayType?: string | null
+  /** soundtrack only: the chapter range a track is pinned across. */
+  pinStart?: number | null
+  pinEnd?: number | null
   /**
    * Per-block gate, evaluated against the evolving story state.
    *
@@ -264,6 +271,11 @@ export function walkBook(
             content: block.content,
             displayType: block.displayType ?? null,
             sourceBlockId: block.id,
+            // `prompt` carries the track NAME for a soundtrack block — the
+            // field is reused, which is why the reader schema renames it.
+            title: block.prompt ?? null,
+            pinStart: block.pinStart ?? null,
+            pinEnd: block.pinEnd ?? null,
           })
         }
         continue

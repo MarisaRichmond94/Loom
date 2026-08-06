@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
-import { useLightMode } from '@/lib/useLightMode'
+import { useLightMode } from '@shared/useLightMode'
 
 // Top-level shell for the home routes. Chrome comes from <AppHeader> (KAN-2),
 // shared with the author, settings, and reader surfaces.

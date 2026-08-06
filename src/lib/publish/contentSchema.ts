@@ -64,7 +64,13 @@ CREATE TABLE ContentBlock (
   type          TEXT NOT NULL,
   content       TEXT NOT NULL,
   displayType   TEXT,
-  sourceBlockId TEXT NOT NULL
+  sourceBlockId TEXT NOT NULL,
+  -- soundtrack only: the track's name, and the chapter range it is pinned to.
+  -- Stored on ContentBlock.prompt/pinStart/pinEnd in Loom; renamed here because
+  -- "prompt" means nothing to a reader looking at a track listing.
+  title         TEXT,
+  pinStart      INTEGER,
+  pinEnd        INTEGER
 );
 CREATE INDEX idx_block_chapter ON ContentBlock(chapterId, "order");
 

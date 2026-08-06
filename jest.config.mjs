@@ -10,7 +10,7 @@ const config = {
       testEnvironment: 'node',
       testMatch: ['<rootDir>/tests/unit/**/*.test.ts'],
       transform: { '^.+\\.tsx?$': ['ts-jest', {}] },
-      moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
+      moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1', '^@shared/(.*)$': '<rootDir>/shared/$1' },
       setupFiles: ['<rootDir>/tests/setup/dbGuard.ts'],
     },
     {
@@ -18,7 +18,7 @@ const config = {
       testEnvironment: 'jsdom',
       testMatch: ['<rootDir>/tests/components/**/*.test.tsx'],
       transform: { '^.+\\.tsx?$': ['ts-jest', { tsconfig: { jsx: 'react-jsx' } }] },
-      moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
+      moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1', '^@shared/(.*)$': '<rootDir>/shared/$1' },
       setupFiles: ['<rootDir>/tests/setup/dbGuard.ts'],
       setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
     },

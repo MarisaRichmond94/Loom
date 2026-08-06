@@ -8,6 +8,7 @@ import {
   LOOM_PUBLIC_ROOT,
   READER_ASSET_ROOT,
   SOURCE_DB_PATH,
+  WRITEAI_PHOTO_ROOT,
 } from '@/lib/publish/paths'
 import { readProfileSettings } from '@/lib/profileSettings'
 
@@ -77,6 +78,7 @@ export async function POST(req: Request, { params }: Params) {
       bookIds,
       publicRoot: LOOM_PUBLIC_ROOT,
       readerAssetRoot: READER_ASSET_ROOT,
+      writeAiPhotoRoot: WRITEAI_PHOTO_ROOT,
     })
     return NextResponse.json(result)
   } catch (e) {

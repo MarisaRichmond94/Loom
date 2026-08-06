@@ -11,7 +11,7 @@ import {
   type VariableIn,
 } from '@/lib/manuscript/walk'
 import { narrationHash, narrationSegments, type NarrationBlock } from '@/lib/narration/text'
-import { publishAssets, type AssetReport } from '@/lib/publish/assets'
+import { publishAssets, type AssetReport, type AssetRef } from '@/lib/publish/assets'
 
 /**
  * Builds `content.db` — the snapshot the reader tier serves (LOOM-127/129).
@@ -104,6 +104,12 @@ type BuildOptions = {
   bookIds?: string[]
   publicRoot?: string
   readerAssetRoot?: string
+  /**
+   * WriteAI's `writer_data/photos`. READ-ONLY, and the only source for most
+   * character portraits: Loom holds 7 of 36 locally, WriteAI holds 47. Omit to
+   * fall back to Loom-local avatars alone.
+   */
+  writeAiPhotoRoot?: string
   /** Compute everything, write nothing — how the status endpoint stays exact. */
   dryRun?: boolean
 }
@@ -189,7 +195,7 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
       `SELECT id, title, "order", pov, date, condition, numbered FROM Chapter WHERE bookId = ? ORDER BY "order"`,
     )
     const blockStmt = source.prepare(
-      `SELECT id, "order", type, content, prompt, displayType, condition FROM ContentBlock WHERE chapterId = ? ORDER BY "order"`,
+      `SELECT id, "order", type, content, prompt, displayType, condition, pinStart, pinEnd FROM ContentBlock WHERE chapterId = ? ORDER BY "order"`,
     )
     const choiceStmt = source.prepare(
       `SELECT id, "order", label, setsVariables, targetChapterId, endingMessage, isBadEnding, endsChapter
@@ -222,6 +228,8 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
           prompt: b.prompt,
           displayType: b.displayType,
           condition: b.condition,
+          pinStart: b.pinStart,
+          pinEnd: b.pinEnd,
           choices: choiceStmt.all(b.id).map((ch: Row) => ({
             id: ch.id,
             label: ch.label,
@@ -306,6 +314,42 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
     return null
   }
 
+  /**
+   * A character's portrait for a given book, mirroring Loom's own precedence
+   * (resolveWriterCharacter.ts:134): per-book avatar, then canonical avatar,
+   * then WriteAI's photo.
+   *
+   * The third is where most of them actually are — Loom holds 7 of 36 locally
+   * and WriteAI holds 47. So publish reads WriteAI's writer_data/photos
+   * READ-ONLY. That is a cross-app filesystem dependency, taken deliberately:
+   * a cast section with 29 blank avatars is not worth shipping, and the
+   * alternative (fetching over HTTP at publish time) would make publishing
+   * depend on WriteAI being *running*, not merely present.
+   *
+   * Returns the reader-facing URL and the file to link it from, or null when
+   * no portrait exists anywhere — in which case the reader falls back to
+   * initials rather than a broken image.
+   */
+  const portraitFor = (wcId: string, bookId: string): AssetRef | null => {
+    const candidates: Array<[string, string | undefined]> = [
+      [`/characters/${wcId}-${bookId}.jpg`, opts.publicRoot],
+      [`/characters/${wcId}.jpg`, opts.publicRoot],
+      [`/characters/${wcId}.jpg`, opts.writeAiPhotoRoot],
+    ]
+    for (const [url, root] of candidates) {
+      if (!root) continue
+      // WriteAI stores photos flat, so the basename is what lives there;
+      // Loom nests them under characters/.
+      const file = root === opts.writeAiPhotoRoot
+        ? path.join(root, `${wcId}.jpg`)
+        : path.join(root, url.replace(/^\//, ''))
+      if (existsSync(file)) return { url, source: file }
+    }
+    return null
+  }
+  /** url -> source, filled as rows are written. */
+  const assetRefs = new Map<string, string>()
+
   const orderByBookId = new Map<string, number>(books.map((b: Row) => [b.id, b.order]))
   const ageOverride = new Map<string, number | null>(
     bookMetaAges.map((r: Row) => [`${r.id}::${r.bookId}`, r.age]),
@@ -333,8 +377,8 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
     }
 
     const insertBlock = out.prepare(
-      `INSERT INTO ContentBlock (id, chapterId, "order", type, content, displayType, sourceBlockId)
-       VALUES (@id, @chapterId, @order, @type, @content, @displayType, @sourceBlockId)`,
+      `INSERT INTO ContentBlock (id, chapterId, "order", type, content, displayType, sourceBlockId, title, pinStart, pinEnd)
+       VALUES (@id, @chapterId, @order, @type, @content, @displayType, @sourceBlockId, @title, @pinStart, @pinEnd)`,
     )
     const insertChapter = out.prepare(
       `INSERT INTO Chapter (id, bookId, title, label, numbered, "order", pov, date)
@@ -471,6 +515,9 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
               content: b.content,
               displayType: b.displayType,
               sourceBlockId: b.sourceBlockId,
+              title: b.title ?? null,
+              pinStart: b.pinStart ?? null,
+              pinEnd: b.pinEnd ?? null,
             })
             blockCount += 1
             fingerprint.update(b.id).update('\0').update(b.content).update('\0')
@@ -516,7 +563,14 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
             bookId: book.id,
             name: c.name ?? c.id,
             age: ageOverride.get(`${c.id}::${book.id}`) ?? c.age ?? null,
-            photoPath: c.photoUrl ?? null,
+            // NOT snapshot.photoUrl — that is a WriteAI API URL
+            // (/api/plan/photos/...) which the reader tier cannot call. The
+            // resolved local file is used instead, or nothing.
+            photoPath: (() => {
+              const p = portraitFor(c.id, book.id)
+              if (p) assetRefs.set(p.url, p.source)
+              return p?.url ?? null
+            })(),
             // The spoiler, resolved to a boolean HERE. The book a character
             // dies in never crosses over.
             deceased: deathOrder !== undefined && deathOrder <= book.order ? 1 : 0,
@@ -544,12 +598,42 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
     // Carried-forward books reference media too, and pruning against only the
     // rebuilt book's references would delete the others' covers and audio out
     // from under them.
-    const refs = new Set<string>()
-    for (const r of out.prepare(`SELECT coverPath v FROM Book WHERE coverPath IS NOT NULL`).all() as Row[]) refs.add(r.v)
-    for (const r of out.prepare(`SELECT content v FROM ContentBlock WHERE type = 'soundtrack'`).all() as Row[]) refs.add(r.v)
-    for (const r of out.prepare(`SELECT audioPath v FROM Narration`).all() as Row[]) refs.add(r.v)
-    for (const r of out.prepare(`SELECT DISTINCT photoPath v FROM Character WHERE photoPath IS NOT NULL`).all() as Row[]) refs.add(r.v)
-    result.referencedAssets = [...refs].sort()
+    // Read off the FINAL snapshot, not accumulated during the walk: carried
+    // forward books reference media too, and pruning against only the rebuilt
+    // book's references would delete the others' covers and audio.
+    const pub = opts.publicRoot
+    const fromPublic = (url: string) => (pub ? path.join(pub, url.replace(/^\//, '').split('?')[0]) : '')
+    for (const r of out.prepare(`SELECT coverPath v FROM Book WHERE coverPath IS NOT NULL`).all() as Row[]) {
+      assetRefs.set(r.v, fromPublic(r.v))
+    }
+    for (const r of out.prepare(`SELECT id, content v FROM ContentBlock WHERE type = 'soundtrack'`).all() as Row[]) {
+      assetRefs.set(r.v, fromPublic(r.v))
+      // Album art sits beside the track as `<blockId>-art.jpg` — a convention,
+      // not a column, so it is derived rather than read.
+      const artUrl = `/music/${r.id}-art.jpg`
+      const artFile = fromPublic(artUrl)
+      if (artFile && existsSync(artFile)) assetRefs.set(artUrl, artFile)
+    }
+    for (const r of out.prepare(`SELECT audioPath v FROM Narration`).all() as Row[]) {
+      assetRefs.set(r.v, fromPublic(r.v))
+    }
+    // Portraits were resolved when the rows were written (their sources are not
+    // all under public/), so they are already in assetRefs. Carried-forward
+    // books need theirs re-resolved from the snapshot.
+    for (const r of out.prepare(`SELECT DISTINCT photoPath v FROM Character WHERE photoPath IS NOT NULL`).all() as Row[]) {
+      if (assetRefs.has(r.v)) continue
+      // A carried-forward book's portrait URL is already correct; only its
+      // SOURCE needs finding again. Try Loom's public/ first, then WriteAI's
+      // flat photo directory by basename.
+      const local = fromPublic(r.v)
+      if (local && existsSync(local)) { assetRefs.set(r.v, local); continue }
+      if (opts.writeAiPhotoRoot) {
+        const remote = path.join(opts.writeAiPhotoRoot, path.basename(r.v))
+        if (existsSync(remote)) { assetRefs.set(r.v, remote); continue }
+      }
+      assetRefs.set(r.v, local)
+    }
+    result.referencedAssets = [...assetRefs.keys()].sort()
   } finally {
     if (canCarry) { try { out.exec('DETACH DATABASE prev') } catch { /* already closing */ } }
     out.close()
@@ -568,9 +652,9 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
 
   if (opts.publicRoot && opts.readerAssetRoot) {
     result.assets = publishAssets({
-      publicRoot: opts.publicRoot,
       readerRoot: opts.readerAssetRoot,
-      referenced: result.referencedAssets,
+      referenced: [...assetRefs].map(([url, source]) => ({ url, source })),
+      sourceRoots: [opts.publicRoot, opts.writeAiPhotoRoot].filter((r): r is string => !!r),
     })
   }
   return result
