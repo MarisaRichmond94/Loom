@@ -1,6 +1,9 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ConditionSentence from '@/components/editor/ConditionSentence'
+import { showToast } from '@/lib/notifications'
+
+jest.mock('@/lib/notifications', () => ({ showToast: jest.fn() }))
 
 // Conditions read as a sentence, and in the banner their variable names are
 // click-to-copy (LOOM-122). The name is the search term for finding the thing
@@ -64,7 +67,7 @@ describe('ConditionSentence', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
-  it('copies the variable name when asked to, and says so', async () => {
+  it('copies the variable name and confirms in a toast', async () => {
     const user = userEvent.setup()
     const writeText = jest.fn().mockResolvedValue(undefined)
     // Defined, not assigned: jsdom exposes navigator.clipboard as a getter,
@@ -77,10 +80,26 @@ describe('ConditionSentence', () => {
     await user.click(screen.getByRole('button', { name: /Copy isNoahUsingSteroids/ }))
 
     expect(writeText).toHaveBeenCalledWith('isNoahUsingSteroids')
-    expect(await screen.findByText('copied')).toBeInTheDocument()
+    expect(showToast).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'ok', message: 'Copy successful' }),
+    )
+  })
+
+  it('leaves the sentence alone — the label never becomes "copied"', async () => {
+    const user = userEvent.setup()
+    const writeText = jest.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+
+    render(<ConditionSentence raw={JSON.stringify({ isNoahUsingSteroids: true })} copyable />)
+    await user.click(screen.getByRole('button', { name: /Copy isNoahUsingSteroids/ }))
+
+    // Swapping the label rewrites the line mid-read and reflows around it.
+    expect(screen.queryByText('copied')).not.toBeInTheDocument()
+    expect(screen.getByText('isNoahUsingSteroids')).toBeInTheDocument()
   })
 
   it('stays quiet when the clipboard is unavailable', async () => {
+    ;(showToast as jest.Mock).mockClear()
     const user = userEvent.setup()
     const writeText = jest.fn().mockRejectedValue(new Error('denied'))
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
@@ -91,5 +110,6 @@ describe('ConditionSentence', () => {
     // The name is still shown and selectable; a failed convenience must not
     // turn into an error the writer has to dismiss.
     expect(screen.getByText('didNoahGetShot')).toBeInTheDocument()
+    expect(showToast).not.toHaveBeenCalled()
   })
 })

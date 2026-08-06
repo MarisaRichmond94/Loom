@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { parseCondition } from '@/components/editor/conditionUI'
+import { showToast } from '@/lib/notifications'
 
 // A stored condition, read as a sentence (LOOM-122).
 //
@@ -35,13 +36,18 @@ const CMP_WORDS: Record<string, string> = {
  * broken clause this whole feature found got written in the first place.
  */
 function CopyableName({ name }: { name: string }) {
-  const [copied, setCopied] = useState(false)
-
   async function copy() {
     try {
       await navigator.clipboard.writeText(name)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1200)
+      // A toast, NOT a swap of the label to "copied". The name sits mid-
+      // sentence, so replacing it rewrites the line you are reading and
+      // reflows what is around it — the confirmation lands as a flinch in the
+      // thing you were looking at. The toast confirms in the corner the writer
+      // already watches for autosave, and leaves the sentence alone.
+      //
+      // Short: this is the most trivial confirmation in the app, and copying
+      // several names in a row should not stack a column of them.
+      showToast({ kind: 'ok', message: 'Copy successful', durationMs: 2000 })
     } catch {
       // Clipboard blocked (insecure context, denied permission). Say nothing:
       // the name is still selectable by hand, and an error toast for a
@@ -53,11 +59,11 @@ function CopyableName({ name }: { name: string }) {
     <button
       type="button"
       onClick={copy}
-      title={copied ? 'Copied' : `Copy "${name}"`}
-      aria-label={copied ? `Copied ${name}` : `Copy ${name}`}
+      title={`Copy "${name}"`}
+      aria-label={`Copy ${name}`}
       className="rounded font-mono text-[0.95em] text-ink underline decoration-dotted decoration-ink-faint underline-offset-2 transition hover:decoration-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      {copied ? 'copied' : name}
+      {name}
     </button>
   )
 }
