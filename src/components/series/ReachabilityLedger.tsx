@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { LuCircleCheck, LuTriangleAlert, LuCircleSlash, LuExternalLink } from 'react-icons/lu'
 import type { Finding, ReachabilityReport } from '@/lib/reachability'
+import ConditionSentence from '@/components/editor/ConditionSentence'
 
 // The Paths tab (LOOM-122) — every branch no reader can reach.
 //
@@ -33,59 +34,6 @@ const TONE = {
   },
 } as const
 
-/**
- * A condition, in words.
- *
- * The stored form is JSON, and that is what a writer had to decode here
- * before: `{"didNoahUseSteroids":true,"isNoahUsingSteroids":true}`. The
- * variable names are the writer's own and worth keeping verbatim — so they
- * stay in mono — but the braces, quotes and colons carry nothing she needs,
- * and reading them is work. The sentence carries the same information.
- */
-function ConditionText({ raw }: { raw: string }) {
-  let parsed: unknown
-  try { parsed = JSON.parse(raw) } catch { return <>{raw}</> }
-  if (!parsed || typeof parsed !== 'object') return <>{raw}</>
-
-  const name = (n: string) => (
-    <span key={n} className="font-mono text-[11.5px] text-ink">{n}</span>
-  )
-  const value = (v: unknown) => (
-    <span className="font-mono text-[11.5px] text-ink">{typeof v === 'string' ? `"${v}"` : String(v)}</span>
-  )
-  const CMP: Record<string, string> = {
-    '=': 'is', '>': 'is above', '<': 'is below', '>=': 'is at least', '<=': 'is at most',
-  }
-
-  const compound = parsed as { op?: string; clauses?: { var: string; value: unknown; cmp?: string }[]; mode?: string }
-  const clauses: { var: string; value: unknown; cmp?: string }[] = Array.isArray(compound.clauses)
-    ? compound.clauses
-    : Object.entries(parsed as Record<string, unknown>).map(([k, v]) => ({ var: k, value: v }))
-
-  if (clauses.length === 0) return <span className="text-ink-muted">always</span>
-
-  const joiner = compound.op === 'or' ? ' or ' : ' and '
-  const parts: ReactNode[] = []
-  clauses.forEach((cl, i) => {
-    if (i > 0) parts.push(<span key={`j${i}`} className="text-ink-muted">{joiner}</span>)
-    parts.push(
-      <span key={`c${i}`}>
-        {name(cl.var)} <span className="text-ink-muted">{CMP[cl.cmp ?? '='] ?? 'is'}</span> {value(cl.value)}
-      </span>,
-    )
-  })
-
-  // 'hide' flips the polarity of the whole condition, so it changes the lead-in
-  // rather than adding to it — "Hidden when x is true", never "Shows when
-  // hidden when x is true".
-  return (
-    <>
-      <span className="text-ink-muted">{compound.mode === 'hide' ? 'Hidden when ' : 'Shows when '}</span>
-      {parts}
-    </>
-  )
-}
-
 function FindingRow({ finding, seriesId }: { finding: Finding; seriesId: string }) {
   const tone = TONE[finding.severity]
   const Icon = tone.icon
@@ -103,9 +51,15 @@ function FindingRow({ finding, seriesId }: { finding: Finding; seriesId: string 
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <span className="text-sm font-semibold text-ink">{finding.title}</span>
             {finding.bookTitle && (
+              // The chapter's authored title, verbatim — the same string the
+              // outline tree shows. NOT a number derived from `order`: an
+              // unnumbered chapter (a prologue) and any chapter hidden behind
+              // a condition both leave the running count short, so position 13
+              // is routinely titled "Chapter 10". Deriving one here produced a
+              // label that disagreed with the chapter it linked to.
               <span className="text-xs text-ink-muted">
                 {finding.bookTitle}
-                {finding.chapterOrder != null && ` · Chapter ${finding.chapterOrder}`}
+                {finding.chapterTitle && ` · ${finding.chapterTitle}`}
               </span>
             )}
           </div>
@@ -114,7 +68,7 @@ function FindingRow({ finding, seriesId }: { finding: Finding; seriesId: string 
 
           {finding.condition && (
             <p className="mt-2 overflow-x-auto rounded border border-accent/10 bg-surface-base px-2.5 py-2 text-xs leading-relaxed">
-              <ConditionText raw={finding.condition} />
+              <ConditionSentence raw={finding.condition} />
             </p>
           )}
 
@@ -141,7 +95,7 @@ function FindingRow({ finding, seriesId }: { finding: Finding; seriesId: string 
                 rel="noopener noreferrer"
                 className="ml-auto inline-flex items-center gap-1.5 rounded border border-accent/30 bg-surface-overlay px-2.5 py-1 text-[11px] font-medium text-ink transition hover:border-accent/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
-                Open Chapter {finding.chapterOrder} <LuExternalLink size={11} />
+                Open {finding.chapterTitle ?? 'chapter'} <LuExternalLink size={11} />
               </a>
             ) : (
               <span className="ml-auto text-[11px] text-ink-muted">Series-wide — no single chapter</span>

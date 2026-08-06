@@ -25,6 +25,7 @@ import { substituteVarTemplates } from '@/lib/templateVars'
 import { matchesCondition, type StoryState, type Condition } from '@/lib/storyEngine'
 import { resolveChapter, buildStoryState, varTypeMap } from '@/lib/chapterResolve'
 import PathConfigModal from '@/components/editor/PathConfigModal'
+import ChapterReachabilityBanner from '@/components/editor/ChapterReachabilityBanner'
 
 type Block = {
   id: string; order: number; type: string
@@ -1539,6 +1540,13 @@ export default function ChapterEditorPage() {
             <button onClick={clearLensRef.current} className="ml-auto shrink-0 text-accent hover:underline">Clear path</button>
           </div>
         )}
+
+        {/* Sits below the path-lens notice and above the blocks: both are
+            statements about this chapter as a whole, and this one is about
+            what a reader can never get to, which belongs before the prose
+            rather than buried in the dock (LOOM-122). Renders nothing when
+            the chapter is clean. */}
+        <ChapterReachabilityBanner seriesId={seriesId} chapterId={chapterId} />
 
         {/* Each block row reserves a 23px gutter on its right (8px gap + the
             15px delete/collapse column), which made the cards sit 23px further
