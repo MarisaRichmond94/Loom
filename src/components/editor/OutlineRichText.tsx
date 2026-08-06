@@ -20,6 +20,7 @@ export default function OutlineRichText({
   onBlur,
   placeholder,
   editable = true,
+  scrollable = true,
 }: {
   /** HTML string. */
   value: string
@@ -27,6 +28,8 @@ export default function OutlineRichText({
   onBlur?: () => void
   placeholder?: string
   editable?: boolean
+  /** Whether the summary can scroll — off while the card isn't active, so a long summary just clips. */
+  scrollable?: boolean
 }) {
   const editor = useEditor({
     immediatelyRender: false,
@@ -94,7 +97,11 @@ export default function OutlineRichText({
         )}
       </div>
 
-      <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-1.5 py-1">
+      <div
+        className={`relative min-h-0 flex-1 overscroll-contain px-1.5 py-1 ${
+          scrollable ? 'overflow-y-auto' : 'overflow-hidden'
+        }`}
+      >
         {editor.isEmpty && placeholder && (
           <span className="pointer-events-none absolute left-1.5 top-1 select-none text-[11px] text-ink-faint/60">
             {placeholder}

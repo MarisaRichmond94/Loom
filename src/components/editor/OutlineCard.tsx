@@ -54,6 +54,7 @@ export default function OutlineCard({
   dragStyle?: React.CSSProperties
   isDragging?: boolean
 }) {
+  const [active, setActive] = useState(false)
   const [pov, setPov] = useState(card.pov ?? '')
   const [povFocused, setPovFocused] = useState(false)
   const [date, setDate] = useState(card.date ?? '')
@@ -96,11 +97,12 @@ export default function OutlineCard({
       style={dragStyle}
       {...dragAttributes}
       {...dragListeners}
+      onClick={() => setActive(a => !a)}
       className={`group relative flex h-[250px] flex-col overflow-hidden rounded-lg transition-colors ${
         synced
           ? 'border border-accent/10 bg-surface-raised hover:border-accent/25'
           : 'border-2 border-dashed border-accent/40 bg-surface-raised/70 hover:border-accent/60'
-      } ${isDragging ? 'cursor-grabbing opacity-50' : 'cursor-grab'}`}
+      } ${active ? 'ring-2 ring-purple-400/60' : ''} ${isDragging ? 'cursor-grabbing opacity-50' : 'cursor-grab'}`}
     >
       <div className="flex min-h-0 flex-1 flex-col px-4 py-3">
         <div className="flex items-center justify-between">
@@ -269,6 +271,7 @@ export default function OutlineCard({
             }}
             editable={!disabled}
             placeholder="Plan / summary…"
+            scrollable={active}
           />
         </div>
       </div>
