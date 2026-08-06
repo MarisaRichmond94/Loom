@@ -7,6 +7,11 @@ import { useClickOutside } from '@/components/editor/AnchoredPopover'
 import { useBookChapterTags } from './useBookChapterTags'
 import TagFilterSelect, { type FilterOption } from './TagFilterSelect'
 import EditableSummary from './EditableSummary'
+import ChaptersBoardSkeleton, {
+  CHAPTER_BOARD_H,
+  CHAPTER_CARD_H,
+  CHAPTER_GRID_GAP,
+} from './ChaptersBoardSkeleton'
 import { useTimelineData } from '@/components/timeline/useTimelineData'
 import { prefetchBookOutline } from '@/components/editor/outlineCache'
 import { htmlToParagraphs } from '@/lib/outlineCards'
@@ -63,23 +68,16 @@ function buildSummaries(cards: OutlineCard[]): SummaryMap {
   return out
 }
 
-/**
- * Every card is the SAME height, and its body scrolls.
- *
- * A grid of cards that each size to their summary reflows into a ragged mess —
- * and worse for this view, row heights then encode summary length rather than
- * anything about the story, which is noise laid over exactly the spatial signal
- * the tab exists to show.
- */
-const CARD_HEIGHT = 190
-const GRID_GAP = 12
-/**
- * The board scrolls at three and a half rows.
- *
- * The half is the point: a row cut through the middle is what tells you there
- * is more below, where a whole number of rows reads as the end of the list.
- */
-const BOARD_HEIGHT = 3.5 * (CARD_HEIGHT + GRID_GAP)
+// Geometry lives in the skeleton and is imported here, not duplicated: the
+// skeleton exists to occupy the board's exact footprint, so a height defined
+// twice is a height that will eventually differ and make the tab jump on load.
+//
+// Every card is the SAME height, and its body scrolls. A grid of cards that
+// each size to their summary reflows into a ragged mess — and worse for this
+// view, row heights then encode summary length rather than anything about the
+// story, which is noise laid over exactly the spatial signal the tab shows.
+const CARD_HEIGHT = CHAPTER_CARD_H
+const GRID_GAP = CHAPTER_GRID_GAP
 
 function ChapterCard({
   row,
@@ -277,10 +275,8 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
 
   if (loading && chapters.length === 0) {
     return (
-      <div className="grid animate-pulse gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="h-[150px] rounded-lg border border-accent/10 bg-surface-raised/50" />
-        ))}
+      <div className="animate-pulse">
+        <ChaptersBoardSkeleton />
       </div>
     )
   }
@@ -362,7 +358,7 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
           if (e.target === e.currentTarget) setActiveId(null)
         }}
         className="overflow-y-auto pr-1 pt-1"
-        style={{ maxHeight: BOARD_HEIGHT + 4 }}
+        style={{ maxHeight: CHAPTER_BOARD_H }}
       >
         <div
           style={{

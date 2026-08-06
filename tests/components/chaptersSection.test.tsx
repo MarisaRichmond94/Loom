@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ChaptersSection from '@/components/chapters/ChaptersSection'
 import type { BookChapterRow } from '@/lib/bookChapterTags'
+import { CHAPTER_CARD_H } from '@/components/chapters/ChaptersBoardSkeleton'
 
 // The Chapters tab (LOOM-120/121). The cases worth pinning are the ones the
 // Outline tab gets wrong by construction: a branch chapter must appear, under
@@ -34,11 +35,14 @@ const CHAPTERS: BookChapterRow[] = [
   { chapterId: 'c5', title: 'Chapter 4', order: 6, chapterNumber: 4, offCanon: false, manualSummary: null, characters: [], events: [] },
 ]
 
+// Mutable so one test can drive the loading state. Referenced only inside the
+// factory's FUNCTION body, which runs at render time — a direct reference in
+// the factory itself would hit the TDZ, since jest hoists the mock above this.
+const mockChapterState = { chapters: CHAPTERS, loading: false, failed: false }
+
 jest.mock('@/components/chapters/useBookChapterTags', () => ({
   useBookChapterTags: () => ({
-    chapters: CHAPTERS,
-    loading: false,
-    failed: false,
+    ...mockChapterState,
     refresh: jest.fn(),
     applyManualSummary: jest.fn(),
   }),
@@ -81,6 +85,12 @@ jest.mock('@/components/editor/outlineCache', () => ({
     reason: null,
   }),
 }))
+
+beforeEach(() => {
+  mockChapterState.chapters = CHAPTERS
+  mockChapterState.loading = false
+  mockChapterState.failed = false
+})
 
 function setup() {
   return render(<ChaptersSection seriesId="s1" bookId="b1" />)
@@ -183,6 +193,29 @@ describe('ChaptersSection', () => {
 
     // Chapter 1 no longer matches, and its summary is still on screen.
     expect(screen.getByText('Chase meets Emma.')).toBeInTheDocument()
+  })
+})
+
+describe('ChaptersSection loading', () => {
+  it('holds the board’s real footprint while loading', async () => {
+    // The skeleton exists to occupy the space the board is about to take. If it
+    // guesses, the tab settles and then jumps — worse than no skeleton at all.
+    // Both sides import one height constant; this pins that they still agree.
+    mockChapterState.loading = true
+    mockChapterState.chapters = []
+
+    const { container } = setup()
+    // The grid's own children — not `[style*="height"]`, which also matches the
+    // board container's max-height.
+    const grid = container.querySelector('[style*="grid-template-columns"]')!
+    expect(grid.childElementCount).toBeGreaterThan(0)
+    for (const card of Array.from(grid.children)) {
+      expect((card as HTMLElement).style.height).toBe(`${CHAPTER_CARD_H}px`)
+    }
+
+    // The filter bar is drawn too — omitting it lets the whole board slide down
+    // the moment the real one arrives.
+    expect(container.querySelectorAll('.w-52')).toHaveLength(2)
   })
 })
 

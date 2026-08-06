@@ -1,0 +1,77 @@
+// Placeholder board for the Chapters tab (LOOM-120/121).
+//
+// Same contract as OutlineBoardSkeleton, and the same reason: the geometry
+// lives HERE and the real board imports it, so the card's height can only ever
+// be changed in one place. A skeleton that guesses is worse than none — the tab
+// settles and then jumps when the guess turns out wrong, which is the very
+// thing a skeleton is for.
+//
+// It also draws the FILTER BAR, not just the cards. The bar is two fields tall
+// and sits above the board; a skeleton that omits it lets the whole board slide
+// down the moment the real one appears.
+
+/** The real card height. Imported by ChaptersSection — do not duplicate. */
+export const CHAPTER_CARD_H = 190
+export const CHAPTER_GRID_GAP = 12
+/**
+ * The board scrolls at three and a half rows.
+ *
+ * The half is the point: a row cut through the middle is what tells you there
+ * is more below, where a whole number of rows reads as the end of the list.
+ * The +4 matches the board's top padding, which keeps the scroll edge off the
+ * first row's top border.
+ */
+export const CHAPTER_BOARD_H = 3.5 * (CHAPTER_CARD_H + CHAPTER_GRID_GAP) + 4
+
+/** One filter field: its label, then the control. */
+function FieldSkeleton() {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="h-3 w-16 rounded bg-surface-overlay" />
+      <div className="h-9 w-52 rounded-lg border-2 border-accent/10 bg-surface-overlay/40" />
+    </div>
+  )
+}
+
+export default function ChaptersBoardSkeleton({ cards = 15 }: { cards?: number }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <FieldSkeleton />
+        <FieldSkeleton />
+      </div>
+
+      <div className="overflow-hidden pr-1 pt-1" style={{ maxHeight: CHAPTER_BOARD_H }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+            gap: CHAPTER_GRID_GAP,
+            alignItems: 'start',
+          }}
+        >
+          {Array.from({ length: cards }, (_, i) => (
+            <div
+              key={i}
+              style={{ height: CHAPTER_CARD_H }}
+              // border-2, matching the real card — the board is drawn at the
+              // active card's thickness so nothing shifts by a pixel when the
+              // real one arrives.
+              className="flex flex-col gap-2 rounded-lg border-2 border-accent/10 bg-surface-raised px-3.5 py-3"
+            >
+              {/* Title */}
+              <div className="h-3.5 w-24 rounded bg-surface-muted" />
+              {/* Summary — the card's body, which is most of its height */}
+              <div className="mt-1 flex flex-1 flex-col gap-1.5">
+                <div className="h-2 w-full rounded bg-surface-overlay" />
+                <div className="h-2 w-11/12 rounded bg-surface-overlay" />
+                <div className="h-2 w-full rounded bg-surface-overlay" />
+                <div className="h-2 w-4/6 rounded bg-surface-overlay" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
