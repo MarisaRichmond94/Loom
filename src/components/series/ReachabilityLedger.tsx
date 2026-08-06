@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { LuCircleCheck, LuTriangleAlert, LuCircleSlash, LuExternalLink } from 'react-icons/lu'
 import type { Finding, ReachabilityReport } from '@/lib/reachability'
 import ConditionSentence from '@/components/editor/ConditionSentence'
-import { subscribeReachabilityChanged } from '@/lib/reachabilitySync'
+import { subscribeReachabilityRevalidate } from '@/lib/reachabilitySync'
 
 // The Paths tab (LOOM-122) — every branch no reader can reach.
 //
@@ -124,7 +124,7 @@ export default function ReachabilityLedger({ seriesId }: { seriesId: string }) {
   // several saves as clauses are attached.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null
-    const unsubscribe = subscribeReachabilityChanged(() => {
+    const unsubscribe = subscribeReachabilityRevalidate(() => {
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => setRevision(r => r + 1), 600)
     })

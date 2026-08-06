@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { LuTriangleAlert, LuCircleSlash, LuChevronDown, LuExternalLink, LuLocate } from 'react-icons/lu'
 import type { Finding, ReachabilityReport } from '@/lib/reachability'
 import ConditionSentence from '@/components/editor/ConditionSentence'
-import { subscribeReachabilityChanged } from '@/lib/reachabilitySync'
+import { subscribeReachabilityRevalidate } from '@/lib/reachabilitySync'
 
 // Reachability for the chapter you are actually writing (LOOM-122).
 //
@@ -57,7 +57,7 @@ export default function ChapterReachabilityBanner({
   // once she stops.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null
-    const unsubscribe = subscribeReachabilityChanged(() => {
+    const unsubscribe = subscribeReachabilityRevalidate(() => {
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => setRevision(r => r + 1), 600)
     })
