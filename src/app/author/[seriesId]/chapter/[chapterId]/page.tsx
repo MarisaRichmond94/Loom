@@ -39,6 +39,10 @@ type Chapter = { id: string; title: string; pov: string | null; date: string | n
 // picker draw on the same records (LOOM-88).
 type Character = { id: string; name: string; aliases?: string | null; photoUrl?: string | null; age?: number | null }
 
+// How often the chapter-stats panel (word count, reading time, …) recomputes
+// from live editor state while this page is mounted (LOOM-123).
+const STATS_POLL_MS = 3000
+
 // Published to the header's shortcut menu while this page is mounted. Module
 // level so the identity is stable across renders (it's an effect dependency).
 // Adding a shortcut below means adding its handler in the keydown switch too.
@@ -117,6 +121,14 @@ export default function ChapterEditorPage() {
   const [actionMenuOpen, setActionMenuOpen] = useState(false)
   // Chapter stats panel (LOOM-109) — toggled by its header button or ⌥⇧0.
   const [statsOpen, setStatsOpen] = useState(false)
+  // Ticks every STATS_POLL_MS so chapterStats (below) recomputes on a timer
+  // instead of only when some unrelated state change happens to re-render
+  // this component. currentBlocksRef is a ref BlockEditor mutates on every
+  // keystroke (LOOM-123) — mutating a ref doesn't itself trigger a re-render
+  // of this parent, so without this tick the panel shows whatever word count
+  // was current the last time something else (opening the panel, moving focus
+  // to a different block) happened to re-render it.
+  const [statsTick, setStatsTick] = useState(0)
   // Below 576px the search bar's case/word/replace toggles move into this
   // popover (opened via a single icon) so the input itself keeps its width.
   const [searchOptionsOpen, setSearchOptionsOpen] = useState(false)
@@ -786,6 +798,16 @@ export default function ChapterEditorPage() {
     }
   }, [panelOpen, panelWidth])
 
+  // Poll for chapterStats recomputation (LOOM-123). currentBlocksRef updates
+  // on every keystroke but is a ref, so it doesn't schedule a re-render on
+  // its own — this tick is what keeps the stats panel's word count from
+  // going stale until some unrelated re-render (opening the panel, moving
+  // focus) happens to pick up the latest text.
+  useEffect(() => {
+    const id = setInterval(() => setStatsTick(t => t + 1), STATS_POLL_MS)
+    return () => clearInterval(id)
+  }, [])
+
   // Keep stable refs so the hotkey listener never goes stale
   const addBlockRef = useRef<(type: string) => Promise<void>>(async () => {})
   const addChoiceBlockRef = useRef<() => Promise<void>>(async () => {})
@@ -1092,7 +1114,10 @@ export default function ChapterEditorPage() {
 
   // Chapter stats (LOOM-109) — resolved off the same live editor state and
   // path lens as Copy/Review (buildCanonText), so the numbers agree with
-  // what those already show for the active path.
+  // what those already show for the active path. statsTick is otherwise
+  // unused below; it exists purely to force this recompute on a timer
+  // (LOOM-123).
+  void statsTick
   const chapterStats = computeChapterStats(buildCanonText())
 
   return (
