@@ -3,6 +3,7 @@
 import { memo, useState, useEffect, useMemo, useRef } from 'react'
 import type { Editor } from '@tiptap/core'
 import { useSearchParams } from 'next/navigation'
+import { affectsReachability, notifyReachabilityChanged } from '@/lib/reachabilitySync'
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
@@ -701,7 +702,14 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
         } catch {
           // Network failure — fall through to retry.
         }
-        if (res?.ok) return
+        if (res?.ok) {
+          // Tell the reachability surfaces to re-ask, but only for saves that
+          // can change the answer — prose content is the high-frequency case
+          // and never affects it (LOOM-122). After the response, so nothing
+          // refetches against a write that has not landed.
+          if (affectsReachability(data)) notifyReachabilityChanged()
+          return
+        }
         // 404 means the record was deleted while a save was in flight —
         // deleteBlock discards pending saves, so this race is benign.
         if (res?.status === 404) return
@@ -908,6 +916,8 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     setBlocks(prev => prev.map(b =>
       b.id !== blockId ? b : { ...b, overrides: [...b.overrides, newOverride] }
     ))
+    // Adding an alternative changes what the ones below it can still catch.
+    notifyReachabilityChanged()
   }
 
   function updateOverride(overrideId: string, data: object) {
@@ -937,6 +947,8 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
       b.id !== block.id ? b : { ...b, overrides: b.overrides.filter(o => o.id !== overrideId) }
     ))
     await fetch(`/api/blocks/${block.id}/overrides/${overrideId}`, { method: 'DELETE' })
+    // Removing one can make a later alternative reachable for the first time.
+    notifyReachabilityChanged()
   }
 
   function handleDragStart(event: DragStartEvent) {

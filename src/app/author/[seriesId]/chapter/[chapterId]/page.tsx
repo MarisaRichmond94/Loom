@@ -25,6 +25,7 @@ import { substituteVarTemplates } from '@/lib/templateVars'
 import { matchesCondition, type StoryState, type Condition } from '@/lib/storyEngine'
 import { resolveChapter, buildStoryState, varTypeMap } from '@/lib/chapterResolve'
 import PathConfigModal from '@/components/editor/PathConfigModal'
+import ChapterReachabilityBanner from '@/components/editor/ChapterReachabilityBanner'
 
 type Block = {
   id: string; order: number; type: string
@@ -1101,6 +1102,14 @@ export default function ChapterEditorPage() {
     <div className="flex min-h-full">
     <div className="flex-1 min-w-0 px-8 min-h-full flex flex-col">
       <div className="pb-3 flex-1">
+        {/* Above the sticky header, so it is the first thing on the page
+            rather than something found on the way to the prose (LOOM-122).
+            Deliberately NOT inside the sticky box: that block publishes its
+            own height as --loom-chapter-header-h for every scroll target on
+            the page, and a banner that expands and collapses inside it would
+            move all of them. Renders nothing when the chapter is clean. */}
+        <ChapterReachabilityBanner seriesId={seriesId} chapterId={chapterId} />
+
         {/* Chapter header — sticky to the top of <main>'s scroll area so the
             title, POV, date, find bar, collapse-all and ☰ action menu stay
             reachable at any depth in the chapter (KAN-30).
