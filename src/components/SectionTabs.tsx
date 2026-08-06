@@ -51,11 +51,27 @@ export type Section = {
 export default function SectionTabs({
   sections,
   className = 'mb-8',
+  initialId,
 }: {
   sections: Section[]
   className?: string
+  /**
+   * Tab to open on mount, instead of the first one.
+   *
+   * Deliberately a prop driven by an explicit link, not a remembered "last
+   * tab" — LOOM-111 made this page always open on its first tab, and that
+   * stands: arriving at the series page should be predictable. This is the
+   * different case of arriving with a stated destination, the way the chapter
+   * banner's "Show all issues" does.
+   *
+   * An id that matches no section falls back to the first, so a stale or
+   * mistyped link lands somewhere real rather than on an empty page.
+   */
+  initialId?: string
 }) {
-  const [activeId, setActiveId] = useState(sections[0]?.id)
+  const [activeId, setActiveId] = useState(
+    initialId && sections.some(s => s.id === initialId) ? initialId : sections[0]?.id,
+  )
   const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   /** Content height right before a tab switch, so the swap can animate FROM

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { LuDatabaseBackup, LuEye, LuPencilLine } from 'react-icons/lu'
 import dynamic from 'next/dynamic'
 import { useAuthor } from '@/lib/authorContext'
@@ -66,6 +66,10 @@ function SeriesTimelineTab({ seriesId }: { seriesId: string }) {
 export default function AuthorSeriesPage() {
   const { seriesId } = useParams() as { seriesId: string }
   const router = useRouter()
+  // ?tab=<id> opens the page on a named tab. Only set by links that mean it —
+  // the chapter banner's "Show all issues" — so the plain series URL keeps
+  // opening on Book(s) as LOOM-111 intended.
+  const tabParam = useSearchParams()?.get('tab') ?? undefined
   const { series, loadSeries } = useAuthor()
   const [bookStats, setBookStats] = useState<Record<string, BookStats>>({})
   const [statsLoaded, setStatsLoaded] = useState(false)
@@ -265,6 +269,7 @@ export default function AuthorSeriesPage() {
             existing muscle-memory click expects; the other two are new
             surfaces that nobody has yet formed a habit around. */}
         <SectionTabs
+          initialId={tabParam}
           sections={[{
             id: 'books',
             label: 'Book(s)',

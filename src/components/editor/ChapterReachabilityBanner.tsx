@@ -185,14 +185,17 @@ export default function ChapterReachabilityBanner({
                 is a violet; this sits on choice-kill-bg, which is a deep red in
                 dark mode and a mid red in light — the violet is close enough to
                 both to read as muddy rather than as a link. Same treatment as
-                the ledger's own control, so the two surfaces match. */}
+                the ledger's own control, so the two surfaces match.
+
+                `?tab=paths` so it lands on the ledger rather than on Book(s),
+                which is where the series page otherwise opens. */}
             <a
-              href={`/author/${seriesId}`}
+              href={`/author/${seriesId}?tab=paths`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex w-fit items-center gap-1.5 rounded border border-accent/30 bg-surface-overlay px-2.5 py-1 text-[11px] font-medium text-ink transition hover:border-accent/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="self-end inline-flex w-fit items-center gap-1.5 rounded border border-accent/30 bg-surface-overlay px-2.5 py-1 text-[11px] font-medium text-ink transition hover:border-accent/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
-              See every path in the series <LuExternalLink size={10} />
+              Show all issues <LuExternalLink size={10} />
             </a>
           </div>
         </div>
