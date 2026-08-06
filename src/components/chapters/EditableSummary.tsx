@@ -18,6 +18,7 @@ export default function EditableSummary({
   chapterId,
   initial,
   disabled = false,
+  scrolls = false,
   onSaved,
 }: {
   chapterId: string
@@ -26,6 +27,9 @@ export default function EditableSummary({
    *  scrollable — a de-emphasised card that still takes the pointer reads as
    *  an active one. */
   disabled?: boolean
+  /** The card is active (clicked). Only then may this take the wheel — a board
+   *  of independently scrollable cards steals scrolling from the board. */
+  scrolls?: boolean
   /** Lets the tab hold the saved text without re-fetching the whole book. */
   onSaved: (body: string) => void
 }) {
@@ -108,12 +112,14 @@ export default function EditableSummary({
         placeholder="Add a summary…"
         aria-label="Chapter summary"
         className={`min-h-0 w-full flex-1 resize-none rounded border border-transparent bg-transparent text-[11px] leading-relaxed text-ink-faint outline-none transition placeholder:italic placeholder:text-ink-faint ${
+          // overflow is driven by ACTIVE, not by disabled: an enabled textarea
+          // on an inactive card would still take the wheel, which is the thing
+          // that makes scrolling the board a game of aiming at the gaps.
+          scrolls ? 'overflow-y-auto' : 'overflow-hidden'
+        } ${
           disabled
-            ? // overflow-hidden, not just disabled: a disabled textarea still
-              // scrolls under a wheel event in some browsers, and the whole
-              // point is that a filtered-out card does not move.
-              'cursor-default overflow-hidden'
-            : 'overflow-y-auto hover:border-accent/20 focus:border-accent/40 focus:bg-surface-overlay/30 focus:text-ink'
+            ? 'cursor-default'
+            : 'hover:border-accent/20 focus:border-accent/40 focus:bg-surface-overlay/30 focus:text-ink'
         }`}
       />
       {state !== 'idle' && (

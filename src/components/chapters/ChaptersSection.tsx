@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { LuExternalLink, LuGitBranch } from 'react-icons/lu'
+import { useClickOutside } from '@/components/editor/AnchoredPopover'
 import { useBookChapterTags } from './useBookChapterTags'
 import TagFilterSelect, { type FilterOption } from './TagFilterSelect'
 import EditableSummary from './EditableSummary'
@@ -88,6 +89,8 @@ function ChapterCard({
   filtering,
   gap,
   isFirstMatch,
+  active,
+  onActivate,
   onSummarySaved,
 }: {
   row: BookChapterRow
@@ -99,6 +102,8 @@ function ChapterCard({
    *  match, and only while filtering. */
   gap: number
   isFirstMatch: boolean
+  active: boolean
+  onActivate: () => void
   onSummarySaved: (chapterId: string, body: string) => void
 }) {
   // Faded, never resized and never re-flowed. Two earlier versions got this
@@ -108,21 +113,36 @@ function ChapterCard({
   // visibly rearranged the board. The gap is now a label inside the matching
   // card, and filtering changes nothing but colour.
   const faded = filtering && !matched
+  // Only the ACTIVE card scrolls its own summary. A board of independently
+  // scrollable cards steals the wheel from the board itself, so scrolling the
+  // list means aiming the pointer at a gap between cards. A card takes the
+  // wheel only once it has been clicked, which makes that deliberate.
+  const scrolls = active && !faded
 
   return (
     <div
+      onClick={faded ? undefined : onActivate}
       style={{ height: CARD_HEIGHT }}
-      className={`group relative flex flex-col overflow-hidden rounded-lg border bg-surface-raised px-3.5 py-3 transition-[opacity,border-color] ${
-        row.offCanon ? 'border-dashed border-amber-500/40' : 'border-accent/10'
-      } ${matched && filtering ? 'ring-1 ring-accent/40' : ''} ${
+      // border-2 on EVERY card, not just the active one: switching between 1px
+      // and 2px changes the box by a pixel on each side, so the whole grid
+      // would nudge as the selection moved.
+      className={`group relative flex flex-col overflow-hidden rounded-lg border-2 bg-surface-raised px-3.5 py-3 transition-[opacity,border-color] ${
+        matched && filtering ? 'ring-1 ring-accent/40' : ''
+      } ${
+        active
+          ? 'border-accent'
+          : row.offCanon
+            ? 'border-dashed border-amber-500/40'
+            : 'border-accent/10'
+      } ${
         // A faded card is inert: no hover lift, no border change, no revealed
         // controls. Reacting to the pointer is what makes a de-emphasised card
         // read as an active one.
         faded
           ? 'opacity-40'
-          : row.offCanon
-            ? 'hover:border-amber-500/60'
-            : 'hover:border-accent/25'
+          : active
+            ? ''
+            : `cursor-pointer ${row.offCanon ? 'hover:border-amber-500/60' : 'hover:border-accent/25'}`
       }`}
     >
       <div className="flex shrink-0 items-start justify-between gap-2">
@@ -157,15 +177,15 @@ function ChapterCard({
             chapterId={row.chapterId}
             initial={row.manualSummary ?? ''}
             disabled={faded}
+            scrolls={scrolls}
             onSaved={body => onSummarySaved(row.chapterId, body)}
           />
         ) : (
           // Read-only: this text is WriteAI's, joined one direction only.
-          // Scrolls only when the card is live — a filtered-out card must not
-          // move under the pointer any more than it lights up under it.
+          // Scrolls only while the card is active, so the board keeps the wheel.
           <p
             className={`min-h-0 flex-1 text-[11px] leading-relaxed text-ink-faint ${
-              faded ? 'overflow-hidden' : 'overflow-y-auto'
+              scrolls ? 'overflow-y-auto' : 'overflow-hidden'
             }`}
           >
             {summary?.text ?? <span className="italic">No summary yet.</span>}
@@ -193,6 +213,18 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
 
   const [characterId, setCharacterId] = useState<string | null>(null)
   const [eventId, setEventId] = useState<string | null>(null)
+
+  /**
+   * The card that currently owns the wheel.
+   *
+   * Cards do not scroll until clicked. Nested scroll containers capture the
+   * wheel wherever the pointer happens to be, so a board of independently
+   * scrollable cards makes scrolling the BOARD a matter of aiming at the gaps
+   * between them. Clicking is the opt-in.
+   */
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const boardRef = useRef<HTMLDivElement>(null)
+  useClickOutside([boardRef], () => setActiveId(null), activeId !== null)
 
   // Summaries, joined read-only from the outline the Outline tab already
   // fetched. Through the shared cache, so this does not add a second
@@ -320,8 +352,18 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
 
       {/* Scrolls at three and a half rows, so the board never pushes the rest
           of the page off screen on a 90-chapter book. `pr` leaves room for the
-          scrollbar so it does not sit on top of the last column. */}
-      <div className="overflow-y-auto pr-1" style={{ maxHeight: BOARD_HEIGHT }}>
+          scrollbar so it does not sit on top of the last column, and `pt` keeps
+          the scroll edge off the first row's top border, which it otherwise
+          clips. Clicking the padding (i.e. not a card) hands the wheel back to
+          the board. */}
+      <div
+        ref={boardRef}
+        onClick={e => {
+          if (e.target === e.currentTarget) setActiveId(null)
+        }}
+        className="overflow-y-auto pr-1 pt-1"
+        style={{ maxHeight: BOARD_HEIGHT + 4 }}
+      >
         <div
           style={{
             display: 'grid',
@@ -346,6 +388,8 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
                 filtering={filtering}
                 gap={idx === undefined ? 0 : gaps[idx]}
                 isFirstMatch={idx === 0}
+                active={activeId === row.chapterId}
+                onActivate={() => setActiveId(row.chapterId)}
                 onSummarySaved={applyManualSummary}
               />
             )

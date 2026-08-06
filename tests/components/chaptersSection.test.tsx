@@ -186,6 +186,72 @@ describe('ChaptersSection', () => {
   })
 })
 
+describe('ChaptersSection card activation', () => {
+  /** The card element for a chapter, by its title. */
+  function cardFor(title: string) {
+    return screen.getByText(title).closest('div.group') as HTMLElement
+  }
+
+  it('does not scroll a card until it is clicked', async () => {
+    // The whole point: nested scroll containers capture the wheel wherever the
+    // pointer is, so an always-scrollable card makes scrolling the BOARD a
+    // matter of aiming at the gaps between cards.
+    setup()
+    await screen.findByText('Chase meets Emma.')
+    const summary = screen.getByText('Chase meets Emma.')
+    expect(summary.className).toContain('overflow-hidden')
+
+    await userEvent.click(cardFor('Chapter 1'))
+    await waitFor(() => expect(summary.className).toContain('overflow-y-auto'))
+  })
+
+  it('marks the active card with the accent border', async () => {
+    setup()
+    const card = cardFor('Chapter 1')
+    // classList, not a substring match: the INACTIVE border is `border-accent/10`,
+    // which contains "border-accent" and would pass a naive assertion.
+    expect(card.classList.contains('border-accent')).toBe(false)
+
+    await userEvent.click(card)
+    await waitFor(() => expect(card.classList.contains('border-accent')).toBe(true))
+    // Thickness is constant so the grid cannot nudge as the selection moves.
+    expect(card.classList.contains('border-2')).toBe(true)
+  })
+
+  it('moves activation to the card you click next', async () => {
+    setup()
+    const first = cardFor('Chapter 1')
+    const second = cardFor('Chapter 2')
+
+    await userEvent.click(first)
+    await waitFor(() => expect(first.classList.contains('border-accent')).toBe(true))
+
+    await userEvent.click(second)
+    await waitFor(() => expect(second.classList.contains('border-accent')).toBe(true))
+    expect(first.classList.contains('border-accent')).toBe(false)
+  })
+
+  it('deactivates when you click away', async () => {
+    setup()
+    const card = cardFor('Chapter 1')
+    await userEvent.click(card)
+    await waitFor(() => expect(card.classList.contains('border-accent')).toBe(true))
+
+    await userEvent.click(document.body)
+    await waitFor(() => expect(card.classList.contains('border-accent')).toBe(false))
+  })
+
+  it('a faded card cannot be activated', async () => {
+    setup()
+    await pick(/Any character/, 'Emma Bradford')
+    await waitFor(() => expect(screen.getByText('1 of 6 chapter(s)')).toBeInTheDocument())
+
+    const faded = cardFor('Chapter 1')
+    await userEvent.click(faded)
+    expect(faded.classList.contains('border-accent')).toBe(false)
+  })
+})
+
 describe('ChaptersSection summaries', () => {
   it('lets a branch chapter be edited in place, prefilled', async () => {
     setup()
