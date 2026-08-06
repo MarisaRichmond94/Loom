@@ -31,6 +31,9 @@ export type ChapterIn = {
   id: string
   title: string
   order: number
+  /** The writer's own summary (ChapterSummary), absent for the great majority
+   *  of chapters, which take theirs from WriteAI's outline card instead. */
+  manualSummary?: string | null
 }
 
 export type TaggedEntity = {
@@ -68,6 +71,16 @@ export type BookChapterRow = {
    * badge ordinary named chapters as branch content.
    */
   offCanon: boolean
+  /**
+   * The writer's own summary, or null.
+   *
+   * Only branch chapters are expected to carry one — they are the chapters with
+   * no outline card and no way to get one. Kept as its own field rather than
+   * merged with the WriteAI summary on the server, because the client must be
+   * able to tell them apart: one is editable in place and the other is a
+   * read-only join it must never write back through.
+   */
+  manualSummary: string | null
   characters: TaggedEntity[]
   events: TaggedEntity[]
 }
@@ -127,6 +140,7 @@ export function groupBookChapterTags(
         order: c.order,
         chapterNumber: numbers.get(c.id) ?? null,
         offCanon: !numbers.has(c.id),
+        manualSummary: c.manualSummary ?? null,
         characters: bucket.characters,
         events: bucket.events,
       }

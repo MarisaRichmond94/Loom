@@ -46,7 +46,10 @@ export async function GET(_: Request, { params }: Params) {
   const [chapters, characterRows, eventRows] = await Promise.all([
     prisma.chapter.findMany({
       where: { bookId },
-      select: { id: true, title: true, order: true },
+      // `summary` is joined explicitly, not spread. It lives in its own table
+      // precisely so its body does NOT ride along in the bulk chapter queries
+      // the outline tree and book page run; this view is the one that needs it.
+      select: { id: true, title: true, order: true, summary: { select: { body: true } } },
       orderBy: { order: 'asc' },
     }),
     prisma.chapterCharacter.findMany({
@@ -74,7 +77,12 @@ export async function GET(_: Request, { params }: Params) {
 
   return NextResponse.json({
     chapters: groupBookChapterTags(
-      chapters,
+      chapters.map(c => ({
+        id: c.id,
+        title: c.title,
+        order: c.order,
+        manualSummary: c.summary?.body ?? null,
+      })),
       toTagRow(characterRows, 'writerCharacterId'),
       toTagRow(eventRows, 'writerEventId'),
       numbers,

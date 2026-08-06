@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { LuExternalLink, LuGitBranch, LuSearch, LuX } from 'react-icons/lu'
+import { LuExternalLink, LuGitBranch } from 'react-icons/lu'
 import { useBookChapterTags } from './useBookChapterTags'
+import TagFilterSelect, { type FilterOption } from './TagFilterSelect'
+import EditableSummary from './EditableSummary'
 import { useTimelineData } from '@/components/timeline/useTimelineData'
 import { prefetchBookOutline } from '@/components/editor/outlineCache'
 import { htmlToParagraphs } from '@/lib/outlineCards'
@@ -26,8 +28,13 @@ import type { OutlineCard } from '@/lib/writerOutline'
 // PRUNED by WriteAI's `_auto_reconcile`, which drops any card whose `loom_id` is
 // absent from the manifest. So the sequence comes from Loom and the summaries
 // are joined ON to it, read-only, one direction only. Nothing here writes.
-
-type Mode = 'characters' | 'events'
+//
+// The two filters are AND-ed, and there is no character/event mode switch. A
+// switch was the first shape and it was one control too many: it had to clear
+// the selection on every flip (a character id means nothing in event mode), so
+// it spent its existence undoing the user's last action. Two independent
+// fields cost the same space, never fight each other, and answer "which
+// chapters have Chase AND the heist" for free.
 
 /** Summaries keyed by Loom chapter id, joined from the outline read-only. */
 type SummaryMap = Record<string, { text: string; source: 'writer' | 'machine' }>
@@ -55,30 +62,6 @@ function buildSummaries(cards: OutlineCard[]): SummaryMap {
   return out
 }
 
-function Chip({
-  label,
-  active,
-  onClick,
-}: {
-  label: string
-  active: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition ${
-        active
-          ? 'bg-accent text-white'
-          : 'bg-surface-raised text-ink-faint hover:text-ink border border-accent/10'
-      }`}
-    >
-      {label}
-      {active && <LuX size={11} />}
-    </button>
-  )
-}
-
 /** The run of non-matching chapters between two matches, as a readable rule. */
 function Gap({ count }: { count: number }) {
   if (count === 0) return null
@@ -93,42 +76,49 @@ function Gap({ count }: { count: number }) {
   )
 }
 
+/**
+ * Every card is the SAME height, and its body scrolls.
+ *
+ * A grid of cards that each size to their summary reflows into a ragged mess —
+ * and worse for this view, row heights then encode summary length rather than
+ * anything about the story, which is noise laid over exactly the spatial signal
+ * the tab exists to show.
+ */
+const CARD_HEIGHT = 190
+
 function ChapterCard({
   row,
   summary,
   seriesId,
   matched,
   filtering,
+  onSummarySaved,
 }: {
   row: BookChapterRow
   summary: SummaryMap[string] | undefined
   seriesId: string
   matched: boolean
   filtering: boolean
+  onSummarySaved: (chapterId: string, body: string) => void
 }) {
-  // Dimmed rather than hidden while filtering — the gap IS the answer. A
-  // collapsed card still occupies the sequence, so the eye can count it.
-  const dim = filtering && !matched
-  if (dim) {
-    return (
-      <div
-        title={row.title}
-        className="flex h-9 items-center gap-2 overflow-hidden rounded border border-accent/5 bg-surface-raised/40 px-2.5 opacity-50"
-      >
-        <span className="truncate text-[10px] text-ink-faint">{row.title}</span>
-      </div>
-    )
-  }
+  // Faded, never resized. An earlier version collapsed non-matching cards to a
+  // thin strip; it made the whole grid jump on every filter change, and it hid
+  // the summaries of the chapters you are scanning PAST — which are often how
+  // you decide where the new chapter goes.
+  const faded = filtering && !matched
 
   return (
     <div
-      className={`group relative flex min-h-[150px] flex-col overflow-hidden rounded-lg border bg-surface-raised px-3.5 py-3 transition-colors ${
+      style={{ height: CARD_HEIGHT }}
+      className={`group relative flex flex-col overflow-hidden rounded-lg border bg-surface-raised px-3.5 py-3 transition-[opacity,border-color] ${
         row.offCanon
           ? 'border-dashed border-amber-500/40 hover:border-amber-500/60'
           : 'border-accent/10 hover:border-accent/25'
-      } ${matched && filtering ? 'ring-1 ring-accent/40' : ''}`}
+      } ${matched && filtering ? 'ring-1 ring-accent/40' : ''} ${
+        faded ? 'opacity-40 hover:opacity-100' : ''
+      }`}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex shrink-0 items-start justify-between gap-2">
         <div className="flex min-w-0 flex-col">
           {/* The AUTHORED title, verbatim — the same string the left-hand
               sidebar shows. A branch chapter reads "Bonus Chapter 1", which no
@@ -150,29 +140,35 @@ function ChapterCard({
         </Link>
       </div>
 
-      <p className="mt-2 min-h-0 flex-1 overflow-hidden text-[11px] leading-relaxed text-ink-faint">
-        {summary?.text ?? (
-          <span className="italic">
-            {row.offCanon
-              ? 'No summary — branch chapters have no outline card. Add one in the chapter’s notes.'
-              : 'No summary yet.'}
-          </span>
+      <div className="mt-2 flex min-h-0 flex-1 flex-col">
+        {row.offCanon ? (
+          // Editable in place — this chapter has no outline card and can never
+          // get one, so Loom is the only place its summary can live.
+          <EditableSummary
+            chapterId={row.chapterId}
+            initial={row.manualSummary ?? ''}
+            onSaved={body => onSummarySaved(row.chapterId, body)}
+          />
+        ) : (
+          // Read-only: this text is WriteAI's, joined one direction only.
+          <p className="min-h-0 flex-1 overflow-y-auto text-[11px] leading-relaxed text-ink-faint">
+            {summary?.text ?? <span className="italic">No summary yet.</span>}
+          </p>
         )}
-      </p>
+      </div>
     </div>
   )
 }
 
 export default function ChaptersSection({ seriesId, bookId }: { seriesId: string; bookId: string }) {
-  const { chapters, loading, failed, refresh } = useBookChapterTags(seriesId, bookId)
+  const { chapters, loading, failed, refresh, applyManualSummary } = useBookChapterTags(seriesId, bookId)
   // Shared with the Timeline tab through its cache, so opening this tab costs
   // no extra WriteAI request when Timeline has already been opened (and warms
   // it when it has not).
   const { events, characterPool, unreachable } = useTimelineData()
 
-  const [mode, setMode] = useState<Mode>('characters')
-  const [selected, setSelected] = useState<string | null>(null)
-  const [query, setQuery] = useState('')
+  const [characterId, setCharacterId] = useState<string | null>(null)
+  const [eventId, setEventId] = useState<string | null>(null)
 
   // Summaries, joined read-only from the outline the Outline tab already
   // fetched. Through the shared cache, so this does not add a second
@@ -188,33 +184,33 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
     }
   }, [seriesId, bookId])
 
-  // Switching what you filter BY must clear what you filtered TO — a character
-  // id left selected in event mode matches nothing and reads as "no results".
-  useEffect(() => setSelected(null), [mode])
-
   // Only entities actually tagged somewhere in this book. Offering the full
-  // cast would fill the picker with names whose every chip returns nothing.
-  const options = useMemo(() => {
-    const tagged = new Set(
-      chapters.flatMap(c => (mode === 'characters' ? c.characters : c.events)).map(e => e.id),
-    )
-    const named =
-      mode === 'characters'
-        ? characterPool.map(c => ({ id: c.id, name: c.name }))
-        : events.map(e => ({ id: e.id, name: e.title }))
-    return named
-      .filter(o => tagged.has(o.id))
-      .filter(o => o.name.toLowerCase().includes(query.trim().toLowerCase()))
+  // cast would fill the list with names whose every selection returns nothing.
+  const characterOptions: FilterOption[] = useMemo(() => {
+    const tagged = new Set(chapters.flatMap(c => c.characters).map(e => e.id))
+    return characterPool
+      .filter(c => tagged.has(c.id))
+      .map(c => ({ id: c.id, name: c.name }))
       .sort((a, b) => a.name.localeCompare(b.name))
-  }, [chapters, characterPool, events, mode, query])
+  }, [chapters, characterPool])
 
-  const filtering = selected !== null
+  const eventOptions: FilterOption[] = useMemo(() => {
+    const tagged = new Set(chapters.flatMap(c => c.events).map(e => e.id))
+    return events
+      .filter(e => tagged.has(e.id))
+      .map(e => ({ id: e.id, name: e.title }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [chapters, events])
+
+  const filtering = characterId !== null || eventId !== null
+  // AND, not OR: two filters set means "chapters that have both". OR would
+  // make adding a second filter widen the result, which is the opposite of
+  // what setting a filter is for.
   const matches = useMemo(
     () => (row: BookChapterRow) =>
-      selected === null
-        ? true
-        : (mode === 'characters' ? row.characters : row.events).some(e => e.id === selected),
-    [selected, mode],
+      (characterId === null || row.characters.some(c => c.id === characterId)) &&
+      (eventId === null || row.events.some(e => e.id === eventId)),
+    [characterId, eventId],
   )
 
   const gaps = useMemo(
@@ -263,33 +259,26 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-md border border-accent/10 p-0.5">
-          {(['characters', 'events'] as const).map(m => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`rounded px-2.5 py-1 text-[11px] font-medium capitalize transition ${
-                mode === m ? 'bg-accent text-white' : 'text-ink-faint hover:text-ink'
-              }`}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
-
-        <div className="relative flex items-center">
-          <LuSearch size={12} className="absolute left-2 text-ink-faint" />
-          <input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder={mode === 'characters' ? 'Find a character…' : 'Find an event…'}
-            className="w-44 rounded border border-accent/10 bg-surface-raised py-1 pl-7 pr-2 text-[11px] text-ink outline-none focus:border-accent/30"
-          />
-        </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <TagFilterSelect
+          label="Character"
+          placeholder="Any character"
+          options={characterOptions}
+          value={characterId}
+          onChange={setCharacterId}
+          emptyHint="No characters tagged in this book yet."
+        />
+        <TagFilterSelect
+          label="Event"
+          placeholder="Any event"
+          options={eventOptions}
+          value={eventId}
+          onChange={setEventId}
+          emptyHint="No events tagged in this book yet."
+        />
 
         {filtering && (
-          <span className="text-[11px] text-ink-faint">
+          <span className="pb-2.5 text-[11px] text-ink-faint">
             {matchCount} of {chapters.length} chapters
           </span>
         )}
@@ -301,25 +290,6 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
           is Loom’s and is complete.
         </p>
       )}
-
-      <div className="flex flex-wrap gap-1.5">
-        {options.length === 0 ? (
-          <span className="text-[11px] italic text-ink-faint">
-            {mode === 'characters'
-              ? 'No characters tagged in this book yet. Tag them from a chapter’s Characters tab.'
-              : 'No events tagged in this book yet. Tag them from a chapter’s Events tab.'}
-          </span>
-        ) : (
-          options.map(o => (
-            <Chip
-              key={o.id}
-              label={o.name}
-              active={selected === o.id}
-              onClick={() => setSelected(selected === o.id ? null : o.id)}
-            />
-          ))
-        )}
-      </div>
 
       <div
         style={{
@@ -343,6 +313,7 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
                 seriesId={seriesId}
                 matched={matched}
                 filtering={filtering}
+                onSummarySaved={applyManualSummary}
               />
             </div>
           )

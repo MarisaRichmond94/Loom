@@ -20,6 +20,9 @@ export type BookChapterTags = {
    *  would read as "this book has nothing in it", which is a lie. */
   failed: boolean
   refresh: () => Promise<void>
+  /** Record a summary the writer just saved, without re-reading the book — a
+   *  refetch would re-run the canon walk to restate one card's text. */
+  applyManualSummary: (chapterId: string, body: string) => void
 }
 
 export function useBookChapterTags(seriesId: string, bookId: string): BookChapterTags {
@@ -60,5 +63,11 @@ export function useBookChapterTags(seriesId: string, bookId: string): BookChapte
     void load()
   }, [bookId, load])
 
-  return { chapters, loading, failed, refresh: load }
+  const applyManualSummary = useCallback((chapterId: string, body: string) => {
+    setChapters(rows =>
+      rows.map(r => (r.chapterId === chapterId ? { ...r, manualSummary: body || null } : r)),
+    )
+  }, [])
+
+  return { chapters, loading, failed, refresh: load, applyManualSummary }
 }
