@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+/* The SAME palette Loom resolves against — imported, never copied (LOOM-130).
+   Change an accent in shared/theme.css and both apps move together. A copy
+   would drift, and the drift reads as "the reader app feels slightly off"
+   months later. */
+@import "../../shared/theme.css";
+
+/* Tailwind v4 scans upward from this file, which would miss the shared
+   directory. Without this, a class used only in shared code is silently
+   dropped — Tailwind does not error on unknown classes, so the symptom is an
+   unstyled element rather than a build failure. */
+@source "../../shared";
+@source "../";

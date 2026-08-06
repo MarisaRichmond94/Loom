@@ -1,42 +1,6 @@
 @import "tailwindcss";
 
-@theme {
-  /* Type (LOOM-21). Content is Inter, loaded by next/font in layout.tsx; chrome
-     stays on the native UI face. Both apps carry this split — see TOKENS.md. */
-  --font-sans: var(--font-inter), system-ui, sans-serif;
-  --font-chrome: system-ui, -apple-system, sans-serif;
-
-  /* The shared palette (LOOM-6), promoted out of the UNIFIED_CHROME flag when
-     LOOM-8 retired it. Surfaces and ink are WriteAI's cooler ramp; the accent is
-     Loom's. Canonical values live in TOKENS.md, mirrored in both repos. */
-  --color-surface-base: #0f1117;
-  --color-surface-raised: #1a1d27;
-  --color-surface-overlay: #21253a;
-  --color-surface-muted: #2a2d3a;
-  --color-ink: #e8eaf0;
-  --color-ink-muted: #9da3b4;
-  --color-ink-faint: #5c627a;
-  --color-accent: #8888ff;
-  --color-accent-muted: #4a4a7a;
-  --color-choice-spare: #88cc88;
-  --color-choice-spare-bg: #1a2a1a;
-  --color-choice-spare-border: #3a5a3a;
-  --color-choice-kill: #cc8888;
-  --color-choice-kill-bg: #2a1a1a;
-  --color-choice-kill-border: #5a3a3a;
-  --color-choice-amber: #ccaa55;
-  --color-choice-amber-bg: #2a2010;
-  --color-choice-amber-border: #5a4a20;
-  --color-choice-blue: #7799cc;
-  --color-choice-blue-bg: #101a2a;
-  --color-choice-blue-border: #203a5a;
-  --color-choice-purple: #aa88cc;
-  --color-choice-purple-bg: #1e1a2a;
-  --color-choice-purple-border: #4a3a5a;
-  --color-choice-teal: #55bbaa;
-  --color-choice-teal-bg: #102420;
-  --color-choice-teal-border: #205040;
-}
+@import "../../shared/theme.css";
 
 /* ---------------------------------------------------------------------------
    Always-dark chrome (LOOM-17).

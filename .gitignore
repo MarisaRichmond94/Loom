@@ -13,9 +13,14 @@
 # testing
 /coverage
 
-# next.js
+# next.js — rooted rules cover Loom only; the reader app is a second Next app
+# with its own build output, node_modules and lockfile (LOOM-130).
 /.next/
 /out/
+/reader/.next/
+/reader/.next-stale-*/
+/reader/out/
+/reader/node_modules/
 
 # production
 /build
