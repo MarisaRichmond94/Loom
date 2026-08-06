@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
 import { LuTriangleAlert, LuCircleSlash, LuChevronDown, LuExternalLink, LuLocate } from 'react-icons/lu'
 import type { Finding, ReachabilityReport } from '@/lib/reachability'
 import ConditionSentence from '@/components/editor/ConditionSentence'
@@ -32,23 +31,39 @@ export default function ChapterReachabilityBanner({
   const [open, setOpen] = useState(false)
   // Bumped when a structural save lands, to re-ask the server.
   const [revision, setRevision] = useState(0)
-  const router = useRouter()
-  const pathname = usePathname()
 
   /**
-   * Scroll the offending block into view.
+   * Scroll the offending block into view, every time it is asked.
    *
-   * Reuses the editor's existing `?block=<id>` deep link (BlockEditor reads it
-   * from the query string and scrolls that block to centre) rather than
-   * reaching into the DOM from here — the Context modal's Origin link already
-   * navigates this way, so there is one mechanism to keep working.
+   * NOT via the editor's `?block=` deep link, which was the first attempt and
+   * silently did nothing. That link is deliberately once-per-block-id
+   * (BlockEditor's `scrolledTargetRef`, so re-renders don't yank the writer's
+   * scroll) — and arriving here from the ledger already carries `?block=<id>`
+   * for this very block, so the ref is set before the banner is ever clicked.
+   * Re-setting an identical URL is then a no-op twice over.
    *
-   * `replace`, not `push`: jumping to a block is not a place in history the
-   * writer wants Back to walk her through. `scroll: false` because the target
-   * is the block, not the top of the page.
+   * A direct scroll leaves that rule alone and is repeatable by nature. The
+   * `scroll-margin-top` on `[data-block-id]` (globals.css) keeps the target
+   * clear of the sticky header.
    */
   function onJumpToBlock(blockId: string) {
-    router.replace(`${pathname}?block=${blockId}`, { scroll: false })
+    const el = document.querySelector(`[data-block-id="${blockId}"]`)
+    if (!(el instanceof HTMLElement)) return
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' })
+    // Flash it. Without this, "Show me" on a block already in view looks like
+    // nothing happened — which is exactly how this button read before.
+    // Web Animations rather than a class, so nothing is left on a node React
+    // owns and there is no cleanup to leak.
+    if (reduced) return
+    el.animate(
+      [
+        { boxShadow: '0 0 0 0px var(--color-accent)' },
+        { boxShadow: '0 0 0 3px var(--color-accent)' },
+        { boxShadow: '0 0 0 0px var(--color-accent)' },
+      ],
+      { duration: 1200, easing: 'ease-out' },
+    )
   }
 
   // Re-check after any edit that can change the answer, so fixing a branch
@@ -141,7 +156,7 @@ export default function ChapterReachabilityBanner({
                 <p className="text-xs font-semibold text-ink">{f.title}</p>
                 {f.condition && (
                   <p className="mt-1 text-[11px] leading-relaxed">
-                    <ConditionSentence raw={f.condition} />
+                    <ConditionSentence raw={f.condition} copyable />
                   </p>
                 )}
                 <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">{f.detail}</p>
