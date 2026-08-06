@@ -40,7 +40,9 @@ export default function TagFilterSelect({
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const anchorRef = useRef<HTMLButtonElement>(null)
+  // The whole field is the anchor now, not the trigger button — so the popover
+  // lines up with the control's full width rather than with one control inside it.
+  const anchorRef = useRef<HTMLDivElement>(null)
   const popRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -59,34 +61,50 @@ export default function TagFilterSelect({
     <div className="flex flex-col gap-1">
       <span className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">{label}</span>
 
-      <div className="relative flex items-center">
+      {/* The three controls are flex SIBLINGS, not an absolutely-positioned
+          clear button laid over the trigger. Overlaying put the ✕ on top of
+          the caret, because the caret sits inside the trigger's own padding
+          and the two were positioned from the same edge independently. Laid
+          out in a row, they cannot collide however the label is sized. */}
+      <div
+        ref={anchorRef}
+        className={`flex w-52 items-center gap-1 rounded-lg border bg-surface-overlay/40 py-2 pl-3 pr-2 text-sm transition ${
+          selected ? 'border-accent/40 text-ink' : 'border-accent/20 text-ink-faint'
+        } hover:border-accent/50`}
+      >
         <button
-          ref={anchorRef}
           type="button"
           onClick={() => { setQuery(''); setOpen(v => !v) }}
           aria-expanded={open}
           aria-haspopup="listbox"
-          className={`flex w-52 items-center justify-between gap-2 rounded-lg border bg-surface-overlay/40 py-2 text-sm transition focus:outline-none ${
-            selected ? 'border-accent/40 text-ink' : 'border-accent/20 text-ink-faint'
-          } hover:border-accent/50 pl-3 ${selected ? 'pr-8' : 'pr-3'}`}
+          className="min-w-0 flex-1 truncate text-left focus:outline-none"
         >
-          <span className="truncate">{selected?.name ?? placeholder}</span>
-          <LuChevronDown size={13} className="shrink-0 text-ink-faint" />
+          {selected?.name ?? placeholder}
         </button>
 
-        {/* Clearing is a separate control from opening the list: "show me
-            everything again" is one click, not open-then-find-and-untoggle. */}
+        {/* Clearing is its own control: "show me everything again" is one
+            click, not open-then-find-and-untoggle. */}
         {selected && (
           <button
             type="button"
             onClick={() => { onChange(null); setQuery('') }}
             title={`Clear ${label.toLowerCase()} filter`}
             aria-label={`Clear ${label.toLowerCase()} filter`}
-            className="absolute right-7 rounded p-0.5 text-ink-faint transition hover:text-accent"
+            className="shrink-0 rounded p-0.5 text-ink-faint transition hover:text-accent"
           >
             <LuX size={12} />
           </button>
         )}
+
+        <button
+          type="button"
+          onClick={() => { setQuery(''); setOpen(v => !v) }}
+          aria-label={`Open ${label.toLowerCase()} list`}
+          tabIndex={-1}
+          className="shrink-0 rounded p-0.5 text-ink-faint transition hover:text-accent"
+        >
+          <LuChevronDown size={13} />
+        </button>
       </div>
 
       {open && (

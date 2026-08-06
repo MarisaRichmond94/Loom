@@ -143,14 +143,32 @@ describe('ChaptersSection', () => {
     // Chase is in Chapter 1 and Bonus Chapter 1. One chapter precedes the
     // first match (the prologue); two sit between the two matches (Chapter 2
     // and Chapter 3). Chapter 4 trails the last match and is NOT a gap.
-    await waitFor(() => expect(screen.getByText('1 chapter without')).toBeInTheDocument())
-    expect(screen.getByText('2 chapters without')).toBeInTheDocument()
-    expect(screen.queryByText('3 chapters without')).not.toBeInTheDocument()
+    //
+    // The counts live INSIDE the matching cards. They used to be full-width
+    // rules between cards, which in a grid is a row-spanning item — it forced a
+    // line break wherever it landed, so filtering rearranged the whole board.
+    await waitFor(() => expect(screen.getByText('1 chapter before this')).toBeInTheDocument())
+    expect(screen.getByText('2 chapters since the last')).toBeInTheDocument()
     expect(screen.getByText('2 of 6 chapters')).toBeInTheDocument()
 
     // Faded, not removed — the sequence has to stay countable.
     expect(screen.getByText('Chapter 2')).toBeInTheDocument()
     expect(screen.getByText('Chapter 3')).toBeInTheDocument()
+  })
+
+  it('renders one grid item per chapter, filtered or not', async () => {
+    // The layout must not change when a filter is set. Any extra element in
+    // the grid — a gap rule, a wrapper — is what made cards jump rows.
+    const { container } = setup()
+    await screen.findByText('Bonus Chapter 1')
+    const grid = container.querySelector('[style*="grid"]')!
+    const before = grid.childElementCount
+
+    await pick(/Any character/, 'Chase Gatlin')
+    await waitFor(() => expect(screen.getByText('2 of 6 chapters')).toBeInTheDocument())
+
+    expect(grid.childElementCount).toBe(before)
+    expect(before).toBe(CHAPTERS.length)
   })
 
   it('a filtered-out chapter keeps its summary', async () => {

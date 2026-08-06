@@ -62,20 +62,6 @@ function buildSummaries(cards: OutlineCard[]): SummaryMap {
   return out
 }
 
-/** The run of non-matching chapters between two matches, as a readable rule. */
-function Gap({ count }: { count: number }) {
-  if (count === 0) return null
-  return (
-    <div className="col-span-full flex items-center gap-3 py-1">
-      <div className="h-px flex-1 bg-accent/10" />
-      <span className="text-[10px] italic text-ink-faint">
-        {count} chapter{count === 1 ? '' : 's'} without
-      </span>
-      <div className="h-px flex-1 bg-accent/10" />
-    </div>
-  )
-}
-
 /**
  * Every card is the SAME height, and its body scrolls.
  *
@@ -85,6 +71,14 @@ function Gap({ count }: { count: number }) {
  * the tab exists to show.
  */
 const CARD_HEIGHT = 190
+const GRID_GAP = 12
+/**
+ * The board scrolls at three and a half rows.
+ *
+ * The half is the point: a row cut through the middle is what tells you there
+ * is more below, where a whole number of rows reads as the end of the list.
+ */
+const BOARD_HEIGHT = 3.5 * (CARD_HEIGHT + GRID_GAP)
 
 function ChapterCard({
   row,
@@ -92,6 +86,8 @@ function ChapterCard({
   seriesId,
   matched,
   filtering,
+  gap,
+  isFirstMatch,
   onSummarySaved,
 }: {
   row: BookChapterRow
@@ -99,23 +95,34 @@ function ChapterCard({
   seriesId: string
   matched: boolean
   filtering: boolean
+  /** Non-matching chapters immediately before this one. Only meaningful on a
+   *  match, and only while filtering. */
+  gap: number
+  isFirstMatch: boolean
   onSummarySaved: (chapterId: string, body: string) => void
 }) {
-  // Faded, never resized. An earlier version collapsed non-matching cards to a
-  // thin strip; it made the whole grid jump on every filter change, and it hid
-  // the summaries of the chapters you are scanning PAST — which are often how
-  // you decide where the new chapter goes.
+  // Faded, never resized and never re-flowed. Two earlier versions got this
+  // wrong: one collapsed non-matching cards to a thin strip, and one drew the
+  // run-length as a full-width rule BETWEEN cards — which, in a grid, is a
+  // row-spanning item that forces a line break wherever it lands, so filtering
+  // visibly rearranged the board. The gap is now a label inside the matching
+  // card, and filtering changes nothing but colour.
   const faded = filtering && !matched
 
   return (
     <div
       style={{ height: CARD_HEIGHT }}
       className={`group relative flex flex-col overflow-hidden rounded-lg border bg-surface-raised px-3.5 py-3 transition-[opacity,border-color] ${
-        row.offCanon
-          ? 'border-dashed border-amber-500/40 hover:border-amber-500/60'
-          : 'border-accent/10 hover:border-accent/25'
+        row.offCanon ? 'border-dashed border-amber-500/40' : 'border-accent/10'
       } ${matched && filtering ? 'ring-1 ring-accent/40' : ''} ${
-        faded ? 'opacity-40 hover:opacity-100' : ''
+        // A faded card is inert: no hover lift, no border change, no revealed
+        // controls. Reacting to the pointer is what makes a de-emphasised card
+        // read as an active one.
+        faded
+          ? 'opacity-40'
+          : row.offCanon
+            ? 'hover:border-amber-500/60'
+            : 'hover:border-accent/25'
       }`}
     >
       <div className="flex shrink-0 items-start justify-between gap-2">
@@ -134,7 +141,9 @@ function ChapterCard({
           href={`/author/${seriesId}/chapter/${row.chapterId}`}
           title="Open this chapter"
           aria-label={`Open ${row.title}`}
-          className="shrink-0 rounded p-0.5 text-ink-faint opacity-0 transition hover:text-accent focus-visible:opacity-100 group-hover:opacity-100"
+          className={`shrink-0 rounded p-0.5 text-ink-faint opacity-0 transition focus-visible:opacity-100 ${
+            faded ? '' : 'hover:text-accent group-hover:opacity-100'
+          }`}
         >
           <LuExternalLink size={12} />
         </Link>
@@ -156,6 +165,14 @@ function ChapterCard({
           </p>
         )}
       </div>
+
+      {/* The run length, in the card rather than between cards. Fixed height,
+          so showing it cannot reflow anything. */}
+      {filtering && matched && gap > 0 && (
+        <span className="shrink-0 truncate pt-1 text-[9px] italic text-ink-faint">
+          {gap} chapter{gap === 1 ? '' : 's'} {isFirstMatch ? 'before this' : 'since the last'}
+        </span>
+      )}
     </div>
   )
 }
@@ -291,33 +308,39 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
         </p>
       )}
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-          gap: 12,
-          alignItems: 'start',
-        }}
-      >
-        {chapters.map(row => {
-          const matched = matches(row)
-          const idx = matchIndexByChapterId.get(row.chapterId)
-          return (
-            <div key={row.chapterId} className="contents">
-              {/* The run before this match, drawn across the full row so it
-                  reads as a gap in the sequence rather than a card. */}
-              {filtering && matched && idx !== undefined && <Gap count={gaps[idx]} />}
+      {/* Scrolls at three and a half rows, so the board never pushes the rest
+          of the page off screen on a 90-chapter book. `pr` leaves room for the
+          scrollbar so it does not sit on top of the last column. */}
+      <div className="overflow-y-auto pr-1" style={{ maxHeight: BOARD_HEIGHT }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+            gap: GRID_GAP,
+            alignItems: 'start',
+          }}
+        >
+          {/* One grid item per chapter, always — no wrappers, no row-spanning
+              rules. That is what keeps the layout identical whether or not a
+              filter is set. */}
+          {chapters.map(row => {
+            const matched = matches(row)
+            const idx = matchIndexByChapterId.get(row.chapterId)
+            return (
               <ChapterCard
+                key={row.chapterId}
                 row={row}
                 summary={summaries[row.chapterId]}
                 seriesId={seriesId}
                 matched={matched}
                 filtering={filtering}
+                gap={idx === undefined ? 0 : gaps[idx]}
+                isFirstMatch={idx === 0}
                 onSummarySaved={applyManualSummary}
               />
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
     </div>
   )
