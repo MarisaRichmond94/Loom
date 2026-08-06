@@ -147,9 +147,9 @@ describe('ChaptersSection', () => {
     // The counts live INSIDE the matching cards. They used to be full-width
     // rules between cards, which in a grid is a row-spanning item — it forced a
     // line break wherever it landed, so filtering rearranged the whole board.
-    await waitFor(() => expect(screen.getByText('1 chapter before this')).toBeInTheDocument())
-    expect(screen.getByText('2 chapters since the last')).toBeInTheDocument()
-    expect(screen.getByText('2 of 6 chapters')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('1 chapter(s) before this')).toBeInTheDocument())
+    expect(screen.getByText('2 chapter(s) since the last')).toBeInTheDocument()
+    expect(screen.getByText('2 of 6 chapter(s)')).toBeInTheDocument()
 
     // Faded, not removed — the sequence has to stay countable.
     expect(screen.getByText('Chapter 2')).toBeInTheDocument()
@@ -165,7 +165,7 @@ describe('ChaptersSection', () => {
     const before = grid.childElementCount
 
     await pick(/Any character/, 'Chase Gatlin')
-    await waitFor(() => expect(screen.getByText('2 of 6 chapters')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('2 of 6 chapter(s)')).toBeInTheDocument())
 
     expect(grid.childElementCount).toBe(before)
     expect(before).toBe(CHAPTERS.length)
@@ -179,7 +179,7 @@ describe('ChaptersSection', () => {
     expect(await screen.findByText('Chase meets Emma.')).toBeInTheDocument()
 
     await pick(/Any character/, 'Emma Bradford')
-    await waitFor(() => expect(screen.getByText('1 of 6 chapters')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('1 of 6 chapter(s)')).toBeInTheDocument())
 
     // Chapter 1 no longer matches, and its summary is still on screen.
     expect(screen.getByText('Chase meets Emma.')).toBeInTheDocument()
@@ -191,6 +191,21 @@ describe('ChaptersSection summaries', () => {
     setup()
     const box = await screen.findByRole('textbox', { name: 'Chapter summary' })
     expect(box).toHaveValue('Chase hands Jared the flash drive.')
+  })
+
+  it('goes inert when its card is filtered out', async () => {
+    // A filtered-out card must not take the pointer at all: no editing, no
+    // focus, and nothing that scrolls under a wheel event. A de-emphasised
+    // card that still moves reads as an active one.
+    setup()
+    const box = await screen.findByRole('textbox', { name: 'Chapter summary' })
+    expect(box).not.toBeDisabled()
+
+    // Emma is not in the branch chapter, so filtering by her fades it.
+    await pick(/Any character/, 'Emma Bradford')
+    await waitFor(() => expect(box).toBeDisabled())
+    expect(box.className).toContain('overflow-hidden')
+    expect(box.className).not.toContain('overflow-y-auto')
   })
 
   it('offers exactly one editor — canon chapters stay read-only', async () => {
@@ -251,10 +266,10 @@ describe('ChaptersSection summaries', () => {
   it('clears the filter from the trigger, without reopening the list', async () => {
     setup()
     await pick(/Any character/, 'Chase Gatlin')
-    await waitFor(() => expect(screen.getByText('2 of 6 chapters')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('2 of 6 chapter(s)')).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: 'Clear character filter' }))
-    await waitFor(() => expect(screen.queryByText('2 of 6 chapters')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByText('2 of 6 chapter(s)')).not.toBeInTheDocument())
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
   })
 
@@ -264,21 +279,21 @@ describe('ChaptersSection summaries', () => {
     // what setting a second filter is for.
     setup()
     await pick(/Any character/, 'Chase Gatlin')
-    await waitFor(() => expect(screen.getByText('2 of 6 chapters')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('2 of 6 chapter(s)')).toBeInTheDocument())
 
     await pick(/Any event/, 'The Heist')
-    await waitFor(() => expect(screen.getByText('1 of 6 chapters')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('1 of 6 chapter(s)')).toBeInTheDocument())
   })
 
   it('keeps each filter independent — clearing one leaves the other', async () => {
     setup()
     await pick(/Any character/, 'Chase Gatlin')
     await pick(/Any event/, 'The Heist')
-    await waitFor(() => expect(screen.getByText('1 of 6 chapters')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('1 of 6 chapter(s)')).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: 'Clear character filter' }))
     // The event filter survives: one chapter carries the heist.
-    await waitFor(() => expect(screen.getByText('1 of 6 chapters')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('1 of 6 chapter(s)')).toBeInTheDocument())
     expect(screen.getByRole('button', { name: /The Heist/ })).toBeInTheDocument()
   })
 })

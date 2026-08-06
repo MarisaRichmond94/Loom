@@ -17,10 +17,15 @@ import { useEffect, useRef, useState } from 'react'
 export default function EditableSummary({
   chapterId,
   initial,
+  disabled = false,
   onSaved,
 }: {
   chapterId: string
   initial: string
+  /** The card is filtered out. Inert: not focusable, not editable, and not
+   *  scrollable — a de-emphasised card that still takes the pointer reads as
+   *  an active one. */
+  disabled?: boolean
   /** Lets the tab hold the saved text without re-fetching the whole book. */
   onSaved: (body: string) => void
 }) {
@@ -82,6 +87,7 @@ export default function EditableSummary({
     <div className="flex min-h-0 flex-1 flex-col">
       <textarea
         value={value}
+        disabled={disabled}
         onChange={e => {
           set(e.target.value)
           if (state === 'error') setState('idle')
@@ -101,7 +107,14 @@ export default function EditableSummary({
         }}
         placeholder="Add a summary…"
         aria-label="Chapter summary"
-        className="min-h-0 w-full flex-1 resize-none overflow-y-auto rounded border border-transparent bg-transparent text-[11px] leading-relaxed text-ink-faint outline-none transition placeholder:italic placeholder:text-ink-faint hover:border-accent/20 focus:border-accent/40 focus:bg-surface-overlay/30 focus:text-ink"
+        className={`min-h-0 w-full flex-1 resize-none rounded border border-transparent bg-transparent text-[11px] leading-relaxed text-ink-faint outline-none transition placeholder:italic placeholder:text-ink-faint ${
+          disabled
+            ? // overflow-hidden, not just disabled: a disabled textarea still
+              // scrolls under a wheel event in some browsers, and the whole
+              // point is that a filtered-out card does not move.
+              'cursor-default overflow-hidden'
+            : 'overflow-y-auto hover:border-accent/20 focus:border-accent/40 focus:bg-surface-overlay/30 focus:text-ink'
+        }`}
       />
       {state !== 'idle' && (
         <span

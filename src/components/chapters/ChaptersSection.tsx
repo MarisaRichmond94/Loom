@@ -156,11 +156,18 @@ function ChapterCard({
           <EditableSummary
             chapterId={row.chapterId}
             initial={row.manualSummary ?? ''}
+            disabled={faded}
             onSaved={body => onSummarySaved(row.chapterId, body)}
           />
         ) : (
           // Read-only: this text is WriteAI's, joined one direction only.
-          <p className="min-h-0 flex-1 overflow-y-auto text-[11px] leading-relaxed text-ink-faint">
+          // Scrolls only when the card is live — a filtered-out card must not
+          // move under the pointer any more than it lights up under it.
+          <p
+            className={`min-h-0 flex-1 text-[11px] leading-relaxed text-ink-faint ${
+              faded ? 'overflow-hidden' : 'overflow-y-auto'
+            }`}
+          >
             {summary?.text ?? <span className="italic">No summary yet.</span>}
           </p>
         )}
@@ -170,7 +177,7 @@ function ChapterCard({
           so showing it cannot reflow anything. */}
       {filtering && matched && gap > 0 && (
         <span className="shrink-0 truncate pt-1 text-[9px] italic text-ink-faint">
-          {gap} chapter{gap === 1 ? '' : 's'} {isFirstMatch ? 'before this' : 'since the last'}
+          {gap} chapter(s) {isFirstMatch ? 'before this' : 'since the last'}
         </span>
       )}
     </div>
@@ -294,9 +301,12 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
           emptyHint="No events tagged in this book yet."
         />
 
+        {/* Pushed to the far right — the filters are the controls, this is the
+            readout, and putting it against the opposite edge stops it reading
+            as a third field. */}
         {filtering && (
-          <span className="pb-2.5 text-[11px] text-ink-faint">
-            {matchCount} of {chapters.length} chapters
+          <span className="ml-auto pb-2.5 text-[11px] text-ink-faint">
+            {matchCount} of {chapters.length} chapter(s)
           </span>
         )}
       </div>
