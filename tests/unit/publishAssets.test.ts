@@ -113,6 +113,20 @@ describe('publishAssets', () => {
     expect(existsSync(path.join(readerRoot, 'logo.svg'))).toBe(true)
   })
 
+  it('refuses overlapping roots rather than pruning the author&apos;s own media', () => {
+    // The catastrophic misconfiguration: reader root pointed at (or inside)
+    // Loom's public/. The prune would delete every unreferenced cover,
+    // portrait, track and narration — 2.6 GB of generated audiobook alone.
+    write(publicRoot, 'covers/a.jpg', 'A')
+    write(publicRoot, 'narration/precious.m4a', 'AUDIOBOOK')
+    for (const bad of [publicRoot, path.join(publicRoot, 'reader'), path.dirname(publicRoot)]) {
+      expect(() => publishAssets({ publicRoot, readerRoot: bad, referenced: ['/covers/a.jpg'] }))
+        .toThrow(/overlap/)
+    }
+    // Nothing was touched on the way to refusing.
+    expect(readFileSync(path.join(publicRoot, 'narration/precious.m4a'), 'utf8')).toBe('AUDIOBOOK')
+  })
+
   it('skips a re-copy when the destination is already current', () => {
     write(publicRoot, 'narration/big.m4a', 'AUDIO')
     const first = publishAssets({ publicRoot, readerRoot, referenced: ['/narration/big.m4a'] })

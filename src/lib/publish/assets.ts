@@ -84,6 +84,29 @@ export function publishAssets(opts: {
   readerRoot: string
   referenced: Iterable<string>
 }): AssetReport {
+  // THE GUARD THAT MATTERS MOST IN THIS FILE.
+  //
+  // The prune deletes every file under readerRoot's media dirs that publish did
+  // not just reference. If readerRoot were ever pointed at Loom's own public/ —
+  // a copy-pasted config, an unset env var falling back to a default, a typo —
+  // that would delete the author's unreferenced covers, portraits, music and
+  // narration. public/narration alone is 2.6 GB of generated audiobook.
+  //
+  // Overlapping roots are never legitimate, so refuse rather than proceed.
+  const publicAbs = path.resolve(opts.publicRoot)
+  const readerAbs = path.resolve(opts.readerRoot)
+  if (
+    publicAbs === readerAbs ||
+    readerAbs.startsWith(publicAbs + path.sep) ||
+    publicAbs.startsWith(readerAbs + path.sep)
+  ) {
+    throw new Error(
+      `Refusing to publish assets: reader root and public root overlap.\n` +
+      `  public: ${publicAbs}\n  reader: ${readerAbs}\n` +
+      `The prune deletes unreferenced files under the reader root; an overlap would delete the author's media.`,
+    )
+  }
+
   const report: AssetReport = { copied: 0, pruned: 0, missing: [], bytes: 0 }
 
   const wanted = new Set<string>()
