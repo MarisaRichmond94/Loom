@@ -5,6 +5,7 @@
   "scripts": {
     "predev": "node scripts/ensure-native.mjs && node scripts/ensure-narrate.mjs",
     "dev": "next dev",
+    "dev:sandbox": "DATABASE_URL=\"file:./sandbox.db\" next dev -p 3100",
     "prebuild": "node scripts/ensure-native.mjs && node scripts/ensure-narrate.mjs",
     "build": "next build",
     "prestart": "node scripts/ensure-native.mjs && node scripts/ensure-narrate.mjs",

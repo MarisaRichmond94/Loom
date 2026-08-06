@@ -2,12 +2,14 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuDatabaseBackup, LuEye, LuPencilLine } from 'react-icons/lu'
+import { LuDatabaseBackup, LuEye, LuPencilLine, LuSend } from 'react-icons/lu'
 import dynamic from 'next/dynamic'
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import SeriesTagsEditor from '@/components/editor/SeriesTagsEditor'
 import SectionTabs from '@/components/SectionTabs'
+import PublishBadge from '@/components/series/PublishBadge'
+import { usePublishStatus } from '@/components/series/usePublishStatus'
 
 // Both loaded on tab open rather than with the page. Books is the default tab,
 // so most visits need neither — and the timeline pulls in the chart's SVG
@@ -77,6 +79,11 @@ export default function AuthorSeriesPage() {
   const [descriptionDraft, setDescriptionDraft] = useState(series.description ?? '')
   const [authorName, setAuthorName] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null)
+
+  // Reader-tier state, per book (LOOM-129). Lives here rather than in a panel
+  // because the controls sit ON the book cards: publishing is a per-book act,
+  // and "can my family read this?" is read while looking at the book.
+  const publish = usePublishStatus(seriesId)
 
   const isInitialStatsLoadRef = useRef(true)
   const loadStats = useCallback(async () => {
@@ -275,6 +282,11 @@ export default function AuthorSeriesPage() {
             label: 'Book(s)',
             content: (
               <>
+        {publish.error && (
+          <div className="mb-4 px-3 py-2 rounded bg-choice-kill-bg border border-choice-kill-border text-choice-kill text-xs whitespace-pre-wrap">
+            {publish.error}
+          </div>
+        )}
         {series.books.length === 0 ? (
           <p className="text-ink-faint text-sm text-center mt-16">No books yet. Add one from the outline.</p>
         ) : (
@@ -320,6 +332,12 @@ export default function AuthorSeriesPage() {
                             {deadByBook[book.id]} unreachable
                           </span>
                         )}
+                        {/* Top-right of the card: the reader-facing answer.
+                            The chips to its left are about the book's state in
+                            Loom; this one is about what the family can see. */}
+                        <span className="ml-auto shrink-0">
+                          <PublishBadge status={publish.byId(book.id)} />
+                        </span>
                       </div>
                       <div className="grid grid-cols-4 gap-3">
                         {[
@@ -340,6 +358,44 @@ export default function AuthorSeriesPage() {
                       </div>
                     </div>
                     <div className="flex justify-end gap-2 mt-3" onClick={e => e.stopPropagation()}>
+                      {/* Always rendered, including for drafts — disabled with
+                          a reason, rather than absent. A control that vanishes
+                          leaves "how do I send this?" unanswered; one that is
+                          visibly disabled answers it. */}
+                      {(() => {
+                        const st = publish.byId(book.id)
+                        const eligible = st?.eligible ?? false
+                        const needs = !!st && (st.changed || !st.inSnapshot)
+                        const working = publish.busyBookId === book.id
+                        const disabled = !st || !eligible || !!publish.busyBookId
+                        // Hover styling is applied ONLY when the button can
+                        // actually be pressed. Tailwind's hover: variants fire
+                        // regardless of the disabled attribute, so a disabled
+                        // button that still lightens on hover reads as
+                        // enabled-but-unresponsive rather than as disabled.
+                        const look = working
+                          ? 'bg-accent text-white border-accent'
+                          : disabled
+                            ? 'bg-surface-overlay border-accent/20 text-ink-faint opacity-40 cursor-not-allowed'
+                            : needs
+                              ? 'bg-accent text-white border-accent hover:opacity-90'
+                              : 'bg-surface-overlay border-accent/20 text-ink-muted hover:text-ink'
+                        return (
+                          <button
+                            onClick={() => eligible && publish.publish(book.id)}
+                            disabled={disabled}
+                            title={!eligible
+                              ? 'This book is a draft. Mark it as Published first — until then readers only see “Coming Soon”.'
+                              : needs
+                                ? 'Send this book to readers. Every other book keeps exactly what it has.'
+                                : 'Readers already have this version — republishing would change nothing.'}
+                            className={`px-3 py-1.5 rounded text-xs transition flex items-center gap-1.5 border ${look}`}
+                          >
+                            <LuSend size={11} />
+                            {working ? 'Publishing…' : needs ? 'Publish to readers' : 'Republish'}
+                          </button>
+                        )
+                      })()}
                       <button
                         onClick={() => toggleInProgress(book.id, !book.inProgress)}
                         title={book.inProgress ? 'Click to unset' : 'Default this book in the outline and scroll its latest chapter into view'}

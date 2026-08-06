@@ -68,6 +68,9 @@ next-env.d.ts
 /reader/public/covers
 /reader/public/music
 /reader/public/narration
+# Sandbox publishes namespace their outputs so a fixture run cannot clobber
+# the snapshot real readers are served.
+/reader/public-sandbox/
 # local pre-migration database snapshots — never commit (large binaries)
 dev.db.pre-*
 

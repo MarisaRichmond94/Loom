@@ -172,6 +172,77 @@ describe('publish selects narration by canon hash', () => {
   })
 })
 
+describe('publish is per book', () => {
+  // The workflow this exists for: release book one while book two is still
+  // being revised. Carry-forward is what makes it safe — the whole file is
+  // still rebuilt and swapped atomically; only each book's SOURCE differs.
+  const buildSome = (bookIds: string[] | undefined, at: string) => buildContentDb({
+    sourcePath: SANDBOX, outPath: OUT, seriesId: 'sbx-series',
+    authorName: 'Sandbox Author', publishedAt: at, bookIds,
+  })
+
+  fixtureIt('publishing one book leaves the other exactly as readers had it', () => {
+    buildSome(undefined, '2026-01-01T00:00:00.000Z')
+    const before = read(`SELECT id, content FROM ContentBlock WHERE chapterId IN
+      (SELECT id FROM Chapter WHERE bookId='sbx-book-2') ORDER BY id`)
+    expect(before.length).toBeGreaterThan(0)
+
+    const result = buildSome(['sbx-book-1'], '2026-02-02T00:00:00.000Z')
+    expect(result.built).toEqual(['sbx-book-1'])
+    expect(result.books.find(b => b.id === 'sbx-book-1')?.source).toBe('built')
+    expect(result.books.find(b => b.id === 'sbx-book-2')?.source).toBe('carried')
+
+    const after = read(`SELECT id, content FROM ContentBlock WHERE chapterId IN
+      (SELECT id FROM Chapter WHERE bookId='sbx-book-2') ORDER BY id`)
+    expect(after).toEqual(before)
+  })
+
+  fixtureIt('keeps each book&apos;s own publish time, so they can move independently', () => {
+    buildSome(undefined, '2026-01-01T00:00:00.000Z')
+    buildSome(['sbx-book-1'], '2026-02-02T00:00:00.000Z')
+    const meta = Object.fromEntries(
+      read(`SELECT key, value FROM PublishMeta`).map(r => [r.key, r.value]),
+    )
+    expect(meta['book:sbx-book-1:publishedAt']).toBe('2026-02-02T00:00:00.000Z')
+    expect(meta['book:sbx-book-2:publishedAt']).toBe('2026-01-01T00:00:00.000Z')
+  })
+
+  fixtureIt('an eligible book that was never published reads as a stub, not a hole', () => {
+    // Publishing only book 1 on a fresh snapshot must not leave book 2 missing
+    // from the series entirely — it shows as Coming Soon, like a draft.
+    for (const s of ['', '-wal', '-shm']) rmSync(OUT + s, { force: true })
+    const result = buildSome(['sbx-book-1'], '2026-01-01T00:00:00.000Z')
+    expect(result.books.find(b => b.id === 'sbx-book-2')?.source).toBe('stub')
+    expect(read(`SELECT id FROM Book WHERE id='sbx-book-2'`)).toHaveLength(1)
+    expect(read(`SELECT id FROM Chapter WHERE bookId='sbx-book-2'`)).toHaveLength(0)
+    expect(read(`SELECT synopsis FROM Book WHERE id='sbx-book-2'`)[0].synopsis).toBe('')
+  })
+
+  fixtureIt('rebuilds everything rather than un-publishing a book it cannot carry', () => {
+    // An unreadable snapshot (older format) leaves an unselected book nowhere
+    // to come from. Dropping it to a stub would silently take a book away from
+    // readers, so the selection is widened and the result says so.
+    buildSome(undefined, '2026-01-01T00:00:00.000Z')
+    const db = new Database(OUT)
+    db.prepare(`UPDATE PublishMeta SET value='not-a-real-fingerprint' WHERE key='schema'`).run()
+    db.close()
+
+    const result = buildSome(['sbx-book-1'], '2026-02-02T00:00:00.000Z')
+    expect(result.built).toContain('sbx-book-2')
+    expect(result.books.find(b => b.id === 'sbx-book-2')?.source).toBe('built')
+    expect(result.warnings.join(' ')).toMatch(/every book was rebuilt/i)
+  })
+
+  fixtureIt('keeps a carried book&apos;s assets referenced, so the prune cannot orphan them', () => {
+    // Pruning against only the rebuilt book's references would delete the
+    // other books' covers and audio out from under them.
+    buildSome(undefined, '2026-01-01T00:00:00.000Z')
+    const result = buildSome(['sbx-book-1'], '2026-02-02T00:00:00.000Z')
+    expect(result.referencedAssets).toContain('/covers/sbx-book-2.jpg')
+    expect(result.referencedAssets).toContain('/covers/sbx-book-1.jpg')
+  })
+})
+
 describe('publish reports rather than refuses', () => {
   fixtureIt('does not refuse when canon is ambiguous, and surfaces the warning', () => {
     // The fixture's lantern point is genuinely ambiguous (two accumulator
@@ -180,7 +251,7 @@ describe('publish reports rather than refuses', () => {
     const result = build()
     const book1 = result.books.find(b => b.id === 'sbx-book-1')
     expect(book1?.chapters).toBeGreaterThan(0)
-    expect(result.books.every(b => b.published || b.chapters === 0)).toBe(true)
+    expect(result.books.every(b => b.eligible || b.chapters === 0)).toBe(true)
   })
 
   fixtureIt('leaves the previous content.db intact when a build fails', () => {
