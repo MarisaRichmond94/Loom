@@ -21,6 +21,10 @@ const OutlineSection = dynamic(() => import('@/components/OutlineSection'), { ss
 // Same treatment as the outline: the chart's SVG machinery should not ride in
 // the bundle for the many page visits that only open the cast.
 const TimelineSection = dynamic(() => import('@/components/timeline/TimelineSection'), { ssr: false })
+// Same again: the Chapters tab issues its own read on mount and pulls in the
+// timeline's WriteAI data for names, neither of which a page visit that only
+// opens the cast should pay for (LOOM-120/121).
+const ChaptersSection = dynamic(() => import('@/components/chapters/ChaptersSection'), { ssr: false })
 // Same treatment again, for a sharper reason: the panel pulls in the whole chat
 // surface AND issues its scope read on mount (LOOM-118).
 const ExplorePanel = dynamic(() => import('@/components/explore/ExplorePanel'), {
@@ -575,6 +579,15 @@ export default function BookDetailPage() {
             id: 'outline',
             label: 'Outline',
             content: <OutlineSection seriesId={seriesId} bookId={bookId} />,
+          }, {
+            // Second, right after Outline, because it answers the same
+            // "what is this book" question from the other side — the planning
+            // board is WriteAI's canon cards, this is Loom's full sequence
+            // including the branch chapters that can never appear there
+            // (LOOM-120/121).
+            id: 'chapters',
+            label: 'Chapters',
+            content: <ChaptersSection seriesId={seriesId} bookId={bookId} />,
           }, {
             id: 'characters',
             label: 'Character(s)',

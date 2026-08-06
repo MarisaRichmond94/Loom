@@ -240,10 +240,40 @@ model Chapter {
   inboundChoices Choice[]       @relation("TargetChapter")
   narrations     ChapterNarration[]
   note           ChapterNote?
+  summary        ChapterSummary?
   events         ChapterEvent[]
   characters     ChapterCharacter[]
 
   @@index([bookId, order])
+}
+
+// A writer-authored summary for a chapter WriteAI cannot describe (LOOM-120).
+//
+// Every canon chapter gets its summary from WriteAI's outline card, machine-
+// written and refreshed by enrichment. Branch-gated chapters get nothing: the
+// canon walk never reaches them, so they never enter the manifest, so no card
+// is ever seeded — and one added by hand is PRUNED by `_auto_reconcile`, which
+// drops any card whose loom_id is absent from the manifest. The Chapters tab
+// shows those chapters in sequence, so it needs somewhere to put a summary,
+// and WriteAI's store is provably not it.
+//
+// Deliberately NOT ChapterNote. That is the writer's private scratchpad —
+// continuity reminders, threads to fix — and it never renders to readers. A
+// summary describes what happens and is shown on a card. Folding the two would
+// mean either notes leaking onto the board or summaries buried in a field the
+// board does not read.
+//
+// A separate table rather than a column on Chapter, for the reason ChapterNote
+// records: chapter rows are fetched in bulk for the outline tree and the book
+// page, and Prisma selects every scalar by default, so a summary body on
+// Chapter would ride along in every one of those list queries.
+model ChapterSummary {
+  id        String   @id @default(cuid())
+  chapterId String   @unique
+  body      String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 }
 
 // The writer's private scratchpad for one chapter — continuity reminders,
