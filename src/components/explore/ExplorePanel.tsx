@@ -348,7 +348,7 @@ export default function ExplorePanel({
         onSynced={() => { /* the next question uses the fresh index */ }}
       />
 
-      <div className="relative mt-3 flex h-[560px] overflow-hidden rounded-lg border border-accent/15 bg-surface-raised">
+      <div className="relative mt-3 flex h-[750px] overflow-hidden rounded-lg border border-accent/15 bg-surface-raised">
         <ExploreHistory
           sessions={sessions}
           activeId={chat.sessionId}
