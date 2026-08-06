@@ -42,12 +42,18 @@ describe('sandbox fixture shape', () => {
     expect(sql(`SELECT COUNT(*) FROM Choice WHERE endsChapter=1;`)).toEqual(['1'])
   })
 
-  fixtureIt('narrates one chapter along two paths and leaves another silent', () => {
+  fixtureIt('covers all three narration cases publish has to tell apart', () => {
+    // 1. Two recordings, NEITHER of the canon text — publish must go silent
+    //    rather than pick one. This is the 47-chapters-with-variants case.
     const twoPaths = sql(`SELECT COUNT(DISTINCT contentHash) FROM ChapterNarration WHERE chapterId='sbx-b1-c1';`)
     expect(Number(twoPaths[0])).toBe(2)
-    // sbx-b1-c3 is canon-reachable and deliberately unnarrated, so LOOM-128 can
-    // prove a missing narration publishes silent instead of borrowing audio.
-    expect(sql(`SELECT COUNT(*) FROM ChapterNarration WHERE chapterId='sbx-b1-c3';`)).toEqual(['0'])
+
+    // 2. One recording OF the canon text, hashed the way src/lib/narration
+    //    does — the only case that should publish audio.
+    expect(sql(`SELECT COUNT(*) FROM ChapterNarration WHERE chapterId='sbx-b1-c3';`)).toEqual(['1'])
+
+    // 3. No recording at all — silent, and not reported as a mismatch.
+    expect(sql(`SELECT COUNT(*) FROM ChapterNarration WHERE chapterId='sbx-b1-c0';`)).toEqual(['0'])
   })
 
   fixtureIt('carries the three character shapes the per-book projection must separate', () => {

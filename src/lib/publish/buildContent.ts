@@ -8,6 +8,8 @@ import {
   type ChapterInWalk,
   type VariableIn,
 } from '@/lib/manuscript/walk'
+import { narrationHash, narrationSegments, type NarrationBlock } from '@/lib/narration/text'
+import { publishAssets, type AssetReport } from '@/lib/publish/assets'
 
 /**
  * Builds `content.db` — the snapshot the reader tier serves (LOOM-127).
@@ -43,6 +45,15 @@ export type PublishedBook = {
   blocks: number
   /** Chapters on the canon path with no prose — reported, never silent. */
   emptyChapters: string[]
+  /** Chapters that got canon narration. */
+  narrated: number
+  /**
+   * Canon-path chapters that have recordings, but none matching the canon
+   * text. They publish SILENT rather than borrowing another branch's audio —
+   * surfaced so "why is chapter 12 quiet" is answerable without an
+   * investigation.
+   */
+  narrationMismatched: string[]
   warnings: string[]
 }
 
@@ -51,6 +62,9 @@ export type PublishResult = {
   seriesId: string
   books: PublishedBook[]
   warnings: string[]
+  /** Media paths the published content references, for the asset copy. */
+  referencedAssets: string[]
+  assets?: AssetReport
 }
 
 type BuildOptions = {
@@ -63,6 +77,10 @@ type BuildOptions = {
   authorName: string
   /** Injected so repeated builds of unchanged input are byte-comparable. */
   publishedAt: string
+  /** Loom's public/ dir. Omit to skip the asset copy (schema-only builds). */
+  publicRoot?: string
+  /** The reader app's asset root. Pruning is bounded to this directory. */
+  readerAssetRoot?: string
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -80,6 +98,7 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
   let variables: VariableIn[]
   let characters: Row[]
   let bookMetaAges: Row[]
+  let narrations: Row[]
 
   try {
     // One read transaction, held only as long as it takes to pull rows into
@@ -171,11 +190,61 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
         WHERE m.seriesId = ?`,
     ).all(opts.seriesId)
 
+    // Every recording for every chapter of this series. Selection happens
+    // below, against the recomputed canon hash — NOT here, and never "the
+    // first row".
+    narrations = source.prepare(
+      `SELECT n.chapterId, n.voice, n.audioPath, n.timing, n.contentHash, n.durationMs
+         FROM ChapterNarration n
+         JOIN Chapter c ON c.id = n.chapterId
+         JOIN Book b ON b.id = c.bookId
+        WHERE b.seriesId = ?`,
+    ).all(opts.seriesId)
+
     source.exec('COMMIT')
   } finally {
     source.close()
   }
 
+  const narrationsByChapter = new Map<string, Row[]>()
+  for (const n of narrations) {
+    const list = narrationsByChapter.get(n.chapterId) ?? []
+    list.push(n)
+    narrationsByChapter.set(n.chapterId, list)
+  }
+
+  /**
+   * The canon recording for a chapter, or null.
+   *
+   * Reproduces Loom's own keying: segment the chapter exactly as the narrator
+   * did — same block list, same entry state, same answered choices, only here
+   * the answers are the CANON ones — then fold the per-segment hashes the way
+   * `variantHashFor` does. A row matches only if it is the recording of this
+   * prose. Anything else publishes silent.
+   *
+   * Voice is part of the hash, so each voice present for the chapter is tried
+   * rather than assuming the default.
+   */
+  const canonNarration = (
+    chapterId: string,
+    blocks: NarrationBlock[],
+    state: Record<string, string | number | boolean>,
+    answered: Record<string, string>,
+  ): Row | null => {
+    const rows = narrationsByChapter.get(chapterId)
+    if (!rows?.length) return null
+    const plan = narrationSegments(blocks, state, answered)
+    if (!plan.segments.length) return null
+    for (const voice of new Set(rows.map(r => r.voice as string))) {
+      const segHashes = plan.segments.map(s => narrationHash(s.text, voice))
+      const variantHash = narrationHash(segHashes.join('|'), voice)
+      const match = rows.find(r => r.contentHash === variantHash)
+      if (match) return match
+    }
+    return null
+  }
+
+  const referencedAssets = new Set<string>()
   const orderByBookId = new Map<string, number>(books.map((b: Row) => [b.id, b.order]))
   const ageOverride = new Map<string, number | null>(
     bookMetaAges.map((r: Row) => [`${r.id}::${r.bookId}`, r.age]),
@@ -190,6 +259,7 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
     seriesId: opts.seriesId,
     books: [],
     warnings: [],
+    referencedAssets: [],
   }
 
   try {
@@ -233,7 +303,8 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
           ).run({ id: book.id, seriesId: book.seriesId, title: book.title, order: book.order })
           result.books.push({
             id: book.id, title: book.title, order: book.order, published: false,
-            chapters: 0, blocks: 0, emptyChapters: [], warnings: [],
+            chapters: 0, blocks: 0, emptyChapters: [], narrated: 0,
+            narrationMismatched: [], warnings: [],
           })
           continue
         }
@@ -253,8 +324,12 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
         const chapters = chaptersByBook.get(book.id) ?? []
         const walk = walkBook(chapters, variables, defaultStoryState(variables), {})
 
+        if (book.coverPath) referencedAssets.add(book.coverPath)
+
         let blockCount = 0
+        let narrated = 0
         const emptyChapters: string[] = []
+        const narrationMismatched: string[] = []
         walk.chapters.forEach((ch, idx) => {
           insertChapter.run({
             id: ch.id,
@@ -278,7 +353,36 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
               sourceBlockId: b.sourceBlockId,
             })
             blockCount += 1
+            if (b.type === 'soundtrack') referencedAssets.add(b.content)
           })
+
+          const sourceChapter = chapters.find(c => c.id === ch.id)
+          const match = sourceChapter
+            ? canonNarration(
+                ch.id,
+                sourceChapter.blocks as unknown as NarrationBlock[],
+                ch.stateAtStart as Record<string, string | number | boolean>,
+                ch.answeredChoices,
+              )
+            : null
+          if (match) {
+            out.prepare(
+              `INSERT INTO Narration (chapterId, audioPath, timing, durationMs)
+               VALUES (@chapterId, @audioPath, @timing, @durationMs)`,
+            ).run({
+              chapterId: ch.id,
+              audioPath: match.audioPath,
+              // The timing map travels with the audio it belongs to. A map from
+              // another path desyncs the word highlight visibly.
+              timing: match.timing,
+              durationMs: match.durationMs,
+            })
+            referencedAssets.add(match.audioPath)
+            narrated += 1
+          } else if (narrationsByChapter.has(ch.id)) {
+            // Recordings exist, none is of the canon text. Silent, and said so.
+            narrationMismatched.push(ch.label)
+          }
         })
 
         // Per-book character projection. Everything a reader may know by the
@@ -296,7 +400,7 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
             bookId: book.id,
             name: c.name ?? c.id,
             age: override ?? c.age ?? null,
-            photoPath: c.photoUrl ?? null,
+            photoPath: (() => { if (c.photoUrl) referencedAssets.add(c.photoUrl); return c.photoUrl ?? null })(),
             // The spoiler. Resolved to a boolean HERE; the book a character
             // dies in never crosses over.
             deceased: deathOrder !== undefined && deathOrder <= book.order ? 1 : 0,
@@ -311,6 +415,8 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
           chapters: walk.chapters.length,
           blocks: blockCount,
           emptyChapters,
+          narrated,
+          narrationMismatched,
           warnings: walk.warnings,
         })
       }
@@ -329,5 +435,14 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
   // Atomic swap. An interrupted build leaves the previous content.db serving;
   // a half-written file is never visible to the reader app.
   renameSync(tmpPath, opts.outPath)
+
+  result.referencedAssets = [...referencedAssets].sort()
+  if (opts.publicRoot && opts.readerAssetRoot) {
+    result.assets = publishAssets({
+      publicRoot: opts.publicRoot,
+      readerRoot: opts.readerAssetRoot,
+      referenced: result.referencedAssets,
+    })
+  }
   return result
 }

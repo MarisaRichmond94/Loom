@@ -85,6 +85,23 @@ export type ManuscriptChapter = {
    * it into the exported .docx/.pages.
    */
   blocks: WalkedBlock[]
+  /**
+   * Story state as the walk ENTERS this chapter, before any of its blocks run.
+   *
+   * `stateByContent` only has entries where content was emitted, so a chapter
+   * that emits nothing has no state at all — and narration needs the entry
+   * state regardless, to resolve the same conditions the reader would.
+   */
+  stateAtStart: StoryState
+  /**
+   * Choice points resolved inside this chapter: choicePointId -> chosen id.
+   *
+   * This is what makes canon narration findable. `ChapterNarration` is keyed by
+   * a hash of the segment texts, and the segments depend on which choices were
+   * answered — so reproducing the canon variant hash needs the canon answers,
+   * per chapter, in the walk's own resolution order.
+   */
+  answeredChoices: Record<string, string>
 }
 
 export type WalkResult = {
@@ -210,6 +227,8 @@ export function walkBook(
       contents: [],
       stateByContent: [],
       blocks: [],
+      stateAtStart: { ...state },
+      answeredChoices: {},
     }
 
     // Every push into `contents` records the block it came from in the same
@@ -310,6 +329,7 @@ export function walkBook(
         ambiguous,
       })
       if (!resolved) continue
+      out.answeredChoices[block.id] = resolved.id
 
       const record: ChoiceRecord = {
         id: resolved.id,

@@ -81,6 +81,21 @@ CREATE TABLE Character (
   PRIMARY KEY (id, bookId)
 );
 
+-- At most one row per chapter: the narration of the CANON path.
+--
+-- ChapterNarration in Loom is keyed [chapterId, contentHash] — a hash of the
+-- segment texts, which depend on which choices were answered. A chapter can
+-- therefore have many recordings, one per narrated branch (47 chapters do; one
+-- has 22). Publishing the wrong row would ship branch prose to the reader as
+-- AUDIO, past every guarantee the text side makes. Selection is by recomputed
+-- canon hash, and a chapter with no canon recording publishes silent.
+CREATE TABLE Narration (
+  chapterId  TEXT PRIMARY KEY,
+  audioPath  TEXT NOT NULL,
+  timing     TEXT NOT NULL,
+  durationMs INTEGER NOT NULL
+);
+
 CREATE TABLE PublishMeta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL

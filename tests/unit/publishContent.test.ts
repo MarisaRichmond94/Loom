@@ -135,6 +135,43 @@ describe('publish projects characters per book', () => {
   })
 })
 
+describe('publish selects narration by canon hash', () => {
+  // The one path by which non-canon prose could still reach a reader after
+  // canon flattening: as AUDIO. 47 real chapters have more than one recording;
+  // one has 22. "First row" would ship the wrong branch's voice.
+  fixtureIt('publishes the recording of the canon text', () => {
+    const result = build()
+    expect(read(`SELECT chapterId FROM Narration WHERE chapterId='sbx-b1-c3'`)).toHaveLength(1)
+    const row = read(`SELECT audioPath, durationMs FROM Narration WHERE chapterId='sbx-b1-c3'`)[0]
+    expect(row.audioPath).toBe('/narration/sbx-b1-c3.m4a')
+    expect(result.books.find(b => b.id === 'sbx-book-1')?.narrated).toBe(1)
+  })
+
+  fixtureIt('publishes silent when recordings exist but none is of the canon text', () => {
+    // Chapter 1 has two recordings, neither hashing to its canon prose.
+    const result = build()
+    expect(read(`SELECT chapterId FROM Narration WHERE chapterId='sbx-b1-c1'`)).toHaveLength(0)
+    expect(result.books.find(b => b.id === 'sbx-book-1')?.narrationMismatched).toContain('1')
+  })
+
+  fixtureIt('never publishes a non-canon recording under any chapter', () => {
+    build()
+    const paths = read(`SELECT audioPath FROM Narration`).map(r => r.audioPath)
+    expect(paths).not.toContain('/narration/sbx-b1-c1-canon.mp3')
+    expect(paths).not.toContain('/narration/sbx-b1-c1-branch.mp3')
+  })
+
+  fixtureIt('references only the audio it actually published', () => {
+    const result = build()
+    expect(result.referencedAssets).toContain('/narration/sbx-b1-c3.m4a')
+    expect(result.referencedAssets).not.toContain('/narration/sbx-b1-c1-branch.mp3')
+    // The soundtrack and the published cover come along; the draft's does not.
+    expect(result.referencedAssets).toContain('/music/sbx-lantern-theme.mp3')
+    expect(result.referencedAssets).toContain('/covers/sbx-book-1.jpg')
+    expect(result.referencedAssets).not.toContain('/covers/sbx-book-3.jpg')
+  })
+})
+
 describe('publish reports rather than refuses', () => {
   fixtureIt('does not refuse when canon is ambiguous, and surfaces the warning', () => {
     // The fixture's lantern point is genuinely ambiguous (two accumulator

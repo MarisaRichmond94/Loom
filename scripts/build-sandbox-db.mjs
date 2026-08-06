@@ -19,6 +19,7 @@
 // shape production happens to be in.
 
 import Database from 'better-sqlite3'
+import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { rmSync } from 'node:fs'
 import path from 'node:path'
@@ -132,21 +133,29 @@ db.transaction(() => {
   insert('Choice', { id: 'sbx-cp1-b', choicePointId: 'sbx-b1-c1-cp', order: 2, label: 'Leave it', setsVariables: JSON.stringify({ sandboxTrustScore: { op: '-=', value: 1 } }), isBadEnding: 0, endsChapter: 0 })
 
   insert('ContentBlock', { id: 'sbx-b1-c2-b1', chapterId: 'sbx-b1-c2', order: 1, type: 'text', content: doc('The ferryman did not look up.'), wordCount: 6 })
-  insert('ContentBlock', { id: 'sbx-b1-c2-cf', chapterId: 'sbx-b1-c2', order: 2, type: 'conditional_fragment', wordCount: 0 })
+  // Condition-gated block (LOOM-138). tookTheLantern defaults to false, so this
+  // is NOT on the canon path and must never reach the reader tier. Before
+  // LOOM-138 the walk could not see this gate at all and included it.
+  //
+  // Lives in chapter 2, NOT the narration fixture chapter: narrationSegments
+  // does not evaluate block conditions (it only gates unanswered choice
+  // points), so a gated block here would be spoken and would change the
+  // chapter's variant hash. Publish must reproduce Loom's hashing exactly —
+  // bugs included — or it would match no existing recording at all.
+  insert('ContentBlock', { id: 'sbx-b1-c2-b1g', chapterId: 'sbx-b1-c2', order: 2, type: 'text', condition: JSON.stringify({ tookTheLantern: true }), content: doc('GATED PROSE — only if she took the lantern. Must never reach a reader.'), wordCount: 12 })
+  insert('ContentBlock', { id: 'sbx-b1-c2-cf', chapterId: 'sbx-b1-c2', order: 3, type: 'conditional_fragment', wordCount: 0 })
   // Fires under canon (tookTheLantern=false at defaults). LOOM-127 publishes the
   // MATCHED override as a resolved text block; the unmatched one must not ship.
   insert('ConditionalOverride', { id: 'sbx-cf-nolantern', conditionalFragmentId: 'sbx-b1-c2-cf', order: 1, condition: JSON.stringify({ tookTheLantern: false }), content: doc('Empty-handed, she paid in coin.'), endsChapter: 0 })
   insert('ConditionalOverride', { id: 'sbx-cf-lantern', conditionalFragmentId: 'sbx-b1-c2-cf', order: 2, condition: JSON.stringify({ tookTheLantern: true }), content: doc('BRANCH ONLY — the lantern bought her passage. Must never reach a reader.'), endsChapter: 0 })
-  insert('ContentBlock', { id: 'sbx-b1-c2-cp', chapterId: 'sbx-b1-c2', order: 3, type: 'choice_point', prompt: 'Speak to the ferryman?', wordCount: 0 })
+  insert('ContentBlock', { id: 'sbx-b1-c2-cp', chapterId: 'sbx-b1-c2', order: 4, type: 'choice_point', prompt: 'Speak to the ferryman?', wordCount: 0 })
   // Exactly ONE non-bad-ending choice → unambiguous, and it endsChapter.
   insert('Choice', { id: 'sbx-cp2-a', choicePointId: 'sbx-b1-c2-cp', order: 1, label: 'Say nothing', setsVariables: JSON.stringify({ spokeToFerryman: false }), isBadEnding: 0, endsChapter: 1, endingMessage: doc('The crossing took the rest of the night.') })
   insert('Choice', { id: 'sbx-cp2-bad', choicePointId: 'sbx-b1-c2-cp', order: 2, label: 'Ask his name', setsVariables: JSON.stringify({ spokeToFerryman: true }), isBadEnding: 1, endsChapter: 0, endingMessage: doc('BAD ENDING PROSE — the river took her. Must never reach a reader.') })
 
+  // Chapter 3 is deliberately ONE plain block: it is the narration fixture, and
+  // its variant hash is computed by hand below. Keep the gated block out of it.
   insert('ContentBlock', { id: 'sbx-b1-c3-b1', chapterId: 'sbx-b1-c3', order: 1, type: 'text', content: doc('Ashfall, and then nothing at all for a while.'), wordCount: 9 })
-  // Condition-gated block (LOOM-138). tookTheLantern defaults to false, so this
-  // is NOT on the canon path and must never reach the reader tier. Before
-  // LOOM-138 the walk could not see this gate at all and included it.
-  insert('ContentBlock', { id: 'sbx-b1-c3-b2', chapterId: 'sbx-b1-c3', order: 2, type: 'text', condition: JSON.stringify({ tookTheLantern: true }), content: doc('GATED PROSE — only if she took the lantern. Must never reach a reader.'), wordCount: 12 })
 
   // ---- Book 2 --------------------------------------------------------------
   insert('Chapter', { id: 'sbx-b2-c1', bookId: B2, title: 'Tidewater', order: 1, numbered: 1, pov: 'Idris' })
@@ -166,8 +175,17 @@ db.transaction(() => {
   const now = '2026-01-01 00:00:00'
   insert('ChapterNarration', { id: 'sbx-narr-c1-canon', chapterId: 'sbx-b1-c1', voice: 'sandbox', audioPath: '/narration/sbx-b1-c1-canon.mp3', timing: '[]', contentHash: 'sbx-hash-canon-path', durationMs: 1000, createdAt: now, updatedAt: now })
   insert('ChapterNarration', { id: 'sbx-narr-c1-branch', chapterId: 'sbx-b1-c1', voice: 'sandbox', audioPath: '/narration/sbx-b1-c1-branch.mp3', timing: '[]', contentHash: 'sbx-hash-branch-path', durationMs: 1200, createdAt: now, updatedAt: now })
-  // sbx-b1-c3 has NO narration at all — a canon chapter that must publish
-  // silent rather than borrowing another chapter's or another path's audio.
+  // Chapter 3 gets a recording of its ACTUAL canon text, hashed the way
+  // src/lib/narration does it (sha256 over voice + NUL + text, folded again
+  // over the joined segment hashes). Publish must find this one. Computed here
+  // rather than hardcoded so it survives an edit to the chapter's prose.
+  const VOICE = 'Tom (Enhanced)'
+  const nHash = text => createHash('sha256').update(VOICE).update('\0').update(text).digest('hex')
+  // One plain paragraph, no templates, one text block on the canon path — so
+  // the spoken text is just that sentence, and the plan is a single segment.
+  const c3Text = 'Ashfall, and then nothing at all for a while.'
+  const c3Variant = nHash(nHash(c3Text))
+  insert('ChapterNarration', { id: 'sbx-narr-c3-canon', chapterId: 'sbx-b1-c3', voice: VOICE, audioPath: '/narration/sbx-b1-c3.m4a', timing: '[]', contentHash: c3Variant, durationMs: 900, createdAt: now, updatedAt: now })
 
   // ---- Characters ----------------------------------------------------------
   // Three shapes the per-book projection has to get right (LOOM-127):
