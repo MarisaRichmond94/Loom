@@ -282,3 +282,65 @@ Three snapshots taken in the same minute produced three distinct files
 
 **Re-run these drills periodically.** A backup chain that worked in July is not
 evidence about November.
+
+---
+
+## Reader tier data rules (LOOM-124)
+
+The reader tier adds two database files beside `dev.db`. They are **not** in the
+backup rotation above, and that is deliberate — but the reasons differ, so know
+which is which before you go looking for a copy of one.
+
+| File | What it is | If you lose it |
+|------|-----------|----------------|
+| `dev.db` | The manuscript. **Production.** | Everything above exists for this |
+| `content.db` | Published, canon-flattened snapshot the reader app serves | **Nothing.** Re-run publish; it is derived from `dev.db` |
+| `reader.db` | Family readers, their reading positions, their comments | **Gone permanently.** Single copy, by choice |
+| `sandbox.db` | Synthetic fixture for development and tests | Nothing. `node scripts/build-sandbox-db.mjs` |
+
+`reader.db` holding the only copy of your family's comments is an accepted
+trade, not an oversight (LOOM-134). If that ever stops feeling right, it is
+small, and adding it to `ops/book_backup.sh` is one line — **via the backup
+API, never `cp`**, for the reason directly below.
+
+### Never `cp` a SQLite file
+
+The WAL is not inside the `.db` file. `cp dev.db somewhere` gives you a copy
+that is missing every write still sitting in `dev.db-wal` — it opens fine, looks
+plausible, and is silently stale. This has bitten us before, and it presents as
+a code bug rather than a backup bug, which is what makes it expensive.
+
+Use the backup API (`VACUUM INTO`, or `better-sqlite3`'s `.backup()`), which is
+what the scripts above already do.
+
+### Never point anything at `dev.db` "just to look"
+
+`.env` ships `DATABASE_URL="file:./dev.db"`, so production is the **default** for
+anything that reads that variable — `npm run dev`, `prisma migrate`, any script.
+Three guards exist because of that (LOOM-125):
+
+- `tests/setup/dbGuard.ts` — runs before every Jest file in both projects. Fails
+  loudly if `DATABASE_URL` resolves to `dev.db` or a `dev.db.*` snapshot, and
+  repoints an unset one at `sandbox.db` so the fallback in `src/lib/prisma.ts`
+  can never quietly engage in a test.
+- `src/lib/readonlyDb.ts` — the one sanctioned way to open a database this
+  process does not own. `readonly: true` means a write **throws** rather than
+  relying on everyone remembering. Publish uses it for `dev.db`; Loom uses it
+  for `reader.db`.
+- `src/lib/dbSafety.ts` — `assertNotProductionDb()`, shared by the above and by
+  the reader app's boot check.
+
+One deliberate exception: `tests/unit/canonTemplateResolve.test.ts` reads
+`dev.db` directly, because its whole value is checking the export against real
+prose that synthetic fixtures do not contain. It shells out to `sqlite3` with
+`-readonly`, so it is structurally incapable of writing.
+
+### Migrations against the manuscript
+
+`prisma migrate dev` offers to **drop and recreate** the database when it detects
+drift. Against `dev.db` that is unrecoverable without the backups above.
+
+    # never `migrate dev` against dev.db
+    npx prisma migrate deploy          # after a verified backup
+
+`migrate dev` is for `sandbox.db` and nothing else.

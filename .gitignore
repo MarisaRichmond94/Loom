@@ -35,6 +35,11 @@ yarn-error.log*
 
 # database
 *.db
+# SQLite sidecars. `*.db` does NOT match these — a live connection leaves a
+# -wal that can reach hundreds of MB, and it shows up as untracked at exactly
+# the moment someone is most likely to `git add -A` without looking (LOOM-125).
+*.db-wal
+*.db-shm
 
 # vercel
 .vercel
@@ -54,6 +59,15 @@ next-env.d.ts
 /public/narration
 /public/avatar.jpg
 /data
+
+# Reader tier assets (LOOM-124). The rules above are ROOTED, so they do not
+# reach the reader app's own public/ — published covers, portraits and
+# narration audio copied there by the publish step would otherwise be staged
+# for commit. Same media, same reason, different root.
+/reader/public/characters
+/reader/public/covers
+/reader/public/music
+/reader/public/narration
 # local pre-migration database snapshots — never commit (large binaries)
 dev.db.pre-*
 
