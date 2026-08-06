@@ -517,11 +517,11 @@ export default function BookDetailPage() {
             <LuEye size={12} /> Preview
           </a>
         </div>
-        <div className="flex gap-8 mb-8 items-stretch">
+        <div className="flex gap-4 mb-4 items-stretch">
           {/* Cover */}
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="w-44 rounded-lg border-2 border-dashed border-accent/20 flex items-center justify-center cursor-pointer hover:border-accent/50 transition overflow-hidden shrink-0 bg-surface-raised self-stretch"
+            className="w-[264px] h-96 rounded-lg border-2 border-dashed border-accent/20 flex items-center justify-center cursor-pointer hover:border-accent/50 transition overflow-hidden shrink-0 bg-surface-raised"
           >
             {book.coverPath ? (
               <img src={book.coverPath} alt="Book cover" className="w-full h-full object-cover" />

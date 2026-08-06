@@ -35,17 +35,18 @@ export default function BookSkeleton() {
       </div>
 
       {/* Cover + title/synopsis row */}
-      <div className="flex gap-8 mb-8 items-stretch">
+      <div className="flex gap-4 mb-4 items-stretch">
         {/* surface-raised, matching the real cover well — it was surface-muted,
-            a tier lighter than anything on the loaded page. */}
-        <div className="w-44 rounded-lg border-2 border-dashed border-accent/20 bg-surface-raised self-stretch" style={{ minHeight: '264px' }} />
+            a tier lighter than anything on the loaded page. Fixed at 264x384
+            (w-[264px] h-96), the same size the real cover now renders at. */}
+        <div className="w-[264px] h-96 rounded-lg border-2 border-dashed border-accent/20 bg-surface-raised" />
         <div className="flex-1 flex flex-col gap-4">
           <div className="w-full h-12 bg-surface-raised border border-accent/20 rounded-lg" />
           <div className="w-full flex-1 bg-surface-raised border border-accent/20 rounded-lg" style={{ minHeight: '200px' }} />
         </div>
       </div>
       {/* Stats grid */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-4 gap-4 mb-4">
         {[0, 1, 2, 3].map(i => (
           <div key={i} className="bg-surface-raised border border-accent/10 rounded-lg px-4 py-5 flex flex-col items-center gap-1">
             <div className="h-8 w-10 bg-surface-muted rounded" />
