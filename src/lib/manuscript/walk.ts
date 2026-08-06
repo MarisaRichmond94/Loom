@@ -32,6 +32,37 @@ export type WalkChoicePoint = {
   ambiguous: boolean
 }
 
+/**
+ * One renderable unit on the canon path, with its identity intact.
+ *
+ * `contents` below is a `string[]`, which is all the manuscript export needs —
+ * it concatenates prose into a document. A reading surface needs more: stable
+ * ids to anchor comments and reading positions to, and the non-prose blocks a
+ * document cannot represent. Emitting both from ONE walk is deliberate; a
+ * second walk that computed the canon path separately would be a second thing
+ * to drift.
+ */
+export type WalkedBlock = {
+  /**
+   * Stable across republishes, which is the whole point — reader positions and
+   * comment anchors hang off these.
+   *
+   * Real blocks use their own id. Content that is not a block in its own right
+   * gets a deterministic composite of ids that are themselves stable:
+   *   - a taken branch's inline text -> `<choicePointId>:choice:<choiceId>`
+   *   - a matched conditional override -> `<fragmentBlockId>:override:<id>`
+   * Never generated, never positional.
+   */
+  id: string
+  /** `text` or `soundtrack`. Resolved conditionals arrive already flattened to text. */
+  type: string
+  /** TipTap doc JSON for text; the media path for soundtrack. */
+  content: string
+  displayType: string | null
+  /** The ContentBlock this came from, for tracing back into Loom. */
+  sourceBlockId: string
+}
+
 export type ManuscriptChapter = {
   id: string
   // "1", "2", … for numbered chapters; the authored title otherwise.
@@ -46,6 +77,14 @@ export type ManuscriptChapter = {
   // template substitution inside the chapter see mid-chapter updates via
   // the walk, so each content entry carries its own state snapshot.
   stateByContent: StoryState[]
+  /**
+   * The same path as `contents`, plus the blocks a manuscript cannot carry.
+   *
+   * NOT a parallel array to `contents` — `soundtrack` blocks appear here and
+   * deliberately never there. Putting a media path into `contents` would write
+   * it into the exported .docx/.pages.
+   */
+  blocks: WalkedBlock[]
 }
 
 export type WalkResult = {
@@ -60,6 +99,8 @@ type BlockIn = {
   type: string
   content: string | null
   prompt: string | null
+  /** Presentation hint the reader needs; irrelevant to the manuscript export. */
+  displayType?: string | null
   /**
    * Per-block gate, evaluated against the evolving story state.
    *
@@ -168,6 +209,16 @@ export function walkBook(
       date: chapter.date,
       contents: [],
       stateByContent: [],
+      blocks: [],
+    }
+
+    // Every push into `contents` records the block it came from in the same
+    // step. One helper rather than two call sites per emission, so the
+    // manuscript path and the reader path cannot drift apart.
+    const emitText = (content: string, id: string, sourceBlockId: string, displayType: string | null = null) => {
+      out.contents.push(content)
+      out.stateByContent.push({ ...state })
+      out.blocks.push({ id, type: 'text', content, displayType, sourceBlockId })
     }
 
     let jumpToChapterId: string | null = null
@@ -181,9 +232,20 @@ export function walkBook(
       // order.
       if (!isBlockVisible(block.condition, state)) continue
       if (block.type === 'text') {
+        if (block.content) emitText(block.content, block.id, block.id, block.displayType ?? null)
+        continue
+      }
+      if (block.type === 'soundtrack') {
+        // Reader-only, and deliberately NOT pushed into `contents`: that array
+        // becomes the exported .docx/.pages, and a media path is not prose.
         if (block.content) {
-          out.contents.push(block.content)
-          out.stateByContent.push({ ...state })
+          out.blocks.push({
+            id: block.id,
+            type: 'soundtrack',
+            content: block.content,
+            displayType: block.displayType ?? null,
+            sourceBlockId: block.id,
+          })
         }
         continue
       }
@@ -206,8 +268,10 @@ export function walkBook(
           continue
         }
         if (matched.content) {
-          out.contents.push(matched.content)
-          out.stateByContent.push({ ...state })
+          // Anchored on the fragment block plus the override, both stable ids.
+          // The reader receives this already resolved to text — no condition
+          // evaluation happens on the reader tier.
+          emitText(matched.content, `${block.id}:override:${matched.id}`, block.id)
         }
         // A matched "ends chapter" override cleanly closes the chapter here:
         // its content is the last thing shown and the walk resumes at the next
@@ -259,16 +323,14 @@ export function walkBook(
           `Chapter ${label}: the selected branch "${resolved.label}" is a bad ending — the manuscript stops there.`,
         )
         if (resolved.endingMessage) {
-          out.contents.push(resolved.endingMessage)
-          out.stateByContent.push({ ...state })
+          emitText(resolved.endingMessage, `${block.id}:choice:${resolved.id}`, block.id)
         }
         endWalk = true
         break
       }
       // Inline branch text renders at the choice point's position.
       if (resolved.endingMessage) {
-        out.contents.push(resolved.endingMessage)
-        out.stateByContent.push({ ...state })
+        emitText(resolved.endingMessage, `${block.id}:choice:${resolved.id}`, block.id)
       }
       if (resolved.targetChapterId) {
         // The reader is carried straight to the target chapter; anything

@@ -143,6 +143,10 @@ db.transaction(() => {
   insert('Choice', { id: 'sbx-cp2-bad', choicePointId: 'sbx-b1-c2-cp', order: 2, label: 'Ask his name', setsVariables: JSON.stringify({ spokeToFerryman: true }), isBadEnding: 1, endsChapter: 0, endingMessage: doc('BAD ENDING PROSE — the river took her. Must never reach a reader.') })
 
   insert('ContentBlock', { id: 'sbx-b1-c3-b1', chapterId: 'sbx-b1-c3', order: 1, type: 'text', content: doc('Ashfall, and then nothing at all for a while.'), wordCount: 9 })
+  // Condition-gated block (LOOM-138). tookTheLantern defaults to false, so this
+  // is NOT on the canon path and must never reach the reader tier. Before
+  // LOOM-138 the walk could not see this gate at all and included it.
+  insert('ContentBlock', { id: 'sbx-b1-c3-b2', chapterId: 'sbx-b1-c3', order: 2, type: 'text', condition: JSON.stringify({ tookTheLantern: true }), content: doc('GATED PROSE — only if she took the lantern. Must never reach a reader.'), wordCount: 12 })
 
   // ---- Book 2 --------------------------------------------------------------
   insert('Chapter', { id: 'sbx-b2-c1', bookId: B2, title: 'Tidewater', order: 1, numbered: 1, pov: 'Idris' })
