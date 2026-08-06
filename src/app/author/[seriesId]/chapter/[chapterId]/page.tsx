@@ -1102,6 +1102,14 @@ export default function ChapterEditorPage() {
     <div className="flex min-h-full">
     <div className="flex-1 min-w-0 px-8 min-h-full flex flex-col">
       <div className="pb-3 flex-1">
+        {/* Above the sticky header, so it is the first thing on the page
+            rather than something found on the way to the prose (LOOM-122).
+            Deliberately NOT inside the sticky box: that block publishes its
+            own height as --loom-chapter-header-h for every scroll target on
+            the page, and a banner that expands and collapses inside it would
+            move all of them. Renders nothing when the chapter is clean. */}
+        <ChapterReachabilityBanner seriesId={seriesId} chapterId={chapterId} />
+
         {/* Chapter header — sticky to the top of <main>'s scroll area so the
             title, POV, date, find bar, collapse-all and ☰ action menu stay
             reachable at any depth in the chapter (KAN-30).
@@ -1540,13 +1548,6 @@ export default function ChapterEditorPage() {
             <button onClick={clearLensRef.current} className="ml-auto shrink-0 text-accent hover:underline">Clear path</button>
           </div>
         )}
-
-        {/* Sits below the path-lens notice and above the blocks: both are
-            statements about this chapter as a whole, and this one is about
-            what a reader can never get to, which belongs before the prose
-            rather than buried in the dock (LOOM-122). Renders nothing when
-            the chapter is clean. */}
-        <ChapterReachabilityBanner seriesId={seriesId} chapterId={chapterId} />
 
         {/* Each block row reserves a 23px gutter on its right (8px gap + the
             15px delete/collapse column), which made the cards sit 23px further

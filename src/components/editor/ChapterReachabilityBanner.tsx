@@ -64,7 +64,9 @@ export default function ChapterReachabilityBanner({
     : ''
 
   return (
-    <div className={`mb-3 rounded-lg border ${tone.border} ${tone.bg}`}>
+    // mt-3 because nothing sits above this now — the column has no top padding
+    // of its own, and the sticky header below supplies its own pt-3.
+    <div className={`mt-3 rounded-lg border ${tone.border} ${tone.bg}`}>
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
@@ -113,11 +115,16 @@ export default function ChapterReachabilityBanner({
                 )}
               </div>
             ))}
+            {/* A bordered control rather than accent-coloured text. The accent
+                is a violet; this sits on choice-kill-bg, which is a deep red in
+                dark mode and a mid red in light — the violet is close enough to
+                both to read as muddy rather than as a link. Same treatment as
+                the ledger's own control, so the two surfaces match. */}
             <a
               href={`/author/${seriesId}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex w-fit items-center gap-1.5 text-[11px] text-accent hover:underline"
+              className="inline-flex w-fit items-center gap-1.5 rounded border border-accent/30 bg-surface-overlay px-2.5 py-1 text-[11px] font-medium text-ink transition hover:border-accent/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               See every path in the series <LuExternalLink size={10} />
             </a>
