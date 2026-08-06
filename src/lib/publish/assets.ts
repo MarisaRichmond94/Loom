@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { copyFileSync, existsSync, linkSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import path from 'node:path'
 
 /**
@@ -21,10 +21,14 @@ import path from 'node:path'
 const MEDIA_DIRS = ['covers', 'characters', 'music', 'narration'] as const
 
 export type AssetReport = {
+  /** Hardlinked — the normal case, and free. */
+  linked: number
+  /** Copied because a hardlink was impossible (different filesystem). */
   copied: number
   pruned: number
   /** Referenced but not on disk. Reported, never silently skipped. */
   missing: string[]
+  /** Bytes actually consumed. Hardlinks contribute nothing. */
   bytes: number
 }
 
@@ -107,7 +111,7 @@ export function publishAssets(opts: {
     )
   }
 
-  const report: AssetReport = { copied: 0, pruned: 0, missing: [], bytes: 0 }
+  const report: AssetReport = { linked: 0, copied: 0, pruned: 0, missing: [], bytes: 0 }
 
   const wanted = new Set<string>()
   for (const ref of opts.referenced) {
@@ -124,16 +128,39 @@ export function publishAssets(opts: {
     const dest = path.join(opts.readerRoot, rel)
     assertInside(opts.readerRoot, dest)
     mkdirSync(path.dirname(dest), { recursive: true })
-    // Skip identical files so a republish is cheap — narration audio is large,
-    // and almost none of it changes between publishes.
+
     const srcStat = statSync(src)
     if (existsSync(dest)) {
       const destStat = statSync(dest)
-      if (destStat.size === srcStat.size && destStat.mtimeMs >= srcStat.mtimeMs) continue
+      // Already the same inode: this is the hardlink from a previous publish.
+      // Nothing to do, and the check is exact rather than heuristic.
+      if (destStat.dev === srcStat.dev && destStat.ino === srcStat.ino) continue
+      // A stale copy (or a link to a replaced file) — clear it and relink.
+      rmSync(dest, { force: true })
     }
-    copyFileSync(src, dest)
-    report.copied += 1
-    report.bytes += srcStat.size
+
+    // HARDLINK, not copy. public/narration alone is 2.6 GB, and duplicating it
+    // per publish would be pure waste — a hardlink is a second name for the
+    // same inode and costs nothing.
+    //
+    // Safe for the prune: rmSync on a hardlink drops that name only. The
+    // source keeps its own, and the data survives until every name is gone.
+    // So "the reader tier can delete its own files" stays true.
+    //
+    // The one rule this imposes: the reader tier must treat its assets as
+    // READ-ONLY. Writing through a hardlink writes the author's file too,
+    // because there is only one inode. Nothing on the reader side writes media
+    // — it serves it — but that is now load-bearing rather than incidental.
+    try {
+      linkSync(src, dest)
+      report.linked += 1
+    } catch {
+      // Different filesystem (EXDEV), or a filesystem without hardlinks. Copy
+      // instead — correct, just not free.
+      copyFileSync(src, dest)
+      report.copied += 1
+      report.bytes += srcStat.size
+    }
   }
 
   for (const rel of existing) {

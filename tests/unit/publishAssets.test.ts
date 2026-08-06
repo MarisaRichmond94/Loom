@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
 import { mkdtempSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
@@ -62,7 +62,7 @@ describe('publishAssets', () => {
     write(publicRoot, 'covers/wanted.jpg', 'W')
     write(publicRoot, 'covers/draft-spoiler.jpg', 'D')
     const report = publishAssets({ publicRoot, readerRoot, referenced: ['/covers/wanted.jpg'] })
-    expect(report.copied).toBe(1)
+    expect(report.linked + report.copied).toBe(1)
     expect(existsSync(path.join(readerRoot, 'covers/wanted.jpg'))).toBe(true)
     // A draft's cover is a spoiler; mirroring the directory would ship it.
     expect(existsSync(path.join(readerRoot, 'covers/draft-spoiler.jpg'))).toBe(false)
@@ -90,7 +90,7 @@ describe('publishAssets', () => {
   it('reports a referenced file that is missing instead of failing silently', () => {
     const report = publishAssets({ publicRoot, readerRoot, referenced: ['/covers/gone.jpg'] })
     expect(report.missing).toEqual(['/covers/gone.jpg'])
-    expect(report.copied).toBe(0)
+    expect(report.linked + report.copied).toBe(0)
   })
 
   it('ignores hostile references rather than reaching outside public/', () => {
@@ -127,12 +127,50 @@ describe('publishAssets', () => {
     expect(readFileSync(path.join(publicRoot, 'narration/precious.m4a'), 'utf8')).toBe('AUDIOBOOK')
   })
 
+  it('hardlinks rather than copying, so 2.6 GB of narration costs nothing', () => {
+    const src = write(publicRoot, 'narration/big.m4a', 'AUDIO')
+    const report = publishAssets({ publicRoot, readerRoot, referenced: ['/narration/big.m4a'] })
+    expect(report.linked).toBe(1)
+    expect(report.copied).toBe(0)
+    expect(report.bytes).toBe(0)
+    // Same inode — one file, two names.
+    const dest = path.join(readerRoot, 'narration/big.m4a')
+    expect(statSync(dest).ino).toBe(statSync(src).ino)
+    expect(statSync(src).nlink).toBe(2)
+  })
+
+  it('pruning a hardlink leaves the author&apos;s file whole', () => {
+    // The property that makes hardlinks safe here. rmSync drops one NAME; the
+    // data survives while any name remains. Without this, the prune would be
+    // deleting the author's audiobook rather than the reader's view of it.
+    const src = write(publicRoot, 'narration/keeper.m4a', 'AUDIOBOOK')
+    publishAssets({ publicRoot, readerRoot, referenced: ['/narration/keeper.m4a'] })
+    const report = publishAssets({ publicRoot, readerRoot, referenced: [] })
+    expect(report.pruned).toBe(1)
+    expect(existsSync(path.join(readerRoot, 'narration/keeper.m4a'))).toBe(false)
+    expect(readFileSync(src, 'utf8')).toBe('AUDIOBOOK')
+    expect(statSync(src).nlink).toBe(1)
+  })
+
+  it('relinks when the source file was replaced', () => {
+    // Loom rewrites a cover: new inode, same path. The stale link must be
+    // dropped and remade, or the reader would serve the old image forever.
+    write(publicRoot, 'covers/a.jpg', 'OLD')
+    publishAssets({ publicRoot, readerRoot, referenced: ['/covers/a.jpg'] })
+    rmSync(path.join(publicRoot, 'covers/a.jpg'))
+    const fresh = write(publicRoot, 'covers/a.jpg', 'NEW')
+    const report = publishAssets({ publicRoot, readerRoot, referenced: ['/covers/a.jpg'] })
+    expect(report.linked).toBe(1)
+    expect(readFileSync(path.join(readerRoot, 'covers/a.jpg'), 'utf8')).toBe('NEW')
+    expect(statSync(path.join(readerRoot, 'covers/a.jpg')).ino).toBe(statSync(fresh).ino)
+  })
+
   it('skips a re-copy when the destination is already current', () => {
     write(publicRoot, 'narration/big.m4a', 'AUDIO')
     const first = publishAssets({ publicRoot, readerRoot, referenced: ['/narration/big.m4a'] })
-    expect(first.copied).toBe(1)
+    expect(first.linked + first.copied).toBe(1)
     const second = publishAssets({ publicRoot, readerRoot, referenced: ['/narration/big.m4a'] })
-    expect(second.copied).toBe(0)
+    expect(second.linked + second.copied).toBe(0)
     expect(second.pruned).toBe(0)
   })
 })
