@@ -84,17 +84,27 @@ describe('publish builds content.db', () => {
     expect(tables).not.toContain('StoryVariable')
   })
 
-  fixtureIt('reduces a draft book to a title+order stub', () => {
+  fixtureIt('reduces a draft book to title, order and cover — nothing else', () => {
     build()
     const draft = read(`SELECT * FROM Book WHERE published=0`)
     expect(draft).toHaveLength(1)
     expect(draft[0].title).toBe('The Unfinished Book')
+    // The narrow, deliberate exception: the landing dims a draft's cover
+    // rather than showing a blank slot, and a cover is marketing not plot.
+    expect(draft[0].coverPath).toBe('/covers/sbx-book-3.jpg')
+    // The synopsis is NOT the exception. The landing blurs lorem ipsum over
+    // drafts, so shipping the real blurb would look identical and differ only
+    // in making it readable from the network response.
     expect(draft[0].synopsis).toBe('')
-    expect(draft[0].coverPath).toBeNull()
     expect(read(`SELECT id FROM Chapter WHERE bookId='sbx-book-3-draft'`)).toHaveLength(0)
     const all = read(`SELECT content FROM ContentBlock`).map(r => r.content).join(' ')
     expect(all).not.toContain('DRAFT PROSE')
     expect(all).not.toContain('SPOILER SYNOPSIS')
+  })
+
+  fixtureIt('hardlinks a draft cover so the landing can dim it', () => {
+    const result = build()
+    expect(result.referencedAssets).toContain('/covers/sbx-book-3.jpg')
   })
 })
 
@@ -165,10 +175,13 @@ describe('publish selects narration by canon hash', () => {
     const result = build()
     expect(result.referencedAssets).toContain('/narration/sbx-b1-c3.m4a')
     expect(result.referencedAssets).not.toContain('/narration/sbx-b1-c1-branch.mp3')
-    // The soundtrack and the published cover come along; the draft's does not.
+    // Soundtrack and covers come along — including the DRAFT's, which the
+    // series landing dims rather than leaving a blank slot. Covers are the one
+    // deliberate exception to a stub sending nothing but title and order; the
+    // draft's synopsis and chapters are still absent, asserted above.
     expect(result.referencedAssets).toContain('/music/sbx-lantern-theme.mp3')
     expect(result.referencedAssets).toContain('/covers/sbx-book-1.jpg')
-    expect(result.referencedAssets).not.toContain('/covers/sbx-book-3.jpg')
+    expect(result.referencedAssets).toContain('/covers/sbx-book-3.jpg')
   })
 })
 

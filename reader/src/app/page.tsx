@@ -55,7 +55,11 @@ export default function Home() {
                 </span>
               )}
             </div>
-            {b.published && b.synopsis && (
+            {/* `!!` is load-bearing. SQLite has no boolean type, so `published`
+                arrives as 0 or 1 — and `0 && …` evaluates to 0, which React
+                renders as a literal "0" under every unpublished book. The same
+                trap is waiting on every other flag read out of content.db. */}
+            {!!b.published && !!b.synopsis && (
               <p className="text-sm text-ink-muted mt-2 leading-relaxed">{b.synopsis}</p>
             )}
           </div>

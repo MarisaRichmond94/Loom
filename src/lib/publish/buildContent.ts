@@ -398,13 +398,27 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
 
         // ---- stub: a draft, or eligible but not yet sent ---------------------
         if (!rebuilding) {
-          // Title and order only. No synopsis (it spoils), no cover, no
-          // chapters — the reader shows "Coming Soon" and there is nothing
-          // else present for a bug to expose.
+          // Title, order and COVER. No synopsis, no chapters.
+          //
+          // The cover is a deliberate, narrow exception to "a stub sends
+          // nothing but title and order" (author's call): the reader's series
+          // landing dims a draft's cover to 40% rather than leaving a blank
+          // slot, and a cover is marketing rather than plot.
+          //
+          // The synopsis stays behind. The landing blurs LOREM IPSUM over
+          // drafts, not the real blurb, so publishing the real one would look
+          // identical and differ only in putting an unpublished book's
+          // synopsis into every network response.
           out.prepare(
             `INSERT INTO Book (id, seriesId, title, synopsis, coverPath, "order", published)
-             VALUES (@id, @seriesId, @title, '', NULL, @order, 0)`,
-          ).run({ id: book.id, seriesId: book.seriesId, title: book.title, order: book.order })
+             VALUES (@id, @seriesId, @title, '', @coverPath, @order, 0)`,
+          ).run({
+            id: book.id,
+            seriesId: book.seriesId,
+            title: book.title,
+            coverPath: book.coverPath,
+            order: book.order,
+          })
           result.books.push({
             id: book.id, title: book.title, order: book.order, eligible,
             source: 'stub', chapters: 0, blocks: 0, emptyChapters: [], narrated: 0,
