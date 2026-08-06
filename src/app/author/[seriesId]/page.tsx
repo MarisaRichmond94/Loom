@@ -26,6 +26,12 @@ const ExplorePanel = dynamic(() => import('@/components/explore/ExplorePanel'), 
   ssr: false,
   loading: () => <ExplorePanelSkeleton />,
 })
+// Same treatment again: the ledger walks the whole series on mount. Cheap
+// (milliseconds, and a pure read) but there is no reason to pay for it on
+// behalf of someone who came to open a book.
+const ReachabilityLedger = dynamic(() => import('@/components/series/ReachabilityLedger'), {
+  ssr: false,
+})
 import ExplorePanelSkeleton from '@/components/editor/ExplorePanelSkeleton'
 import { prefetchScope } from '@/components/explore/scopeCache'
 import { prefetchSeriesCharacters } from '@/components/series/seriesCharactersCache'
@@ -89,6 +95,22 @@ export default function AuthorSeriesPage() {
   }, [seriesId, series.books])
 
   useEffect(() => { loadStats() }, [loadStats])
+
+  // Unreachable branches per book, for the badge on each book card (LOOM-122).
+  //
+  // Fetched here rather than lifted out of the Paths tab: the whole point of
+  // the badge is to be seen by someone who never opens that tab. It is a pure
+  // read and it fails silently — a badge that cannot load is a missing badge,
+  // never an error on a page that is mostly about something else.
+  const [deadByBook, setDeadByBook] = useState<Record<string, number>>({})
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/series/${seriesId}/reachability`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled && d?.summary) setDeadByBook(d.summary.deadByBook ?? {}) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [seriesId])
   useEffect(() => { setTitleDraft(series.title) }, [series.title])
   useEffect(() => { setDescriptionDraft(series.description ?? '') }, [series.description])
   useEffect(() => { setAuthorName(localStorage.getItem('loom-author-name') ?? '') }, [])
@@ -282,6 +304,17 @@ export default function AuthorSeriesPage() {
                         ) : !book.published && (
                           <span className="text-[10px] uppercase tracking-widest text-ink-faint border border-accent/30 rounded px-1.5 py-0.5 shrink-0">Draft</span>
                         )}
+                        {/* Sits with the status chips rather than in the stats
+                            grid below: those four are all "how much is here",
+                            and this is not a size — it is something to fix. */}
+                        {(deadByBook[book.id] ?? 0) > 0 && (
+                          <span
+                            title="Written, but no reader can reach it. See the Path(s) tab."
+                            className="text-[10px] uppercase tracking-widest text-choice-kill border border-choice-kill-border bg-choice-kill-bg rounded px-1.5 py-0.5 shrink-0"
+                          >
+                            {deadByBook[book.id]} unreachable
+                          </span>
+                        )}
                       </div>
                       <div className="grid grid-cols-4 gap-3">
                         {[
@@ -356,6 +389,13 @@ export default function AuthorSeriesPage() {
             id: 'explore',
             label: 'Explore',
             content: <ExplorePanel seriesId={seriesId} bookId={null} />,
+          }, {
+            // Last, and series-scoped by necessity rather than preference: a
+            // variable set in book 2 is read in book 4, so there is no honest
+            // per-book version of this view (LOOM-122).
+            id: 'paths',
+            label: 'Path(s)',
+            content: <ReachabilityLedger seriesId={seriesId} />,
           }]}
         />
       </div>
