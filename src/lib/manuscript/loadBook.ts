@@ -57,6 +57,10 @@ export async function loadManuscriptBook(seriesId: string, bookId: string): Prom
         type: b.type,
         content: b.content,
         prompt: b.prompt,
+        // Load-bearing. Omitting this is what let the canon export include
+        // choice points the reader gates away — walkBook cannot honour a
+        // condition it never receives. See the block gate in walk.ts.
+        condition: b.condition,
         choices: b.choices.map(ch => ({
           id: ch.id,
           label: ch.label,

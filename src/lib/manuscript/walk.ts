@@ -1,5 +1,6 @@
 import {
   applyChoice,
+  matchesCondition,
   resolveConditionalOverride,
   type ChoiceRecord,
   type ChoiceSetValue,
@@ -59,6 +60,16 @@ type BlockIn = {
   type: string
   content: string | null
   prompt: string | null
+  /**
+   * Per-block gate, evaluated against the evolving story state.
+   *
+   * The writer uses this to make a choice point mutually exclusive with an
+   * earlier one — "Does Noah pull the trigger?" is gated on
+   * `didJaredKillHisGrandpa: false`, so exactly one of them can fire. The
+   * reader has always honoured it; this walk did not, because the field was
+   * dropped in loadManuscriptBook and absent from this type.
+   */
+  condition?: string | null
   choices: Array<{
     id: string
     label: string
@@ -163,6 +174,12 @@ export function walkBook(
     let endWalk = false
 
     for (const block of [...chapter.blocks].sort((a, b) => a.order - b.order)) {
+      // Block-level gate, checked against state as of THIS point in the walk —
+      // not the chapter's opening state. A choice point gated on a variable an
+      // earlier choice point in the same chapter sets (Nobody's Hero 24 does
+      // exactly this) only resolves correctly if the two are evaluated in
+      // order.
+      if (!isBlockVisible(block.condition, state)) continue
       if (block.type === 'text') {
         if (block.content) {
           out.contents.push(block.content)
@@ -285,6 +302,28 @@ export function walkBook(
 
 function safeParseCondition(raw: string): Record<string, boolean | number | string> {
   try { return JSON.parse(raw) } catch { return {} }
+}
+
+/**
+ * Whether a block fires under the current story state.
+ *
+ * Mirrors `isChapterVisible` deliberately, including failing OPEN on an absent
+ * or unparseable condition: prose that cannot be evaluated should still reach
+ * the manuscript, because silently dropping a paragraph is worse than showing
+ * one that should have been gated.
+ *
+ * Goes through `matchesCondition` rather than a plain equality check because
+ * block conditions can be compound — The Secrets We Keep chapter 10 gates a
+ * choice point on an `{op:'or', clauses:[…]}`, which a naive comparison would
+ * silently evaluate as false and drop.
+ */
+function isBlockVisible(condition: string | null | undefined, state: StoryState): boolean {
+  if (!condition) return true
+  try {
+    return matchesCondition(JSON.parse(condition), state)
+  } catch {
+    return true
+  }
 }
 
 // Endings are stored as TipTap JSON or legacy plain text; pull a short
