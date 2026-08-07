@@ -164,32 +164,43 @@ export default function ChapterView({
         </div>
       </main>
 
-      {/* Sticky footer rail, like Loom's. Page-coloured rather than raised —
-          it reads as the bottom of the page, not a separate bar. */}
-      <div className="sticky bottom-0 bg-surface-base border-t border-accent/10">
-        {/* A hairline with a travelling DOT, not a filling bar: the dot says
-            "you are here in the chapter", where a filled bar reads as loading. */}
-        <div className="relative h-px bg-accent/15">
-          <div
-            className="absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 -translate-x-1/2 rounded-full bg-accent transition-[left] duration-150"
-            style={{ left: `${progress * 100}%` }}
-          />
-        </div>
-        <div className="px-8 py-2 flex items-center justify-between text-xs">
-          {prev ? (
-            <Link href={`/book/${bookId}/chapter/${prev.id}`} className="flex items-center gap-1.5 text-ink-muted hover:text-ink transition">
-              <LuArrowLeft size={12} /> {prev.numbered ? `Chapter ${prev.label}` : prev.label}
-            </Link>
-          ) : (
-            <Link href={`/book/${bookId}`} className="flex items-center gap-1.5 text-ink-muted hover:text-ink transition">
-              <LuArrowLeft size={12} /> {bookTitle}
-            </Link>
-          )}
-          {next && (
-            <Link href={`/book/${bookId}/chapter/${next.id}`} className="flex items-center gap-1.5 text-ink-muted hover:text-ink transition">
-              {next.numbered ? `Chapter ${next.label}` : next.label} <LuArrowRight size={12} />
-            </Link>
-          )}
+      {/* Sticky footer rail, like Loom's.
+
+          chrome-dark: it stays DARK in light mode. I had removed that on a
+          misread of a screenshot — the page above it is cream, the bar is not.
+
+          Progress is a filled accent bar with a dot at its leading edge, not a
+          lone dot: a dot on a hairline gave no sense of how far through the
+          chapter you were, which is the only thing this rail is for. */}
+      <div className="chrome-dark sticky bottom-0 bg-surface-raised">
+        <div className="px-8 py-3 flex items-center gap-6">
+          <div className="relative flex-1 min-w-0 h-1 rounded-full bg-surface-muted/60">
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-accent transition-[width] duration-150"
+              style={{ width: `${progress * 100}%` }}
+            />
+            <div
+              className="absolute top-1/2 h-2 w-2 -translate-y-1/2 -translate-x-1/2 rounded-full bg-accent transition-[left] duration-150"
+              style={{ left: `${progress * 100}%` }}
+            />
+          </div>
+
+          <div className="flex items-center gap-6 shrink-0 text-xs">
+            {prev ? (
+              <Link href={`/book/${bookId}/chapter/${prev.id}`} className="flex items-center gap-1.5 text-ink-muted hover:text-ink transition">
+                <LuArrowLeft size={12} /> {prev.numbered ? `Chapter ${prev.label}` : prev.label}
+              </Link>
+            ) : (
+              <Link href={`/book/${bookId}`} className="flex items-center gap-1.5 text-ink-muted hover:text-ink transition">
+                <LuArrowLeft size={12} /> {bookTitle}
+              </Link>
+            )}
+            {next && (
+              <Link href={`/book/${bookId}/chapter/${next.id}`} className="flex items-center gap-1.5 text-ink-muted hover:text-ink transition">
+                {next.numbered ? `Chapter ${next.label}` : next.label} <LuArrowRight size={12} />
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 
