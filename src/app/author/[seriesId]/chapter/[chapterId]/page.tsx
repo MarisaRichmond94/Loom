@@ -163,15 +163,17 @@ export default function ChapterEditorPage() {
   const panelTabRef = useRef(panelTab)
   panelTabRef.current = panelTab
 
-  // Restore the writer's last-used tab and width (LOOM-56) so reopening the
-  // dock doesn't drop them back to Notes at 360px. Read on mount rather than
-  // as a lazy useState initializer — localStorage isn't available during SSR.
+  // Restore the writer's last-used tab, width, and open state (LOOM-56) so
+  // reopening the dock doesn't drop them back to Notes at 360px, and so a
+  // reload doesn't force the dock closed. Read on mount rather than as a
+  // lazy useState initializer — localStorage isn't available during SSR.
   useEffect(() => {
     try {
       const savedTab = localStorage.getItem('loom-panel-tab') as PanelTab | null
       if (savedTab && PANEL_TAB_ORDER.includes(savedTab)) setPanelTab(savedTab)
       const savedWidth = Number(localStorage.getItem('loom-panel-width'))
       if (Number.isFinite(savedWidth) && savedWidth > 0) setPanelWidth(savedWidth)
+      if (localStorage.getItem('loom-panel-open') === 'true') setPanelOpen(true)
     } catch { /* ignore */ }
   }, [])
 
@@ -219,6 +221,7 @@ export default function ChapterEditorPage() {
   function openPanel(tab: PanelTab) {
     setPanelTabPersisted(tab)
     setPanelOpen(true)
+    try { localStorage.setItem('loom-panel-open', 'true') } catch { /* ignore */ }
     // Review needs a third of the viewport to be readable, and the panel
     // remembers whatever width notes last used. Widen on the way in rather
     // than leaving the writer to drag it open every time (KAN-22). Never
@@ -231,6 +234,7 @@ export default function ChapterEditorPage() {
   }
   function closePanel() {
     setPanelOpen(false)
+    try { localStorage.setItem('loom-panel-open', 'false') } catch { /* ignore */ }
   }
   // One rule for every side-panel menu item: closed → open on my tab; open on
   // another tab → switch to mine; open on my tab → close. Used to also back
