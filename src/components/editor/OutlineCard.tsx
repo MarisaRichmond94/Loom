@@ -39,6 +39,8 @@ export default function OutlineCard({
   dragListeners,
   dragStyle,
   isDragging = false,
+  active = false,
+  onToggleActive,
 }: {
   card: Card
   label: string
@@ -53,8 +55,11 @@ export default function OutlineCard({
   dragListeners?: Record<string, unknown>
   dragStyle?: React.CSSProperties
   isDragging?: boolean
+  /** Whether this card is the one active card on the board. Owned by the
+   * board, not the card, so opening one closes any other. */
+  active?: boolean
+  onToggleActive?: () => void
 }) {
-  const [active, setActive] = useState(false)
   const [pov, setPov] = useState(card.pov ?? '')
   const [povFocused, setPovFocused] = useState(false)
   const [date, setDate] = useState(card.date ?? '')
@@ -97,7 +102,7 @@ export default function OutlineCard({
       style={dragStyle}
       {...dragAttributes}
       {...dragListeners}
-      onClick={() => setActive(a => !a)}
+      onClick={() => onToggleActive?.()}
       className={`group relative flex h-[250px] flex-col overflow-hidden rounded-lg transition-colors ${
         synced
           ? 'border border-accent/10 bg-surface-raised hover:border-accent/25'
@@ -120,6 +125,9 @@ export default function OutlineCard({
               <Link
                 data-no-dnd="true"
                 href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
                 title="Open this chapter in Loom"
                 aria-label={`Open ${label} in Loom`}
                 className="rounded p-0.5 text-ink-faint transition hover:text-accent"

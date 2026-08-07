@@ -2,7 +2,7 @@ import { writeFile, mkdir } from 'fs/promises'
 import { existsSync } from 'fs'
 import path from 'path'
 import { prisma } from '@/lib/prisma'
-import { narrationHash, narrationSegments, DEFAULT_VOICE, type NarrationPlan, type WordTiming } from './text'
+import { narrationHash, narrationSegments, segHashesFor, variantHashFor, DEFAULT_VOICE, type NarrationPlan, type WordTiming } from './text'
 import { reconcileTiming } from './tokens'
 import type { StoryState } from '@/lib/storyEngine'
 import { synthesize, concatM4a } from './synthesize'
@@ -76,15 +76,6 @@ async function chapterPlan(
   if (state) for (const [k, val] of Object.entries(state)) merged[k] = val
   return narrationSegments(chapter.blocks, merged, answered ?? {})
 }
-
-const segHashesFor = (plan: NarrationPlan, voice: string) =>
-  plan.segments.map(s => narrationHash(s.text, voice))
-
-// Fingerprint the whole unlocked sequence: fold the per-segment hashes together
-// so a chapter edit, a different branch, or a newly-unlocked segment all yield a
-// distinct variant (and thus a cache miss that regenerates).
-const variantHashFor = (segHashes: string[], voice: string) =>
-  narrationHash(segHashes.join('|'), voice)
 
 // Synthesize + persist one segment clip, content-addressed by its hash. A no-op
 // when the clip already exists on disk, so the shared pre-choice segment (and

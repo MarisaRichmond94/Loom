@@ -10,7 +10,7 @@ import {
   type ChapterInWalk,
   type VariableIn,
 } from '@/lib/manuscript/walk'
-import { narrationHash, narrationSegments, type NarrationBlock, type NarrationPlan } from '@/lib/narration/text'
+import { narrationSegments, segHashesFor, variantHashFor, type NarrationBlock, type NarrationPlan } from '@/lib/narration/text'
 import { reconcileTiming } from '@/lib/narration/tokens'
 import { renderProseHtml } from '@/lib/publish/renderProse'
 import { publishAssets, type AssetReport, type AssetRef } from '@/lib/publish/assets'
@@ -316,8 +316,10 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
     const plan = narrationSegments(blocks, state, answered)
     if (!plan.segments.length) return null
     for (const voice of new Set(rows.map(r => r.voice as string))) {
-      const segHashes = plan.segments.map(s => narrationHash(s.text, voice))
-      const row = rows.find(r => r.contentHash === narrationHash(segHashes.join('|'), voice))
+      // The SAME helpers narration generation uses, imported rather than
+      // reimplemented: this is the rule for "which recording is this", and a
+      // second copy of it drifts into chapters publishing silent.
+      const row = rows.find(r => r.contentHash === variantHashFor(segHashesFor(plan, voice), voice))
       if (row) return { row, plan }
     }
     return null
