@@ -23,7 +23,17 @@ assertReaderSafe(CONTENT_DB_PATH)
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    // suppressHydrationWarning is REQUIRED here, not a papering-over. The
+    // script below deliberately adds `pre-light` to this element before React
+    // hydrates, so the live DOM and React's render disagree by design — and
+    // React logged that mismatch as an error on EVERY page load, which is both
+    // console noise and a real cost (it was driving `logd` hard enough to show
+    // up in system load).
+    //
+    // It applies to THIS element's own attributes only, one level deep. A
+    // genuine mismatch anywhere below still reports normally, so this does not
+    // blind the app to the class of bug it looks like it is hiding.
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head>
         {/* Applies the light preference BEFORE first paint. Without it every
             navigation flashes dark: the server cannot know the preference, and
