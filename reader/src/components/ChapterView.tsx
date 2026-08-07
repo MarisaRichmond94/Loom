@@ -9,6 +9,8 @@ import TrackRow from '@/components/TrackRow'
 import NarrationBar from '@/components/NarrationBar'
 import { PROSE_CLASS } from '@/shared/proseClass'
 import { useProgressRecorder } from '@/components/useProgressRecorder'
+import CommentThread from '@/components/CommentThread'
+import type { CommentView } from '@/lib/comments'
 import type { BookCharacter } from '@/components/BookLanding'
 
 /**
@@ -48,6 +50,7 @@ export default function ChapterView({
   povCharacterId,
   resumeOffset = 0,
   resumeNotice = null,
+  comments = null,
 }: {
   bookId: string
   chapterId: string
@@ -74,6 +77,8 @@ export default function ChapterView({
   resumeOffset?: number
   /** Set only when the resume ladder MOVED them, so we can say why. */
   resumeNotice?: string | null
+  /** Null when the viewer has not finished the chapter (LOOM-134). */
+  comments?: CommentView[] | null
 }) {
   const { lightMode, toggleLightMode, mounted } = useReaderTheme()
   const hoverRootRef = useRef<HTMLDivElement>(null)
@@ -242,6 +247,10 @@ export default function ChapterView({
             ),
           )}
         </div>
+
+        {/* Below the end of the prose, past the point the reader has finished.
+            Never a margin, never a sidebar, never previewed above (LOOM-134). */}
+        <CommentThread bookId={bookId} chapterId={chapterId} initial={comments} />
       </main>
 
       {/* Sticky footer rail, like Loom's.

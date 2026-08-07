@@ -4,6 +4,7 @@ import { type BookCharacter } from '@/components/BookLanding'
 import { hasContent, query } from '@/lib/db'
 import { requireReader, readerDbHandle } from '@/lib/readers'
 import { getProgress } from '@/shared/readerDb'
+import { commentsFor } from '@/lib/comments'
 
 export const dynamic = 'force-dynamic'
 
@@ -118,8 +119,16 @@ export default async function ChapterPage({
         ? 'That chapter was revised, so you’re back at the beginning of the book.'
         : null
 
+  // Null when they have not finished — the component renders one line and no
+  // count, because a count is itself a signal that something happens here.
+  const publishedAt = query<{ value: string }>(
+    `SELECT value FROM PublishMeta WHERE key = 'publishedAt'`,
+  )[0]?.value ?? null
+  const comments = commentsFor(reader.id, bookId, chapterId, publishedAt)
+
   return (
     <ChapterView
+      comments={comments}
       chapterId={chapterId}
       resumeOffset={resumeOffset}
       resumeNotice={resumeNotice}
