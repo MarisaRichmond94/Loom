@@ -19,9 +19,32 @@ import { useEffect, useRef } from 'react'
 /** How long the reader must settle before a scroll counts as a position. */
 const SETTLE_MS = 1500
 
-export function useProgressRecorder(bookId: string, chapterId: string, enabled: boolean) {
+export function useProgressRecorder(
+  bookId: string,
+  chapterId: string,
+  enabled: boolean,
+  /**
+   * Fired once, after the "finished" position has been written.
+   *
+   * The comment gate is decided on the SERVER when the page renders, so
+   * reaching the bottom cannot change a decision already made — without this,
+   * comments only appeared after navigating away and back. The callback runs
+   * after the write lands, so the re-check it triggers cannot race the very
+   * position it depends on.
+   */
+  onFinished?: () => void,
+) {
   const lastSent = useRef<number>(-1)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const announced = useRef(false)
+  // Kept in a ref so a new callback identity each render does not tear down
+  // and re-arm the listeners mid-scroll.
+  const finishedCb = useRef(onFinished)
+  finishedCb.current = onFinished
+
+  useEffect(() => {
+    announced.current = false
+  }, [chapterId])
 
   useEffect(() => {
     if (!enabled) return
@@ -55,20 +78,32 @@ export function useProgressRecorder(bookId: string, chapterId: string, enabled: 
       return idx
     }
 
+    const total = () => document.querySelectorAll('[data-para]').length
+
     const send = (offset: number, beacon: boolean) => {
       if (offset === lastSent.current) return
       lastSent.current = offset
       const body = JSON.stringify({ bookId, chapterId, offset })
+
       if (beacon && navigator.sendBeacon) {
         navigator.sendBeacon('/api/progress', new Blob([body], { type: 'application/json' }))
         return
       }
-      void fetch('/api/progress', {
+
+      const done = fetch('/api/progress', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body,
         keepalive: true,
       })
+
+      // Announce only after the write lands. Firing early would let the
+      // comment re-check race the position it is asking about, and lose.
+      const count = total()
+      if (count > 0 && offset >= count && !announced.current) {
+        announced.current = true
+        void done.then(() => finishedCb.current?.())
+      }
     }
 
     const onScroll = () => {

@@ -50,7 +50,7 @@ export default function ChapterView({
   povCharacterId,
   resumeOffset = 0,
   resumeNotice = null,
-  comments = null,
+  comments: initialComments = null,
 }: {
   bookId: string
   chapterId: string
@@ -118,7 +118,23 @@ export default function ChapterView({
     window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top - 120 })
   }, [resumeOffset, blocks])
 
-  useProgressRecorder(bookId, chapterId, true)
+  // Comments (LOOM-134) are gated on the server at render time, so finishing
+  // the chapter cannot reveal them on its own — the decision was already made.
+  // Re-ask once the finished position has been written. The server still
+  // decides; this only gives it a second chance to answer.
+  const [comments, setComments] = useState<CommentView[] | null>(initialComments)
+
+  useProgressRecorder(bookId, chapterId, true, () => {
+    void fetch(`/api/comments?bookId=${bookId}&chapterId=${chapterId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then((d: { comments: CommentView[] } | null) => {
+        if (d) setComments(d.comments)
+      })
+      .catch(() => {
+        // A failed re-check leaves the gated line in place, which is the safe
+        // side of this particular error.
+      })
+  })
 
   // Character mentions are `<span class="character-ref" data-character-name>`
   // inside HTML publish produced, so there is no React element to hang a
@@ -250,7 +266,7 @@ export default function ChapterView({
 
         {/* Below the end of the prose, past the point the reader has finished.
             Never a margin, never a sidebar, never previewed above (LOOM-134). */}
-        <CommentThread bookId={bookId} chapterId={chapterId} initial={comments} />
+        <CommentThread bookId={bookId} chapterId={chapterId} comments={comments} />
       </main>
 
       {/* Sticky footer rail, like Loom's.

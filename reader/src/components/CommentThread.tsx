@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { LuMessageSquare, LuTrash2, LuChevronDown, LuChevronUp } from 'react-icons/lu'
 import { NOT_YET_NOTICE, PACE_NUDGE } from '@/shared/commentGate'
 import type { CommentView } from '@/lib/comments'
@@ -32,15 +32,18 @@ const ago = (iso: string): string => {
 export default function CommentThread({
   bookId,
   chapterId,
-  initial,
+  comments: incoming,
 }: {
   bookId: string
   chapterId: string
   /** Null means the viewer has not finished this chapter. */
-  initial: CommentView[] | null
+  comments: CommentView[] | null
 }) {
-  const [comments, setComments] = useState<CommentView[] | null>(initial)
+  // Owned by the parent, which re-asks the server the moment the chapter is
+  // finished; mirrored locally so posting and deleting stay instant.
+  const [comments, setComments] = useState<CommentView[] | null>(incoming)
   const [open, setOpen] = useState(false)
+  useEffect(() => { setComments(incoming) }, [incoming])
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
 
