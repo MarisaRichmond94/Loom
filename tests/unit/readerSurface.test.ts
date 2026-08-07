@@ -174,3 +174,45 @@ describe('client calls stay inside the app’s mount point', () => {
     },
   )
 })
+
+describe('the reader cookie reaches the app it was issued for', () => {
+  // A trailing slash on the cookie path cost a real reader their session.
+  //
+  // The cookie was scoped `/loom/`, enrolment redirected to `/loom/`, and Next
+  // normalised that to `/loom` with a 308 — a path the cookie does not cover.
+  // The reader enrolled successfully and was handed straight back to the invite
+  // page, with nothing to indicate why.
+  //
+  // curl did not catch it: its path matching is looser than a browser's. So the
+  // rule itself is encoded here, from RFC 6265 §5.1.4.
+  const pathMatch = (requestPath: string, cookiePath: string): boolean => {
+    if (requestPath === cookiePath) return true
+    if (!requestPath.startsWith(cookiePath)) return false
+    if (cookiePath.endsWith('/')) return true
+    return requestPath[cookiePath.length] === '/'
+  }
+
+  it('a trailing slash breaks the app root — the bug', () => {
+    expect(pathMatch('/loom', '/loom/')).toBe(false)
+  })
+
+  it('without one, it covers the root and everything under it', () => {
+    for (const p of ['/loom', '/loom/', '/loom/book/abc', '/loom/api/comments']) {
+      expect(pathMatch(p, '/loom')).toBe(true)
+    }
+  })
+
+  it('and still does not leak to the app next door', () => {
+    // The reason it is scoped at all: the tailnet host serves another
+    // application, which has no business holding a token for the books.
+    for (const p of ['/', '/honey-dew', '/honey-dew/thing']) {
+      expect(pathMatch(p, '/loom')).toBe(false)
+    }
+  })
+
+  it('the route scopes the cookie with ROOT, not api("/")', () => {
+    const src = readFileSync(path.join(APP, 'r/[token]/route.ts'), 'utf8')
+    expect(src).toMatch(/path:\s*ROOT/)
+    expect(src).not.toMatch(/path:\s*api\('\/'\)/)
+  })
+})

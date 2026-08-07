@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { api } from '@/lib/basePath'
+import { api, ROOT } from '@/lib/basePath'
 import { markSeen, READER_COOKIE, READER_COOKIE_MAX_AGE, redeemToken } from '@/lib/readers'
 
 /**
@@ -14,7 +14,9 @@ import { markSeen, READER_COOKIE, READER_COOKIE_MAX_AGE, redeemToken } from '@/l
  */
 const seeOther = (path: string) => new NextResponse(null, {
   status: 303,
-  headers: { Location: api(path) },
+  // `|| '/'` so the app root is never an EMPTY Location header: unmounted
+  // locally, api('') is the empty string.
+  headers: { Location: api(path) || '/' },
 })
 
 /**
@@ -50,7 +52,8 @@ export async function GET(
 
   markSeen(reader.id)
 
-  const res = seeOther('/')
+  // ROOT, so the reader lands where their cookie applies and skips a 308.
+  const res = seeOther('')
   res.cookies.set(READER_COOKIE, reader.token, {
     httpOnly: true,      // page scripts cannot read it
     sameSite: 'lax',     // survives following a link in, blocks cross-site POSTs
@@ -58,7 +61,10 @@ export async function GET(
     // application at a different prefix, and a cookie on '/' is sent to it on
     // every request — handing a bearer token that grants access to the books
     // to an app that has no business holding one.
-    path: api('/'),
+    //
+    // ROOT, not api('/'): no trailing slash. `/loom/` would not be sent to
+    // `/loom`, which is exactly where Next sends the reader next.
+    path: ROOT,
     maxAge: READER_COOKIE_MAX_AGE,
     // `tailscale serve` terminates TLS, so the tailnet URL is https and the
     // cookie should never travel in clear. Browsers treat localhost as a secure

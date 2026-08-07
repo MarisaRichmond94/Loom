@@ -19,3 +19,17 @@ export const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
 
 /** Prefix an app-absolute path with the mount point. */
 export const api = (path: string): string => `${BASE_PATH}${path}`
+
+/**
+ * The app's root, WITHOUT a trailing slash — `/loom`, or `/` when unmounted.
+ *
+ * `api('/')` yields `/loom/`, and that trailing slash is not cosmetic. A cookie
+ * scoped to `/loom/` is NOT sent to `/loom` (RFC 6265 path-match: the request
+ * path is shorter than the cookie path, so it cannot match), and Next
+ * normalises `/loom/` to `/loom` with a 308 the moment you land. The result was
+ * a reader who enrolled successfully, was redirected to a URL their brand-new
+ * cookie did not cover, and got the invite page again.
+ *
+ * curl does not reproduce it — its path matching is looser than a browser's.
+ */
+export const ROOT = BASE_PATH || '/'
