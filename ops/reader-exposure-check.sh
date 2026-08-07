@@ -16,12 +16,23 @@ set -uo pipefail
 READER_PORT="${READER_PORT:-3200}"
 LOOM_PORT="${LOOM_PORT:-3000}"
 HOST="${HOST:-}"
+# Where the reader is mounted on the tailnet (LOOM-136). Nothing owns bare `/`.
+MOUNT="${MOUNT:-/loom}"
 
 pass=0; fail=0
 ok()   { printf "  \033[32m✓\033[0m %s\n" "$1"; pass=$((pass+1)); }
 bad()  { printf "  \033[31m✗\033[0m %s\n" "$1"; fail=$((fail+1)); }
 
-code() { curl -s -o /dev/null -m 5 -w "%{http_code}" "$1" 2>/dev/null || echo "000"; }
+# `%{http_code}` already prints 000 when the connection fails, and curl ALSO
+# exits non-zero — so a `|| echo 000` fallback appends a second one and yields
+# "000000", which matches nothing. That bug made this script report the reader
+# as reachable on the LAN when it was correctly refusing. Take curl's output as
+# it comes, and only substitute when it printed nothing at all.
+code() {
+  local out
+  out=$(curl -s -o /dev/null -m 5 -w "%{http_code}" "$1" 2>/dev/null)
+  printf "%s" "${out:-000}"
+}
 
 if [[ -z "$HOST" ]]; then
   echo "== Local bindings =="
@@ -87,25 +98,33 @@ else
     && ok "Loom's port is not reachable" \
     || bad "Loom ANSWERS on $HOST:$LOOM_PORT"
 
-  # 2. No author API path exists on the reader host.
+  # 2. No author API path exists on the reader host — checked both at the mount
+  #    and at the bare root, since a stray route could sit at either.
   for p in /api/series /api/chapters /api/import /api/backup /api/writeai /api/settings/readers; do
-    c=$(code "https://$HOST$p")
-    [[ "$c" == "404" || "$c" == "000" ]] \
-      && ok "no author route at $p ($c)" \
-      || bad "$p responded $c on the reader host"
+    c=$(code "https://$HOST$MOUNT$p")
+    # 3xx is a PASS: the route does not exist, so the gate redirected to the
+    # invite page. A real author API would answer 200 or an error, never a
+    # redirect to /invite. (The unit surface audit is the primary proof these
+    # routes are absent; this is defence in depth against a deployed build
+    # differing from the source.)
+    case "$c" in
+      200|201|4[05][0-9]|5??) bad "$p responded $c on the reader host" ;;
+      *) ok "no author route at $p ($c)" ;;
+    esac
   done
 
   # 3. Without a cookie, no prose.
   for p in / /book/x /book/x/chapter/y; do
-    c=$(code "https://$HOST$p")
-    [[ "$c" == "303" || "$c" == "307" || "$c" == "404" ]] \
-      && ok "$p is gated without a token ($c)" \
-      || bad "$p returned $c without a token"
+    c=$(code "https://$HOST$MOUNT$p")
+    # 308 too: Next normalises a trailing slash before the gate runs.
+    [[ "$c" == "303" || "$c" == "307" || "$c" == "308" || "$c" == "404" ]] \
+      && ok "$MOUNT$p is gated without a token ($c)" \
+      || bad "$MOUNT$p returned $c without a token"
   done
 
   # 4. Media is gated too — prose behind an invite with the audiobook open
   #    is not a boundary.
-  c=$(code "https://$HOST/api/media/narration/anything.mp3")
+  c=$(code "https://$HOST$MOUNT/api/media/narration/anything.mp3")
   [[ "$c" == "404" ]] && ok "media is gated without a token" || bad "media returned $c"
 fi
 
