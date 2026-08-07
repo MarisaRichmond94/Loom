@@ -32,7 +32,8 @@ export default function TrackRow({
   audioPath,
   artPath,
 }: {
-  index: number
+  /** Position in a numbered list. Omit inline, where there is no list. */
+  index?: number
   title: string
   chapter: string
   audioPath: string
@@ -74,7 +75,9 @@ export default function TrackRow({
 
   return (
     <div className="flex items-center gap-4 px-4 py-3 rounded-lg bg-surface-raised border border-accent/10">
-      <span className="w-4 shrink-0 text-xs text-ink-faint tabular-nums text-right">{index}</span>
+      {index !== undefined && (
+        <span className="w-4 shrink-0 text-xs text-ink-faint tabular-nums text-right">{index}</span>
+      )}
 
       <div className="w-11 h-11 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/15 flex items-center justify-center">
         {artOk ? (

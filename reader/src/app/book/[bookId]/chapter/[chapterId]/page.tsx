@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import ChapterView, { type ChapterNav, type ProseBlock } from '@/components/ChapterView'
+import { type BookCharacter } from '@/components/BookLanding'
 import { hasContent, query } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -48,6 +49,19 @@ export default async function ChapterPage({
     return row ? { id: row.id, label: row.label, numbered: !!row.numbered } : null
   }
 
+  const characters = query<{ id: string; name: string; age: number | null; photoPath: string | null; deceased: number }>(
+    `SELECT id, name, age, photoPath, deceased FROM Character WHERE bookId = ?`, bookId,
+  ).map((c): BookCharacter => ({
+    id: c.id, name: c.name, age: c.age, photoPath: c.photoPath, deceased: !!c.deceased,
+  }))
+
+  // The POV is stored as a NAME on the chapter, so resolving it to a character
+  // has to happen by name — the one place that is unavoidable. Done here rather
+  // than client-side so the byline card behaves like any other mention.
+  const povCharacterId = chapter.pov
+    ? characters.find(c => c.name === chapter.pov)?.id ?? null
+    : null
+
   const narration = query<{ audioPath: string; durationMs: number }>(
     `SELECT audioPath, durationMs FROM Narration WHERE chapterId = ?`, chapterId,
   )[0] ?? null
@@ -55,6 +69,8 @@ export default async function ChapterPage({
   return (
     <ChapterView
       narration={narration}
+      characters={characters}
+      povCharacterId={povCharacterId}
       bookId={bookId}
       bookTitle={book?.title ?? ''}
       heading={chapter.numbered ? `Chapter ${chapter.label}` : chapter.label}

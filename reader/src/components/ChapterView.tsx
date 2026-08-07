@@ -7,6 +7,8 @@ import { useReaderTheme } from '@/components/useReaderTheme'
 import ReaderHeader from '@/components/ReaderHeader'
 import TrackRow from '@/components/TrackRow'
 import NarrationBar from '@/components/NarrationBar'
+import { PROSE_CLASS } from '@/shared/proseClass'
+import type { BookCharacter } from '@/components/BookLanding'
 
 /**
  * The reading surface (LOOM-131) — matched to Loom's own read view, minus the
@@ -27,6 +29,9 @@ export type ProseBlock = {
 
 export type ChapterNav = { id: string; label: string; numbered: boolean } | null
 
+/** The hovered mention's character, plus where to put the card. */
+type HoverCard = { c: BookCharacter; x: number; y: number }
+
 export default function ChapterView({
   bookId,
   bookTitle,
@@ -37,6 +42,8 @@ export default function ChapterView({
   prev,
   next,
   narration,
+  characters,
+  povCharacterId,
 }: {
   bookId: string
   bookTitle: string
@@ -47,10 +54,15 @@ export default function ChapterView({
   prev: ChapterNav
   next: ChapterNav
   narration: { audioPath: string; durationMs: number } | null
+  /** This book's cast, for the hover cards. Keyed by writerCharacterId. */
+  characters: BookCharacter[]
+  /** The POV character, resolved server-side so the byline can be hovered too. */
+  povCharacterId: string | null
 }) {
   const { lightMode, toggleLightMode, mounted } = useReaderTheme()
   const proseRef = useRef<HTMLDivElement>(null)
-  const [hovered, setHovered] = useState<{ name: string; x: number; y: number } | null>(null)
+  const [hovered, setHovered] = useState<HoverCard | null>(null)
+  const byId = new Map(characters.map(c => [c.id, c]))
   const [progress, setProgress] = useState(0)
 
   // Character mentions are `<span class="character-ref" data-character-name>`
@@ -62,9 +74,14 @@ export default function ChapterView({
     if (!el) return
     const over = (e: Event) => {
       const t = (e.target as HTMLElement).closest('.character-ref') as HTMLElement | null
-      if (!t?.dataset.characterName) return
+      if (!t) return
+      // Prefer the id: names are not identity, and two characters can share
+      // one. Fall back to the name only when the mark predates ids.
+      const c = (t.dataset.characterId && byId.get(t.dataset.characterId))
+        || characters.find(x => x.name === t.dataset.characterName)
+      if (!c) return
       const r = t.getBoundingClientRect()
-      setHovered({ name: t.dataset.characterName, x: r.left + r.width / 2, y: r.top })
+      setHovered({ c, x: r.left + r.width / 2, y: r.top })
     }
     const out = (e: Event) => {
       if ((e.target as HTMLElement).closest('.character-ref')) setHovered(null)
@@ -101,7 +118,11 @@ export default function ChapterView({
         </h1>
         {pov && (
           <p className="text-center mt-2">
-            <span className="character-ref">{pov}</span>
+            {/* Carries the same mark and data as a mention in the prose, so the
+                byline gets a card too — it is the same character. */}
+            <span className="character-ref" data-character-id={povCharacterId ?? undefined} data-character-name={pov}>
+              {pov}
+            </span>
           </p>
         )}
 
@@ -118,7 +139,6 @@ export default function ChapterView({
             b.type === 'soundtrack' ? (
               <TrackRow
                 key={b.id}
-                index={0}
                 title={b.title ?? 'Untitled'}
                 chapter=""
                 audioPath={b.content}
@@ -131,7 +151,7 @@ export default function ChapterView({
               <div
                 key={b.id}
                 id={`block-${b.id}`}
-                className="reader-prose text-ink leading-relaxed"
+                className={PROSE_CLASS}
                 dangerouslySetInnerHTML={{ __html: b.content }}
               />
             ),
@@ -141,7 +161,7 @@ export default function ChapterView({
 
       {/* Sticky footer rail, like Loom's: progress on the left, the next
           chapter on the right. chrome-dark so it stays dark in light mode. */}
-      <div className="chrome-dark sticky bottom-0 bg-surface-raised border-t border-accent/10">
+      <div className="sticky bottom-0 bg-surface-raised border-t border-accent/10">
         <div className="h-0.5 bg-surface-muted">
           <div className="h-full bg-accent transition-[width] duration-150" style={{ width: `${progress * 100}%` }} />
         </div>
@@ -164,11 +184,30 @@ export default function ChapterView({
       </div>
 
       {hovered && (
+        // Follows the page theme — a dark card on a cream page read as a bug.
+        // And it shows the AVATAR: repeating a name the reader just read is no
+        // information at all, where a face is the thing worth surfacing
+        // mid-chapter.
         <div
-          className="chrome-dark fixed z-50 -translate-x-1/2 -translate-y-full pointer-events-none px-2.5 py-1 rounded bg-surface-raised border border-accent/20 text-xs text-ink shadow-lg"
-          style={{ left: hovered.x, top: hovered.y - 6 }}
+          className="fixed z-50 -translate-x-1/2 -translate-y-full pointer-events-none flex items-center gap-3 px-3 py-2 rounded-lg bg-surface-raised border border-accent/20 shadow-lg"
+          style={{ left: hovered.x, top: hovered.y - 8 }}
         >
-          {hovered.name}
+          <div className="w-12 h-12 shrink-0 rounded-full overflow-hidden bg-surface-overlay border border-accent/15 flex items-center justify-center">
+            {hovered.c.photoPath ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={hovered.c.photoPath} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-sm text-ink-faint">{hovered.c.name.charAt(0)}</span>
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm text-ink whitespace-nowrap">{hovered.c.name}</p>
+            {hovered.c.deceased ? (
+              <p className="text-[10px] uppercase tracking-widest text-ink-faint italic">Deceased</p>
+            ) : hovered.c.age !== null ? (
+              <p className="text-[11px] text-ink-faint">Age {hovered.c.age}</p>
+            ) : null}
+          </div>
         </div>
       )}
     </div>

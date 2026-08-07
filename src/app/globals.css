@@ -2,6 +2,11 @@
 
 @import "../../shared/theme.css";
 
+/* Tailwind scans upward from this file and would miss shared/. PROSE_CLASS
+   now lives there, and Tailwind DROPS UNKNOWN CLASSES SILENTLY — a miss shows
+   up as unstyled prose in the read view, not as a build error. */
+@source "../../shared";
+
 @import "../../shared/chrome.css";
 
 

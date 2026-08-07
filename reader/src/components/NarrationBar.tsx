@@ -7,8 +7,9 @@ import { LuPause, LuPlay, LuSkipBack, LuSkipForward } from 'react-icons/lu'
  * The chapter's narration transport, matching Loom's read view: skip back,
  * play/pause, skip forward, elapsed/total, scrubber, speed.
  *
- * `chrome-dark` because it is chrome — it stays dark in light mode, like the
- * header and the footer rail.
+ * Follows the page theme rather than staying dark: in Loom's read view this bar
+ * sits on the cream page in light mode, not on a dark strip. Only the top nav
+ * is always-dark chrome.
  *
  * Word-level highlighting is NOT here yet. The timing map is published
  * alongside the audio, but wrapping the rendered prose in per-word spans and
@@ -51,7 +52,7 @@ export default function NarrationBar({ audioPath }: { audioPath: string }) {
   const pct = duration > 0 ? (time / duration) * 100 : 0
 
   return (
-    <div className="chrome-dark w-full max-w-3xl flex items-center gap-3 px-4 py-2 rounded-full bg-surface-raised border border-accent/10">
+    <div className="w-full flex items-center gap-3 px-4 py-2 rounded-full bg-surface-raised border border-accent/10">
       <button onClick={() => nudge(-15)} aria-label="Back 15 seconds" className="p-1 rounded text-ink-muted hover:text-accent transition">
         <LuSkipBack size={13} />
       </button>
