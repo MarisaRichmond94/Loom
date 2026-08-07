@@ -1,75 +1,14 @@
 @import "tailwindcss";
 
-@theme {
-  /* Type (LOOM-21). Content is Inter, loaded by next/font in layout.tsx; chrome
-     stays on the native UI face. Both apps carry this split — see TOKENS.md. */
-  --font-sans: var(--font-inter), system-ui, sans-serif;
-  --font-chrome: system-ui, -apple-system, sans-serif;
+@import "../../shared/theme.css";
 
-  /* The shared palette (LOOM-6), promoted out of the UNIFIED_CHROME flag when
-     LOOM-8 retired it. Surfaces and ink are WriteAI's cooler ramp; the accent is
-     Loom's. Canonical values live in TOKENS.md, mirrored in both repos. */
-  --color-surface-base: #0f1117;
-  --color-surface-raised: #1a1d27;
-  --color-surface-overlay: #21253a;
-  --color-surface-muted: #2a2d3a;
-  --color-ink: #e8eaf0;
-  --color-ink-muted: #9da3b4;
-  --color-ink-faint: #5c627a;
-  --color-accent: #8888ff;
-  --color-accent-muted: #4a4a7a;
-  --color-choice-spare: #88cc88;
-  --color-choice-spare-bg: #1a2a1a;
-  --color-choice-spare-border: #3a5a3a;
-  --color-choice-kill: #cc8888;
-  --color-choice-kill-bg: #2a1a1a;
-  --color-choice-kill-border: #5a3a3a;
-  --color-choice-amber: #ccaa55;
-  --color-choice-amber-bg: #2a2010;
-  --color-choice-amber-border: #5a4a20;
-  --color-choice-blue: #7799cc;
-  --color-choice-blue-bg: #101a2a;
-  --color-choice-blue-border: #203a5a;
-  --color-choice-purple: #aa88cc;
-  --color-choice-purple-bg: #1e1a2a;
-  --color-choice-purple-border: #4a3a5a;
-  --color-choice-teal: #55bbaa;
-  --color-choice-teal-bg: #102420;
-  --color-choice-teal-border: #205040;
-}
+/* Tailwind scans upward from this file and would miss shared/. PROSE_CLASS
+   now lives there, and Tailwind DROPS UNKNOWN CLASSES SILENTLY — a miss shows
+   up as unstyled prose in the read view, not as a build error. */
+@source "../../shared";
 
-/* ---------------------------------------------------------------------------
-   Always-dark chrome (LOOM-17).
+@import "../../shared/chrome.css";
 
-   Some chrome must stay dark even inside .light-body — the chapter editor's
-   sticky footer and its skeleton, which mirror the reader's bars. The reader
-   gets this for free by living outside the light-body wrapper; these do not,
-   so they need dark values that survive it.
-
-   .light-body redefines --color-*, so var(--color-ink) inside it resolves
-   LIGHT. --dark-* is a parallel reference light mode never touches, and
-   .chrome-dark maps the theme tokens back onto it. Descendants then use
-   ordinary bg-surface-raised / text-ink utilities.
-
-   These were previously hardcoded hexes in inline styles (LOOM-17), which
-   pinned that chrome to the old palette. Keep --dark-* in step with the
-   --color-* values in @theme.
-   --------------------------------------------------------------------------- */
-:root {
-  --dark-surface-raised: #1a1d27;
-  --dark-surface-muted: #2a2d3a;
-  --dark-ink: #e8eaf0;
-  --dark-ink-muted: #9da3b4;
-  --dark-ink-faint: #5c627a;
-}
-
-.chrome-dark {
-  --color-surface-raised: var(--dark-surface-raised);
-  --color-surface-muted: var(--dark-surface-muted);
-  --color-ink: var(--dark-ink);
-  --color-ink-muted: var(--dark-ink-muted);
-  --color-ink-faint: var(--dark-ink-faint);
-}
 
 body {
   /* var() rather than literals so .light-body reaches the page background.
@@ -123,71 +62,10 @@ button, a, select, [role="button"] {
 }
 
 /* Footnote mark — editor + reader */
-.footnote-ref {
-  border-bottom: 1px dotted currentColor;
-  cursor: default;
-  position: relative;
-}
-
-.footnote-ref::after {
-  content: attr(data-footnote);
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  /* Tokenised (LOOM-6): the footnote tooltip used to hardcode the old violet
-     overlay and cream ink, so it stayed on the old palette under the flag. */
-  background: var(--color-surface-overlay);
-  color: var(--color-ink);
-  border: 1px solid color-mix(in srgb, var(--color-accent) 20%, transparent);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 0.75rem;
-  line-height: 1.4;
-  white-space: normal;
-  width: max-content;
-  max-width: 260px;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s;
-  z-index: 50;
-  text-indent: 0;
-}
-
-.footnote-ref:hover::after {
-  opacity: 1;
-}
-
-.character-ref {
-  /* Was rgba(var(--color-accent-rgb, 136, 136, 255), …) — but
-     --color-accent-rgb is defined nowhere, so the literal fallback was always
-     what rendered. A dead var reference reads as tokenised while behaving like
-     a hardcode, which is worse than an honest literal. color-mix works
-     directly off the hex token (LOOM-6). */
-  color: color-mix(in srgb, var(--color-accent) 85%, transparent);
-  text-decoration: underline;
-  text-decoration-style: dotted;
-  text-decoration-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
-  cursor: default;
-}
+@import "../../shared/prose.css";
 
 .var-ref-known { color: #10b981; }
 .var-ref-unknown { color: #ef4444; }
-
-/* Read-mode narration (karaoke) highlight. Spans are injected over the rendered
-   prose at runtime (src/lib/narration/wrapWords.ts) and toggled on rAF as the
-   audio plays. The accent tint reads on both themes; a soft ring keeps the
-   active word legible without shifting the line's layout. */
-.narration-word {
-  cursor: pointer;
-  border-radius: 3px;
-  transition: background-color 0.1s linear, box-shadow 0.1s linear;
-}
-.narration-word.is-active {
-  /* Same dead --color-accent-rgb reference as .character-ref had (LOOM-6). */
-  background-color: color-mix(in srgb, var(--color-accent) 32%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 30%, transparent);
-}
 
 /* Highlight for series-search matches across the chapter editor. Pale
    yellow reads clearly on both light and dark themes; a thin shadow
@@ -239,40 +117,7 @@ mark.search-match,
           appearance: none;
 }
 
-/* Light mode — scoped to the main writing area only */
-.light-body {
-  --color-surface-base: #f5f2eb;
-  --color-surface-raised: #ede9e0;
-  --color-surface-overlay: #e5e0d5;
-  --color-surface-muted: #ddd8cc;
-  --color-ink: #1a1a2a;
-  --color-ink-muted: #444;
-  --color-ink-faint: #888;
-  background-color: var(--color-surface-base);
-  color: var(--color-ink);
-}
-
-.light-body {
-  --color-choice-kill-bg: #cc8888;
-  --color-choice-kill-border: #bb6666;
-  /* Darker red for label text on the kill panel; the default `#cc8888`
-     matches the bg color in light mode and disappears against it. */
-  --color-choice-kill: #5a1a1a;
-  --color-choice-spare-bg: #a3c377;
-  --color-choice-spare-border: #8aaa5e;
-  --color-choice-spare: #1a5a1a;
-  /* Amber had no light values at all until the Explore staleness banner
-     (LOOM-117) became the first thing to use it outside the choice panels.
-     The dark `#2a2010` is a very deep brown: right as a panel on `#0f1117`,
-     but on the cream page it reads as a mud-coloured block rather than a
-     caution — the opposite of what a warning wants. Exactly the failure the
-     kill note above describes, just left unfixed because nothing had hit it. */
-  --color-choice-amber-bg: #f7ecc8;
-  --color-choice-amber-border: #d9c078;
-  /* Dark enough to carry body text on that background rather than merely
-     tint it — the banner names chapter numbers, so it has to be READ. */
-  --color-choice-amber: #6b5210;
-}
+@import "../../shared/light.css";
 
 .light-body .ProseMirror,
 .light-body .ProseMirror * {

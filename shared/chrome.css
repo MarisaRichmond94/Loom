@@ -1,0 +1,43 @@
+/* Always-dark chrome, shared by Loom and the reader app.
+ *
+ * Light mode is scoped to the page BODY; headers and player bars stay dark in
+ * both apps. Those elements sit inside the light-body wrapper, so they need
+ * values light mode cannot reach — hence a parallel --dark-* reference.
+ *
+ * The reader also uses this to avoid a flash: its light preference is applied
+ * to <body> by an inline script before first paint, which would otherwise
+ * lighten the header too.
+ */
+
+/* ---------------------------------------------------------------------------
+   Always-dark chrome (LOOM-17).
+
+   Some chrome must stay dark even inside .light-body — the chapter editor's
+   sticky footer and its skeleton, which mirror the reader's bars. The reader
+   gets this for free by living outside the light-body wrapper; these do not,
+   so they need dark values that survive it.
+
+   .light-body redefines --color-*, so var(--color-ink) inside it resolves
+   LIGHT. --dark-* is a parallel reference light mode never touches, and
+   .chrome-dark maps the theme tokens back onto it. Descendants then use
+   ordinary bg-surface-raised / text-ink utilities.
+
+   These were previously hardcoded hexes in inline styles (LOOM-17), which
+   pinned that chrome to the old palette. Keep --dark-* in step with the
+   --color-* values in @theme.
+   --------------------------------------------------------------------------- */
+:root {
+  --dark-surface-raised: #1a1d27;
+  --dark-surface-muted: #2a2d3a;
+  --dark-ink: #e8eaf0;
+  --dark-ink-muted: #9da3b4;
+  --dark-ink-faint: #5c627a;
+}
+
+.chrome-dark {
+  --color-surface-raised: var(--dark-surface-raised);
+  --color-surface-muted: var(--dark-surface-muted);
+  --color-ink: var(--dark-ink);
+  --color-ink-muted: var(--dark-ink-muted);
+  --color-ink-faint: var(--dark-ink-faint);
+}

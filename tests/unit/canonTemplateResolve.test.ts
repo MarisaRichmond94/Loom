@@ -15,8 +15,18 @@ const SERIES_ID = 'cmp8wtcr50000zufxy70xic4e'
 const hasDb = existsSync(DB)
 const dbIt = hasDb ? it : it.skip
 
+// The ONE sanctioned exception to "no test touches dev.db" (LOOM-125). This
+// suite's value is that it runs against real prose — the mark-split and
+// apostrophe-collision cases it guards do not occur in synthetic fixtures, so a
+// sandbox copy would assert nothing. It shells out to the sqlite3 binary, so
+// the Jest DATABASE_URL guard cannot see it.
+//
+// `-readonly` is therefore load-bearing, not decoration: it makes the exception
+// structurally safe rather than safe-by-convention. `sql()` interpolates its
+// argument, so without it a future query that is not a SELECT would write to
+// the manuscript and nothing would stop it.
 function sql(query: string): string {
-  return execFileSync('sqlite3', [DB, query], { encoding: 'utf8' })
+  return execFileSync('sqlite3', ['-readonly', DB, query], { encoding: 'utf8' })
 }
 
 function storyStateFromDefaults(): StoryState {

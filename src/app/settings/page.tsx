@@ -7,11 +7,12 @@ import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
 import { cropImageToBlob } from '@/lib/cropImage'
 import AppHeader from '@/components/AppHeader'
-import { useLightMode } from '@/lib/useLightMode'
+import { useLightMode } from '@shared/useLightMode'
 import ExportFormattingSection from '@/components/ExportFormattingSection'
 import CanonSaveLocationSection from '@/components/CanonSaveLocationSection'
 import ManuscriptTemplateSection from '@/components/ManuscriptTemplateSection'
 import EditorColorsSection from '@/components/EditorColorsSection'
+import ReadersSection from '@/components/ReadersSection'
 import ToastLayer from '@/components/ToastLayer'
 import { showToast } from '@/lib/notifications'
 
@@ -286,7 +287,7 @@ export default function SettingsPage() {
     }
   }
 
-  const TABS = ['Profile', 'Editor', 'Export', 'Backups', 'Demo Data'] as const
+  const TABS = ['Profile', 'Editor', 'Export', 'Backups', 'Readers', 'Demo Data'] as const
   type Tab = typeof TABS[number]
   const [activeTab, setActiveTab] = useState<Tab>('Profile')
 
@@ -514,6 +515,11 @@ export default function SettingsPage() {
               </div>
             </div>
           </section>}
+
+          {/* Reader invites (LOOM-132). Sits with the operational tabs rather
+              than under Profile: this is about other people's access, not the
+              author's identity. */}
+          {activeTab === 'Readers' && <ReadersSection />}
 
           {/* Editor preferences */}
           {activeTab === 'Editor' && <EditorColorsSection />}

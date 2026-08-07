@@ -16,7 +16,24 @@ import { stripEmptyParagraphs } from '@/lib/clipboardFormatting'
 import { substituteVarTemplates } from '@/lib/templateVars'
 import type { StoryState } from '@/lib/storyEngine'
 
-function escapeHtml(s: string): string {
+/**
+ * The extension list every prose renderer must use.
+ *
+ * Exported so the publish-time renderer (which needs @tiptap/html/server) can
+ * share it rather than keeping a second copy. A divergence here would mean the
+ * reader tier silently dropped a mark type the editor supports.
+ */
+export const PROSE_EXTENSIONS = [
+  StarterKit,
+  TextAlign.configure({ types: ['paragraph', 'heading'] }),
+  ParagraphIndent,
+  TextStyle,
+  Color,
+  Footnote,
+  CharacterMark,
+]
+
+export function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
@@ -26,7 +43,7 @@ function escapeHtml(s: string): string {
 export function renderTipTapJson(json: string | null | undefined, storyState?: StoryState): string {
   if (!json) return ''
   try {
-    const html = generateHTML(JSON.parse(json), [StarterKit, TextAlign.configure({ types: ['paragraph', 'heading'] }), ParagraphIndent, TextStyle, Color, Footnote, CharacterMark])
+    const html = generateHTML(JSON.parse(json), PROSE_EXTENSIONS)
     const stripped = stripEmptyParagraphs(html)
     if (!storyState) return stripped
     return substituteVarTemplates(stripped, storyState, escapeHtml)

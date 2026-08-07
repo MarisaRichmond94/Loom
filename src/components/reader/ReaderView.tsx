@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, memo, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
+import { PROSE_CLASS } from '@shared/proseClass'
 import { LuArrowLeft, LuArrowRight, LuMusic, LuUser, LuSlidersHorizontal, LuCopy, LuCheck } from 'react-icons/lu'
 import { generateHTML } from '@tiptap/html'
 import StarterKit from '@tiptap/starter-kit'
@@ -28,7 +29,7 @@ import InlineBadEnding from './InlineBadEnding'
 const ChoiceConfigModal = dynamic(() => import('./ChoiceConfigModal'), { ssr: false })
 const BadEndingModal = dynamic(() => import('./BadEndingModal'), { ssr: false })
 import AppHeader from '@/components/AppHeader'
-import { useLightMode } from '@/lib/useLightMode'
+import { useLightMode } from '@shared/useLightMode'
 import PinnedAudio from '@/components/PinnedAudio'
 import NarrationBar from './NarrationBar'
 import { stripEmptyParagraphs, htmlToPlainText, inlineParagraphStyles, educateHtml, educateQuotes, PASTE_FONT_FAMILY } from '@/lib/clipboardFormatting'
@@ -568,7 +569,7 @@ export default function ReaderView({
                 <ProseBlock
                   key={block.id}
                   blockId={block.id}
-                  className="prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_p.no-indent]:indent-0 [&_p[style*='center']]:indent-0 [&_p:empty]:min-h-[1em] [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6"
+                  className={PROSE_CLASS}
                   style={pendingChoice ? { filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' } : undefined}
                   html={renderedBlocks.get(block.id)?.html ?? ''}
                 />
@@ -591,7 +592,7 @@ export default function ReaderView({
                 <ProseBlock
                   key={block.id}
                   blockId={block.id}
-                  className={`prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_p.no-indent]:indent-0 [&_p[style*='center']]:indent-0 [&_p:empty]:min-h-[1em] [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6 ${HIGHLIGHT_CLASSES}`}
+                  className={`${PROSE_CLASS} ${HIGHLIGHT_CLASSES}`}
                   html={renderedBlocks.get(block.id)?.html ?? ''}
                 />
               )
@@ -617,7 +618,7 @@ export default function ReaderView({
                 if (chosen?.endsChapter && !chosen?.isBadEnding) chapterEnded = true
                 if (chosen?.endingMessage && !chosen?.isBadEnding) {
                   const rich = renderedBlocks.get(block.id)?.branchHtml ?? null
-                  const branchClass = `prose prose-invert max-w-none text-ink leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_p.no-indent]:indent-0 [&_p[style*='center']]:indent-0 [&_p:empty]:min-h-[1em] [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-current [&_hr]:opacity-20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-6 ${HIGHLIGHT_CLASSES}`
+                  const branchClass = `${PROSE_CLASS} ${HIGHLIGHT_CLASSES}`
                   // rich: rendered HTML → show it; null → legacy plain text,
                   // wrap verbatim; '' → rich JSON that rendered to nothing
                   // (e.g. an empty placeholder), render nothing rather than

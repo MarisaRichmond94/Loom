@@ -70,6 +70,8 @@ function SortableOutlineCard(props: {
   onSave: (changes: Partial<Card>) => void
   onDelete: () => void
   disabled: boolean
+  active: boolean
+  onToggleActive: () => void
 }) {
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
     id: props.card.id,
@@ -103,6 +105,8 @@ export default function OutlineSection({
 
   const [pendingDelete, setPendingDelete] = useState<{ card: Card; label: string } | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  // Only one card open at a time — the board, not the card, owns this.
+  const [activeCardId, setActiveCardId] = useState<string | null>(null)
   const actionSlot = useSectionActionSlot()
 
   // A little distance before a drag starts, so a click on the card is still a
@@ -256,6 +260,8 @@ export default function OutlineSection({
                     onSave={changes => void editCard(card.id, changes)}
                     onDelete={() => setPendingDelete({ card, label: labels[i] })}
                     disabled={saving}
+                    active={activeCardId === card.id}
+                    onToggleActive={() => setActiveCardId(id => (id === card.id ? null : card.id))}
                   />
                   <button
                     data-no-dnd="true"

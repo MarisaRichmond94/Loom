@@ -158,3 +158,25 @@ export function narrationSegments(
 export function narrationHash(text: string, voice: string): string {
   return createHash('sha256').update(voice).update('\0').update(text).digest('hex')
 }
+
+/**
+ * The two halves of "which recording is this".
+ *
+ * Here rather than in generate.ts because PUBLISH needs the identical rule to
+ * decide which recording belongs to the canon path, and generate.ts imports
+ * prisma — pulling the whole synthesis stack (and a database client) into the
+ * snapshot builder, which broke publish's tests the moment it was tried.
+ *
+ * Two copies of this rule is a drift that surfaces as chapters silently
+ * publishing without audio, so there is exactly one.
+ */
+export const segHashesFor = (plan: NarrationPlan, voice: string): string[] =>
+  plan.segments.map(s => narrationHash(s.text, voice))
+
+/**
+ * Fingerprint the whole sequence: fold the per-segment hashes together so a
+ * chapter edit, a different branch, or a newly-unlocked segment all yield a
+ * distinct variant (and thus a cache miss that regenerates).
+ */
+export const variantHashFor = (segHashes: string[], voice: string): string =>
+  narrationHash(segHashes.join('|'), voice)

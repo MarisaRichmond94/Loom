@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!-- The reader app (Next.js, production mode) on 127.0.0.1:3200 (LOOM-136).
+
+     BOUND TO LOCALHOST, DELIBERATELY. `next start` binds 0.0.0.0 by default,
+     which would put the reader on every interface this Mac has — home Wi-Fi,
+     any VPN, anything else attached. `tailscale serve` proxies from the tailnet
+     INTO localhost, so binding here to 127.0.0.1 loses nothing and means the
+     only route in is the one Tailscale authenticates. Remove -H and the app is
+     reachable by anyone on the coffee shop's network.
+
+     NO FULL DISK ACCESS. Unlike Loom, this service needs none: it reads
+     content.db and reader.db inside the repo and nothing else. If macOS ever
+     prompts for disk access on behalf of this service, something is wrong —
+     do not grant it, work out what asked.
+
+     Install:
+       cp ops/com.marisarichmond.loomreader.plist ~/Library/LaunchAgents/
+       launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.marisarichmond.loomreader.plist
+
+     Controls:
+       restart : launchctl kickstart -k gui/$(id -u)/com.marisarichmond.loomreader
+       stop    : launchctl bootout gui/$(id -u)/com.marisarichmond.loomreader
+
+     After code changes: cd ~/Documents/GitHub/Loom/reader && npm run build,
+     then restart with the kickstart command above. Publish does the restart
+     itself, because a running process holds a handle on the old content.db
+     inode until it reopens.
+
+     NOTE: a brew upgrade of node changes the Cellar path below — update it. -->
+<dict>
+  <key>Label</key>
+  <string>com.marisarichmond.loomreader</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/Cellar/node@24/24.16.0/bin/node</string>
+    <string>/Users/marisarichmond/Documents/GitHub/Loom/reader/node_modules/next/dist/bin/next</string>
+    <string>start</string>
+    <string>-H</string>
+    <string>127.0.0.1</string>
+    <string>-p</string>
+    <string>3200</string>
+  </array>
+  <!-- Same PATH lesson as Loom's plist: launchd hands a service a bare PATH,
+       and Homebrew binaries are invisible without this. The reader spawns
+       nothing today (a test enforces that), but a bare PATH has bitten this
+       machine before and costs nothing to get right. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>NODE_ENV</key>
+    <string>production</string>
+    <!-- The mount point on the tailnet (LOOM-136). Must match the value the
+         app was BUILT with — Next inlines basePath into the client bundle, so
+         a mismatch between build and runtime produces asset URLs that leave
+         this app and land on whatever answers `/`.
+           cd reader && NEXT_PUBLIC_BASE_PATH=/loom npm run build -->
+    <key>NEXT_PUBLIC_BASE_PATH</key>
+    <string>/loom</string>
+  </dict>
+  <key>WorkingDirectory</key>
+  <string>/Users/marisarichmond/Documents/GitHub/Loom/reader</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/marisarichmond/Library/Logs/loom-reader.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/marisarichmond/Library/Logs/loom-reader.log</string>
+</dict>
+</plist>
