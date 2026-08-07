@@ -58,8 +58,15 @@ export default function NarrationBar({
   const ref = useRef<HTMLAudioElement>(null)
   const [playing, setPlaying] = useState(false)
   const [time, setTime] = useState(0)
-  const [duration, setDuration] = useState(0)
   const [speedIdx, setSpeedIdx] = useState(0)
+
+  // Total time comes from the SNAPSHOT, never from the audio element. The
+  // narration track is segments concatenated after the fact, and its header
+  // duration is unreliable — `loadedmetadata` reported 0, which rendered as
+  // "0:00" beside a chapter that plays for seven minutes. Loom's own player
+  // reads durationMs for the same reason (NarrationBar.tsx:495), and seeks
+  // against it too, so the scrubber agrees with the clock.
+  const totalSec = durationMs / 1000
 
   const timesRef = useRef<number[]>([])   // timeMs per word index, for binary search
   const activeRef = useRef(-1)
@@ -179,20 +186,22 @@ export default function NarrationBar({
     }
   }, [])
 
-  const pct = duration > 0 ? (time / duration) * 100 : 0
+  const pct = totalSec > 0 ? Math.min(100, (time / totalSec) * 100) : 0
 
   const seek = (e: React.MouseEvent<HTMLDivElement>) => {
     const el = ref.current
-    if (!el || !Number.isFinite(el.duration)) return
+    if (!el || totalSec <= 0) return
     const r = e.currentTarget.getBoundingClientRect()
-    el.currentTime = ((e.clientX - r.left) / r.width) * el.duration
+    const frac = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width))
+    el.currentTime = totalSec * frac
+    setTime(totalSec * frac)
     followRef.current = true
   }
 
   const nudge = (by: number) => {
     const el = ref.current
     if (!el) return
-    el.currentTime = Math.max(0, Math.min(el.duration || 0, el.currentTime + by))
+    el.currentTime = Math.max(0, Math.min(totalSec || el.currentTime + by, el.currentTime + by))
     followRef.current = true
   }
 
@@ -213,7 +222,7 @@ export default function NarrationBar({
       </button>
 
       <span className="text-xs text-ink-faint tabular-nums shrink-0">
-        {clock(time)} / {clock(duration)}
+        {clock(time)} / {clock(totalSec)}
       </span>
 
       {/* py-2 gives the 4px bar a usable hit area without thickening it. */}
@@ -238,7 +247,6 @@ export default function NarrationBar({
         onPause={() => setPlaying(false)}
         onEnded={() => { setPlaying(false); setActiveWord(-1) }}
         onTimeUpdate={e => setTime(e.currentTarget.currentTime)}
-        onLoadedMetadata={e => setDuration(e.currentTarget.duration)}
       />
     </div>
   )

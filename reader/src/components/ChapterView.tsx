@@ -124,7 +124,11 @@ export default function ChapterView({
 
       {/* Full width, like Loom's read view — prose runs the page rather than
           sitting in a column. Light mode is already on <body>. */}
-      <main ref={hoverRootRef} className="flex-1 px-8 pt-10 pb-24">
+      {/* pb-8 matches Loom's read view (ReaderView.tsx:552). It was pb-24 —
+          padding sized for a FIXED footer floating over the text, which this
+          one is not: the rail is sticky and in flow, so it already reserves its
+          own height and the extra 64px was just empty page under the last line. */}
+      <main ref={hoverRootRef} className="flex-1 px-8 pt-10 pb-8">
         <h1 className="text-4xl font-bold tracking-wide uppercase text-ink text-center">
           {heading}
         </h1>
