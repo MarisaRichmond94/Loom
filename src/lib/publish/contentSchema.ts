@@ -95,10 +95,23 @@ CREATE TABLE Character (
 -- has 22). Publishing the wrong row would ship branch prose to the reader as
 -- AUDIO, past every guarantee the text side makes. Selection is by recomputed
 -- canon hash, and a chapter with no canon recording publishes silent.
+--
+-- timing is the RECONCILED map, not the synthesizer's raw output. Loom's own
+-- read view reconciles at serve time; a snapshot has no serve time, so publish
+-- does it once, here. Shipping the raw ranges instead looks fine — it is a
+-- valid JSON array of the right rough length — and drifts the word highlight a
+-- word at a time until it is a paragraph behind the voice.
+--
+-- blockIds is the ordered list of blocks the recording actually speaks, which
+-- is NOT "every non-soundtrack block": a block whose prose resolves to nothing
+-- is skipped, and the highlight's whole contract is that DOM word N is timing
+-- word N. Deriving that list in the browser is a guess about publish's rules;
+-- storing it makes it the same fact both sides read.
 CREATE TABLE Narration (
   chapterId  TEXT PRIMARY KEY,
   audioPath  TEXT NOT NULL,
   timing     TEXT NOT NULL,
+  blockIds   TEXT NOT NULL,
   durationMs INTEGER NOT NULL
 );
 

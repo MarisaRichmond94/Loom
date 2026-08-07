@@ -62,9 +62,40 @@ export default async function ChapterPage({
     ? characters.find(c => c.name === chapter.pov)?.id ?? null
     : null
 
-  const narration = query<{ audioPath: string; durationMs: number }>(
-    `SELECT audioPath, durationMs FROM Narration WHERE chapterId = ?`, chapterId,
+  // `timing` is the reconciled per-token map publish stored beside the audio —
+  // what drives the word highlight. Parsed here rather than in the client so a
+  // corrupt row degrades to a plain transport instead of throwing in the
+  // browser: the audio is still worth having without the highlight.
+  // blockIds arrived with the word highlight. A snapshot published before it
+  // still has perfectly good audio, so an older file degrades to a plain
+  // transport rather than 500-ing the chapter — the fix is a republish, and a
+  // chapter that won't open is a worse way to learn that than one that plays.
+  const hasBlockIds = query<{ name: string }>(`PRAGMA table_info(Narration)`)
+    .some(c => c.name === 'blockIds')
+
+  const row = query<{ audioPath: string; durationMs: number; timing: string; blockIds: string }>(
+    `SELECT audioPath, durationMs, timing, ${hasBlockIds ? 'blockIds' : `'[]' AS blockIds`}
+     FROM Narration WHERE chapterId = ?`, chapterId,
   )[0] ?? null
+
+  // Both are JSON columns publish wrote. Parsed here rather than in the client
+  // so a corrupt row degrades to a plain transport instead of throwing in the
+  // browser — the audio is still worth having without the highlight.
+  const json = <T,>(s: string, what: string): T[] => {
+    try {
+      const parsed = JSON.parse(s)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      console.warn(`[narration] unreadable ${what} for chapter ${chapterId}`)
+      return []
+    }
+  }
+  const narration = row && {
+    audioPath: row.audioPath,
+    durationMs: row.durationMs,
+    timing: json<{ word: string; timeMs: number }>(row.timing, 'timing'),
+    blockIds: json<string>(row.blockIds, 'blockIds'),
+  }
 
   return (
     <ChapterView

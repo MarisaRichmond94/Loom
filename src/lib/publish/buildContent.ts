@@ -10,7 +10,8 @@ import {
   type ChapterInWalk,
   type VariableIn,
 } from '@/lib/manuscript/walk'
-import { narrationHash, narrationSegments, type NarrationBlock } from '@/lib/narration/text'
+import { narrationHash, narrationSegments, type NarrationBlock, type NarrationPlan } from '@/lib/narration/text'
+import { reconcileTiming } from '@/lib/narration/tokens'
 import { renderProseHtml } from '@/lib/publish/renderProse'
 import { publishAssets, type AssetReport, type AssetRef } from '@/lib/publish/assets'
 
@@ -296,21 +297,28 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
    * answers are the CANON ones — then fold the segment hashes the way
    * `variantHashFor` does. Voice is part of the hash, so each voice present is
    * tried rather than assuming the default.
+   *
+   * Returns the plan alongside the row, because the row alone is not publishable:
+   * the stored timing is the engine's RAW willSpeakRange output (blob ranges,
+   * backward duplicates, split punctuation, silent tokens), and Loom's read view
+   * only ever serves it through reconcileTiming. The plan carries the narration
+   * text that reconciliation aligns against, and the block ids the highlight
+   * walks — both derived here, from the canon path, rather than guessed later.
    */
   const canonNarration = (
     chapterId: string,
     blocks: NarrationBlock[],
     state: Record<string, string | number | boolean>,
     answered: Record<string, string>,
-  ): Row | null => {
+  ): { row: Row; plan: NarrationPlan } | null => {
     const rows = narrationsByChapter.get(chapterId)
     if (!rows?.length) return null
     const plan = narrationSegments(blocks, state, answered)
     if (!plan.segments.length) return null
     for (const voice of new Set(rows.map(r => r.voice as string))) {
       const segHashes = plan.segments.map(s => narrationHash(s.text, voice))
-      const match = rows.find(r => r.contentHash === narrationHash(segHashes.join('|'), voice))
-      if (match) return match
+      const row = rows.find(r => r.contentHash === narrationHash(segHashes.join('|'), voice))
+      if (row) return { row, plan }
     }
     return null
   }
@@ -507,7 +515,11 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
             date: ch.date,
           })
           if (ch.blocks.length === 0) emptyChapters.push(ch.label)
+          // Source block id → the id it was published under, for this chapter.
+          // The two differ wherever the walk resolved a branch.
+          const publishedIdBySource = new Map<string, string>()
           ch.blocks.forEach((b, bIdx) => {
+            publishedIdBySource.set(b.sourceBlockId ?? b.id, b.id)
             insertBlock.run({
               id: b.id,
               chapterId: ch.id,
@@ -548,16 +560,38 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
               )
             : null
           if (match) {
+            const { row, plan } = match
+            // Reconciled ONCE, here, against the same combined text Loom's read
+            // view aligns against (generate.ts:206 — segment texts joined the way
+            // buildVariant offsets them). A snapshot has no serve time to do this
+            // at, and the raw ranges are wrong in ways that still parse.
+            const timing = reconcileTiming(
+              plan.segments.map(s => s.text).join('\n\n'),
+              JSON.parse(row.timing as string),
+              row.durationMs as number,
+            )
             out.prepare(
-              `INSERT INTO Narration (chapterId, audioPath, timing, durationMs)
-               VALUES (@chapterId, @audioPath, @timing, @durationMs)`,
+              `INSERT INTO Narration (chapterId, audioPath, timing, blockIds, durationMs)
+               VALUES (@chapterId, @audioPath, @timing, @blockIds, @durationMs)`,
             ).run({
               chapterId: ch.id,
-              audioPath: match.audioPath,
+              audioPath: row.audioPath,
               // The timing map travels with the audio it belongs to; a map from
               // another path desyncs the word highlight visibly.
-              timing: match.timing,
-              durationMs: match.durationMs,
+              timing: JSON.stringify(timing),
+              // Translated to PUBLISHED ids. The plan speaks in source block
+              // ids, but a resolved fragment or choice is published under a
+              // composite id (`<block>:override:<id>`) — so the raw list looks
+              // right and silently matches nothing for exactly the blocks that
+              // branched, dropping their words out of the wrap and drifting
+              // everything after them.
+              blockIds: JSON.stringify(
+                plan.segments
+                  .flatMap(s => s.blockIds)
+                  .map(id => publishedIdBySource.get(id))
+                  .filter((id): id is string => id !== undefined),
+              ),
+              durationMs: row.durationMs,
             })
             narrated += 1
           } else if (narrationsByChapter.has(ch.id)) {

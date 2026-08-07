@@ -53,7 +53,14 @@ export default function ChapterView({
   blocks: ProseBlock[]
   prev: ChapterNav
   next: ChapterNav
-  narration: { audioPath: string; durationMs: number } | null
+  narration: {
+    audioPath: string
+    durationMs: number
+    /** Per-token timings driving the word highlight; empty when unavailable. */
+    timing: { word: string; timeMs: number }[]
+    /** The blocks the recording speaks, in order — publish's list, not a guess. */
+    blockIds: string[]
+  } | null
   /** This book's cast, for the hover cards. Keyed by writerCharacterId. */
   characters: BookCharacter[]
   /** The POV character, resolved server-side so the byline can be hovered too. */
@@ -133,7 +140,12 @@ export default function ChapterView({
 
         {narration && (
           <div className="mt-6 flex justify-center">
-            <NarrationBar audioPath={narration.audioPath} />
+            <NarrationBar
+              audioPath={narration.audioPath}
+              durationMs={narration.durationMs}
+              timing={narration.timing}
+              blockIds={narration.blockIds}
+            />
           </div>
         )}
 
