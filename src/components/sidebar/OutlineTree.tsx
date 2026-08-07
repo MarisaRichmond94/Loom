@@ -11,7 +11,13 @@ import { CSS } from '@dnd-kit/utilities'
 import { useCanonSave } from '@/components/editor/useCanonSave'
 
 type Chapter = { id: string; title: string; order: number }
-type Book = { id: string; title: string; order: number; inProgress?: boolean; chapters: Chapter[] }
+type Book = {
+  id: string; title: string; order: number
+  inProgress?: boolean
+  /** Needed for the default-book fallback below (LOOM-140). */
+  published?: boolean
+  chapters: Chapter[]
+}
 
 type Props = {
   seriesId: string
@@ -119,13 +125,39 @@ function SortableChapter({ chapter, seriesId, isActive, scrollOnDefault, openMen
   )
 }
 
+/**
+ * Which book the sidebar opens on, and whose latest chapter it scrolls to.
+ *
+ * `inProgress` is not just a label — it is this. LOOM-140 made the three
+ * statuses mutually exclusive, which means marking a book Published now clears
+ * `inProgress`, and a naive `inProgress ?? books[0]` would silently send the
+ * sidebar back to book one.
+ *
+ * That is invisible while the in-progress book is unpublished, and bites the
+ * first time a book is published while still being written — which per-book
+ * publishing (LOOM-129) makes considerably more likely. So the fallback widens:
+ * the book being written, else the furthest-along published book, else the
+ * first.
+ */
+export function defaultBook<T extends { id: string; order: number; inProgress?: boolean; published?: boolean }>(
+  books: T[],
+): T | undefined {
+  const writing = books.find(b => b.inProgress)
+  if (writing) return writing
+  const published = books.filter(b => b.published)
+  if (published.length) {
+    return published.reduce((furthest, b) => (b.order > furthest.order ? b : furthest))
+  }
+  return books[0]
+}
+
 export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, onInsertChapter }: Props) {
   const params = useParams()
   const router = useRouter()
   const { saveCanonAfterStructuralChange } = useCanonSave(seriesId)
   // Default-open: the in-progress book (writer's currently-active work),
   // falling back to book 1 when nothing is flagged.
-  const defaultBookId = books.find(b => b.inProgress)?.id ?? books[0]?.id ?? null
+  const defaultBookId = defaultBook(books)?.id ?? null
   const [selectedBook, setSelectedBook] = useState<string | null>(() => defaultBookId)
   // The chapter the writer last worked in, so a bare series-page landing can
   // open + scroll to it instead of the bottom of the in-progress book. Two
@@ -188,7 +220,7 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
     // preserve (choosing a book navigates to its own URL). Open the book the
     // writer left off in: the remembered chapter's book, else the in-progress
     // book, else the first.
-    setSelectedBook(rememberedBookId ?? books.find(b => b.inProgress)?.id ?? books[0]?.id ?? null)
+    setSelectedBook(rememberedBookId ?? defaultBook(books)?.id ?? null)
   }, [books, params.chapterId, params.bookId, rememberedBookId])
 
   // Sync localChapters from the layout's series prop whenever any
@@ -304,7 +336,8 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
   // (brand-new series, never opened a chapter), fall back to the in-progress
   // book's last chapter — "where they left off" for the common workflow of
   // appending new chapters.
-  const inProgressBook = books.find(b => b.inProgress)
+  // Same widened rule as the default book, so the scroll target follows it.
+  const inProgressBook = defaultBook(books)
   const scrollDefaultChapterId =
     !params.bookId && !params.chapterId
       ? rememberedChapterId

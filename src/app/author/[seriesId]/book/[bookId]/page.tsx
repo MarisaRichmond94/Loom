@@ -436,17 +436,6 @@ export default function BookDetailPage() {
 
   if (!book) return <BookSkeleton />
 
-  async function togglePublished() {
-    if (!book) return
-    const next = !book.published
-    setBook({ ...book, published: next })
-    await fetch(`/api/series/${seriesId}/books/${bookId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ published: next }),
-    })
-  }
-
   return (
     <>
       {/* Wider than the 3xl it was: the outline is a board of cards, and at
@@ -461,18 +450,11 @@ export default function BookDetailPage() {
         {/* Preview + Publish controls sit in their own row above the cover
             so they don't crowd the title or get hidden behind the synopsis. */}
         <div className="flex items-center justify-end gap-2 mb-6">
-          <button
-            onClick={togglePublished}
-            className={`px-3 py-1.5 rounded text-xs font-medium transition border flex items-center gap-1.5 ${
-              book.published
-                ? 'bg-accent/10 text-ink border-accent/30 hover:bg-accent/15'
-                : 'bg-surface-overlay text-ink-muted border-accent/20 hover:text-ink'
-            }`}
-            title={book.published ? 'Click to revert to draft' : 'Click to publish to readers'}
-          >
-            <span className={`inline-block w-1.5 h-1.5 rounded-full ${book.published ? 'bg-accent' : 'bg-ink-faint'}`} />
-            {book.published ? 'Published' : 'Draft'}
-          </button>
+          {/* The Published/Draft toggle lived here and moved to the series
+              page's book card (LOOM-140), where it is one Draft / In progress /
+              Published dropdown. Status was two booleans set by two toggles on
+              two different pages; comparing books against each other is what
+              the card view is for, and it is where publishing already happens. */}
           {/* Export (.loom.json) sits beside Download deliberately (KAN-20).
               A standalone project's landing page IS its book page — the
               switcher routes name-clicks straight here, because a standalone

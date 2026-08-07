@@ -108,9 +108,14 @@ export default function SeriesPageSkeleton() {
               <div className="w-28 shrink-0 rounded bg-surface-muted" style={{ minHeight: '9rem' }} />
               <div className="flex-1 min-w-0 flex flex-col justify-between">
                 <div>
-                  <div className="flex items-baseline gap-3 mb-4">
+                  {/* items-CENTER, matching the real row: the status chip is a
+                      control, and baseline alignment sat it visibly low. */}
+                  <div className="flex items-center gap-3 mb-4">
                     <div className="h-3 w-12 bg-surface-muted rounded" />
                     <div className="h-5 w-48 bg-surface-muted rounded" />
+                    {/* The status chip (LOOM-140). Without a stub the title row
+                        reflows when it arrives. */}
+                    <div className="h-4 w-20 bg-surface-overlay rounded" />
                   </div>
                   <div className="grid grid-cols-4 gap-3">
                     {[0, 1, 2, 3].map(j => (
@@ -121,11 +126,13 @@ export default function SeriesPageSkeleton() {
                     ))}
                   </div>
                 </div>
-                {/* THREE controls, not two: "Mark as in progress" (or the
-                    shorter "In progress" once set), Backup, and Delete. Sized
-                    for the longer label, which is the state most books are in. */}
+                {/* THREE controls: the publish button (accent, because it is
+                    the primary action and should read as one while loading),
+                    Backup and Delete. Status is NOT here — it is the chip
+                    beside the title (LOOM-140). This previously described
+                    "Mark as in progress", a button that no longer exists. */}
                 <div className="flex justify-end gap-2 mt-3">
-                  <div className="h-7 w-40 bg-surface-overlay rounded" />
+                  <div className="h-7 w-32 bg-accent/30 rounded" />
                   <div className="h-7 w-20 bg-surface-overlay rounded" />
                   <div className="h-7 w-16 bg-surface-overlay rounded" />
                 </div>

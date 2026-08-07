@@ -66,6 +66,30 @@ function SeriesTimelineTab({ seriesId }: { seriesId: string }) {
   )
 }
 
+/**
+ * A book's status as ONE value (LOOM-140).
+ *
+ * Stored as two booleans, which stays true — the collapse is lossless (no book
+ * has ever been both) and keeping the columns means no migration and no change
+ * to the PATCH endpoint. This type is the vocabulary the UI thinks in.
+ */
+type BookStatus = 'draft' | 'inProgress' | 'published'
+
+/**
+ * IN PROGRESS WINS, matching the chips this replaced exactly.
+ *
+ * The old card rendered `inProgress ? 'In progress' : !published && 'Draft'`,
+ * so a book flagged BOTH showed as In progress. The three states are meant to
+ * be exclusive now and the real series has no such book — but the sandbox
+ * fixture does, and reading `published` first would silently relabel it. A
+ * display rule that changes what an existing row means is not a refactor.
+ *
+ * Storage self-corrects on the next edit: choosing any option writes both
+ * booleans, so a both-set row resolves the moment it is touched.
+ */
+const statusOf = (book: { published: boolean; inProgress: boolean }): BookStatus =>
+  book.inProgress ? 'inProgress' : book.published ? 'published' : 'draft'
+
 export default function AuthorSeriesPage() {
   const { seriesId } = useParams() as { seriesId: string }
   const router = useRouter()
@@ -214,11 +238,26 @@ export default function AuthorSeriesPage() {
     loadSeries()
   }
 
-  async function toggleInProgress(bookId: string, next: boolean) {
+  /**
+   * A book's status, as one field (LOOM-140).
+   *
+   * Storage keeps both booleans — no migration, and the PATCH endpoint already
+   * accepts them together and already clears `inProgress` on every other book
+   * atomically. Only the CONTROL is collapsed: it was two toggles on two
+   * different pages writing one concept, which is why the card had to render
+   * two chips with a precedence rule to explain itself.
+   *
+   * The three states are mutually exclusive by construction here, which is
+   * what the data already looked like (no book was ever both).
+   */
+  async function setBookStatus(bookId: string, status: BookStatus) {
     await fetch(`/api/series/${seriesId}/books/${bookId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ inProgress: next }),
+      body: JSON.stringify({
+        published: status === 'published',
+        inProgress: status === 'inProgress',
+      }),
     })
     loadSeries()
   }
@@ -336,14 +375,48 @@ export default function AuthorSeriesPage() {
                       <div className="flex items-center gap-3 mb-4">
                         <span className="text-xs text-ink-faint uppercase tracking-widest shrink-0">Book {idx + 1}</span>
                         <span className="font-semibold text-ink text-lg leading-tight">{book.title}</span>
-                        {/* In progress wins over Draft — the writer is actively
-                            working on this one; that's the more informative
-                            signal of the two. */}
-                        {book.inProgress ? (
-                          <span className="text-[10px] uppercase tracking-widest text-accent border border-accent/50 bg-accent/10 rounded px-1.5 py-0.5 shrink-0">In progress</span>
-                        ) : !book.published && (
-                          <span className="text-[10px] uppercase tracking-widest text-ink-faint border border-accent/30 rounded px-1.5 py-0.5 shrink-0">Draft</span>
-                        )}
+                        {/* The one status control (LOOM-140), styled as the
+                            outlined chip it replaced and kept where that chip
+                            was: beside the title, reading as a property of the
+                            book. It is a <select>, so this is also where you
+                            change it.
+
+                            Three outlines rather than three fills. The action
+                            row below already has a solid accent button
+                            ("Publish to readers"); a solid chip up here
+                            competed with it and made the primary action
+                            ambiguous.
+
+                            Green / amber / faint-dashed, all from the guarded
+                            palette — teal, blue and purple have no light-mode
+                            override and would render near-black on the cream
+                            page. */}
+                        <select
+                          value={statusOf(book)}
+                          onChange={e => void setBookStatus(book.id, e.target.value as BookStatus)}
+                          // The whole CARD navigates to the book on click. The
+                          // action row below guards its buttons with the same
+                          // stopPropagation; this chip sits in the title row,
+                          // which has no such wrapper, so it carries its own.
+                          // mousedown too: a <select> opens on mousedown, and
+                          // without it the card reacts underneath the dropdown.
+                          onClick={e => e.stopPropagation()}
+                          onMouseDown={e => e.stopPropagation()}
+                          title="Draft: readers see “Coming Soon”. In progress: the one you’re writing — the outline opens here. Published: eligible to send to readers."
+                          className={`appearance-none shrink-0 cursor-pointer rounded border px-1.5 py-0.5
+                            text-center text-[10px] uppercase tracking-widest transition
+                            focus:outline-none focus-visible:border-accent/70 ${
+                            statusOf(book) === 'published'
+                              ? 'border-choice-spare-border bg-choice-spare-bg text-choice-spare hover:brightness-110'
+                              : statusOf(book) === 'inProgress'
+                                ? 'border-accent/50 bg-accent/10 text-accent hover:bg-accent/15'
+                                : 'border-ink-faint/40 border-dashed text-ink-faint hover:text-ink-muted hover:border-ink-faint/60'
+                          }`}
+                        >
+                          <option value="draft">Draft</option>
+                          <option value="inProgress">In progress</option>
+                          <option value="published">Published</option>
+                        </select>
                         {/* Sits with the status chips rather than in the stats
                             grid below: those four are all "how much is here",
                             and this is not a size — it is something to fix. */}
@@ -419,17 +492,10 @@ export default function AuthorSeriesPage() {
                           </button>
                         )
                       })()}
-                      <button
-                        onClick={() => toggleInProgress(book.id, !book.inProgress)}
-                        title={book.inProgress ? 'Click to unset' : 'Default this book in the outline and scroll its latest chapter into view'}
-                        className={`px-3 py-1.5 rounded text-xs transition flex items-center gap-1.5 border ${
-                          book.inProgress
-                            ? 'bg-accent text-white border-accent hover:opacity-90'
-                            : 'bg-surface-overlay border-accent/20 text-ink-muted hover:text-ink'
-                        }`}
-                      >
-                        <LuPencilLine size={11} /> {book.inProgress ? 'In progress' : 'Mark as in progress'}
-                      </button>
+                      {/* Status is a chip beside the TITLE, not a control in
+                          this row — see the card header. It reads as a property
+                          of the book rather than an action you take on it, and
+                          it keeps this row to things you DO. */}
                       <a
                         href={`/api/series/${seriesId}/books/${book.id}/export`}
                         download

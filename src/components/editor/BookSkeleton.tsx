@@ -27,8 +27,11 @@ export default function BookSkeleton() {
           gap-1.5: Published/Draft ~96 (dot, no icon), Backup ~82, Save ~69,
           Preview ~89. The first can only match one of its two labels, so it is
           sized for "Published"; a Draft book shows a small gap there. */}
+      {/* THREE controls, not four: the Published/Draft toggle moved to the
+          series page's status dropdown (LOOM-140). A skeleton that reserves a
+          button the page no longer renders makes the real content jump when it
+          arrives, which is the one thing a skeleton exists to prevent. */}
       <div className="flex items-center justify-end gap-2 mb-6">
-        <div className="h-7 w-24 bg-surface-overlay rounded" />
         <div className="h-7 w-20 bg-surface-overlay rounded" />
         <div className="h-7 w-16 bg-surface-overlay rounded" />
         <div className="h-7 w-24 bg-accent/30 rounded" />
