@@ -1,6 +1,7 @@
 'use client'
 
 import { LuMoon, LuSun } from 'react-icons/lu'
+import { media } from '@/lib/basePath'
 
 /**
  * The reader tier's chrome.
@@ -31,7 +32,9 @@ export default function ReaderHeader({
   return (
     <nav className="chrome-dark font-chrome sticky top-0 z-50 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
       <span className="shrink-0" aria-label="Loom">
-        <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
+        {/* media(), like every other asset: a bare "/loom-logo.svg" is not
+            under the /loom mount despite sharing the letters, and 404s. */}
+        <img src={media('/loom-logo.svg')} alt="" className="block h-9 w-9" />
       </span>
       <span className="text-accent font-bold tracking-wider text-2xl leading-none shrink-0">
         LOOM

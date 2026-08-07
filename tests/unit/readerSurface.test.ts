@@ -246,7 +246,13 @@ describe('media URLs carry the mount prefix', () => {
       const bare = [...code.matchAll(/src=\{([^}]+)\}/g)]
         .map(m => m[1].trim())
         .filter(e => !e.startsWith('media(') && !e.startsWith('api('))
-      expect(bare).toEqual([])
+      // STRING LITERALS TOO. The first version of this test only looked at
+      // src={...} expressions, so `src="/loom-logo.svg"` sailed through and the
+      // site logo 404'd — the one asset on every single page.
+      const literals = [...code.matchAll(/src="([^"]+)"/g)]
+        .map(m => m[1])
+        .filter(u => u.startsWith('/'))
+      expect([...bare, ...literals]).toEqual([])
     },
   )
 })
