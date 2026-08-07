@@ -82,19 +82,34 @@ export function isBranchOnly(appearances: BookEventAppearance[]): boolean {
   return appearances.length > 0 && appearances.every(a => a.nonCanon)
 }
 
+/** Same pill language as the expanded/view card's "Referenced in" chips
+ *  (LOOM-138) — plain here rather than links, since this preview sits inside
+ *  the card's own button and a link cannot nest inside one; the click that
+ *  opens this card is what reaches the real, clickable version. */
 function ChapterLine({ appearances }: { appearances: BookEventAppearance[] }) {
   if (appearances.length === 0) return null
   // Numbers where there are numbers, titles where there are not — an
   // unnumbered chapter has no canon address but is still a real appearance,
   // and dropping it would under-report the spread.
   const shown = appearances.slice(0, 3)
-  const label = shown.map(appearanceLabel).join(', ')
   const rest = appearances.length - shown.length
   return (
-    <span className="text-[10px] text-ink-faint">
-      {label}
-      {rest > 0 && ` +${rest}`}
-    </span>
+    <div className="flex flex-wrap justify-end gap-1">
+      {shown.map(a => (
+        <span
+          key={a.chapterId}
+          title={a.nonCanon ? 'Referenced here only on a non-canon branch' : undefined}
+          className={`rounded-full border px-1.5 py-px text-[9px] ${
+            a.nonCanon
+              ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
+              : 'border-accent/15 bg-surface-overlay/60 text-ink-faint'
+          }`}
+        >
+          {appearanceLabel(a)}
+        </span>
+      ))}
+      {rest > 0 && <span className="text-[9px] text-ink-faint">+{rest}</span>}
+    </div>
   )
 }
 
