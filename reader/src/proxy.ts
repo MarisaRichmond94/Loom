@@ -43,5 +43,9 @@ export const config = {
   // its own check, and it answers <img> and <audio>. Redirecting those to an
   // HTML page produces a broken asset with a misleading status, so that route
   // returns its own 404 instead.
-  matcher: ['/((?!r/|invite|api/media/|_next/|favicon.ico|loom-logo.svg).*)'],
+  //
+  // The icons are excluded too. They are not prose, and gating them means the
+  // tab shows a blank page icon on the invite screen — the one screen an
+  // unrecognised visitor sees.
+  matcher: ['/((?!r/|invite|api/media/|_next/|favicon.ico|icon.svg|loom-logo.svg).*)'],
 }
