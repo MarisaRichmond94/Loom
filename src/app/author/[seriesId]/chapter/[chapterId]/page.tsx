@@ -13,6 +13,7 @@ import { useChapterNotes } from '@/components/editor/useChapterNotes'
 import { useChapterEvents } from '@/components/editor/useChapterEvents'
 import { useChapterCharacters } from '@/components/editor/useChapterCharacters'
 import { useChapterInsights } from '@/components/editor/useChapterInsights'
+import { useChapterComments } from '@/components/editor/useChapterComments'
 import { useRegisterShortcuts, type ShortcutGroup } from '@/lib/shortcuts'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import { notify, showToast } from '@/lib/notifications'
@@ -197,6 +198,15 @@ export default function ChapterEditorPage() {
     reviewBookId,
     chapterId,
     panelOpen && panelTab === 'insights',
+  )
+
+  // Reader comments (LOOM-135). Same shape as Insights — an outside store,
+  // fetched only while its tab is open — except the badge needs a count even
+  // when the tab is closed, which is what makes it discoverable at all.
+  const chapterComments = useChapterComments(
+    reviewBookId,
+    chapterId,
+    panelOpen && panelTab === 'comments',
   )
   useRegisterShortcuts('chapter', CHAPTER_SHORTCUTS)
 
@@ -1814,6 +1824,7 @@ export default function ChapterEditorPage() {
           onRetry: chapterCharacters.refresh,
         }}
         insights={chapterInsights}
+        comments={chapterComments}
         review={reviewData}
         reviewLoading={reviewLoading}
         reviewCtx={{

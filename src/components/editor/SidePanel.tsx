@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, type ReactNode } from 'react'
-import { LuCalendarDays, LuLightbulb, LuPin, LuScanText, LuUsers, LuX } from 'react-icons/lu'
+import { LuCalendarDays, LuLightbulb, LuMessageSquare, LuPin, LuScanText, LuUsers, LuX } from 'react-icons/lu'
 import { PiNotebookThin } from 'react-icons/pi'
 import { ReferenceList, type PinnedText } from './ReferencePanel'
 import NotesPanel from './NotesPanel'
@@ -9,6 +9,7 @@ import ReviewPanel, { type ReviewSession } from './ReviewPanel'
 import EventsPanel from './EventsPanel'
 import CharactersPanel from './CharactersPanel'
 import InsightsPanel from './InsightsPanel'
+import CommentsPanel from './CommentsPanel'
 import { tabsFitLabelled } from '@/lib/panelTabs'
 import type { WriterEvent } from '@/lib/eventSearch'
 import type { TaggedEvent } from './useChapterEvents'
@@ -16,15 +17,16 @@ import type { WriterCharacter } from '@/lib/characterSearch'
 import type { CharacterOption } from '@/lib/writerCharacters'
 import type { TaggedCharacter } from './useChapterCharacters'
 import type { ChapterInsights, InsightsReason } from './useChapterInsights'
+import type { CommentsResult } from '@/lib/readerComments'
 
-export type PanelTab = 'notes' | 'refs' | 'review' | 'events' | 'characters' | 'insights'
+export type PanelTab = 'notes' | 'refs' | 'review' | 'events' | 'characters' | 'insights' | 'comments'
 
 const MIN_WIDTH = 280
 
 /** How many tabs the strip renders. Kept beside the tab list rather than
  *  derived from it, because the label-fit calculation needs it before the
  *  buttons are built. Bump when a tab is added. */
-const TAB_COUNT = 6
+const TAB_COUNT = 7
 
 /** Review needs materially more room than notes — it is a document, not a
  *  margin. A third of the viewport is the floor below which it stops being
@@ -60,6 +62,7 @@ export default function SidePanel({
   events,
   characters,
   insights,
+  comments,
   review,
   reviewLoading,
   reviewCtx,
@@ -115,6 +118,13 @@ export default function SidePanel({
     reason: InsightsReason | null
     loading: boolean
     onRetry: () => void
+  }
+  /** The Comments tab's data — useChapterComments' return (LOOM-135). Unlike
+   *  Insights this one mutates, but only in two ways and neither deletes. */
+  comments: {
+    data: CommentsResult | null
+    loading: boolean
+    mutate: (id: string, patch: { resolved?: boolean; hidden?: boolean }) => void
   }
   review: { review: ReviewSession | null; reason?: string; total?: number; chapter?: number | null } | null
   reviewLoading: boolean
@@ -255,6 +265,16 @@ export default function SidePanel({
             {tabButton('events', <LuCalendarDays size={13} />, 'Events', events.count)}
             {tabButton('characters', <LuUsers size={13} />, 'Characters', characters.count)}
             {tabButton('insights', <LuLightbulb size={13} />, 'Insights')}
+            {/* Comments sit beside Insights: both are things the chapter tells
+                you from outside, rather than things you do to it. The badge
+                counts UNRESOLVED and unhidden — a resolved comment is done
+                with, and a hidden one should not nag from the tab strip. */}
+            {tabButton(
+              'comments',
+              <LuMessageSquare size={13} />,
+              'Comments',
+              comments.data?.chapter.filter(c => !c.resolved && !c.hidden).length,
+            )}
             {tabButton('notes', <PiNotebookThin size={14} />, 'Notes')}
             {tabButton('refs', <LuPin size={12} />, 'Pins')}
           </div>
@@ -293,7 +313,9 @@ export default function SidePanel({
                 ? <CharactersPanel {...characters} bookId={reviewCtx.bookId} pov={chapterPov} />
                 : tab === 'insights'
                   ? <InsightsPanel {...insights} />
-                  : <NotesPanel value={notes} onChange={onNotesChange} />}
+                  : tab === 'comments'
+                    ? <CommentsPanel {...comments} />
+                    : <NotesPanel value={notes} onChange={onNotesChange} />}
       </div>
     </aside>
   )
