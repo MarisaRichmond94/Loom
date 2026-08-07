@@ -105,6 +105,29 @@ export default function NarrationBar({
     }
   }, [timing, durationMs, blockIds])
 
+  // ---- per-chapter reset ---------------------------------------------------
+  //
+  // Chapter-to-chapter navigation REUSES this component: same type, same
+  // position in the tree, so React updates it rather than remounting. Every ref
+  // here therefore survives into the next chapter, and so does `playing` —
+  // swapping an <audio> element's src pauses it WITHOUT firing a pause event,
+  // so the state can outlive the playback it described.
+  //
+  // A chapter-3 highlight failure was reported once against exactly this path
+  // (nav in while chapter 2 was playing) and has not reproduced since. This
+  // does not claim to be that fix. It removes the carried-over state that could
+  // produce it: a stale activeRef makes setActiveWord's identity check skip the
+  // first real update, and a stale `playing` leaves the transport disagreeing
+  // with the element about whether it is running.
+  useEffect(() => {
+    activeRef.current = -1
+    followRef.current = true
+    document.querySelectorAll('.narration-word.is-active')
+      .forEach(el => el.classList.remove('is-active'))
+    setTime(0)
+    setPlaying(!(ref.current?.paused ?? true))
+  }, [audioPath])
+
   // ---- highlight loop ------------------------------------------------------
   const setActiveWord = useCallback((idx: number) => {
     if (idx === activeRef.current) return
@@ -147,7 +170,17 @@ export default function NarrationBar({
     let raf = 0
     const tick = () => {
       const a = ref.current
-      if (a) setActiveWord(search(a.currentTime * 1000 + HIGHLIGHT_LEAD_MS * a.playbackRate))
+      if (a) {
+        const ms = a.currentTime * 1000
+        // The lead is suppressed until the voice is past the first word.
+        // Anticipating mid-sentence reads as leading the eye; anticipating at
+        // 0:00 just skips word one, because the opening word is often spoken in
+        // less than the lead itself and the highlight lands on word two before
+        // the reader has heard word one at all.
+        const past = search(ms)
+        const lead = past < 1 ? 0 : HIGHLIGHT_LEAD_MS * a.playbackRate
+        setActiveWord(lead === 0 ? Math.max(past, 0) : search(ms + lead))
+      }
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
