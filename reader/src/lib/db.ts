@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3'
+import { statSync } from 'node:fs'
 import path from 'node:path'
 
 /**
@@ -47,18 +48,49 @@ export function assertReaderSafe(filePath: string): void {
 }
 
 let content: Database.Database | null = null
+let openedStamp = ''
+
+/**
+ * Identity of the file currently on disk — inode first, because publish REPLACES
+ * the snapshot rather than writing into it. A held handle follows the old inode
+ * happily: same path, same queries, no error, silently the previous publish.
+ */
+function stamp(): string {
+  try {
+    const s = statSync(CONTENT_DB_PATH)
+    return `${s.ino}:${s.size}:${s.mtimeMs}`
+  } catch {
+    // Missing for an instant mid-publish (or genuinely gone). Keep serving what
+    // we have; the next call re-checks.
+    return openedStamp
+  }
+}
 
 /**
  * The published snapshot, opened read-only.
+ *
+ * REOPENED WHEN THE FILE IS REPLACED. Caching the handle alone was wrong in a
+ * way that looked like nothing at all: publish rebuilds the snapshot as a new
+ * file, so a long-lived reader kept serving the inode it opened at boot. Every
+ * page still rendered, every query still succeeded, and a republish simply had
+ * no effect until someone restarted the process — which under launchd is never.
+ * The word highlight surfaced it (a chapter shipped an empty block list while
+ * the snapshot on disk had one), but the same staleness applied to the PROSE.
  *
  * `fileMustExist` is deliberate: without it a typo'd path silently CREATES an
  * empty database and every page renders "no books", which reads as "nothing is
  * published" rather than "you are pointed at the wrong file".
  */
 export function contentDb(): Database.Database {
-  if (content) return content
+  const current = stamp()
+  if (content && current === openedStamp) return content
   assertReaderSafe(CONTENT_DB_PATH)
-  content = new Database(CONTENT_DB_PATH, { readonly: true, fileMustExist: true })
+  const next = new Database(CONTENT_DB_PATH, { readonly: true, fileMustExist: true })
+  // Swap only once the new handle is open, so a failed reopen leaves the
+  // previous snapshot being served rather than taking the app down.
+  content?.close()
+  content = next
+  openedStamp = current
   return content
 }
 
