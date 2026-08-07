@@ -2,7 +2,8 @@ import { notFound } from 'next/navigation'
 import ChapterView, { type ChapterNav, type ProseBlock } from '@/components/ChapterView'
 import { type BookCharacter } from '@/components/BookLanding'
 import { hasContent, query } from '@/lib/db'
-import { requireReader } from '@/lib/readers'
+import { requireReader, readerDbHandle } from '@/lib/readers'
+import { getProgress } from '@/shared/readerDb'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,11 +14,14 @@ type ChapterRow = {
 
 export default async function ChapterPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ bookId: string; chapterId: string }>
+  searchParams: Promise<{ resume?: string; moved?: string }>
 }) {
-  await requireReader()
+  const reader = await requireReader()
   const { bookId, chapterId } = await params
+  const sp = await searchParams
   if (!hasContent()) notFound()
 
   // Joined to Book so an unpublished book's chapter cannot be reached by
@@ -99,8 +103,26 @@ export default async function ChapterPage({
     blockIds: json<string>(row.blockIds, 'blockIds'),
   }
 
+  // Restoring is opt-in via ?resume=1. Someone who clicked a chapter link wants
+  // the top of that chapter; only a Continue card asks to be dropped back into
+  // the middle of one. The offset still comes from the SERVER's row, never the
+  // URL — a query parameter is not a position.
+  const saved = sp.resume === '1' ? getProgress(readerDbHandle(), reader.id, bookId) : null
+  const resumeOffset = saved?.chapterId === chapterId ? saved.offset : 0
+
+  // `moved` only selects which sentence to show; the ladder already decided.
+  const resumeNotice =
+    sp.moved === 'previous'
+      ? 'That chapter was revised, so you’re back at the start of the one before it.'
+      : sp.moved === 'restart'
+        ? 'That chapter was revised, so you’re back at the beginning of the book.'
+        : null
+
   return (
     <ChapterView
+      chapterId={chapterId}
+      resumeOffset={resumeOffset}
+      resumeNotice={resumeNotice}
       narration={narration}
       characters={characters}
       povCharacterId={povCharacterId}

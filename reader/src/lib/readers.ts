@@ -30,10 +30,18 @@ export const READER_DB_PATH =
 
 let handle: Database.Database | null = null
 
-function db(): Database.Database {
+/**
+ * The one `reader.db` handle for this process. Exported so reading progress
+ * (LOOM-133) shares it rather than opening the same file a second time —
+ * two handles would mean two WAL readers and two chances to be pointed
+ * somewhere different.
+ */
+export function readerDbHandle(): Database.Database {
   if (!handle) handle = openReaderDb(READER_DB_PATH)
   return handle
 }
+
+const db = readerDbHandle
 
 /**
  * The reader behind this request, or null.

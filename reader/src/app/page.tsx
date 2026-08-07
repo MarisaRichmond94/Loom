@@ -1,4 +1,5 @@
-import SeriesLanding, { type LandingBook } from '@/components/SeriesLanding'
+import SeriesLanding, { type LandingBook, type ResumeTarget } from '@/components/SeriesLanding'
+import { continueReading, resumeFor } from '@/lib/progress'
 import { hasContent, query } from '@/lib/db'
 import { requireReader } from '@/lib/readers'
 
@@ -20,7 +21,7 @@ const parseList = (raw: string | null): string[] => {
 
 export default async function Home() {
   // Gated: no cookie, unknown token, or revoked reader → /invite (LOOM-132).
-  await requireReader()
+  const reader = await requireReader()
 
   // Nothing published is a normal state, not an error: the reader app can be
   // running before the author has ever pressed Publish.
@@ -50,8 +51,42 @@ export default async function Home() {
     published: !!b.published,
   }))
 
+  // Where the primary button goes (LOOM-133). Resolved through the ladder, so
+  // a saved position pointing at a since-unpublished chapter lands somewhere
+  // real instead of 404-ing. Falls back to the first published book for a
+  // reader who has not started anything.
+  const cards = continueReading(reader.id)
+  const firstBook = landingBooks.find(b => b.published)
+  const mostRecent = cards[0]
+
+  const resume: ResumeTarget = mostRecent
+    ? {
+        href: `/book/${mostRecent.bookId}/chapter/${mostRecent.chapterId}?resume=1${mostRecent.notice ? '&moved=previous' : ''}`,
+        label: 'Continue reading',
+      }
+    : firstBook
+      ? (() => {
+          const point = resumeFor(reader.id, firstBook.id)
+          return point
+            ? { href: `/book/${firstBook.id}/chapter/${point.chapterId}`, label: 'Start reading' }
+            : null
+        })()
+      : null
+
   return (
     <SeriesLanding
+      resume={resume}
+      continueReading={cards.map(c => ({
+        bookId: c.bookId,
+        title: c.title,
+        coverPath: c.coverPath,
+        chapterId: c.chapterId,
+        chapterLabel: c.chapterLabel,
+        chapterNumbered: c.chapterNumbered,
+        offset: c.offset,
+        notice: c.notice,
+        updatedAt: c.updatedAt,
+      }))}
       series={{
         title: s?.title ?? '',
         description: s?.description ?? '',

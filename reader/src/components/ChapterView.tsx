@@ -1,13 +1,14 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { LuArrowLeft, LuArrowRight } from 'react-icons/lu'
+import { LuArrowLeft, LuArrowRight, LuInfo, LuX } from 'react-icons/lu'
 import { useReaderTheme } from '@/components/useReaderTheme'
 import ReaderHeader from '@/components/ReaderHeader'
 import TrackRow from '@/components/TrackRow'
 import NarrationBar from '@/components/NarrationBar'
 import { PROSE_CLASS } from '@/shared/proseClass'
+import { useProgressRecorder } from '@/components/useProgressRecorder'
 import type { BookCharacter } from '@/components/BookLanding'
 
 /**
@@ -34,6 +35,7 @@ type HoverCard = { c: BookCharacter; x: number; y: number }
 
 export default function ChapterView({
   bookId,
+  chapterId,
   bookTitle,
   heading,
   pov,
@@ -44,8 +46,11 @@ export default function ChapterView({
   narration,
   characters,
   povCharacterId,
+  resumeOffset = 0,
+  resumeNotice = null,
 }: {
   bookId: string
+  chapterId: string
   bookTitle: string
   heading: string
   pov: string | null
@@ -65,12 +70,43 @@ export default function ChapterView({
   characters: BookCharacter[]
   /** The POV character, resolved server-side so the byline can be hovered too. */
   povCharacterId: string | null
+  /** Paragraph to restore to. 0 (or absent) means start at the top (LOOM-133). */
+  resumeOffset?: number
+  /** Set only when the resume ladder MOVED them, so we can say why. */
+  resumeNotice?: string | null
 }) {
   const { lightMode, toggleLightMode, mounted } = useReaderTheme()
   const hoverRootRef = useRef<HTMLDivElement>(null)
   const [hovered, setHovered] = useState<HoverCard | null>(null)
   const byId = new Map(characters.map(c => [c.id, c]))
   const [progress, setProgress] = useState(0)
+  const [notice, setNotice] = useState<string | null>(resumeNotice)
+
+  // Number every paragraph in document order, across all prose blocks, so the
+  // recorder and the restore below agree on what "paragraph 12" means. Done
+  // here rather than at publish time because the prose arrives as an HTML
+  // string — there is no React element per paragraph to hang an index on.
+  //
+  // Runs before paint (layout effect) so a restore never lands on unnumbered
+  // nodes and visibly jumps a frame later.
+  useLayoutEffect(() => {
+    const paras = document.querySelectorAll<HTMLElement>(`.${PROSE_CLASS.split(' ')[0]} p`)
+    paras.forEach((p, i) => { p.dataset.para = String(i) })
+  }, [blocks])
+
+  // Put the reader back where they were. Only on an explicit resume — someone
+  // who clicked a chapter link wants the top of that chapter, not to be thrown
+  // into the middle of it.
+  useLayoutEffect(() => {
+    if (!resumeOffset) return
+    const target = document.querySelector<HTMLElement>(`[data-para="${resumeOffset}"]`)
+    if (!target) return
+    // Instant, not smooth: this is where the page STARTS, and animating to it
+    // reads as the page moving on its own.
+    window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top - 120 })
+  }, [resumeOffset, blocks])
+
+  useProgressRecorder(bookId, chapterId, true)
 
   // Character mentions are `<span class="character-ref" data-character-name>`
   // inside HTML publish produced, so there is no React element to hang a
@@ -132,6 +168,24 @@ export default function ChapterView({
           paragraph's bottom margin, so the padding is the whole distance
           between the last line and the rail rather than an addition to it. */}
       <main ref={hoverRootRef} className="flex-1 px-8 pt-10 pb-2">
+        {/* Shown only when the resume ladder MOVED them (LOOM-133). A silent
+            jump reads as a bug and invites the reader to think they lost their
+            place; saying so plainly costs one line and removes the doubt.
+            Dismissible, because it is news, not state. */}
+        {notice && (
+          <div className="mx-auto mb-8 max-w-2xl flex items-start gap-3 px-4 py-3 rounded-lg bg-surface-raised border border-accent/20">
+            <LuInfo size={15} className="text-accent/80 shrink-0 mt-0.5" />
+            <p className="flex-1 text-sm text-ink-muted leading-relaxed">{notice}</p>
+            <button
+              onClick={() => setNotice(null)}
+              aria-label="Dismiss"
+              className="shrink-0 p-1 rounded text-ink-faint hover:text-ink transition"
+            >
+              <LuX size={14} />
+            </button>
+          </div>
+        )}
+
         <h1 className="text-4xl font-bold tracking-wide uppercase text-ink text-center">
           {heading}
         </h1>
