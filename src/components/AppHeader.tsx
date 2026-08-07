@@ -138,7 +138,7 @@ export default function AppHeader({
             {(hasTools || tools) && (
               <div className="flex items-center gap-2 animate-pulse shrink-0">
                 <Bar className="w-4 h-4" />
-                <Bar className="h-7 w-72 rounded-lg" />
+                <Bar className="h-7 w-96 rounded-lg" />
               </div>
             )}
             <Bar className={`h-4 w-28 shrink-0${compactGreeting ? ' hidden lg:block' : ''}`} />

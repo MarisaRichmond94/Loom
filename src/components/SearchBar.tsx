@@ -307,7 +307,7 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
           filter + clear buttons on the right. Keeping every interactive
           element inside the input prevents the surrounding header from
           reflowing when the filter label changes width. */}
-      <div className="relative flex items-center flex-1 min-w-32 max-w-72">
+      <div className="relative flex items-center w-96 min-w-32">
         <LuSearch size={12} className="absolute left-2 text-ink-faint pointer-events-none" />
         <input
           ref={inputRef}
