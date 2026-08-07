@@ -14,6 +14,8 @@ export default function ChapterSkeleton() {
       {/* Sticky title/date header — mirrors the real page's `headerRef`
           wrapper: title+POV centered, then a date/search/actions row. */}
       <div className="sticky top-0 z-[45] -mx-8 px-8 pt-3 pb-2 bg-surface-base">
+        {/* Back to book link */}
+        <div className="h-4 w-32 bg-surface-muted rounded mb-4" />
         {/* Title + POV — centered */}
         <div className="flex flex-col items-center mb-8">
           <div className="h-9 w-72 bg-surface-muted rounded mb-3" />

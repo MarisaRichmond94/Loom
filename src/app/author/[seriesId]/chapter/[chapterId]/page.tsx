@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers, LuLightbulb, LuChartNoAxesColumn, LuSlidersHorizontal } from 'react-icons/lu'
 import { computeChapterStats } from '@/lib/chapterStats'
@@ -1165,6 +1166,24 @@ export default function ChapterEditorPage() {
               header placeholder to match — it drifted silently after KAN-30
               until LOOM-49 caught it. */}
         <div ref={headerRef} className="@container sticky top-0 z-[45] -mx-8 px-8 pt-3 pb-2 bg-surface-base">
+          {/* Back to book — cmd/ctrl-click opens the book page in a new,
+              focused tab via window.open (a plain Link's native modifier-click
+              would open it unfocused in the background). */}
+          {currentBook && (
+            <Link
+              href={`/author/${seriesId}/book/${currentBook.id}`}
+              onClick={e => {
+                if (e.metaKey || e.ctrlKey) {
+                  e.preventDefault()
+                  window.open(`/author/${seriesId}/book/${currentBook.id}`, '_blank')
+                }
+              }}
+              className="inline-flex items-center gap-1.5 text-xs uppercase tracking-widest text-ink-faint hover:text-ink transition mb-4"
+            >
+              <LuArrowLeft size={11} /> {currentBook.title}
+            </Link>
+          )}
+
           {/* Title + POV — centered */}
           <div className="flex flex-col items-center mb-8">
             <input
