@@ -116,6 +116,24 @@ describe('the reader tier does not keep progress in the browser', () => {
     expect(src).not.toMatch(/body[.?]*\.readerId/)
   })
 
+  it('never stamps its own attributes onto the rendered prose', () => {
+    // How the recorder broke, and it cost three rounds of instrumentation to
+    // see: paragraphs were numbered by writing `data-para` onto each <p>. The
+    // attributes were present at mount and GONE by the first scroll, because
+    // React owns those nodes and discards foreign attributes on its first
+    // client render. Every write then looked like a duplicate of the mount
+    // write and was dropped, so progress advanced only via the flush-on-leave —
+    // which is why a hard refresh appeared to fix it.
+    //
+    // A paragraph's index is now its position in the live list. Nothing is
+    // written to the DOM, so there is nothing for React to take back.
+    for (const f of ['components/useProgressRecorder.ts', 'components/ChapterView.tsx']) {
+      const code = strip(read(f))
+      expect(code).not.toContain('dataset.para')
+      expect(code).not.toContain('data-para')
+    }
+  })
+
   it('the predecessor is resolved on the server, not sent by the page', () => {
     expect(strip(read('lib/progress.ts'))).toContain('SELECT prev.id FROM Chapter cur')
     expect(strip(read('app/api/progress/route.ts'))).not.toContain('prevChapterId')

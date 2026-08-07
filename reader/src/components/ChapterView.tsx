@@ -8,7 +8,7 @@ import ReaderHeader from '@/components/ReaderHeader'
 import TrackRow from '@/components/TrackRow'
 import NarrationBar from '@/components/NarrationBar'
 import { PROSE_CLASS } from '@/shared/proseClass'
-import { useProgressRecorder } from '@/components/useProgressRecorder'
+import { useProgressRecorder, proseParagraphs } from '@/components/useProgressRecorder'
 import CommentThread from '@/components/CommentThread'
 import type { CommentView } from '@/lib/comments'
 import type { BookCharacter } from '@/components/BookLanding'
@@ -87,31 +87,19 @@ export default function ChapterView({
   const [progress, setProgress] = useState(0)
   const [notice, setNotice] = useState<string | null>(resumeNotice)
 
-  // Number every paragraph in document order, across all prose blocks, so the
-  // recorder and the restore below agree on what "paragraph 12" means. Done
-  // here rather than at publish time because the prose arrives as an HTML
-  // string — there is no React element per paragraph to hang an index on.
-  //
-  // Runs before paint (layout effect) so a restore never lands on unnumbered
-  // nodes and visibly jumps a frame later.
-  useLayoutEffect(() => {
-    const paras = document.querySelectorAll<HTMLElement>(`.${PROSE_CLASS.split(' ')[0]} p`)
-    paras.forEach((p, i) => { p.dataset.para = String(i) })
-  }, [blocks])
-
   // Put the reader back where they were. Only on an explicit resume — someone
   // who clicked a chapter link wants the top of that chapter, not to be thrown
   // into the middle of it.
   useLayoutEffect(() => {
     if (!resumeOffset) return
+    // Indexed by position, the same way the recorder counts them — nothing is
+    // written to the DOM, so there is no attribute for React to discard.
+    //
     // A finished chapter records `count` — one past the last index (LOOM-134's
-    // gate signal) — so an exact lookup finds nothing and would silently drop
-    // the reader at the top of a chapter they had just finished. Fall back to
-    // the last paragraph, which is where they actually were.
-    const paras = document.querySelectorAll<HTMLElement>('[data-para]')
-    const target =
-      document.querySelector<HTMLElement>(`[data-para="${resumeOffset}"]`)
-      ?? (paras.length ? paras[paras.length - 1] : null)
+    // gate signal) — so clamp rather than miss, or a reader would be dropped at
+    // the top of a chapter they had just finished.
+    const paras = proseParagraphs()
+    const target = paras[Math.min(resumeOffset, paras.length - 1)]
     if (!target) return
     // Instant, not smooth: this is where the page STARTS, and animating to it
     // reads as the page moving on its own.

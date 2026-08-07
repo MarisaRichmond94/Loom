@@ -1,6 +1,26 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { PROSE_CLASS } from '@/shared/proseClass'
+
+/**
+ * The chapter's paragraphs, in document order.
+ *
+ * A paragraph's index IS its position in this list — nothing is written to the
+ * DOM. Stamping `data-para` attributes was the previous approach and it failed
+ * in a way that took three rounds to see: the attributes existed at mount and
+ * were gone by the first scroll, because React owns these nodes and discards
+ * foreign attributes on its first client render. Every position write was then
+ * suppressed as a duplicate of the mount write, so progress only ever advanced
+ * via the flush-on-leave — which is why a hard refresh looked like the fix.
+ *
+ * Reading the order live cannot drift from what React renders, because it asks
+ * React's own DOM every time.
+ */
+export function proseParagraphs(): HTMLElement[] {
+  const root = PROSE_CLASS.split(' ')[0]
+  return Array.from(document.querySelectorAll<HTMLElement>(`.${root} p`))
+}
 
 /**
  * Records the reader's position while they read (LOOM-133).
@@ -49,38 +69,36 @@ export function useProgressRecorder(
   useEffect(() => {
     if (!enabled) return
 
+    const paras = proseParagraphs
+
     /** The topmost paragraph not yet scrolled past. */
     const currentIndex = (): number => {
-      const paras = document.querySelectorAll<HTMLElement>('[data-para]')
-      if (paras.length === 0) return 0
+      const ps = paras()
+      if (ps.length === 0) return 0
 
       // FINISHED is an explicit signal, not a threshold: once the last
       // paragraph's end is above the bottom of the viewport, the reader has
       // seen the end of the chapter. Reported as `count` — one past the final
       // index — which is what opens the comments (LOOM-134).
-      //
-      // A heuristic cannot do this. The index below is the topmost paragraph
-      // above the reading line, so at the true bottom of a chapter it sits
-      // several short of the end by an amount that depends on screen height —
-      // there is no fixed slack that is right for both a phone and a monitor.
-      const last = paras[paras.length - 1]
-      if (last.getBoundingClientRect().bottom <= window.innerHeight) return paras.length
+      const last = ps[ps.length - 1]
+      if (last.getBoundingClientRect().bottom <= window.innerHeight) return ps.length
 
       // A small band below the top edge, so the "current" paragraph is one the
       // reader can actually see rather than one just clipped by the header.
       const line = window.innerHeight * 0.25
       let idx = 0
-      for (const p of paras) {
-        const r = p.getBoundingClientRect()
-        if (r.top <= line) idx = Number(p.dataset.para ?? 0)
+      for (let i = 0; i < ps.length; i++) {
+        if (ps[i].getBoundingClientRect().top <= line) idx = i
         else break
       }
       return idx
     }
 
-    const total = () => document.querySelectorAll('[data-para]').length
+    const total = () => paras().length
 
     const send = (offset: number, beacon: boolean) => {
+      // TEMPORARY: above the dedupe, so a suppressed write is distinguishable
+      // from a listener that never fired.
       if (offset === lastSent.current) return
       lastSent.current = offset
       const body = JSON.stringify({ bookId, chapterId, offset })
