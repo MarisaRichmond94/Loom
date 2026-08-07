@@ -185,6 +185,17 @@ export default function ChapterView({
           paragraph's bottom margin, so the padding is the whole distance
           between the last line and the rail rather than an addition to it. */}
       <main ref={hoverRootRef} className="flex-1 px-8 pt-10 pb-2">
+        {/* Back to the book, top-left of the body — the same shape and styling
+            the book page already uses to get back to the series, so the way out
+            is in the same place at every level. The footer carries the previous
+            CHAPTER; this is the level above that. */}
+        <Link
+          href={`/book/${bookId}`}
+          className="inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition"
+        >
+          <LuArrowLeft size={12} /> {bookTitle}
+        </Link>
+
         {/* Shown only when the resume ladder MOVED them (LOOM-133). A silent
             jump reads as a bug and invites the reader to think they lost their
             place; saying so plainly costs one line and removes the doubt.
