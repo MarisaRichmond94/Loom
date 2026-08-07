@@ -174,6 +174,20 @@ export default function ChapterView({
           chapter you were, which is the only thing this rail is for. */}
       <div className="chrome-dark sticky bottom-0 bg-surface-raised">
         <div className="px-8 py-3 flex items-center gap-6">
+          {/* Back sits LEFT of the bar and forward sits right, so the pair
+              reads as direction of travel rather than as a menu. */}
+          <div className="shrink-0 text-xs">
+            {prev ? (
+              <Link href={`/book/${bookId}/chapter/${prev.id}`} className="flex items-center gap-1.5 text-ink-muted hover:text-ink transition">
+                <LuArrowLeft size={12} /> {prev.numbered ? `Chapter ${prev.label}` : prev.label}
+              </Link>
+            ) : (
+              <Link href={`/book/${bookId}`} className="flex items-center gap-1.5 text-ink-muted hover:text-ink transition">
+                <LuArrowLeft size={12} /> {bookTitle}
+              </Link>
+            )}
+          </div>
+
           <div className="relative flex-1 min-w-0 h-1 rounded-full bg-surface-muted/60">
             <div
               className="absolute inset-y-0 left-0 rounded-full bg-accent transition-[width] duration-150"
@@ -185,16 +199,7 @@ export default function ChapterView({
             />
           </div>
 
-          <div className="flex items-center gap-6 shrink-0 text-xs">
-            {prev ? (
-              <Link href={`/book/${bookId}/chapter/${prev.id}`} className="flex items-center gap-1.5 text-ink-muted hover:text-ink transition">
-                <LuArrowLeft size={12} /> {prev.numbered ? `Chapter ${prev.label}` : prev.label}
-              </Link>
-            ) : (
-              <Link href={`/book/${bookId}`} className="flex items-center gap-1.5 text-ink-muted hover:text-ink transition">
-                <LuArrowLeft size={12} /> {bookTitle}
-              </Link>
-            )}
+          <div className="shrink-0 text-xs">
             {next && (
               <Link href={`/book/${bookId}/chapter/${next.id}`} className="flex items-center gap-1.5 text-ink-muted hover:text-ink transition">
                 {next.numbered ? `Chapter ${next.label}` : next.label} <LuArrowRight size={12} />
