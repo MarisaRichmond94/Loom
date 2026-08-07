@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation'
 import BookLanding, { type BookChapter, type BookCharacter, type BookTrack } from '@/components/BookLanding'
 import { hasContent, query } from '@/lib/db'
-import { requireReader } from '@/lib/readers'
+import { requireReader, readerDbHandle } from '@/lib/readers'
+import { getProgress } from '@/shared/readerDb'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,7 +15,7 @@ type ChapterRow = {
 }
 
 export default async function BookPage({ params }: { params: Promise<{ bookId: string }> }) {
-  await requireReader()
+  const reader = await requireReader()
   const { bookId } = await params
   if (!hasContent()) notFound()
 
@@ -68,8 +69,14 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
     chapter: t.numbered ? `Chapter ${t.chapterLabel}` : t.chapterLabel,
   }))
 
+  // Where this reader left off, for the marker in the chapter list. Read
+  // directly rather than through the ladder: this is "which row do I highlight",
+  // and a row that no longer exists simply highlights nothing.
+  const saved = getProgress(readerDbHandle(), reader.id, bookId)
+
   return (
     <BookLanding
+      currentChapterId={saved?.chapterId ?? null}
       bookId={bookId}
       characters={characters}
       tracks={tracks}

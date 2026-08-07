@@ -96,6 +96,7 @@ export default function BookLanding({
   seriesTitle,
   book,
   chapters,
+  currentChapterId = null,
   characters,
   tracks,
 }: {
@@ -103,6 +104,8 @@ export default function BookLanding({
   seriesTitle: string
   book: { title: string; synopsis: string; coverPath: string | null; order: number }
   chapters: BookChapter[]
+  /** The chapter this reader left off in, if any (LOOM-133). */
+  currentChapterId?: string | null
   characters: BookCharacter[]
   tracks: BookTrack[]
 }) {
@@ -192,8 +195,16 @@ export default function BookLanding({
                   {chapters.map(ch => (
                     <Link
                       key={ch.id}
-                      href={`/book/${bookId}/chapter/${ch.id}`}
-                      className="flex items-center gap-3 px-4 py-2.5 rounded bg-surface-raised border border-accent/10 hover:border-accent transition-colors text-sm"
+                      href={`/book/${bookId}/chapter/${ch.id}${ch.id === currentChapterId ? '?resume=1' : ''}`}
+                      className={`flex items-center gap-3 px-4 py-2.5 rounded bg-surface-raised border transition-colors text-sm ${
+                        // Where they left off (LOOM-133). A marker on the row
+                        // rather than a separate Resume button: the list is
+                        // already the place they look, and a second control
+                        // would compete with the one at the top of the page.
+                        ch.id === currentChapterId
+                          ? 'border-accent/50'
+                          : 'border-accent/10 hover:border-accent'
+                      }`}
                     >
                       {/* One label, not two. `title` for a numbered chapter is
                           already "Chapter 7", so showing the number beside it
@@ -201,6 +212,11 @@ export default function BookLanding({
                       <span className="text-ink flex-1 min-w-0 truncate">
                         {ch.numbered ? `Chapter ${ch.label}` : ch.label}
                       </span>
+                      {ch.id === currentChapterId && (
+                        <span className="shrink-0 text-[10px] uppercase tracking-widest text-accent">
+                          You’re here
+                        </span>
+                      )}
                       {ch.narrated && (
                         <LuHeadphones
                           size={12}
