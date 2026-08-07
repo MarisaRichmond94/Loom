@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { LuArrowRight } from 'react-icons/lu'
 import { useReaderTheme } from '@/components/useReaderTheme'
 import ReaderHeader from '@/components/ReaderHeader'
+import { media } from '@/lib/basePath'
 
 /**
  * The series landing (LOOM-131) — forked from Loom's
@@ -160,7 +161,7 @@ export default function SeriesLanding({
                     <div className="w-10 h-15 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/15">
                       {c.coverPath && (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={c.coverPath} alt="" className="w-full h-full object-cover" />
+                        <img src={media(c.coverPath)} alt="" className="w-full h-full object-cover" />
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -207,7 +208,7 @@ export default function SeriesLanding({
                   >
                     {book.coverPath ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={book.coverPath} alt="" className="w-full h-full object-cover" />
+                      <img src={media(book.coverPath)} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <span className="text-xs text-ink-faint px-2 text-center">No cover</span>
                     )}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { LuPause, LuPlay, LuSkipBack, LuSkipForward } from 'react-icons/lu'
 import { expandTimes } from '@/shared/narrationTokens'
 import { wrapWords, unwrapWords } from '@/shared/wrapWords'
+import { media } from '@/lib/basePath'
 
 /**
  * The chapter's narration transport, matching Loom's read view: skip back,
@@ -274,7 +275,7 @@ export default function NarrationBar({
 
       <audio
         ref={ref}
-        src={audioPath}
+        src={media(audioPath)}
         preload="metadata"
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}

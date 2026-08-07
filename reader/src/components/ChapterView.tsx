@@ -12,7 +12,7 @@ import { useProgressRecorder, proseParagraphs } from '@/components/useProgressRe
 import CommentThread from '@/components/CommentThread'
 import type { CommentView } from '@/lib/comments'
 import type { BookCharacter } from '@/components/BookLanding'
-import { api } from '@/lib/basePath'
+import { api, media } from '@/lib/basePath'
 
 /**
  * The reading surface (LOOM-131) — matched to Loom's own read view, minus the
@@ -315,7 +315,7 @@ export default function ChapterView({
           <div className="w-12 h-12 shrink-0 rounded-full overflow-hidden bg-surface-overlay border border-accent/15 flex items-center justify-center">
             {hovered.c.photoPath ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={hovered.c.photoPath} alt="" className="w-full h-full object-cover" />
+              <img src={media(hovered.c.photoPath)} alt="" className="w-full h-full object-cover" />
             ) : (
               <span className="text-sm text-ink-faint">{hovered.c.name.charAt(0)}</span>
             )}

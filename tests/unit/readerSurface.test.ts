@@ -216,3 +216,37 @@ describe('the reader cookie reaches the app it was issued for', () => {
     expect(src).not.toMatch(/path:\s*api\('\/'\)/)
   })
 })
+
+describe('media URLs carry the mount prefix', () => {
+  // Cover, portrait, soundtrack and narration paths come out of content.db as
+  // app-absolute strings — '/covers/<id>.jpg' — and go straight into `src`.
+  // Those are plain browser requests, so basePath never touches them: under a
+  // mount they leave the app and land on whatever answers '/'. Every image and
+  // audio element on the site broke this way at once, and nothing errored —
+  // the requests simply went to the wrong application.
+  const components = path.join(__dirname, '../../reader/src/components')
+
+  function tsx(dir: string, found: string[] = []): string[] {
+    for (const name of readdirSync(dir)) {
+      const full = path.join(dir, name)
+      if (statSync(full).isDirectory()) tsx(full, found)
+      else if (name.endsWith('.tsx')) found.push(full)
+    }
+    return found
+  }
+
+  it.each(tsx(components).map(f => [path.basename(f), f]))(
+    '%s wraps every src in media()',
+    (_name, file) => {
+      const code = readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '')
+      // Every `src={…}` whose expression is not a media()/api() call, and not
+      // a plain local string (the logo, which Next serves from public/).
+      const bare = [...code.matchAll(/src=\{([^}]+)\}/g)]
+        .map(m => m[1].trim())
+        .filter(e => !e.startsWith('media(') && !e.startsWith('api('))
+      expect(bare).toEqual([])
+    },
+  )
+})

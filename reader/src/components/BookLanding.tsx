@@ -6,6 +6,7 @@ import { LuArrowLeft, LuArrowRight, LuHeadphones } from 'react-icons/lu'
 import { useReaderTheme } from '@/components/useReaderTheme'
 import ReaderHeader from '@/components/ReaderHeader'
 import TrackRow from '@/components/TrackRow'
+import { media } from '@/lib/basePath'
 
 /**
  * The book landing (LOOM-131) — where "See more" goes, and where the blurb
@@ -137,7 +138,7 @@ export default function BookLanding({
               {book.coverPath ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={book.coverPath}
+                  src={media(book.coverPath)}
                   alt=""
                   className="h-full w-auto object-contain rounded-lg border border-accent/10"
                 />
@@ -248,7 +249,7 @@ export default function BookLanding({
                     <div className="w-16 h-16 rounded-full overflow-hidden bg-surface-overlay border border-accent/15 flex items-center justify-center">
                       {c.photoPath ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={c.photoPath} alt="" className="w-full h-full object-cover" />
+                        <img src={media(c.photoPath)} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <span className="text-sm text-ink-faint">{c.name.charAt(0)}</span>
                       )}

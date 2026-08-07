@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { LuMusic, LuPause, LuPlay, LuVolume2, LuVolumeX } from 'react-icons/lu'
+import { media } from '@/lib/basePath'
 
 /**
  * One soundtrack row: index, art, title, transport, scrubber, mute.
@@ -86,7 +87,7 @@ export default function TrackRow({
           // rather than leaving a broken image.
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={artPath}
+            src={media(artPath)}
             alt=""
             className="w-full h-full object-cover"
             onError={() => setArtOk(false)}
@@ -136,7 +137,7 @@ export default function TrackRow({
 
       <audio
         ref={ref}
-        src={audioPath}
+        src={media(audioPath)}
         preload="metadata"
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}

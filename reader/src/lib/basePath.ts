@@ -33,3 +33,17 @@ export const api = (path: string): string => `${BASE_PATH}${path}`
  * curl does not reproduce it — its path matching is looser than a browser's.
  */
 export const ROOT = BASE_PATH || '/'
+
+/**
+ * A media URL from the published snapshot.
+ *
+ * Cover, portrait, soundtrack and narration paths are stored in content.db as
+ * app-absolute strings — `/covers/<id>.jpg` — and rendered straight into `src`
+ * attributes. Those are plain browser requests, so Next's basePath never
+ * touches them: under a mount they leave this app entirely and land on
+ * whatever answers `/`, which on the tailnet is a different application.
+ *
+ * Same problem as `api()`, but named separately because these are not API
+ * calls and the fix has to be applied where a URL becomes a `src`.
+ */
+export const media = (path: string): string => `${BASE_PATH}${path}`
