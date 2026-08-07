@@ -68,6 +68,7 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
 
   return (
     <BookLanding
+      bookId={bookId}
       characters={characters}
       tracks={tracks}
       seriesTitle={seriesTitle}

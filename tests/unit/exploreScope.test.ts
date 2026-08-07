@@ -194,7 +194,11 @@ describe('every colour the Explore UI uses has a light-mode value', () => {
     path.join(__dirname, '../../src/app/globals.css'),
     path.join(__dirname, '../../shared/light.css'),
   ].map(p => readFileSync(p, 'utf8')).join('\n')
-  const lightBlocks = [...css.matchAll(/\.light-body\s*\{([\s\S]*?)\}/g)]
+  // `.light-body` gained a second selector when the reader app needed the same
+  // palette applied pre-paint (`html.pre-light body`), so the block no longer
+  // opens immediately after the class name. Match through any selector list up
+  // to the brace rather than assuming one selector.
+  const lightBlocks = [...css.matchAll(/\.light-body[^{]*\{([\s\S]*?)\}/g)]
     .map(m => m[1])
     .join('\n')
 

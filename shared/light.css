@@ -9,7 +9,8 @@
  * and WriteAI alike.
  */
 /* Light mode — scoped to the main writing area only */
-.light-body {
+.light-body,
+html.pre-light body {
   --color-surface-base: #f5f2eb;
   --color-surface-raised: #ede9e0;
   --color-surface-overlay: #e5e0d5;
@@ -21,7 +22,8 @@
   color: var(--color-ink);
 }
 
-.light-body {
+.light-body,
+html.pre-light body {
   --color-choice-kill-bg: #cc8888;
   --color-choice-kill-border: #bb6666;
   /* Darker red for label text on the kill panel; the default `#cc8888`

@@ -29,7 +29,7 @@ export default function ReaderHeader({
   mounted: boolean
 }) {
   return (
-    <nav className="font-chrome sticky top-0 z-50 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
+    <nav className="chrome-dark font-chrome sticky top-0 z-50 bg-surface-raised border-b border-accent/10 px-6 py-3 flex items-center gap-3 text-sm">
       <span className="shrink-0" aria-label="Loom">
         <img src="/loom-logo.svg" alt="" className="block h-9 w-9" />
       </span>

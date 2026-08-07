@@ -6,6 +6,8 @@
    months later. */
 @import "../shared/theme.css";
 @import "../shared/light.css";
+@import "../shared/prose.css";
+@import "../shared/chrome.css";
 
 /* Tailwind v4 scans upward from this file, which would miss the shared
    directory. Without this, a class used only in shared code is silently

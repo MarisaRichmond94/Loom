@@ -24,6 +24,18 @@ assertReaderSafe(CONTENT_DB_PATH)
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={inter.variable}>
+      <head>
+        {/* Applies the light preference BEFORE first paint. Without it every
+            navigation flashes dark: the server cannot know the preference, and
+            localStorage is only readable after mount. Inline and synchronous
+            on purpose — a deferred script would paint first.
+            Chrome stays dark inside it via `chrome-dark`. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem('loom-light-mode')==='true')document.documentElement.classList.add('pre-light')}catch(e){}`,
+          }}
+        />
+      </head>
       <body className="min-h-screen bg-surface-base text-ink">{children}</body>
     </html>
   )

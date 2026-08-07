@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { LuArrowRight } from 'react-icons/lu'
-import { useLightMode } from '@/shared/useLightMode'
+import { useReaderTheme } from '@/components/useReaderTheme'
 import ReaderHeader from '@/components/ReaderHeader'
 
 /**
@@ -39,7 +39,7 @@ export default function SeriesLanding({
   series: LandingSeries
   books: LandingBook[]
 }) {
-  const { lightMode, toggleLightMode, mounted } = useLightMode()
+  const { lightMode, toggleLightMode, mounted } = useReaderTheme()
 
   return (
     <div className="min-h-screen bg-surface-base flex flex-col">
@@ -47,7 +47,7 @@ export default function SeriesLanding({
 
       {/* Light mode is scoped to the page body, never the header — the same
           rule Loom and WriteAI both keep. */}
-      <main className={`flex-1${lightMode ? ' light-body' : ''}`}>
+      <main className="flex-1">
         <div className="max-w-4xl mx-auto px-6 pt-12 pb-10">
           <div className="flex items-start justify-between gap-6">
             <div className="min-w-0">

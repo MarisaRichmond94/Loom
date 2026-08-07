@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { LuArrowLeft, LuArrowRight, LuHeadphones } from 'react-icons/lu'
-import { useLightMode } from '@/shared/useLightMode'
+import { useReaderTheme } from '@/components/useReaderTheme'
 import ReaderHeader from '@/components/ReaderHeader'
 import TrackRow from '@/components/TrackRow'
 
@@ -92,25 +92,27 @@ function Scrollable({
 }
 
 export default function BookLanding({
+  bookId,
   seriesTitle,
   book,
   chapters,
   characters,
   tracks,
 }: {
+  bookId: string
   seriesTitle: string
   book: { title: string; synopsis: string; coverPath: string | null; order: number }
   chapters: BookChapter[]
   characters: BookCharacter[]
   tracks: BookTrack[]
 }) {
-  const { lightMode, toggleLightMode, mounted } = useLightMode()
+  const { lightMode, toggleLightMode, mounted } = useReaderTheme()
 
   return (
     <div className="min-h-screen bg-surface-base flex flex-col">
       <ReaderHeader lightMode={lightMode} onToggleLightMode={toggleLightMode} mounted={mounted} />
 
-      <main className={`flex-1${lightMode ? ' light-body' : ''}`}>
+      <main className="flex-1">
         {/* Full width, matching Loom's own book preview — that page has no
             max-width either. The series landing DOES cap at max-w-4xl, and
             deliberately: a list of blurbs wants a readable measure, where a
@@ -188,9 +190,10 @@ export default function BookLanding({
               <Scrollable>
                 <div className="flex flex-col gap-1.5 pr-1">
                   {chapters.map(ch => (
-                    <div
+                    <Link
                       key={ch.id}
-                      className="flex items-center gap-3 px-4 py-2.5 rounded bg-surface-raised border border-accent/10 text-sm"
+                      href={`/book/${bookId}/chapter/${ch.id}`}
+                      className="flex items-center gap-3 px-4 py-2.5 rounded bg-surface-raised border border-accent/10 hover:border-accent transition-colors text-sm"
                     >
                       {/* One label, not two. `title` for a numbered chapter is
                           already "Chapter 7", so showing the number beside it
@@ -205,7 +208,7 @@ export default function BookLanding({
                           title="Narrated"
                         />
                       )}
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </Scrollable>

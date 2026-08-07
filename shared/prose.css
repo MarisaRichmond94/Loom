@@ -1,0 +1,78 @@
+/* Prose presentation shared by Loom and the reader app.
+ *
+ * These style the RENDERED OUTPUT of authored prose — footnote markers,
+ * character mentions, the narration word highlight — so both apps must agree.
+ * The reader receives prose as HTML with these exact class names baked in by
+ * publish, which means a missing rule here shows up as unstyled text rather
+ * than an error.
+ *
+ * Editor-only rules (.var-ref-*, .search-match, .ProseMirror) stay in Loom:
+ * the reader has no editor.
+ */
+
+.footnote-ref {
+  border-bottom: 1px dotted currentColor;
+  cursor: default;
+  position: relative;
+}
+
+.footnote-ref::after {
+  content: attr(data-footnote);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  /* Tokenised (LOOM-6): the footnote tooltip used to hardcode the old violet
+     overlay and cream ink, so it stayed on the old palette under the flag. */
+  background: var(--color-surface-overlay);
+  color: var(--color-ink);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 20%, transparent);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: normal;
+  width: max-content;
+  max-width: 260px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 50;
+  text-indent: 0;
+}
+
+.footnote-ref:hover::after {
+  opacity: 1;
+}
+
+
+.character-ref {
+  /* Was rgba(var(--color-accent-rgb, 136, 136, 255), …) — but
+     --color-accent-rgb is defined nowhere, so the literal fallback was always
+     what rendered. A dead var reference reads as tokenised while behaving like
+     a hardcode, which is worse than an honest literal. color-mix works
+     directly off the hex token (LOOM-6). */
+  color: color-mix(in srgb, var(--color-accent) 85%, transparent);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+  cursor: default;
+}
+
+
+.narration-word {
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background-color 0.1s linear, box-shadow 0.1s linear;
+}
+.narration-word.is-active {
+  /* Same dead --color-accent-rgb reference as .character-ref had (LOOM-6). */
+  background-color: color-mix(in srgb, var(--color-accent) 32%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+/* Highlight for series-search matches across the chapter editor. Pale
+   yellow reads clearly on both light and dark themes; a thin shadow
+   keeps adjacent matches from blurring together. Applied by the
+   TipTap SearchHighlight plugin (prose) on a <mark> wrapper. The
+   compound selector beats Typography's prose-* mark color reset. */
