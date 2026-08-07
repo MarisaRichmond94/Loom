@@ -1,5 +1,6 @@
 import SeriesLanding, { type LandingBook } from '@/components/SeriesLanding'
 import { hasContent, query } from '@/lib/db'
+import { requireReader } from '@/lib/readers'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +18,10 @@ const parseList = (raw: string | null): string[] => {
   try { const v = JSON.parse(raw ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
 }
 
-export default function Home() {
+export default async function Home() {
+  // Gated: no cookie, unknown token, or revoked reader → /invite (LOOM-132).
+  await requireReader()
+
   // Nothing published is a normal state, not an error: the reader app can be
   // running before the author has ever pressed Publish.
   if (!hasContent()) {

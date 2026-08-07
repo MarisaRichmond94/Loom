@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import ChapterView, { type ChapterNav, type ProseBlock } from '@/components/ChapterView'
 import { type BookCharacter } from '@/components/BookLanding'
 import { hasContent, query } from '@/lib/db'
+import { requireReader } from '@/lib/readers'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +16,7 @@ export default async function ChapterPage({
 }: {
   params: Promise<{ bookId: string; chapterId: string }>
 }) {
+  await requireReader()
   const { bookId, chapterId } = await params
   if (!hasContent()) notFound()
 

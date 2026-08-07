@@ -2,6 +2,7 @@ import { createReadStream, existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { Readable } from 'node:stream'
 import { NextResponse } from 'next/server'
+import { resolveReader } from '@/lib/readers'
 
 /**
  * Serves published media from the reader app's own public/ (LOOM-131).
@@ -29,6 +30,17 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
+  // Gated like the pages (LOOM-132). Without this the prose would be behind an
+  // invite while the audiobook, the covers and the portraits sat open to anyone
+  // who could reach the host — the chapter URLs are in the same snapshot the
+  // media paths come from, so guessing one gets you the other.
+  //
+  // 404 rather than a redirect to /invite: this answers <img> and <audio>, and
+  // an HTML page returned to those is a broken asset with a confusing status.
+  if (!(await resolveReader())) {
+    return new NextResponse('Not found', { status: 404 })
+  }
+
   const { path: segments } = await params
   if (!segments?.length || !MEDIA_ROOTS.has(segments[0])) {
     return new NextResponse('Not found', { status: 404 })
