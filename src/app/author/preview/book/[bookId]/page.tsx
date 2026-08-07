@@ -197,8 +197,8 @@ export default function PreviewBookPage() {
     const targetChapter =
       chapterId ?? [...book.chapters].sort((a, b) => a.order - b.order)[0]?.id
     const url = targetChapter
-      ? `/read/${sessionId}?startChapterId=${targetChapter}`
-      : `/read/${sessionId}`
+      ? `/author/preview/session/${sessionId}?startChapterId=${targetChapter}`
+      : `/author/preview/session/${sessionId}`
     router.push(url)
   }
 

@@ -217,7 +217,7 @@ export default function WritePage() {
                         body: JSON.stringify({ seriesId: s.id }),
                       })
                       const session = await res.json()
-                      router.push(`/read/${session.id}`)
+                      router.push(`/author/preview/session/${session.id}`)
                     }}
                     className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition flex items-center gap-1.5"
                   >

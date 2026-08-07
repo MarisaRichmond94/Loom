@@ -233,7 +233,7 @@ export default function ExplorePage() {
                 return (
                   <Link
                     key={r.sessionId}
-                    href={`/read/${r.sessionId}`}
+                    href={`/author/preview/session/${r.sessionId}`}
                     className="group shrink-0 w-[28rem] flex items-stretch gap-4 p-4 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
                   >
                     <div className="relative w-20 aspect-[2/3] shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 flex items-center justify-center">

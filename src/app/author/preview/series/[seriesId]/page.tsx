@@ -96,7 +96,7 @@ export default function PreviewSeriesPage() {
       sessionId = session.id
       localStorage.setItem(cacheKey, sessionId!)
     }
-    router.push(`/read/${sessionId}`)
+    router.push(`/author/preview/session/${sessionId}`)
   }
 
   if (!series) {

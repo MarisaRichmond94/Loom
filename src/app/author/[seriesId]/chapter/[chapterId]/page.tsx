@@ -1049,7 +1049,7 @@ export default function ChapterEditorPage() {
   async function startPreview() {
     const res = await fetch('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seriesId }) })
     const session = await res.json()
-    router.push(`/read/${session.id}?returnTo=/author/${seriesId}/chapter/${chapterId}&startChapterId=${chapterId}`)
+    router.push(`/author/preview/session/${session.id}?returnTo=/author/${seriesId}/chapter/${chapterId}&startChapterId=${chapterId}`)
   }
   startPreviewRef.current = startPreview
 
