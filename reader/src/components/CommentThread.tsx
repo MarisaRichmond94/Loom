@@ -50,7 +50,7 @@ export default function CommentThread({
   // Gated: one quiet line, no count, no affordance to open.
   if (comments === null) {
     return (
-      <div className="mx-auto mt-16 max-w-2xl border-t border-accent/10 pt-6">
+      <div className="mt-16 border-t border-accent/10 pt-6">
         <p className="text-sm text-ink-faint italic text-center">{NOT_YET_NOTICE}</p>
       </div>
     )
@@ -78,7 +78,7 @@ export default function CommentThread({
   }
 
   return (
-    <div className="mx-auto mt-16 max-w-2xl border-t border-accent/10 pt-6">
+    <div className="mt-16 border-t border-accent/10 pt-6">
       <button
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-2 text-sm text-ink-muted hover:text-accent transition"
