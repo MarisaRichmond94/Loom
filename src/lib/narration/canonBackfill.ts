@@ -41,6 +41,8 @@ const publicPath = (p: string) => path.join(process.cwd(), 'public', p.replace(/
 /** Published books only: a draft contributes no chapters to the snapshot. */
 export async function findMissingCanonNarration(
   seriesId: string,
+  /** Narrow to one book — publishing is per-book, so the check should be too. */
+  bookId?: string,
   voice = DEFAULT_VOICE,
 ): Promise<MissingNarration[]> {
   const series = await prisma.series.findUnique({
@@ -51,7 +53,7 @@ export async function findMissingCanonNarration(
   const variables = series.variables as VariableIn[]
 
   const books = await prisma.book.findMany({
-    where: { seriesId, published: true },
+    where: { seriesId, published: true, ...(bookId ? { id: bookId } : {}) },
     orderBy: { order: 'asc' },
     select: {
       id: true, title: true,

@@ -16,10 +16,11 @@ import { ensureFresh } from '@/lib/narration/generate'
  */
 
 export async function GET(req: Request) {
-  const seriesId = new URL(req.url).searchParams.get('seriesId')
+  const url = new URL(req.url)
+  const seriesId = url.searchParams.get('seriesId')
   if (!seriesId) return NextResponse.json({ error: 'seriesId is required.' }, { status: 400 })
 
-  const missing = await findMissingCanonNarration(seriesId)
+  const missing = await findMissingCanonNarration(seriesId, url.searchParams.get('bookId') ?? undefined)
   return NextResponse.json({
     remaining: missing.length,
     chapters: missing.map(m => ({ book: m.bookTitle, label: m.label, chapterId: m.chapterId })),
@@ -27,10 +28,11 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const seriesId = new URL(req.url).searchParams.get('seriesId')
+  const url = new URL(req.url)
+  const seriesId = url.searchParams.get('seriesId')
   if (!seriesId) return NextResponse.json({ error: 'seriesId is required.' }, { status: 400 })
 
-  const missing = await findMissingCanonNarration(seriesId)
+  const missing = await findMissingCanonNarration(seriesId, url.searchParams.get('bookId') ?? undefined)
   if (missing.length === 0) return NextResponse.json({ done: true, remaining: 0 })
 
   const next = missing[0]
