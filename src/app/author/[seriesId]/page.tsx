@@ -60,6 +60,7 @@ function SeriesTimelineTab({ seriesId }: { seriesId: string }) {
   return (
     <TimelineSection
       id="series"
+      seriesId={seriesId}
       appearances={appearances}
       onEventCreated={() => refresh()}
     />

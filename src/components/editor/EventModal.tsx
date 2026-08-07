@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LuBookOpen, LuCalendar, LuCheck, LuClock, LuMapPin, LuPencil, LuPlus, LuSearch, LuTrash2, LuX } from 'react-icons/lu'
+import { LuBookOpen, LuCalendar, LuCheck, LuClock, LuExternalLink, LuMapPin, LuPencil, LuPlus, LuSearch, LuTrash2, LuX } from 'react-icons/lu'
 import { notify } from '@/lib/notifications'
 import { formatEventWhen, fromDateInputValue, toDateInputValue, type WriterEvent } from '@/lib/eventSearch'
 import { portalHost } from '@/lib/portalHost'
@@ -239,6 +239,32 @@ function LocationCombobox({
 /** A chapter this event can be tagged to on create (LOOM-103). */
 export type ChapterChoice = { id: string; title: string; number: number | null }
 
+type AppearanceGroup = { bookId: string; bookTitle: string; appearances: BookEventAppearance[] }
+
+/**
+ * Buckets appearances by book for the "Referenced in" pills (LOOM-138).
+ *
+ * At book scope `bookId`/`bookTitle` are absent by design (see
+ * BookEventAppearance) — there is only ever one book in play there, so
+ * everything lands in a single untitled group and renders as a flat pill row,
+ * unchanged from before this ticket. At series scope, appearances arrive
+ * already ordered by book then chapter (groupSeriesEvents), so Map insertion
+ * order is enough — no re-sort needed here.
+ */
+function groupAppearances(appearances: BookEventAppearance[]): AppearanceGroup[] {
+  const groups = new Map<string, AppearanceGroup>()
+  for (const a of appearances) {
+    const key = a.bookId ?? ''
+    let group = groups.get(key)
+    if (!group) {
+      group = { bookId: key, bookTitle: a.bookTitle ?? '', appearances: [] }
+      groups.set(key, group)
+    }
+    group.appearances.push(a)
+  }
+  return [...groups.values()]
+}
+
 export default function EventModal({
   event,
   characterPool,
@@ -247,6 +273,7 @@ export default function EventModal({
   chapterChoices,
   initialMode = 'edit',
   appearances = [],
+  seriesId,
   characterPhotos = {},
   onSaved,
   onDeleted,
@@ -288,6 +315,10 @@ export default function EventModal({
   /** Chapters referencing this event, shown in view mode. Loom-side data, so
    *  it is passed in rather than fetched — the caller already has it. */
   appearances?: BookEventAppearance[]
+  /** For linking a "Referenced in" pill to `/author/[seriesId]/chapter/[chapterId]`
+   *  in a new tab (LOOM-138). Required alongside `appearances` — view mode is
+   *  the only mode that renders them. */
+  seriesId: string
   /** Portraits keyed by character NAME, for the cast in view mode. */
   characterPhotos?: Record<string, string | null>
   /** `chapterId` is the picker's choice, present only when `chapterChoices`
@@ -298,6 +329,7 @@ export default function EventModal({
   onClose: () => void
 }) {
   const editing = Boolean(event)
+  const appearanceGroups = useMemo(() => groupAppearances(appearances), [appearances])
 
   const [title, setTitle] = useState(event?.title ?? '')
   const [dateValue, setDateValue] = useState(
@@ -510,19 +542,46 @@ export default function EventModal({
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">
                   Referenced in
                 </p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {appearances.map(a => (
-                    <span
-                      key={a.chapterId}
-                      title={a.nonCanon ? 'Referenced here only on a non-canon branch' : undefined}
-                      className={`rounded-full border px-2.5 py-1 text-[11px] ${
-                        a.nonCanon
-                          ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
-                          : 'border-accent/20 bg-surface-overlay/60 text-ink-muted'
-                      }`}
-                    >
-                      {a.chapterNumber === null ? a.chapterTitle : `Ch. ${a.chapterNumber}`}
-                    </span>
+                {/* Grouped by book at series scope, where a bare "Ch. 3" is
+                    ambiguous across five books (LOOM-138) — flat at book
+                    scope, where appearances carry no bookId/bookTitle by
+                    design and there is nothing to group. Each pill opens
+                    that chapter's editor in a new tab. */}
+                <div className="mt-2 flex max-h-32 flex-col gap-1.5 overflow-y-auto pr-0.5">
+                  {appearanceGroups.map(group => (
+                    <div key={group.bookId || 'book'} className="flex items-center gap-1.5 overflow-x-auto pb-px">
+                      {group.bookTitle && (
+                        <span
+                          title={group.bookTitle}
+                          className="sticky left-0 max-w-[120px] shrink-0 cursor-default truncate bg-surface-raised text-[11px] font-semibold text-ink-muted select-none"
+                        >
+                          {group.bookTitle}
+                        </span>
+                      )}
+                      <div className="flex shrink-0 gap-1.5">
+                        {group.appearances.map(a => (
+                          <a
+                            key={a.chapterId}
+                            href={`/author/${seriesId}/chapter/${a.chapterId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={
+                              a.nonCanon
+                                ? 'Referenced here only on a non-canon branch — opens in a new tab'
+                                : `Open ${a.chapterNumber === null ? a.chapterTitle : `Ch. ${a.chapterNumber}`} in a new tab`
+                            }
+                            className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition hover:text-ink ${
+                              a.nonCanon
+                                ? 'border-amber-500/40 bg-amber-500/10 text-amber-400 hover:border-amber-500/60'
+                                : 'border-accent/20 bg-surface-overlay/60 text-ink-muted hover:border-accent-muted'
+                            }`}
+                          >
+                            <LuExternalLink size={10} className="opacity-70" />
+                            {a.chapterNumber === null ? a.chapterTitle : `Ch. ${a.chapterNumber}`}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>

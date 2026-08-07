@@ -308,7 +308,7 @@ export default function SidePanel({
           : tab === 'review'
             ? <ReviewPanel data={review} loading={reviewLoading} {...reviewCtx} />
             : tab === 'events'
-              ? <EventsPanel {...events} bookId={reviewCtx.bookId} />
+              ? <EventsPanel {...events} bookId={reviewCtx.bookId} seriesId={reviewCtx.seriesId} />
               : tab === 'characters'
                 ? <CharactersPanel {...characters} bookId={reviewCtx.bookId} pov={chapterPov} />
                 : tab === 'insights'

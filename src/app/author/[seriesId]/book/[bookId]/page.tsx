@@ -721,6 +721,7 @@ export default function BookDetailPage() {
             content: (
               <TimelineSection
                 id="book"
+                seriesId={seriesId}
                 eventIds={bookEvents.eventIds}
                 appearances={bookEvents.appearances}
                 chapterChoices={chapterChoices}

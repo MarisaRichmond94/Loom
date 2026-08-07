@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { LuArrowUpDown, LuCalendarDays, LuGitBranch, LuMapPin, LuPencil, LuPlus, LuTag, LuX } from 'react-icons/lu'
+import { LuArrowUpDown, LuCalendarDays, LuExternalLink, LuGitBranch, LuMapPin, LuPencil, LuPlus, LuTag, LuX } from 'react-icons/lu'
 import { PanelEmpty, PanelEmptyState } from './PanelEmptyState'
 import { CharacterAvatar } from './CharacterAvatar'
 import EventModal from './EventModal'
@@ -35,10 +35,48 @@ function describeSpread(alsoIn: EventAppearance[], thisBookId: string | undefine
     .join(', ')
 }
 
+type SpreadGroup = {
+  bookId: string
+  bookTitle: string
+  isThisBook: boolean
+  chapters: { chapterId: string; chapterNumber: number | null; label: string }[]
+}
+
+/** Buckets `alsoIn` by book for the expanded card's "Referenced in" pills
+ *  (LOOM-138). The current book sorts first and gets its own accent
+ *  treatment — the "you are here" book among however many others reach the
+ *  same event — everything else follows alphabetically. */
+function groupSpread(alsoIn: EventAppearance[], thisBookId: string | undefined): SpreadGroup[] {
+  const groups = new Map<string, SpreadGroup>()
+  for (const a of alsoIn) {
+    let group = groups.get(a.bookId)
+    if (!group) {
+      group = { bookId: a.bookId, bookTitle: a.bookTitle, isThisBook: a.bookId === thisBookId, chapters: [] }
+      groups.set(a.bookId, group)
+    }
+    group.chapters.push({
+      chapterId: a.chapterId,
+      chapterNumber: a.chapterNumber,
+      label: a.chapterNumber === null ? a.chapterTitle : `Ch. ${a.chapterNumber}`,
+    })
+  }
+  const result = [...groups.values()]
+  for (const group of result) {
+    group.chapters.sort((x, y) => (x.chapterNumber ?? Infinity) - (y.chapterNumber ?? Infinity))
+  }
+  result.sort((a, b) =>
+    a.isThisBook === b.isThisBook ? a.bookTitle.localeCompare(b.bookTitle) : a.isThisBook ? -1 : 1,
+  )
+  return result
+}
+
 function EventRow({
   event,
   tagged,
   spread,
+  alsoIn,
+  seriesId,
+  thisBookId,
   photos,
   nameOf,
   expanded,
@@ -50,7 +88,14 @@ function EventRow({
 }: {
   event: WriterEvent
   tagged: boolean
+  /** The flat, collapsed-row summary ("Ch. 7, Ch. 12") — plain text, since it
+   *  sits inside the card's button and links cannot nest inside one. */
   spread?: string
+  /** The full appearance list, for the expanded card's grouped, clickable
+   *  "Referenced in" pills — rendered OUTSIDE the button (LOOM-138). */
+  alsoIn?: EventAppearance[]
+  seriesId: string
+  thisBookId?: string
   photos: Record<string, string | null>
   /** Stored cast entries are `wc-` ids (LOOM-45); this turns one into the name
    *  to display. The photo map is keyed by name, so it is indexed by the
@@ -71,17 +116,23 @@ function EventRow({
   onEdit?: () => void
 }) {
   const when = formatEventWhen(event)
+  const groups = useMemo(
+    () => (expanded && alsoIn?.length ? groupSpread(alsoIn, thisBookId) : []),
+    [expanded, alsoIn, thisBookId],
+  )
 
   return (
-    <div className="group/event relative">
+    <div
+      className={`group/event relative rounded-lg border transition hover:border-accent/60 ${
+        tagged ? 'border-accent bg-accent/5' : 'border-accent/10 bg-surface-overlay/40'
+      }`}
+    >
       <button
         type="button"
         onClick={onActivate}
         aria-pressed={onUntag ? undefined : tagged}
         aria-expanded={onUntag ? expanded : undefined}
-        className={`w-full cursor-pointer rounded-lg border px-3 py-2.5 text-left transition hover:border-accent/60 ${
-          tagged ? 'border-accent bg-accent/5' : 'border-accent/10 bg-surface-overlay/40'
-        }`}
+        className="w-full cursor-pointer px-3 py-2.5 text-left"
       >
         <div className="flex items-baseline gap-2">
           <span className={`flex-1 text-[13px] font-semibold text-ink ${expanded ? '' : 'truncate'}`}>
@@ -168,13 +219,56 @@ function EventRow({
 
         {/* The cross-chapter spread — the one thing this tab shows that nothing
             else can, and the reason the epic exists. Quieter than the lines
-            above so it informs without competing. */}
-        {spread && (
-          <div className={`mt-1 text-[10px] italic text-ink-faint/80 ${expanded ? '' : 'truncate'}`}>
-            Also in {spread}
-          </div>
+            above so it informs without competing. Collapsed only: the
+            expanded version below has real links, and a link cannot nest
+            inside this button. */}
+        {!expanded && spread && (
+          <div className="mt-1 truncate text-[10px] italic text-ink-faint/80">Also in {spread}</div>
         )}
       </button>
+
+      {/* The expanded, clickable version of the line above — grouped by book,
+          each chapter a link that opens that chapter's editor in a new tab
+          (LOOM-138). A SIBLING of the button, not a child: the button is
+          already the whole card's click target, and a link inside a button
+          is invalid HTML (same reason the hover-icon cluster below is a
+          sibling too). */}
+      {groups.length > 0 && (
+        <div className="px-3 pb-2.5">
+          <p className="text-[9px] font-semibold uppercase tracking-widest text-ink-faint">
+            Referenced in
+          </p>
+          <div className="mt-1.5 flex max-h-24 flex-col gap-1.5 overflow-y-auto pr-0.5">
+            {groups.map(group => (
+              <div key={group.bookId} className="flex items-center gap-1.5 overflow-x-auto pb-px">
+                <span
+                  title={group.bookTitle}
+                  className={`sticky left-0 max-w-[110px] shrink-0 cursor-default truncate bg-surface-overlay text-[10px] font-semibold select-none ${
+                    group.isThisBook ? 'text-accent' : 'text-ink-muted'
+                  }`}
+                >
+                  {group.bookTitle}
+                </span>
+                <div className="flex shrink-0 gap-1.5">
+                  {group.chapters.map(chapter => (
+                    <a
+                      key={chapter.chapterId}
+                      href={`/author/${seriesId}/chapter/${chapter.chapterId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={`Open ${chapter.label} in a new tab`}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-accent/15 bg-surface-overlay px-2 py-0.5 text-[10px] text-ink-muted transition hover:border-accent-muted hover:bg-accent/10 hover:text-ink"
+                    >
+                      <LuExternalLink size={9} className="opacity-75" />
+                      {chapter.label}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Overlaid in the corner on hover, rather than sitting in a lane beside
           the card. The lane cost every card its width permanently to show two
@@ -242,6 +336,7 @@ export default function EventsPanel({
   onSetNonCanon,
   onRetry,
   bookId,
+  seriesId,
   locations,
   characterPool,
   characterPhotos,
@@ -256,6 +351,9 @@ export default function EventsPanel({
   onSetNonCanon: (writerEventId: string, nonCanon: boolean) => void | Promise<void>
   onRetry: () => void
   bookId?: string
+  /** For linking a "Referenced in" pill to `/author/[seriesId]/chapter/[chapterId]`
+   *  (LOOM-138). */
+  seriesId: string
   locations: string[]
   characterPool: CharacterOption[]
   characterPhotos: Record<string, string | null>
@@ -454,6 +552,9 @@ export default function EventsPanel({
               event={event}
               tagged={isTagged}
               spread={alsoIn?.length ? describeSpread(alsoIn, bookId) : undefined}
+              alsoIn={alsoIn}
+              seriesId={seriesId}
+              thisBookId={bookId}
               photos={characterPhotos}
               nameOf={nameOf}
               expanded={!tagMode && expandedId === event.id}
@@ -487,6 +588,7 @@ export default function EventsPanel({
           characterPool={characterPool}
           locationPool={locations}
           defaultDate={lastUpdatedDate}
+          seriesId={seriesId}
           onSaved={async saved => {
             // A newly created event is tagged here immediately. Creating one
             // from a chapter and then having to go find it would be worse than

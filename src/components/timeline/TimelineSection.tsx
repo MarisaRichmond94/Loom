@@ -35,6 +35,9 @@ type TimelineSectionProps = {
   /** Namespace for the persisted view choice, so two pages using this do not
    *  fight over one key. */
   id: string
+  /** For EventModal's "Referenced in" pills, which link to
+   *  `/author/[seriesId]/chapter/[chapterId]` (LOOM-138). */
+  seriesId: string
   /** Restrict to these event ids — the book page's prefilter. Null or absent
    *  means every event, which is the series page. */
   eventIds?: Set<string> | null
@@ -175,6 +178,7 @@ function EventListCard({
 
 export default function TimelineSection({
   id,
+  seriesId,
   eventIds = null,
   appearances = {},
   emptyTitle,
@@ -555,6 +559,7 @@ export default function TimelineSection({
           // still goes straight to the form.
           initialMode="view"
           appearances={editorFor.event ? (appearances[editorFor.event.id] ?? []) : []}
+          seriesId={seriesId}
           characterPhotos={characterPhotos}
           onSaved={async (saved, chapterId) => {
             // The page tags FIRST, then both sides refresh — otherwise the
