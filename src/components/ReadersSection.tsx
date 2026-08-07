@@ -116,7 +116,7 @@ export default function ReadersSection() {
 
       {/* The base URL. Visible because a link built against the wrong host is
           the failure everyone hits once, and it is invisible in an env file. */}
-      <label className="flex flex-col gap-1.5 max-w-xl">
+      <label className="flex flex-col gap-1.5">
         <span className="text-xs uppercase tracking-wider text-ink-faint">Invite link address</span>
         <div className="flex items-center gap-2">
           <LuLink size={14} className="text-ink-faint shrink-0" />
@@ -135,7 +135,7 @@ export default function ReadersSection() {
       </label>
 
       {/* Add */}
-      <div className="flex items-center gap-2 max-w-xl">
+      <div className="flex items-center gap-2">
         <input
           value={name}
           onChange={e => setName(e.target.value)}
@@ -154,7 +154,7 @@ export default function ReadersSection() {
       </div>
 
       {/* List */}
-      <div className="flex flex-col gap-2 max-w-3xl">
+      <div className="flex flex-col gap-2">
         {readers.length === 0 && (
           <p className="text-sm text-ink-faint italic">No readers yet.</p>
         )}
