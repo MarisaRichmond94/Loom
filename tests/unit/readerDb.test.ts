@@ -155,12 +155,17 @@ describe('the author-side operations', () => {
   })
 })
 
-describe('the schema stays confined to reader identity', () => {
-  it('creates only the Reader table', () => {
+describe('the schema stays confined to the reader tier', () => {
+  it('creates only the reader-tier tables', () => {
+    // Exhaustive on purpose. The value of this assertion is that it FAILS when
+    // a table is added — at which point the question "does this belong in the
+    // reader's database or the manuscript's?" gets asked deliberately rather
+    // than by whoever was mid-feature. ReadingProgress (LOOM-133) was added
+    // that way; the manuscript still gains nothing.
     const tables = (db.prepare(
       `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`,
-    ).all() as { name: string }[]).map(t => t.name)
-    expect(tables).toEqual(['Reader'])
+    ).all() as { name: string }[]).map(t => t.name).sort()
+    expect(tables).toEqual(['Reader', 'ReadingProgress'])
   })
 
   it('is safe to open twice — migration is idempotent', () => {

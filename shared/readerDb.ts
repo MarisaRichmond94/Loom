@@ -30,6 +30,16 @@ export type Reader = {
   lastSeenAt: string | null
 }
 
+export type ReadingProgress = {
+  readerId: string
+  bookId: string
+  chapterId: string
+  /** The chapter before `chapterId` when this was saved; null in chapter one. */
+  prevChapterId: string | null
+  offset: number
+  updatedAt: string
+}
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS Reader (
   id          TEXT PRIMARY KEY,
@@ -39,6 +49,33 @@ CREATE TABLE IF NOT EXISTS Reader (
   createdAt   TEXT NOT NULL,
   lastSeenAt  TEXT
 );
+
+-- Reading position, one row per reader per book (LOOM-133).
+--
+-- bookId and chapterId are cuids from content.db — a cross-FILE join, so there
+-- are deliberately no foreign keys: republishing can legitimately remove the
+-- chapter someone is standing in, and the resolution ladder handles that rather
+-- than a constraint refusing the write.
+--
+-- The offset column is a PARAGRAPH INDEX, not a pixel scroll position. The
+-- entire point of server-side progress is that a position set on a laptop means
+-- something on a phone, and a pixel offset does not survive a change of
+-- viewport width, font size, or orientation.
+CREATE TABLE IF NOT EXISTS ReadingProgress (
+  readerId  TEXT NOT NULL,
+  bookId    TEXT NOT NULL,
+  chapterId TEXT NOT NULL,
+  -- The chapter preceding chapterId at the moment this was saved. Recorded
+  -- because a deleted chapter takes its position in the order with it, and
+  -- "drop them to the previous chapter" is unanswerable afterwards.
+  prevChapterId TEXT,
+  offset    INTEGER NOT NULL DEFAULT 0,
+  updatedAt TEXT NOT NULL,
+  PRIMARY KEY (readerId, bookId)
+);
+
+CREATE INDEX IF NOT EXISTS ReadingProgress_reader_idx
+  ON ReadingProgress (readerId, updatedAt DESC);
 `
 
 /**
@@ -137,4 +174,60 @@ export function setReaderDisabled(db: Database.Database, id: string, disabled: b
 
 export function touchLastSeen(db: Database.Database, id: string): void {
   db.prepare(`UPDATE Reader SET lastSeenAt = ? WHERE id = ?`).run(new Date().toISOString(), id)
+}
+
+// ---- reading progress (LOOM-133) -------------------------------------------
+
+/**
+ * Records where a reader is in a book. One row per (reader, book): moving to a
+ * new chapter REPLACES the position rather than appending, because "where am I"
+ * has exactly one answer per book and a history would only invite guessing
+ * which entry is current.
+ */
+export function saveProgress(
+  db: Database.Database,
+  readerId: string,
+  bookId: string,
+  chapterId: string,
+  offset: number,
+  prevChapterId: string | null = null,
+): void {
+  db.prepare(
+    `INSERT INTO ReadingProgress (readerId, bookId, chapterId, prevChapterId, offset, updatedAt)
+     VALUES (@readerId, @bookId, @chapterId, @prevChapterId, @offset, @updatedAt)
+     ON CONFLICT(readerId, bookId) DO UPDATE SET
+       chapterId     = excluded.chapterId,
+       prevChapterId = excluded.prevChapterId,
+       offset        = excluded.offset,
+       updatedAt     = excluded.updatedAt`,
+  ).run({
+    readerId,
+    bookId,
+    chapterId,
+    prevChapterId,
+    offset: Math.max(0, Math.floor(offset)),
+    updatedAt: new Date().toISOString(),
+  })
+}
+
+export function getProgress(
+  db: Database.Database,
+  readerId: string,
+  bookId: string,
+): ReadingProgress | null {
+  return (db.prepare(
+    `SELECT * FROM ReadingProgress WHERE readerId = ? AND bookId = ?`,
+  ).get(readerId, bookId) as ReadingProgress | undefined) ?? null
+}
+
+/** Everything this reader has started, most recently read first. */
+export function listProgress(db: Database.Database, readerId: string): ReadingProgress[] {
+  return db.prepare(
+    `SELECT * FROM ReadingProgress WHERE readerId = ? ORDER BY updatedAt DESC`,
+  ).all(readerId) as ReadingProgress[]
+}
+
+/** Used when a book leaves the snapshot entirely — the position has nowhere to point. */
+export function dropProgress(db: Database.Database, readerId: string, bookId: string): void {
+  db.prepare(`DELETE FROM ReadingProgress WHERE readerId = ? AND bookId = ?`).run(readerId, bookId)
 }
