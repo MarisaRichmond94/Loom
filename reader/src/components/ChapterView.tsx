@@ -60,7 +60,7 @@ export default function ChapterView({
   povCharacterId: string | null
 }) {
   const { lightMode, toggleLightMode, mounted } = useReaderTheme()
-  const proseRef = useRef<HTMLDivElement>(null)
+  const hoverRootRef = useRef<HTMLDivElement>(null)
   const [hovered, setHovered] = useState<HoverCard | null>(null)
   const byId = new Map(characters.map(c => [c.id, c]))
   const [progress, setProgress] = useState(0)
@@ -69,30 +69,35 @@ export default function ChapterView({
   // inside HTML publish produced, so there is no React element to hang a
   // handler on. One delegated listener beats re-parsing the HTML into
   // components purely to attach a tooltip.
+  //
+  // Bound to a wrapper that also contains the POV BYLINE. It was on the prose
+  // container alone, which is why the byline never produced a card — it sits
+  // above the prose, outside that element.
   useEffect(() => {
-    const el = proseRef.current
+    const el = hoverRootRef.current
     if (!el) return
+    // One handler, set-or-clear. A separate mouseout listener left the card
+    // stuck whenever the pointer went somewhere mouseout did not fire for;
+    // deciding on every mouseover means the card cannot outlive the mention.
     const over = (e: Event) => {
       const t = (e.target as HTMLElement).closest('.character-ref') as HTMLElement | null
-      if (!t) return
+      if (!t) { setHovered(null); return }
       // Prefer the id: names are not identity, and two characters can share
       // one. Fall back to the name only when the mark predates ids.
       const c = (t.dataset.characterId && byId.get(t.dataset.characterId))
         || characters.find(x => x.name === t.dataset.characterName)
-      if (!c) return
+      if (!c) { setHovered(null); return }
       const r = t.getBoundingClientRect()
       setHovered({ c, x: r.left + r.width / 2, y: r.top })
     }
-    const out = (e: Event) => {
-      if ((e.target as HTMLElement).closest('.character-ref')) setHovered(null)
-    }
+    const leave = () => setHovered(null)
     el.addEventListener('mouseover', over)
-    el.addEventListener('mouseout', out)
+    el.addEventListener('mouseleave', leave)
     return () => {
       el.removeEventListener('mouseover', over)
-      el.removeEventListener('mouseout', out)
+      el.removeEventListener('mouseleave', leave)
     }
-  }, [blocks])
+  }, [blocks, characters])
 
   // Reading progress for the footer rail. Cheap: scroll position against
   // document height, no per-paragraph observers.
@@ -112,7 +117,7 @@ export default function ChapterView({
 
       {/* Full width, like Loom's read view — prose runs the page rather than
           sitting in a column. Light mode is already on <body>. */}
-      <main className="flex-1 px-8 pt-10 pb-24">
+      <main ref={hoverRootRef} className="flex-1 px-8 pt-10 pb-24">
         <h1 className="text-4xl font-bold tracking-wide uppercase text-ink text-center">
           {heading}
         </h1>
@@ -134,7 +139,7 @@ export default function ChapterView({
 
         {date && <p className="text-sm text-ink-muted mt-8">{date}</p>}
 
-        <div ref={proseRef} className="mt-4 flex flex-col gap-4">
+        <div className="mt-4 flex flex-col gap-4">
           {blocks.map(b =>
             b.type === 'soundtrack' ? (
               <TrackRow
@@ -159,11 +164,16 @@ export default function ChapterView({
         </div>
       </main>
 
-      {/* Sticky footer rail, like Loom's: progress on the left, the next
-          chapter on the right. chrome-dark so it stays dark in light mode. */}
-      <div className="sticky bottom-0 bg-surface-raised border-t border-accent/10">
-        <div className="h-0.5 bg-surface-muted">
-          <div className="h-full bg-accent transition-[width] duration-150" style={{ width: `${progress * 100}%` }} />
+      {/* Sticky footer rail, like Loom's. Page-coloured rather than raised —
+          it reads as the bottom of the page, not a separate bar. */}
+      <div className="sticky bottom-0 bg-surface-base border-t border-accent/10">
+        {/* A hairline with a travelling DOT, not a filling bar: the dot says
+            "you are here in the chapter", where a filled bar reads as loading. */}
+        <div className="relative h-px bg-accent/15">
+          <div
+            className="absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 -translate-x-1/2 rounded-full bg-accent transition-[left] duration-150"
+            style={{ left: `${progress * 100}%` }}
+          />
         </div>
         <div className="px-8 py-2 flex items-center justify-between text-xs">
           {prev ? (
