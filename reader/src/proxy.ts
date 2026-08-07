@@ -24,7 +24,14 @@ const COOKIE = 'loom-reader'
 
 export function proxy(request: NextRequest) {
   if (request.cookies.has(COOKIE)) return NextResponse.next()
-  return NextResponse.redirect(new URL('/invite', request.url), 303)
+  // Built from nextUrl, NOT `new URL('/invite', request.url)`. Under a
+  // basePath (LOOM-136) the latter replaces the whole path and drops the mount
+  // point, sending the reader to a bare /invite that belongs to another app.
+  // nextUrl carries the mount and Next re-applies it on redirect.
+  const url = request.nextUrl.clone()
+  url.pathname = '/invite'
+  url.search = ''
+  return NextResponse.redirect(url, 303)
 }
 
 export const config = {

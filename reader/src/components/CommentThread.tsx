@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { LuMessageSquare, LuTrash2, LuChevronDown, LuChevronUp } from 'react-icons/lu'
 import { NOT_YET_NOTICE, PACE_NUDGE } from '@/shared/commentGate'
 import type { CommentView } from '@/lib/comments'
+import { api } from '@/lib/basePath'
 
 /**
  * The chapter's discussion (LOOM-134).
@@ -60,7 +61,7 @@ export default function CommentThread({
     const body = draft.trim()
     if (!body || busy) return
     setBusy(true)
-    const res = await fetch('/api/comments', {
+    const res = await fetch(api('/api/comments'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ bookId, chapterId, body }),
@@ -73,7 +74,7 @@ export default function CommentThread({
   }
 
   async function remove(id: string) {
-    const res = await fetch(`/api/comments?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+    const res = await fetch(api(`/api/comments?id=${encodeURIComponent(id)}`), { method: 'DELETE' })
     if (res.ok) setComments(cs => (cs ?? []).filter(c => c.id !== id))
   }
 

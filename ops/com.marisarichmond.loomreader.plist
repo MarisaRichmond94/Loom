@@ -52,6 +52,13 @@
     <string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>NODE_ENV</key>
     <string>production</string>
+    <!-- The mount point on the tailnet (LOOM-136). Must match the value the
+         app was BUILT with — Next inlines basePath into the client bundle, so
+         a mismatch between build and runtime produces asset URLs that leave
+         this app and land on whatever answers `/`.
+           cd reader && NEXT_PUBLIC_BASE_PATH=/loom npm run build -->
+    <key>NEXT_PUBLIC_BASE_PATH</key>
+    <string>/loom</string>
   </dict>
   <key>WorkingDirectory</key>
   <string>/Users/marisarichmond/Documents/GitHub/Loom/reader</string>

@@ -143,3 +143,34 @@ describe('the reader app cannot write anywhere it should not', () => {
     expect(src).toContain('startsWith(PUBLIC_ROOT + path.sep)')
   })
 })
+
+describe('client calls stay inside the app’s mount point', () => {
+  // The reader is served under a path prefix on the tailnet (LOOM-136), beside
+  // another application at a different prefix. Next applies basePath to
+  // next/link and to its own assets, but NOT to fetch or sendBeacon — a bare
+  // '/api/progress' would leave this app entirely and land on whichever app
+  // answers '/'. Nothing about that fails loudly: the request just goes
+  // somewhere else and returns somebody else's 404.
+  function clientFiles(dir: string, found: string[] = []): string[] {
+    for (const name of readdirSync(dir)) {
+      if (name === 'shared') continue
+      const full = path.join(dir, name)
+      if (statSync(full).isDirectory()) clientFiles(full, found)
+      else if (/\.tsx?$/.test(name)) found.push(full)
+    }
+    return found
+  }
+
+  const files = clientFiles(path.join(__dirname, '../../reader/src'))
+
+  it.each(files.map(f => [path.relative(path.join(__dirname, '../../reader/src'), f), f]))(
+    '%s uses api() rather than a bare /api path',
+    (_rel, file) => {
+      const code = readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '')
+      // Matches fetch('/api/…'), fetch(`/api/…`) and sendBeacon('/api/…').
+      expect(code).not.toMatch(/(?:fetch|sendBeacon)\(\s*['"`]\/api\//)
+    },
+  )
+})

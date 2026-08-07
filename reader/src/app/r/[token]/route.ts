@@ -1,5 +1,21 @@
 import { NextResponse } from 'next/server'
+import { api } from '@/lib/basePath'
 import { markSeen, READER_COOKIE, READER_COOKIE_MAX_AGE, redeemToken } from '@/lib/readers'
+
+/**
+ * A RELATIVE redirect, deliberately.
+ *
+ * `NextResponse.redirect` needs an absolute URL, and the only host this process
+ * knows is its own — 127.0.0.1:3200. Behind `tailscale serve` that is the
+ * INTERNAL address, so an absolute redirect sent a family member clicking their
+ * invite link to localhost on their own machine. A relative Location is
+ * resolved by the browser against the URL it actually requested, which is the
+ * tailnet one, and needs no knowledge of how the app is reached.
+ */
+const seeOther = (path: string) => new NextResponse(null, {
+  status: 303,
+  headers: { Location: api(path) },
+})
 
 /**
  * The invite link: `/r/<token>` (LOOM-132).
@@ -29,21 +45,25 @@ export async function GET(
   // unknown must not confirm which guess was closer, and revoked is a state the
   // author chose. `?revoked` is a hint for the page's wording, not a claim the
   // page needs to trust — the cookie is never set on either path.
-  if (!reader) return NextResponse.redirect(new URL('/invite', req.url), 303)
-  if (reader.disabled) return NextResponse.redirect(new URL('/invite?revoked=1', req.url), 303)
+  if (!reader) return seeOther('/invite')
+  if (reader.disabled) return seeOther('/invite?revoked=1')
 
   markSeen(reader.id)
 
-  const res = NextResponse.redirect(new URL('/', req.url), 303)
+  const res = seeOther('/')
   res.cookies.set(READER_COOKIE, reader.token, {
     httpOnly: true,      // page scripts cannot read it
     sameSite: 'lax',     // survives following a link in, blocks cross-site POSTs
-    path: '/',
+    // SCOPED TO THIS APP'S MOUNT, not '/'. The tailnet host serves another
+    // application at a different prefix, and a cookie on '/' is sent to it on
+    // every request — handing a bearer token that grants access to the books
+    // to an app that has no business holding one.
+    path: api('/'),
     maxAge: READER_COOKIE_MAX_AGE,
-    // Not `secure`: the tailnet serves this over plain HTTP, and a secure
-    // cookie would simply never be stored — locking every reader out. Revisit
-    // with LOOM-136 if TLS lands there.
-    secure: false,
+    // `tailscale serve` terminates TLS, so the tailnet URL is https and the
+    // cookie should never travel in clear. Browsers treat localhost as a secure
+    // context, so this still works for local testing.
+    secure: true,
   })
   return res
 }

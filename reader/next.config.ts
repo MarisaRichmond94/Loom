@@ -2,6 +2,14 @@ import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  // Mounted under a path on the tailnet (LOOM-136) — /loom, beside HoneyDew at
+  // /honey-dew, so nothing owns the bare / and adding a third app later is not
+  // a rearrangement. Empty locally, so http://localhost:3200 keeps working
+  // unprefixed while you are developing.
+  //
+  // BUILD-TIME. Next inlines this into the client bundle, so changing the mount
+  // point means rebuilding — it is not a runtime switch.
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || undefined,
   // PIN THE ROOT. Without this Next walks up, finds the Loom repo's lockfile,
   // infers that as the workspace root and compiles Loom's own src/ — the first
   // run picked up Loom's instrumentation.ts and tried to start the backup and

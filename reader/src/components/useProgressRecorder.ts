@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { PROSE_CLASS } from '@/shared/proseClass'
+import { api } from '@/lib/basePath'
 
 /**
  * The chapter's paragraphs, in document order.
@@ -104,11 +105,11 @@ export function useProgressRecorder(
       const body = JSON.stringify({ bookId, chapterId, offset })
 
       if (beacon && navigator.sendBeacon) {
-        navigator.sendBeacon('/api/progress', new Blob([body], { type: 'application/json' }))
+        navigator.sendBeacon(api('/api/progress'), new Blob([body], { type: 'application/json' }))
         return
       }
 
-      const done = fetch('/api/progress', {
+      const done = fetch(api('/api/progress'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body,

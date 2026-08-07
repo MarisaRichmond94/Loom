@@ -12,6 +12,7 @@ import { useProgressRecorder, proseParagraphs } from '@/components/useProgressRe
 import CommentThread from '@/components/CommentThread'
 import type { CommentView } from '@/lib/comments'
 import type { BookCharacter } from '@/components/BookLanding'
+import { api } from '@/lib/basePath'
 
 /**
  * The reading surface (LOOM-131) — matched to Loom's own read view, minus the
@@ -113,7 +114,7 @@ export default function ChapterView({
   const [comments, setComments] = useState<CommentView[] | null>(initialComments)
 
   useProgressRecorder(bookId, chapterId, true, () => {
-    void fetch(`/api/comments?bookId=${bookId}&chapterId=${chapterId}`)
+    void fetch(api(`/api/comments?bookId=${bookId}&chapterId=${chapterId}`))
       .then(r => (r.ok ? r.json() : null))
       .then((d: { comments: CommentView[] } | null) => {
         if (d) setComments(d.comments)
