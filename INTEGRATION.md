@@ -58,8 +58,11 @@ form (fallback, retained indefinitely). WriteAI configures `VITE_LOOM_URL`
   by number in both forms**, because that is what the reader sees and what
   WriteAI ingested. Loom re-runs the canon walk to map it to the chapter's cuid,
   mints a fresh reader session, and 302-redirects to
-  `/read/<sessionId>?startChapterId=<cuid>`, which seeds state to reveal the
-  chapter even when it's gated. Misses fall back to the book preview (bad
+  `/author/preview/session/<sessionId>?startChapterId=<cuid>`, which seeds state
+  to reveal the chapter even when it's gated. **The two `by-*` URLs above are
+  the contract and do not change; that redirect TARGET is a Loom-internal
+  detail and moved in LOOM-137** (it was `/read/<sessionId>`). WriteAI never
+  constructs the target itself, so nothing on its side needs updating. Misses fall back to the book preview (bad
   chapter) or home (bad series/book). The by-id form additionally verifies the
   book belongs to the series, so a valid book id from another series cannot
   deep-link across series boundaries.

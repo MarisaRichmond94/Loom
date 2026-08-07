@@ -236,7 +236,7 @@ export default function PreviewBookPage() {
           <div className="flex-1 min-w-0">
             {series && (
               <a
-                href={`/preview/series/${series.id}`}
+                href={`/author/preview/series/${series.id}`}
                 className="text-xs uppercase tracking-widest text-ink-faint hover:text-ink transition flex items-center gap-1.5"
               >
                 <LuArrowLeft size={11} /> {series.title}

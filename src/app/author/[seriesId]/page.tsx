@@ -251,7 +251,7 @@ export default function AuthorSeriesPage() {
             <LuDatabaseBackup size={11} /> Backup
           </a>
           <a
-            href={`/preview/series/${seriesId}`}
+            href={`/author/preview/series/${seriesId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition flex items-center gap-1.5"

@@ -181,7 +181,7 @@ export default function AuthorModal({ authorName, excludeSeriesId, onClose }: Pr
                 {visibleOthers.map(s => (
                   <Link
                     key={s.id}
-                    href={`/preview/series/${s.id}`}
+                    href={`/author/preview/series/${s.id}`}
                     onClick={onClose}
                     className="group flex items-stretch gap-3 p-3 rounded-lg bg-surface-overlay border border-accent/10 hover:border-accent/40 transition"
                   >

@@ -451,7 +451,7 @@ export default function ExplorePage() {
             return (
             <Link
               key={s.id}
-              href={`/preview/series/${s.id}`}
+              href={`/author/preview/series/${s.id}`}
               className="group relative flex gap-4 p-4 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
             >
               {/* Star toggle — preventDefault keeps the outer link from

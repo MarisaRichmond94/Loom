@@ -239,7 +239,7 @@ export default function PreviewSeriesPage() {
               return book.published ? (
                 <a
                   key={book.id}
-                  href={`/preview/book/${book.id}`}
+                  href={`/author/preview/book/${book.id}`}
                   className="group/card flex gap-5 p-5 rounded-lg bg-surface-raised border border-accent/10 hover:border-accent/40 transition"
                 >
                   {card}

@@ -160,5 +160,10 @@ export async function readerJumpPath(
   const session = await prisma.readerSession.create({
     data: { seriesId, currentBlockId: null, storyState, choiceHistory },
   })
-  return `/read/${session.id}?startChapterId=${encodeURIComponent(target.id)}`
+  // The author's preview session view, moved under /author/preview by
+  // LOOM-137. A STRING LITERAL, so nothing here fails to compile if it drifts
+  // from the route — it just 404s at runtime, on the one path only exercised
+  // by following a WriteAI citation. The `/read/by-*` routes that call this
+  // are a public contract and did NOT move; only their target did.
+  return `/author/preview/session/${session.id}?startChapterId=${encodeURIComponent(target.id)}`
 }

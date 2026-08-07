@@ -7,10 +7,12 @@ import { useLightMode } from '@shared/useLightMode'
 // Top-level shell for the home routes. Chrome comes from <AppHeader> (KAN-2),
 // shared with the author, settings, and reader surfaces.
 //
-// NOTE: this layout wraps FOUR routes, and only `/` is author-facing —
-// /read and /preview/{series,book} are reader-facing. (An earlier version of
-// this comment claimed preview pages sat outside this layout; they do not.)
-// Anything author-only added here must be gated on the pathname.
+// NOTE: this layout now wraps TWO routes — `/` and the orphaned `/read`
+// catalog. The two /preview pages moved to /author/preview in LOOM-137, taking
+// their chrome with them (author/preview/layout.tsx), because they are author
+// tools rather than reader pages and reading as reader code nearly got them
+// deleted. Anything author-only added here must still be gated on the pathname
+// while /read remains.
 //
 // The Write | Explore tab pair was removed with KAN-9: /explore became /read
 // and is orphaned pending a decision about the reader-facing browse, so the
@@ -24,11 +26,10 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
       {/* loading={!mounted}: the greeting and toggle read localStorage after
           mount, so placeholders hold their position rather than letting them
           pop in a frame late. */}
-      {/* showAppSwitch only on `/`. This layout is shared by four routes and
-          three of them are READER-facing — /read and both /preview pages. The
-          WriteAI jump is an author tool; a reader must not be able to reach the
-          analysis app from a book preview. Same reasoning excludes the reader
-          session view (KAN-8). */}
+      {/* showAppSwitch only on `/`. The WriteAI jump is an author tool and
+          /read is the reader-facing catalog, so it stays gated rather than
+          becoming unconditional — LOOM-137 removed the preview pages from this
+          layout but /read is still here. */}
       <AppHeader
         showAppSwitch={pathname === '/'}
         lightMode={lightMode}

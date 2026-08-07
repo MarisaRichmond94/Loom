@@ -1,6 +1,20 @@
 import { NextResponse } from 'next/server'
 import { bookIdForTitle, readerJumpPath, seriesIdForTitle } from '@/lib/crossAppJump'
 
+/**
+ * A PUBLIC CROSS-APP CONTRACT — this path must not change (LOOM-137).
+ *
+ * WriteAI constructs these URLs itself, from a different repository, to send a
+ * citation in its review pane to the right chapter in Loom. Renaming this route
+ * breaks every citation link WriteAI has ever emitted, and the breakage shows
+ * up over there — as a dead link, with nothing pointing back here.
+ *
+ * The shared `/read` prefix is misleading: this is an API-ish redirect endpoint
+ * with a public contract, while its TARGET is an internal detail free to move.
+ * It moved in LOOM-137 (to /author/preview/session/*) and this route did not.
+ * See INTEGRATION.md, mirrored in the WriteAI repo.
+ */
+
 // Reader-side companion jump target, title-addressed.
 //
 // WriteAI cites sources by series title, book title, and a chapter *number* —

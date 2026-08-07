@@ -509,7 +509,7 @@ export default function BookDetailPage() {
             <LuSave size={12} /> Save
           </button>
           <a
-            href={`/preview/book/${bookId}`}
+            href={`/author/preview/book/${bookId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition flex items-center gap-1.5"
