@@ -15,7 +15,14 @@ import { useLightMode } from '@shared/useLightMode'
  *
  * They need their own layout because `(home)/layout.tsx` was giving them their
  * chrome. Moving them without this would have quietly stripped the header from
- * three working pages — a behaviour change disguised as a file move.
+ * two working pages — a behaviour change disguised as a file move.
+ *
+ * THE (framed) GROUP EXISTS TO KEEP THE SESSION PAGE OUT OF THIS. Only the
+ * series and book previews want this shell. The reading session
+ * (/author/preview/session/*) renders its OWN header and owns its full height
+ * for a sticky footer — it lived at /read/<id> with no layout at all. Putting
+ * it under this one gave it two headers and swallowed its footer. A route group
+ * scopes the layout without touching a single URL.
  *
  * NO APP SWITCH. `(home)` gated it on `pathname === '/'`, so these pages never
  * had it; passing false here preserves that exactly. The WriteAI jump is an
