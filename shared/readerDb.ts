@@ -76,6 +76,34 @@ CREATE TABLE IF NOT EXISTS ReadingProgress (
 
 CREATE INDEX IF NOT EXISTS ReadingProgress_reader_idx
   ON ReadingProgress (readerId, updatedAt DESC);
+
+-- Reader comments (LOOM-134). Chapter-level in v1: blockId stays null.
+--
+-- Inline anchoring is deliberately deferred. Character offsets into prose that
+-- is still being revised rot the moment a paragraph is edited, and a comment
+-- pinned to the wrong sentence is worse than one pinned to the chapter.
+--
+-- ORPHANED, NEVER DELETED. Republishing can remove the chapter a comment sits
+-- on. The comment stays and is surfaced to the author as "on a chapter that no
+-- longer exists" — deleting a family member's reaction because a scene was
+-- revised is the wrong default. The prose is replaceable; their reaction is not.
+--
+-- publishedAt records which version of the chapter was being read, so a comment
+-- on since-revised prose can be shown as such rather than reading as wrong.
+CREATE TABLE IF NOT EXISTS Comment (
+  id          TEXT PRIMARY KEY,
+  readerId    TEXT NOT NULL,
+  bookId      TEXT NOT NULL,
+  chapterId   TEXT NOT NULL,
+  blockId     TEXT,
+  body        TEXT NOT NULL,
+  createdAt   TEXT NOT NULL,
+  publishedAt TEXT,
+  hiddenAt    TEXT,
+  resolvedAt  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS Comment_chapter_idx ON Comment (chapterId, createdAt);
 `
 
 /**
@@ -230,4 +258,96 @@ export function listProgress(db: Database.Database, readerId: string): ReadingPr
 /** Used when a book leaves the snapshot entirely — the position has nowhere to point. */
 export function dropProgress(db: Database.Database, readerId: string, bookId: string): void {
   db.prepare(`DELETE FROM ReadingProgress WHERE readerId = ? AND bookId = ?`).run(readerId, bookId)
+}
+
+// ---- comments (LOOM-134) ----------------------------------------------------
+
+export type Comment = {
+  id: string
+  readerId: string
+  bookId: string
+  chapterId: string
+  blockId: string | null
+  body: string
+  createdAt: string
+  publishedAt: string | null
+  hiddenAt: string | null
+  resolvedAt: string | null
+}
+
+export function addComment(
+  db: Database.Database,
+  input: {
+    readerId: string
+    bookId: string
+    chapterId: string
+    body: string
+    publishedAt?: string | null
+  },
+): Comment {
+  const body = input.body.trim()
+  if (!body) throw new Error('A comment needs something in it.')
+
+  const comment: Comment = {
+    id: randomBytes(12).toString('hex'),
+    readerId: input.readerId,
+    bookId: input.bookId,
+    chapterId: input.chapterId,
+    blockId: null, // chapter-level in v1
+    body,
+    createdAt: new Date().toISOString(),
+    publishedAt: input.publishedAt ?? null,
+    hiddenAt: null,
+    resolvedAt: null,
+  }
+
+  db.prepare(
+    `INSERT INTO Comment (id, readerId, bookId, chapterId, blockId, body, createdAt, publishedAt, hiddenAt, resolvedAt)
+     VALUES (@id, @readerId, @bookId, @chapterId, @blockId, @body, @createdAt, @publishedAt, @hiddenAt, @resolvedAt)`,
+  ).run(comment)
+  return comment
+}
+
+/**
+ * A chapter's comments, oldest first.
+ *
+ * `includeHidden` is the AUTHOR's view (LOOM-135). Readers never see a hidden
+ * comment, and hiding is soft so a mis-click destroys nothing.
+ */
+export function listComments(
+  db: Database.Database,
+  chapterId: string,
+  includeHidden = false,
+): Comment[] {
+  return db.prepare(
+    includeHidden
+      ? `SELECT * FROM Comment WHERE chapterId = ? ORDER BY createdAt`
+      : `SELECT * FROM Comment WHERE chapterId = ? AND hiddenAt IS NULL ORDER BY createdAt`,
+  ).all(chapterId) as Comment[]
+}
+
+/** Counts per chapter for a whole book, so a list can show "3 comments" without N queries. */
+export function commentCounts(
+  db: Database.Database,
+  bookId: string,
+): Map<string, number> {
+  const rows = db.prepare(
+    `SELECT chapterId, COUNT(*) AS n FROM Comment
+      WHERE bookId = ? AND hiddenAt IS NULL GROUP BY chapterId`,
+  ).all(bookId) as { chapterId: string; n: number }[]
+  return new Map(rows.map(r => [r.chapterId, r.n]))
+}
+
+export function setCommentHidden(db: Database.Database, id: string, hidden: boolean): void {
+  db.prepare(`UPDATE Comment SET hiddenAt = ? WHERE id = ?`)
+    .run(hidden ? new Date().toISOString() : null, id)
+}
+
+/**
+ * A reader deleting their OWN comment. Hard, unlike author moderation: this is
+ * someone retracting their own words, which is theirs to do.
+ */
+export function deleteOwnComment(db: Database.Database, id: string, readerId: string): boolean {
+  const res = db.prepare(`DELETE FROM Comment WHERE id = ? AND readerId = ?`).run(id, readerId)
+  return res.changes > 0
 }

@@ -30,6 +30,19 @@ export function useProgressRecorder(bookId: string, chapterId: string, enabled: 
     const currentIndex = (): number => {
       const paras = document.querySelectorAll<HTMLElement>('[data-para]')
       if (paras.length === 0) return 0
+
+      // FINISHED is an explicit signal, not a threshold: once the last
+      // paragraph's end is above the bottom of the viewport, the reader has
+      // seen the end of the chapter. Reported as `count` — one past the final
+      // index — which is what opens the comments (LOOM-134).
+      //
+      // A heuristic cannot do this. The index below is the topmost paragraph
+      // above the reading line, so at the true bottom of a chapter it sits
+      // several short of the end by an amount that depends on screen height —
+      // there is no fixed slack that is right for both a phone and a monitor.
+      const last = paras[paras.length - 1]
+      if (last.getBoundingClientRect().bottom <= window.innerHeight) return paras.length
+
       // A small band below the top edge, so the "current" paragraph is one the
       // reader can actually see rather than one just clipped by the header.
       const line = window.innerHeight * 0.25

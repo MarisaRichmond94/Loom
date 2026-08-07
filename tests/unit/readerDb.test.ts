@@ -165,7 +165,9 @@ describe('the schema stays confined to the reader tier', () => {
     const tables = (db.prepare(
       `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`,
     ).all() as { name: string }[]).map(t => t.name).sort()
-    expect(tables).toEqual(['Reader', 'ReadingProgress'])
+    // Comment (LOOM-134) joins them: reader-tier data, and emphatically not the
+    // manuscript's — a family member's reaction is not part of the book.
+    expect(tables).toEqual(['Comment', 'Reader', 'ReadingProgress'])
   })
 
   it('is safe to open twice — migration is idempotent', () => {

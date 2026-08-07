@@ -99,7 +99,14 @@ export default function ChapterView({
   // into the middle of it.
   useLayoutEffect(() => {
     if (!resumeOffset) return
-    const target = document.querySelector<HTMLElement>(`[data-para="${resumeOffset}"]`)
+    // A finished chapter records `count` — one past the last index (LOOM-134's
+    // gate signal) — so an exact lookup finds nothing and would silently drop
+    // the reader at the top of a chapter they had just finished. Fall back to
+    // the last paragraph, which is where they actually were.
+    const paras = document.querySelectorAll<HTMLElement>('[data-para]')
+    const target =
+      document.querySelector<HTMLElement>(`[data-para="${resumeOffset}"]`)
+      ?? (paras.length ? paras[paras.length - 1] : null)
     if (!target) return
     // Instant, not smooth: this is where the page STARTS, and animating to it
     // reads as the page moving on its own.
