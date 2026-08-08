@@ -166,8 +166,12 @@ export default function ReachabilityLedger({ seriesId }: { seriesId: string }) {
     <div className="flex flex-col gap-6">
       {/* What was checked, so a clean result means something. Reading "37 choice
           points, 263 alternatives" is what makes "nothing unreachable" a
-          finding rather than an absence of one. */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          finding rather than an absence of one.
+
+          Sticky to whatever scrolls this tab (same pattern as the timeline
+          toolbar) — the dead/warning counts stay visible as a reference point
+          while scrolling through a long findings list. */}
+      <div className="sticky top-0 z-10 grid grid-cols-2 gap-3 bg-surface-base pb-2 sm:grid-cols-4">
         {[
           { label: 'Unreachable', value: summary.dead, tone: summary.dead > 0 ? 'text-choice-kill' : 'text-ink' },
           { label: 'Worth a look', value: summary.warnings, tone: summary.warnings > 0 ? 'text-choice-amber' : 'text-ink' },

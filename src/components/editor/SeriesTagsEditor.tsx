@@ -42,10 +42,10 @@ export default function SeriesTagsEditor({ genres, keywords, onChange }: Props) 
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-2">
       <div>
         <label className="text-xs uppercase tracking-widest text-ink-faint">Genre(s)</label>
-        <div className="flex flex-wrap gap-1.5 mt-2">
+        <div className="flex flex-wrap gap-1.5 mt-1.5">
           {GENRES.map(genre => {
             const on = genres.includes(genre)
             return (
@@ -68,7 +68,7 @@ export default function SeriesTagsEditor({ genres, keywords, onChange }: Props) 
 
       <div>
         <label className="text-xs uppercase tracking-widest text-ink-faint">Keyword(s)</label>
-        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
           {keywords.map(keyword => (
             <span
               key={keyword}

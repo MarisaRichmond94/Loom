@@ -39,12 +39,24 @@ import type { Citation, ExploreMode, ExploreSession } from './types'
 const citationKey = (c: Citation) => `${c.book}__${c.chapter}__${c.chunk_index}`
 
 export default function ExplorePanel({
-  seriesId, bookId, bookTitle,
+  seriesId, bookId, bookTitle, fillHeight = false,
 }: {
   seriesId: string
   /** null on the series page. */
   bookId: string | null
   bookTitle?: string
+  /**
+   * Fills the remaining space in the tab's own scroll container instead of
+   * a fixed 750px, so the chat window is exactly as tall as what's left on
+   * screen rather than a constant that's sometimes too short and sometimes
+   * leaves a gap. Opt-in: it only resolves to a real height when the tab
+   * strip mounting this is itself in fillHeight mode (currently only the
+   * series page) — see SectionTabs' own `fillHeight` for the other half of
+   * this. On the book page, contentRef has no defined height to flex
+   * against, so `flex-1` there would collapse to nothing; the fixed 750px
+   * stays correct there.
+   */
+  fillHeight?: boolean
 }) {
   const actionSlot = useSectionActionSlot()
   const router = useRouter()
@@ -348,7 +360,11 @@ export default function ExplorePanel({
         onSynced={() => { /* the next question uses the fresh index */ }}
       />
 
-      <div className="relative mt-3 flex h-[750px] overflow-hidden rounded-lg border border-accent/15 bg-surface-raised">
+      <div
+        className={`relative mt-3 flex overflow-hidden rounded-lg border border-accent/15 bg-surface-raised ${
+          fillHeight ? 'min-h-0 flex-1' : 'h-[750px]'
+        }`}
+      >
         <ExploreHistory
           sessions={sessions}
           activeId={chat.sessionId}

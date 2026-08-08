@@ -52,9 +52,19 @@ export default function SectionTabs({
   sections,
   className = 'mb-8',
   initialId,
+  fillHeight = false,
 }: {
   sections: Section[]
   className?: string
+  /**
+   * Makes the content area fill whatever space the caller's flex layout
+   * gives it and scroll internally, instead of growing with its content and
+   * letting the page's own scroller handle overflow. The tab strip stays
+   * put above it. Opt-in because the default (book page) wants the strip to
+   * scroll away with everything else — only the series page wants a pinned
+   * strip over an internally-scrolling section.
+   */
+  fillHeight?: boolean
   /**
    * Tab to open on mount, instead of the first one.
    *
@@ -208,7 +218,7 @@ export default function SectionTabs({
 
   return (
     <div className={className}>
-      <div className="flex items-center justify-between mb-2 border-b border-accent/10">
+      <div className="flex-shrink-0 flex items-center justify-between mb-2 border-b border-accent/10">
         {/* Spacing lives in the gap, not in each tab's padding: the underline
             is only as wide as its label, so padding would stretch the marker
             away from the word it marks. */}
@@ -247,10 +257,33 @@ export default function SectionTabs({
 
       {/* Only the active section is mounted. These carry <img> and <audio>
           elements, and a section nobody is looking at should not be fetching
-          portraits and album art. */}
-      <div ref={contentRef} className="transition-[height] duration-200 ease-out motion-reduce:transition-none">
-        <SectionActionSlot.Provider value={actionSlot}>{active?.content}</SectionActionSlot.Provider>
-      </div>
+          portraits and album art.
+
+          fillHeight adds the scrollable wrapper here rather than making
+          contentRef itself scroll: scrollParent() (above) walks up from
+          contentRef's parentElement looking for the nearest overflow-auto
+          ancestor, so this wrapper is exactly what it finds — the height-pin
+          and scroll-hold effects keep working against the right scroller
+          without any change to that lookup. */}
+      {fillHeight ? (
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {/* flex flex-col h-full: gives a section that wants to fill the
+              remaining space (Explore, with its own internal message-stream
+              scroller) something definite to flex against. Sections that
+              just grow with their content (Books, Characters, Timeline,
+              Paths) are unaffected — they aren't flex items themselves, so
+              they render top-aligned and, if taller than the space here,
+              overflow normally into this wrapper's own scrollbar exactly as
+              before. */}
+          <div ref={contentRef} className="flex h-full flex-col transition-[height] duration-200 ease-out motion-reduce:transition-none">
+            <SectionActionSlot.Provider value={actionSlot}>{active?.content}</SectionActionSlot.Provider>
+          </div>
+        </div>
+      ) : (
+        <div ref={contentRef} className="transition-[height] duration-200 ease-out motion-reduce:transition-none">
+          <SectionActionSlot.Provider value={actionSlot}>{active?.content}</SectionActionSlot.Provider>
+        </div>
+      )}
     </div>
   )
 }

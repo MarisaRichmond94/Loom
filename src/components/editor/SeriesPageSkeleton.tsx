@@ -11,32 +11,39 @@
 // markup, per element, not by eye.
 export default function SeriesPageSkeleton() {
   return (
-    // Matches the page's max-w-[1600px] (LOOM-105). At the old 3xl the whole
-    // identity block would settle a container-width narrower than where it
-    // lands, which is the largest jump this file could possibly cause.
-    <div className="max-w-[1600px] mx-auto px-8 py-8 animate-pulse">
-      {/* Action row — Backup then Preview (KAN-19; renamed from Export in
-          KAN-20). Widths still hold: same two controls, and "Backup" is the
-          same length as "Export". Re-check if a third one lands here. */}
-      <div className="flex justify-end items-center gap-2 mb-2">
-        <div className="h-7 w-20 bg-surface-overlay rounded" />
-        <div className="h-7 w-24 bg-accent/30 rounded" />
-      </div>
-
-      {/* Title + by-author */}
-      <div className="flex flex-col items-center mb-8">
-        <div className="h-9 w-72 bg-surface-muted rounded mb-2" />
-        <div className="h-3 w-24 bg-surface-muted rounded" />
+    // Matches the page's max-w-[1600px] and h-full flex flex-col: the real
+    // page fills the viewport below the header and scrolls its tab content
+    // internally rather than the whole page, and a skeleton that doesn't
+    // claim the same height/flex shape settles shorter, so the swap to real
+    // content jumps the page's own scroll position.
+    <div className="max-w-[1600px] mx-auto px-8 pt-4 pb-4 h-full flex flex-col animate-pulse">
+      {/* Title + action row, in one line (buttons right of the title, not a
+          row of their own above it). Grid, matching the real markup, so the
+          title column's width — and therefore where the by-line centres —
+          doesn't shift when the real controls replace these stubs. */}
+      <div className="flex-shrink-0 grid grid-cols-[1fr_auto] items-start gap-4 mb-3">
+        <div className="flex flex-col items-center">
+          <div className="h-9 w-72 bg-surface-muted rounded mb-2" />
+          <div className="h-3 w-24 bg-surface-muted rounded" />
+        </div>
+        {/* Backup then Preview (KAN-19; renamed from Export in KAN-20).
+            Widths still hold: same two controls, and "Backup" is the same
+            length as "Export". Re-check if a third one lands here. */}
+        <div className="flex items-center gap-2 pt-1">
+          <div className="h-7 w-20 bg-surface-overlay rounded" />
+          <div className="h-7 w-24 bg-accent/30 rounded" />
+        </div>
       </div>
 
       {/* Description / Genres / Keywords block */}
-      <div className="mb-8 flex flex-col gap-6">
+      <div className="flex-shrink-0 mb-3 flex flex-col gap-2">
         <div>
           <div className="h-3 w-20 bg-surface-muted rounded mb-2" />
-          <div className="h-20 bg-surface-overlay rounded-lg" />
+          {/* rows=2 in the real textarea. */}
+          <div className="h-16 bg-surface-overlay rounded-lg" />
         </div>
         <div>
-          <div className="h-3 w-16 bg-surface-muted rounded mb-2" />
+          <div className="h-3 w-16 bg-surface-muted rounded mb-1.5" />
           {/* Genre chips. Genre is a MULTI-SELECT against the fixed list in
               @/lib/genres, so the real row always renders ALL of them —
               currently 16 — not just the ones selected. Widths below are
@@ -55,7 +62,7 @@ export default function SeriesPageSkeleton() {
           </div>
         </div>
         <div>
-          <div className="h-3 w-20 bg-surface-muted rounded mb-2" />
+          <div className="h-3 w-20 bg-surface-muted rounded mb-1.5" />
           {/* Keyword chips + the trailing input. Free-form, so the count is
               per-series; sized for the primary user's two ("Psychological
               Thriller", "Dark"). Each carries a remove "×", hence the extra
@@ -82,9 +89,14 @@ export default function SeriesPageSkeleton() {
           hence the repeated 86. Adding a tab and not adding a stub here is the
           exact drift this file has already suffered — the strip would settle
           one tab narrower and everything after it would shift sideways on
-          hydration. */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-2 border-b border-accent/10">
+          hydration.
+
+          flex-1 min-h-0 flex flex-col, matching SectionTabs' own fillHeight
+          shape on this page: the strip stays put and the content below it
+          claims the rest of the column instead of the block growing past the
+          viewport and pushing the page into its own scroll. */}
+      <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex-shrink-0 flex items-center justify-between mb-2 border-b border-accent/10">
           <div className="flex items-center gap-6">
             {[86, 142, 98, 86, 86].map((w, i) => (
               <div key={i} className="pb-2">
@@ -101,44 +113,48 @@ export default function SeriesPageSkeleton() {
         {/* Books-tab content only — the skeleton renders what the DEFAULT tab
             renders. Drawing a timeline or a character grid under a strip that
             will resolve to Books would be a worse jump than drawing nothing.
-            Five stubs, matching the primary user's series. */}
-        <div className="flex flex-col gap-4">
-          {[0, 1, 2, 3, 4].map(i => (
-            <div key={i} className="flex gap-5 p-5 rounded-lg bg-accent/25 border border-accent/20">
-              <div className="w-28 shrink-0 rounded bg-surface-muted" style={{ minHeight: '9rem' }} />
-              <div className="flex-1 min-w-0 flex flex-col justify-between">
-                <div>
-                  {/* items-CENTER, matching the real row: the status chip is a
-                      control, and baseline alignment sat it visibly low. */}
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="h-3 w-12 bg-surface-muted rounded" />
-                    <div className="h-5 w-48 bg-surface-muted rounded" />
-                    {/* The status chip (LOOM-140). Without a stub the title row
-                        reflows when it arrives. */}
-                    <div className="h-4 w-20 bg-surface-overlay rounded" />
+            Five stubs, matching the primary user's series. flex-1 min-h-0
+            overflow-y-auto, matching the real scroll container so the stubs
+            below the fold sit exactly where the real cards will. */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="flex flex-col gap-4">
+            {[0, 1, 2, 3, 4].map(i => (
+              <div key={i} className="flex gap-5 p-5 rounded-lg bg-accent/25 border border-accent/20">
+                <div className="w-28 shrink-0 rounded bg-surface-muted" style={{ minHeight: '9rem' }} />
+                <div className="flex-1 min-w-0 flex flex-col justify-between">
+                  <div>
+                    {/* items-CENTER, matching the real row: the status chip is a
+                        control, and baseline alignment sat it visibly low. */}
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="h-3 w-12 bg-surface-muted rounded" />
+                      <div className="h-5 w-48 bg-surface-muted rounded" />
+                      {/* The status chip (LOOM-140). Without a stub the title row
+                          reflows when it arrives. */}
+                      <div className="h-4 w-20 bg-surface-overlay rounded" />
+                    </div>
+                    <div className="grid grid-cols-4 gap-3">
+                      {[0, 1, 2, 3].map(j => (
+                        <div key={j} className="bg-surface-overlay border border-accent/10 rounded-lg px-3 py-4 flex flex-col items-center gap-1">
+                          <div className="h-6 w-8 bg-surface-muted rounded" />
+                          <div className="h-3 w-14 bg-surface-muted rounded" />
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-4 gap-3">
-                    {[0, 1, 2, 3].map(j => (
-                      <div key={j} className="bg-surface-overlay border border-accent/10 rounded-lg px-3 py-4 flex flex-col items-center gap-1">
-                        <div className="h-6 w-8 bg-surface-muted rounded" />
-                        <div className="h-3 w-14 bg-surface-muted rounded" />
-                      </div>
-                    ))}
+                  {/* THREE controls: the publish button (accent, because it is
+                      the primary action and should read as one while loading),
+                      Backup and Delete. Status is NOT here — it is the chip
+                      beside the title (LOOM-140). This previously described
+                      "Mark as in progress", a button that no longer exists. */}
+                  <div className="flex justify-end gap-2 mt-3">
+                    <div className="h-7 w-32 bg-accent/30 rounded" />
+                    <div className="h-7 w-20 bg-surface-overlay rounded" />
+                    <div className="h-7 w-16 bg-surface-overlay rounded" />
                   </div>
-                </div>
-                {/* THREE controls: the publish button (accent, because it is
-                    the primary action and should read as one while loading),
-                    Backup and Delete. Status is NOT here — it is the chip
-                    beside the title (LOOM-140). This previously described
-                    "Mark as in progress", a button that no longer exists. */}
-                <div className="flex justify-end gap-2 mt-3">
-                  <div className="h-7 w-32 bg-accent/30 rounded" />
-                  <div className="h-7 w-20 bg-surface-overlay rounded" />
-                  <div className="h-7 w-16 bg-surface-overlay rounded" />
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </div>

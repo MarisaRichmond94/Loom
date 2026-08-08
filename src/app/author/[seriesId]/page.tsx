@@ -27,7 +27,7 @@ const TimelineSection = dynamic(() => import('@/components/timeline/TimelineSect
 // for someone who came to open a book (LOOM-118).
 const ExplorePanel = dynamic(() => import('@/components/explore/ExplorePanel'), {
   ssr: false,
-  loading: () => <ExplorePanelSkeleton />,
+  loading: () => <ExplorePanelSkeleton fillHeight />,
 })
 // Same treatment again: the ledger walks the whole series on mount. Cheap
 // (milliseconds, and a pure read) but there is no reason to pay for it on
@@ -271,47 +271,47 @@ export default function AuthorSeriesPage() {
           Capped rather than uncapped for the same reason recorded there: an
           ultrawide display would otherwise stretch the description into a
           single unreadable line. */}
-      <div className="max-w-[1600px] mx-auto px-8 py-8">
-        {/* Action row rather than an absolutely-positioned Preview (KAN-19).
-            Export used to live only on `/`, which the project switcher has
-            replaced as the series list — this is the missing tier, since
-            per-book export already sits further down this page.
-
-            A row, not a second absolute button: the old Preview floated over
-            the centred title below, and stacking another beside it would
-            collide with long titles at narrow widths. Preview stays rightmost
-            as the accent-filled primary action. */}
-        <div className="flex justify-end items-center gap-2 mb-2">
-          <a
-            href={`/api/series/${seriesId}/export`}
-            download
-            title="Back up the whole series as a .loom.json you can re-import. Covers prose, choices and characters — not chapter notes, narration or cover images. For a readable manuscript, open a book and use Save."
-            className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition flex items-center gap-1.5"
-          >
-            <LuDatabaseBackup size={11} /> Backup
-          </a>
-          <a
-            href={`/author/preview/series/${seriesId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition flex items-center gap-1.5"
-          >
-            <LuEye size={12} /> Preview
-          </a>
+      <div className="max-w-[1600px] mx-auto px-8 pt-4 pb-4 h-full flex flex-col">
+        {/* Buttons in line with the title rather than a row of their own
+            above it: they sit at flex-start, top-aligned with the title's
+            own baseline, so the row costs no extra height beyond the title
+            itself. On the right, and sized to content (`auto`) rather than
+            an equal column, so the title gets the rest of the row — the
+            buttons are the smaller thing here and don't need to dictate
+            layout width the way a centred-title design would. */}
+        <div className="flex-shrink-0 grid grid-cols-[1fr_auto] items-start gap-4 mb-3">
+          <div className="flex flex-col items-center">
+            <input
+              value={titleDraft}
+              onChange={e => setTitleDraft(e.target.value)}
+              onBlur={handleTitleBlur}
+              className="w-full bg-transparent border-none outline-none text-center text-3xl font-bold uppercase text-ink tracking-wide focus:opacity-80 transition-opacity"
+            />
+            {authorName && (
+              <p className="text-sm text-ink-faint mt-1">by {authorName}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <a
+              href={`/api/series/${seriesId}/export`}
+              download
+              title="Back up the whole series as a .loom.json you can re-import. Covers prose, choices and characters — not chapter notes, narration or cover images. For a readable manuscript, open a book and use Save."
+              className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition flex items-center gap-1.5"
+            >
+              <LuDatabaseBackup size={11} /> Backup
+            </a>
+            <a
+              href={`/author/preview/series/${seriesId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition flex items-center gap-1.5"
+            >
+              <LuEye size={12} /> Preview
+            </a>
+          </div>
         </div>
-        <div className="flex flex-col items-center mb-8">
-          <input
-            value={titleDraft}
-            onChange={e => setTitleDraft(e.target.value)}
-            onBlur={handleTitleBlur}
-            className="w-full bg-transparent border-none outline-none text-center text-3xl font-bold uppercase text-ink tracking-wide focus:opacity-80 transition-opacity"
-          />
-          {authorName && (
-            <p className="text-sm text-ink-faint mt-1">by {authorName}</p>
-          )}
-        </div>
 
-        <div className="mb-8 flex flex-col gap-6">
+        <div className="flex-shrink-0 mb-3 flex flex-col gap-2">
           <div>
             <label className="text-xs uppercase tracking-widest text-ink-faint">Description</label>
             <textarea
@@ -319,7 +319,7 @@ export default function AuthorSeriesPage() {
               onChange={e => setDescriptionDraft(e.target.value)}
               onBlur={handleDescriptionBlur}
               placeholder="A short pitch readers will see on the series landing page…"
-              rows={3}
+              rows={2}
               className="w-full mt-2 bg-surface-overlay border border-accent/15 rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent/50 resize-y"
             />
           </div>
@@ -340,6 +340,8 @@ export default function AuthorSeriesPage() {
             surfaces that nobody has yet formed a habit around. */}
         <SectionTabs
           initialId={tabParam}
+          className="flex-1 min-h-0 flex flex-col"
+          fillHeight
           sections={[{
             id: 'books',
             label: 'Book(s)',
@@ -539,7 +541,7 @@ export default function AuthorSeriesPage() {
             // reason this exists at series level (LOOM-114).
             id: 'explore',
             label: 'Explore',
-            content: <ExplorePanel seriesId={seriesId} bookId={null} />,
+            content: <ExplorePanel seriesId={seriesId} bookId={null} fillHeight />,
           }, {
             // Last, and series-scoped by necessity rather than preference: a
             // variable set in book 2 is read in book 4, so there is no honest

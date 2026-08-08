@@ -439,8 +439,16 @@ export default function TimelineSection({
     <div className="flex flex-col">
       {/* View controls live in the tab BODY, not the strip's header. They are
           state of the view, not actions on the section — putting them beside
-          "Add Event" would make the header mean two different things. */}
-      <div className="mb-4 flex items-center gap-2">
+          "Add Event" would make the header mean two different things.
+
+          Sticky to whatever scrolls this section — the series page's
+          fillHeight tab content, or `<main>` on the book page — so the
+          toggles and search stay reachable over a long list instead of
+          scrolling out of reach. `top-0` alone is enough: sticky reads its
+          nearest overflow-auto ancestor natively, so this needs no knowledge
+          of which page it's mounted in. bg-surface-base matches the page's
+          own background so the list doesn't show through underneath it. */}
+      <div className="sticky top-0 z-10 bg-surface-base pb-4 flex items-center gap-2">
         <div className="flex items-center overflow-hidden rounded border border-accent/20">
           {(['list', 'chart'] as const).map(v => (
             <button

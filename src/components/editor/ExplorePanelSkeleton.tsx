@@ -12,9 +12,19 @@
 // The staleness banner is deliberately NOT drawn here. Whether it appears
 // depends on a network read, so drawing it speculatively would flash a warning
 // that then vanishes — worse than a slightly taller settle.
-export default function ExplorePanelSkeleton() {
+export default function ExplorePanelSkeleton({
+  /** Matches ExplorePanel's own `fillHeight` — the series page's tab strip is
+   *  fillHeight, so its Explore skeleton should claim the same flex-1 space
+   *  the real panel will, rather than settling at the book page's fixed
+   *  560px and then resizing once the real panel mounts. */
+  fillHeight = false,
+}: { fillHeight?: boolean } = {}) {
   return (
-    <div className="mt-3 flex h-[560px] overflow-hidden rounded-lg border border-accent/15 bg-surface-raised animate-pulse">
+    <div
+      className={`mt-3 flex overflow-hidden rounded-lg border border-accent/15 bg-surface-raised animate-pulse ${
+        fillHeight ? 'min-h-0 flex-1' : 'h-[560px]'
+      }`}
+    >
       {/* History rail — 44px, matching ExploreHistory's w-11. */}
       <div className="flex w-11 shrink-0 flex-col items-center border-r border-accent/10 bg-surface-base py-2.5">
         <div className="h-8 w-8 rounded-md bg-surface-overlay" />
