@@ -257,7 +257,14 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
   }, [openMenu])
 
   function selectBook(id: string) {
-    setSelectedBook(prev => prev === id ? null : id)
+    // Toggling only has a lasting effect when we're already on that book's
+    // page (navigation is then a no-op, so the collapse sticks). Otherwise
+    // — e.g. clicking a book while one of its chapters is active — skip the
+    // local collapse and let the route-sync effect above expand it once
+    // navigation lands, avoiding a collapse/re-expand flash.
+    if (params.bookId === id) {
+      setSelectedBook(prev => prev === id ? null : id)
+    }
     router.push(`/author/${seriesId}/book/${id}`)
   }
 

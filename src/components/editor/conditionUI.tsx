@@ -395,7 +395,7 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
             const q = menuQuery.trim().toLowerCase()
             const filtered = q ? unattachedVars.filter(v => v.name.toLowerCase().includes(q)) : unattachedVars
             return (
-              <div className="absolute left-0 bottom-full mb-1 bg-surface-raised border border-accent/20 rounded-lg shadow-xl z-20 overflow-hidden min-w-[220px]">
+              <div className="absolute left-0 bottom-full mb-1 bg-surface-raised border border-accent/20 rounded-lg shadow-xl z-50 overflow-hidden min-w-[220px]">
                 <div className="px-2 py-1.5 border-b border-accent/10">
                   <input
                     ref={searchInputRef}

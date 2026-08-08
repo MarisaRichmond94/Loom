@@ -1191,7 +1191,7 @@ export default function ChapterEditorPage() {
               value={titleDraft}
               onChange={e => setTitleDraft(e.target.value)}
               onBlur={handleTitleBlur}
-              className="w-full bg-transparent border-none outline-none text-center text-3xl font-bold uppercase text-ink tracking-wide focus:opacity-80 transition-opacity"
+              className="w-106 bg-transparent border-none outline-none text-center text-3xl font-bold uppercase text-ink tracking-wide focus:opacity-80 transition-opacity"
             />
             <input
               ref={povInputRef}
