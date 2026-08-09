@@ -28,24 +28,16 @@ export default function BookSkeleton() {
             shape as the real column. No stats stub: the grid moved behind
             the chart icon below, so it costs no space here either. */}
         <div className="flex-1 h-[320px] flex flex-col gap-3">
-          {/* Title + Stats/Front Matter icons + Backup/Save/Preview/Delete,
-              one row (LOOM-141). Icon buttons ~34 (h-[30px] w-[34px]).
-              Widths for the labelled controls are per-label at text-xs with
-              px-3 padding: Backup ~82 (12px icon + gap-1.5), Save ~69 (same),
-              Preview ~89 (same), Delete ~58 (text only, no icon). THREE
-              export controls, not four: the Published/Draft toggle moved to
-              the series page's status dropdown (LOOM-140). Delete is
-              separate again — red, matching bg-choice-kill on the real
-              button. */}
+          {/* Title + Stats/☰ actions, one row. Preview/Save/Backup/Settings/
+              Delete now live behind the ☰ menu (matching the chapter page's
+              collapse), so the title claims the width they used to take —
+              just two icon buttons remain beside it, both ~34 (h-[30px]
+              w-[34px]). */}
           <div className="flex items-center gap-2">
             <div className="flex-1 min-w-0 h-12 bg-surface-raised border border-accent/20 rounded-lg" />
             <div className="flex items-center gap-2 shrink-0">
               <div className="h-[30px] w-[34px] bg-surface-overlay rounded" />
               <div className="h-[30px] w-[34px] bg-surface-overlay rounded" />
-              <div className="h-7 w-20 bg-surface-overlay rounded" />
-              <div className="h-7 w-16 bg-surface-overlay rounded" />
-              <div className="h-7 w-24 bg-accent/30 rounded" />
-              <div className="h-7 w-14 bg-choice-kill/60 rounded" />
             </div>
           </div>
           <div className="w-full flex-1 min-h-0 bg-surface-raised border border-accent/20 rounded-lg" />

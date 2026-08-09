@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { LuUser, LuCheck, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff, LuDownload, LuFileText, LuFileCheck2, LuFilePlus2, LuSave, LuDatabaseBackup, LuChartNoAxesColumn } from 'react-icons/lu'
+import { LuUser, LuCheck, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff, LuDownload, LuFileText, LuSave, LuDatabaseBackup, LuChartNoAxesColumn, LuMenu, LuSettings, LuTrash2 } from 'react-icons/lu'
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import BookSkeleton from '@/components/editor/BookSkeleton'
@@ -145,8 +145,14 @@ export default function BookDetailPage() {
   const [statsOpen, setStatsOpen] = useState(false)
   const statsMenuRef = useRef<HTMLDivElement>(null)
   useClickOutside([statsMenuRef], () => setStatsOpen(false), statsOpen)
-  // Front matter modal (LOOM-141) — the icon alone tells you whether one's
-  // uploaded; the modal is only for acting on it.
+  // Book actions menu (KAN-30-style, matching the chapter page's ☰):
+  // Preview/Save/Backup/Settings/Delete collapsed behind one button so the
+  // title can claim the width they used to take as a row of buttons.
+  const [actionMenuOpen, setActionMenuOpen] = useState(false)
+  const actionMenuRef = useRef<HTMLDivElement>(null)
+  useClickOutside([actionMenuRef], () => setActionMenuOpen(false), actionMenuOpen)
+  // Front matter modal (LOOM-141) — lives behind Settings in the actions
+  // menu; the modal is only for acting on it.
   const [showFrontMatterModal, setShowFrontMatterModal] = useState(false)
   // Characters — list is resolved for THIS book (firstBookId filter + override merge)
   const [characters, setCharacters] = useState<Character[]>([])
@@ -545,80 +551,109 @@ export default function BookDetailPage() {
                     </div>
                   )}
                 </div>
-                {/* Front matter — spliced ahead of Chapter 1 in manuscript
-                    exports. The icon alone says whether one's uploaded; the
-                    modal is only for acting on it (LOOM-141). */}
-                <button
-                  onClick={() => setShowFrontMatterModal(true)}
-                  title={frontMatter ? `Front matter: ${frontMatter.originalName}` : 'No front matter uploaded'}
-                  aria-label="Front matter"
-                  className={`flex items-center h-[30px] px-2.5 rounded text-xs font-medium border transition ${
-                    frontMatter
-                      ? 'border-accent/20 text-accent bg-surface-overlay hover:border-accent/40'
-                      : 'border-dashed border-accent/30 text-ink-faint bg-surface-overlay hover:text-ink hover:border-accent/50'
-                  }`}
-                >
-                  {frontMatter ? <LuFileCheck2 size={14} /> : <LuFilePlus2 size={14} />}
-                </button>
                 {/* The Published/Draft toggle lived here and moved to the series
                     page's book card (LOOM-140), where it is one Draft / In progress /
                     Published dropdown. Status was two booleans set by two toggles on
                     two different pages; comparing books against each other is what
                     the card view is for, and it is where publishing already happens. */}
-                {/* Export (.loom.json) sits beside Download deliberately (KAN-20).
-                    A standalone project's landing page IS its book page — the
-                    switcher routes name-clicks straight here, because a standalone
-                    author has no series outline to see. Series-level export lives on
-                    the series page, which nothing links to for a standalone, so
-                    before this button the ONLY reachable data backup for those
-                    projects was the root Write page. That is what blocked orphaning
-                    `/`: the manuscript was downloadable, the data was not.
+                {/* ☰ book actions — Preview/Save/Backup/Settings/Delete, collapsed
+                    the same way the chapter page collapsed its row of buttons
+                    (KAN-30), so the title can claim the width they used to take. */}
+                <div ref={actionMenuRef} className="relative shrink-0">
+                  <button
+                    onClick={() => setActionMenuOpen(o => !o)}
+                    title="Book actions"
+                    aria-label="Book actions"
+                    aria-haspopup="menu"
+                    aria-expanded={actionMenuOpen}
+                    className={`flex items-center h-[30px] px-2.5 rounded text-xs font-medium border transition ${
+                      actionMenuOpen
+                        ? 'border-accent/40 text-ink bg-surface-raised'
+                        : 'border-accent/20 text-ink-muted hover:text-ink hover:border-accent/40 bg-surface-overlay'
+                    }`}
+                  >
+                    <LuMenu size={14} />
+                  </button>
 
-                    KAN-19 first split these as Export/Download, but both rendered
-                    with the same download icon and read as near-synonyms — a real
-                    coin-flip at the point of use. They are now Backup vs Save, with
-                    distinct icons: the verb and the glyph both carry the difference.
+                  {actionMenuOpen && (
+                    <div
+                      role="menu"
+                      className="absolute right-0 top-full mt-2 z-50 min-w-[190px] overflow-hidden rounded-lg border border-accent/20 bg-surface-raised shadow-xl"
+                    >
+                      <a
+                        role="menuitem"
+                        href={`/author/preview/book/${bookId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setActionMenuOpen(false)}
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
+                      >
+                        <span className="flex w-5 items-center justify-center text-accent"><LuEye size={14} /></span>
+                        <span className="flex-1">Preview</span>
+                      </a>
+                      {/* Save = the readable manuscript (Pages/Word), the thing you
+                          hand to a person. Distinct verb AND icon from Backup below. */}
+                      <button
+                        role="menuitem"
+                        onClick={() => { setActionMenuOpen(false); setShowExportModal(true) }}
+                        title="Save this book as a Pages manuscript to read or share"
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
+                      >
+                        <span className="flex w-5 items-center justify-center text-accent"><LuSave size={14} /></span>
+                        <span className="flex-1">Save</span>
+                      </button>
+                      {/* Export (.loom.json) sits beside Save deliberately (KAN-20).
+                          A standalone project's landing page IS its book page — the
+                          switcher routes name-clicks straight here, because a standalone
+                          author has no series outline to see. Series-level export lives on
+                          the series page, which nothing links to for a standalone, so
+                          before this button the ONLY reachable data backup for those
+                          projects was the root Write page. That is what blocked orphaning
+                          `/`: the manuscript was downloadable, the data was not.
 
-                    Backup = .loom.json, the re-importable data. NOT a complete
-                    system backup: chapter notes, narration audio, reader sessions
-                    and cover image files live only in dev.db and public/covers. The
-                    nightly chain covers those; this button is for portability. */}
-                <a
-                  href={`/api/series/${seriesId}/books/${bookId}/export`}
-                  download
-                  title="Back up this book's story data as a .loom.json you can re-import. Covers prose, choices and characters — not chapter notes, narration or cover images."
-                  className="px-3 py-1.5 rounded text-xs bg-surface-overlay text-ink-muted border border-accent/20 font-medium hover:text-ink transition flex items-center gap-1.5"
-                >
-                  <LuDatabaseBackup size={12} /> Backup
-                </a>
-                {/* Save = the readable manuscript (Pages/Word), the thing you hand to
-                    a person. Distinct verb AND icon from Backup above. */}
-                <button
-                  onClick={() => setShowExportModal(true)}
-                  title="Save this book as a Pages manuscript to read or share"
-                  className="px-3 py-1.5 rounded text-xs bg-surface-overlay text-ink-muted border border-accent/20 font-medium hover:text-ink transition flex items-center gap-1.5"
-                >
-                  <LuSave size={12} /> Save
-                </button>
-                <a
-                  href={`/author/preview/book/${bookId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition flex items-center gap-1.5"
-                >
-                  <LuEye size={12} /> Preview
-                </a>
-                {/* Red, distinct from the neutral controls beside it — the
-                    only action here that destroys something. Text alone (no
-                    icon), so it can't be mistaken at a glance for one of the
-                    export actions. */}
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  title="Delete this book"
-                  className="px-3 py-1.5 rounded text-xs bg-choice-kill text-white font-medium hover:opacity-90 transition"
-                >
-                  Delete
-                </button>
+                          Backup = .loom.json, the re-importable data. NOT a complete
+                          system backup: chapter notes, narration audio, reader sessions
+                          and cover image files live only in dev.db and public/covers. The
+                          nightly chain covers those; this button is for portability. */}
+                      <a
+                        role="menuitem"
+                        href={`/api/series/${seriesId}/books/${bookId}/export`}
+                        download
+                        onClick={() => setActionMenuOpen(false)}
+                        title="Back up this book's story data as a .loom.json you can re-import. Covers prose, choices and characters — not chapter notes, narration or cover images."
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
+                      >
+                        <span className="flex w-5 items-center justify-center text-accent"><LuDatabaseBackup size={14} /></span>
+                        <span className="flex-1">Backup</span>
+                      </a>
+                      {/* Front matter today, and where any future
+                          book-configuration setting lands (LOOM-141). The dot
+                          means one's uploaded, same convention as the chapter
+                          menu's Notes/Review rows. */}
+                      <button
+                        role="menuitem"
+                        onClick={() => { setActionMenuOpen(false); setShowFrontMatterModal(true) }}
+                        title={frontMatter ? `Front matter: ${frontMatter.originalName}` : 'No front matter uploaded'}
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
+                      >
+                        <span className="flex w-5 items-center justify-center text-accent"><LuSettings size={14} /></span>
+                        <span className="flex-1">Settings</span>
+                        {frontMatter && <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                      </button>
+                      {/* Red, distinct from the neutral items above it — the
+                          only action here that destroys something. */}
+                      <button
+                        role="menuitem"
+                        onClick={() => { setActionMenuOpen(false); setShowDeleteConfirm(true) }}
+                        title="Delete this book"
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-choice-kill transition hover:bg-surface-overlay"
+                      >
+                        <span className="flex w-5 items-center justify-center"><LuTrash2 size={14} /></span>
+                        <span className="flex-1">Delete</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <textarea
