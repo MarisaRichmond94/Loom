@@ -11,7 +11,7 @@
 // down the moment the real one appears.
 
 /** The real card height. Imported by ChaptersSection — do not duplicate. */
-export const CHAPTER_CARD_H = 190
+export const CHAPTER_CARD_H = 208
 export const CHAPTER_GRID_GAP = 12
 
 /** One filter field: its label, then the control. */
@@ -30,7 +30,7 @@ export default function ChaptersBoardSkeleton({ cards = 15 }: { cards?: number }
       {/* Sticky, matching the real filter bar — the tab's own scroll
           container is what this stays pinned to. No pb — see the real
           component for why stacking it with the parent's gap-3 is wrong. */}
-      <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pt-1">
+      <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pb-1">
         <FieldSkeleton />
         <FieldSkeleton />
       </div>
@@ -54,6 +54,8 @@ export default function ChaptersBoardSkeleton({ cards = 15 }: { cards?: number }
           >
             {/* Title */}
             <div className="h-3.5 w-24 rounded bg-surface-muted" />
+            {/* Date / POV row */}
+            <div className="h-2.5 w-16 rounded bg-surface-overlay/60" />
             {/* Summary — the card's body, which is most of its height */}
             <div className="mt-1 flex flex-1 flex-col gap-1.5">
               <div className="h-2 w-full rounded bg-surface-overlay" />

@@ -14,25 +14,26 @@ import { CHAPTER_CARD_H } from '@/components/chapters/ChaptersBoardSkeleton'
 // open-then-choose, which is what these tests drive.
 
 const CHAPTERS: BookChapterRow[] = [
-  { chapterId: 'c0', title: 'Prologue', order: 1, chapterNumber: 0, offCanon: false, manualSummary: null, characters: [], events: [] },
+  { chapterId: 'c0', title: 'Prologue', order: 1, chapterNumber: 0, offCanon: false, manualSummary: null, pov: null, date: null, characters: [], events: [] },
   {
-    chapterId: 'c1', title: 'Chapter 1', order: 2, chapterNumber: 1, offCanon: false, manualSummary: null,
+    chapterId: 'c1', title: 'Chapter 1', order: 2, chapterNumber: 1, offCanon: false, manualSummary: null, pov: null, date: null,
     characters: [{ id: 'wc-chase', nonCanon: false }], events: [],
   },
-  { chapterId: 'c2', title: 'Chapter 2', order: 3, chapterNumber: 2, offCanon: false, manualSummary: null, characters: [], events: [] },
+  { chapterId: 'c2', title: 'Chapter 2', order: 3, chapterNumber: 2, offCanon: false, manualSummary: null, pov: null, date: null, characters: [], events: [] },
   {
     // Emma is tagged only here — enough to make her offerable, while leaving
     // the Chase gaps (1 and 2) unchanged.
-    chapterId: 'c3', title: 'Chapter 3', order: 4, chapterNumber: 3, offCanon: false, manualSummary: null,
+    chapterId: 'c3', title: 'Chapter 3', order: 4, chapterNumber: 3, offCanon: false, manualSummary: null, pov: null, date: null,
     characters: [{ id: 'wc-emma', nonCanon: false }], events: [],
   },
   {
     // The chapter the whole feature exists for: branch-gated, so it has no
-    // canon number and no outline card anywhere.
-    chapterId: 'c4', title: 'Bonus Chapter 1', order: 5, chapterNumber: null, offCanon: true, manualSummary: 'Chase hands Jared the flash drive.',
+    // canon number and no outline card anywhere. Its POV/date come only from
+    // Loom's own columns.
+    chapterId: 'c4', title: 'Bonus Chapter 1', order: 5, chapterNumber: null, offCanon: true, manualSummary: 'Chase hands Jared the flash drive.', pov: 'Chase', date: 'Friday, December 4th',
     characters: [{ id: 'wc-chase', nonCanon: true }], events: [{ id: 'we-heist', nonCanon: true }],
   },
-  { chapterId: 'c5', title: 'Chapter 4', order: 6, chapterNumber: 4, offCanon: false, manualSummary: null, characters: [], events: [] },
+  { chapterId: 'c5', title: 'Chapter 4', order: 6, chapterNumber: 4, offCanon: false, manualSummary: null, pov: null, date: null, characters: [], events: [] },
 ]
 
 // Mutable so one test can drive the loading state. Referenced only inside the
@@ -113,8 +114,17 @@ describe('ChaptersSection', () => {
     setup()
     // The label the left-hand sidebar uses — not "Chapter 4", which is what a
     // number-continuing scheme would have produced for it.
-    expect(await screen.findByText('Bonus Chapter 1')).toBeInTheDocument()
-    expect(screen.getByText('Branch only')).toBeInTheDocument()
+    const title = await screen.findByText('Bonus Chapter 1')
+    expect(title).toBeInTheDocument()
+    // No separate "Branch only" label — the dashed amber border on the card
+    // itself is the only indicator.
+    expect(screen.queryByText('Branch only')).not.toBeInTheDocument()
+    const card = title.closest('[class*="border-dashed"]')
+    expect(card).not.toBeNull()
+    // POV/date for a branch chapter come only from Loom's own Chapter columns
+    // — it has no outline card to join against.
+    expect(within(card as HTMLElement).getByText('Chase')).toBeInTheDocument()
+    expect(within(card as HTMLElement).getByText('Friday, December 4th')).toBeInTheDocument()
   })
 
   it('joins the outline summary read-only where a card exists', async () => {

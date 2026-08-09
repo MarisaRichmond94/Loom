@@ -34,6 +34,14 @@ export type ChapterIn = {
   /** The writer's own summary (ChapterSummary), absent for the great majority
    *  of chapters, which take theirs from WriteAI's outline card instead. */
   manualSummary?: string | null
+  /** Loom's own copy of POV/date, set at import time. For a Bonus Chapter this
+   *  is the ONLY source there will ever be — it has no outline card to join
+   *  against. For a canon chapter it is a snapshot, not live: editing the
+   *  Outline tab's POV/date writes WriteAI's card only, never back to this
+   *  column, so a canon row's card values (joined client-side) take priority
+   *  over these whenever both exist. */
+  pov?: string | null
+  date?: string | null
 }
 
 export type TaggedEntity = {
@@ -81,6 +89,12 @@ export type BookChapterRow = {
    * read-only join it must never write back through.
    */
   manualSummary: string | null
+  /** Loom's own POV/date (Chapter.pov / Chapter.date). The only source for a
+   *  Bonus Chapter; a stale-tolerated fallback for a canon one, since the
+   *  outline card joined client-side reflects the writer's latest edit and
+   *  this column does not. */
+  pov: string | null
+  date: string | null
   characters: TaggedEntity[]
   events: TaggedEntity[]
 }
@@ -141,6 +155,8 @@ export function groupBookChapterTags(
         chapterNumber: numbers.get(c.id) ?? null,
         offCanon: !numbers.has(c.id),
         manualSummary: c.manualSummary ?? null,
+        pov: c.pov ?? null,
+        date: c.date ?? null,
         characters: bucket.characters,
         events: bucket.events,
       }

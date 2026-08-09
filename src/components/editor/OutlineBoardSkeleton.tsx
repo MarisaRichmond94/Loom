@@ -20,7 +20,7 @@ export default function OutlineBoardSkeleton({ cards = 8 }: { cards?: number }) 
           interactive here, just the same footprint so the board doesn't slide
           up the moment the real filter mounts. No pb — see the real
           component for why stacking it with the parent's gap-3 is wrong. */}
-      <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pt-1">
+      <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pb-1">
         <div className="flex flex-col gap-1">
           <div className="h-3 w-16 rounded bg-surface-overlay" />
           <div className="h-9 w-52 rounded-lg border-2 border-accent/10 bg-surface-overlay/40" />

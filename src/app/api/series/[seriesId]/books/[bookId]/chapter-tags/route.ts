@@ -49,7 +49,14 @@ export async function GET(_: Request, { params }: Params) {
       // `summary` is joined explicitly, not spread. It lives in its own table
       // precisely so its body does NOT ride along in the bulk chapter queries
       // the outline tree and book page run; this view is the one that needs it.
-      select: { id: true, title: true, order: true, summary: { select: { body: true } } },
+      select: {
+        id: true,
+        title: true,
+        order: true,
+        pov: true,
+        date: true,
+        summary: { select: { body: true } },
+      },
       orderBy: { order: 'asc' },
     }),
     prisma.chapterCharacter.findMany({

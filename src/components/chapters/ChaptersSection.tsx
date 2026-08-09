@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { LuExternalLink, LuGitBranch } from 'react-icons/lu'
+import { LuCalendar, LuExternalLink } from 'react-icons/lu'
 import { useClickOutside } from '@/components/editor/AnchoredPopover'
 import { useBookChapterTags } from './useBookChapterTags'
 import TagFilterSelect, { type FilterOption } from './TagFilterSelect'
@@ -15,6 +15,7 @@ import { useTimelineData } from '@/components/timeline/useTimelineData'
 import { prefetchBookOutline } from '@/components/editor/outlineCache'
 import { htmlToParagraphs } from '@/lib/outlineCards'
 import { matchGaps, type BookChapterRow } from '@/lib/bookChapterTags'
+import { povColorClass } from '@/lib/storyDate'
 import type { OutlineCard } from '@/lib/writerOutline'
 
 // The book page's Chapters tab (LOOM-120/121).
@@ -42,12 +43,17 @@ import type { OutlineCard } from '@/lib/writerOutline'
 // chapters have Chase AND the heist" for free.
 
 /** Summaries keyed by Loom chapter id, joined from the outline read-only. */
-type SummaryMap = Record<string, { text: string; source: 'writer' | 'machine' }>
+type SummaryMap = Record<
+  string,
+  { text: string; source: 'writer' | 'machine'; date: string | null; pov: string | null }
+>
 
 function buildSummaries(cards: OutlineCard[]): SummaryMap {
   const out: SummaryMap = {}
   for (const card of cards) {
     if (!card.loom_id) continue
+    const date = card.date ?? null
+    const pov = card.pov ?? null
     // `writer_summary` is HTML on every card in the live store. Rendered as
     // TEXT, never injected — this view is read-only and dangerouslySetInnerHTML
     // on a string from another process buys nothing here.
@@ -58,11 +64,16 @@ function buildSummaries(cards: OutlineCard[]): SummaryMap {
       // that still matches it is machine text; anything else the writer touched.
       const machine = (card.summary_source ?? '').trim().length > 0
         && htmlToParagraphs(card.summary_source).join(' ') === text
-      out[card.loom_id] = { text, source: machine ? 'machine' : 'writer' }
+      out[card.loom_id] = { text, source: machine ? 'machine' : 'writer', date, pov }
       continue
     }
     const bullets = (card.extracted_bullets ?? []).filter(Boolean)
-    if (bullets.length) out[card.loom_id] = { text: bullets.join(' • '), source: 'machine' }
+    out[card.loom_id] = {
+      text: bullets.length ? bullets.join(' • ') : '',
+      source: 'machine',
+      date,
+      pov,
+    }
   }
   return out
 }
@@ -116,6 +127,14 @@ function ChapterCard({
   // wheel only once it has been clicked, which makes that deliberate.
   const scrolls = active && !faded
 
+  // Read-only echo of the Outline tab's date/POV. For a canon chapter the
+  // outline card (joined client-side, kept live by the writer's edits) wins;
+  // a Bonus Chapter has no card, ever, so it falls back to Loom's own copy —
+  // the only source that will ever exist for it. Nothing here writes either
+  // one back.
+  const pov = summary?.pov ?? row.pov
+  const date = summary?.date ?? row.date
+
   return (
     <div
       onClick={faded ? undefined : onActivate}
@@ -143,14 +162,26 @@ function ChapterCard({
       }`}
     >
       <div className="flex shrink-0 items-start justify-between gap-2">
-        <div className="flex min-w-0 flex-col">
-          {/* The AUTHORED title, verbatim — the same string the left-hand
-              sidebar shows. A branch chapter reads "Bonus Chapter 1", which no
-              canon numbering would ever produce for it. */}
-          <span className="truncate text-xs font-medium text-ink">{row.title}</span>
-          {row.offCanon && (
-            <span className="mt-1 flex items-center gap-1 text-[10px] text-amber-400">
-              <LuGitBranch size={10} /> Branch only
+        <div className="flex min-w-0 flex-col gap-1">
+          <div className="flex min-w-0 items-center gap-1.5">
+            {/* The AUTHORED title, verbatim — the same string the left-hand
+                sidebar shows. A branch chapter reads "Bonus Chapter 1", which
+                no canon numbering would ever produce for it. Its dashed
+                amber border is the only "branch" indicator — a repeated
+                label here would just say the same thing twice. */}
+            <span className="truncate text-xs font-medium text-ink">{row.title}</span>
+            {pov && (
+              <span
+                className={`shrink-0 truncate rounded-full px-1.5 py-0.5 text-[9px] font-medium ${povColorClass(pov)}`}
+              >
+                {pov}
+              </span>
+            )}
+          </div>
+          {date && (
+            <span className="flex items-center gap-1 truncate text-[10px] text-ink-faint">
+              <LuCalendar size={10} className="shrink-0" />
+              {date}
             </span>
           )}
         </div>
@@ -321,7 +352,7 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
           double-count was enough extra height to force a scrollbar the tab
           didn't otherwise need. pt-1 alone keeps the filters off the scroll
           container's very top edge. */}
-      <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pt-1">
+      <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pb-1">
         <TagFilterSelect
           label="Character"
           placeholder="Any character"

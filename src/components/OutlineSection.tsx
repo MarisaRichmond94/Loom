@@ -246,7 +246,7 @@ export default function OutlineSection({
           the scroller) rather than replacing it — the double-count was
           exactly the "little" extra scroll this tab had. pt-1 alone keeps
           the control off the scroll container's very top edge. */}
-      <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pt-1">
+      <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pb-1">
         <TagFilterSelect
           label="Character"
           placeholder="Any character"
