@@ -10,7 +10,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } 
 import { CSS } from '@dnd-kit/utilities'
 import { useCanonSave } from '@/components/editor/useCanonSave'
 
-type Chapter = { id: string; title: string; order: number }
+type Chapter = { id: string; title: string; order: number; hasNotes?: boolean }
 type Book = {
   id: string; title: string; order: number
   inProgress?: boolean
@@ -87,11 +87,14 @@ function SortableChapter({ chapter, seriesId, isActive, scrollOnDefault, openMen
       <Link
         ref={linkRef}
         href={`/author/${seriesId}/chapter/${chapter.id}`}
-        className={`flex-1 block px-2 py-1.5 rounded text-xs transition truncate ${
+        className={`flex-1 flex items-center gap-1.5 px-2 py-1.5 rounded text-xs transition ${
           isActive ? 'text-ink font-semibold' : 'text-ink-faint hover:text-ink hover:bg-surface-overlay'
         }`}
       >
-        {chapter.title}
+        <span className="truncate min-w-0">{chapter.title}</span>
+        {chapter.hasNotes && (
+          <span className="shrink-0 w-1 h-1 rounded-full bg-accent" title="Has notes" />
+        )}
       </Link>
       <div className="relative shrink-0">
         <button
@@ -237,8 +240,8 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
       let changed = false
       const next = { ...prev }
       for (const book of books) {
-        const incomingKey = book.chapters.map(c => `${c.id}|${c.title}|${c.order}`).join(',')
-        const localKey = (prev[book.id] ?? []).map(c => `${c.id}|${c.title}|${c.order}`).join(',')
+        const incomingKey = book.chapters.map(c => `${c.id}|${c.title}|${c.order}|${c.hasNotes}`).join(',')
+        const localKey = (prev[book.id] ?? []).map(c => `${c.id}|${c.title}|${c.order}|${c.hasNotes}`).join(',')
         if (incomingKey !== localKey) {
           next[book.id] = book.chapters
           changed = true

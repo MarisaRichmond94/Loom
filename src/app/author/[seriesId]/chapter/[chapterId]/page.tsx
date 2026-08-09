@@ -178,7 +178,9 @@ export default function ChapterEditorPage() {
     } catch { /* ignore */ }
   }, [])
 
-  const { notes, setNotes, saving: notesSaving, hasNotes } = useChapterNotes(chapterId)
+  // Refetches the series only when a save actually flips the sidebar's dot
+  // (empty <-> non-empty), not on every keystroke's debounced save.
+  const { notes, setNotes, saving: notesSaving, hasNotes } = useChapterNotes(chapterId, () => { void loadSeries() })
   const chapterEvents = useChapterEvents(chapterId)
   const chapterCharacters = useChapterCharacters(chapterId)
   // The same book lookup as `currentBook` further down, but that one sits

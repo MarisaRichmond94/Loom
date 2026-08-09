@@ -24,7 +24,7 @@ const SAVE_DEBOUNCE_MS = 600
  *     navigation still writes to the chapter the words were typed in
  *   - failures raise a toast rather than disappearing
  */
-export function useChapterNotes(chapterId: string) {
+export function useChapterNotes(chapterId: string, onHasNotesChange?: (hasNotes: boolean) => void) {
   const [notes, setNotesState] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -35,6 +35,12 @@ export function useChapterNotes(chapterId: string) {
   // Set on the first keystroke for this chapter. Guards an in-flight load from
   // overwriting words typed before it came back.
   const touchedRef = useRef(false)
+  const onHasNotesChangeRef = useRef(onHasNotesChange)
+  onHasNotesChangeRef.current = onHasNotesChange
+  // What the sidebar's dot last reflects for this chapter, so a save only
+  // fires the callback (and its series refetch) on an empty<->non-empty
+  // transition rather than on every keystroke's debounced save.
+  const lastNotifiedHasNotesRef = useRef<boolean | null>(null)
 
   const send = useCallback(() => {
     const pending = pendingRef.current
@@ -49,6 +55,11 @@ export function useChapterNotes(chapterId: string) {
           body: JSON.stringify({ body: pending.body }),
         })
         if (!res.ok) throw new Error(String(res.status))
+        const nowHasNotes = pending.body.trim().length > 0
+        if (lastNotifiedHasNotesRef.current !== nowHasNotes) {
+          lastNotifiedHasNotesRef.current = nowHasNotes
+          onHasNotesChangeRef.current?.(nowHasNotes)
+        }
       } catch {
         notify('error', "Couldn't save this chapter's notes. The text is still on screen — copy it somewhere safe if this keeps happening.")
       } finally {
@@ -92,6 +103,7 @@ export function useChapterNotes(chapterId: string) {
   useEffect(() => {
     chapterIdRef.current = chapterId
     touchedRef.current = false
+    lastNotifiedHasNotesRef.current = null
     let cancelled = false
     setNotesState('')
     fetch(`/api/chapters/${chapterId}/notes`)
@@ -99,6 +111,7 @@ export function useChapterNotes(chapterId: string) {
       .then((data: { body?: string }) => {
         if (cancelled || touchedRef.current) return
         setNotesState(data.body ?? '')
+        lastNotifiedHasNotesRef.current = (data.body ?? '').trim().length > 0
       })
       .catch(() => { /* offline — the box stays empty and typing still saves */ })
     return () => { cancelled = true }

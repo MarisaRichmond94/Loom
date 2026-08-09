@@ -14,6 +14,10 @@ export async function GET(_: Request, { params }: Params) {
         include: {
           chapters: {
             orderBy: { order: 'asc' },
+            // Note bodies are short scratchpad text, so selecting them here to
+            // compute hasNotes (never shipped to the client) doesn't reintroduce
+            // the bulk-payload cost ChapterNote's separate table avoids.
+            include: { note: { select: { body: true } } },
           },
         },
       },
@@ -23,7 +27,14 @@ export async function GET(_: Request, { params }: Params) {
     },
   })
   if (!series) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json(series)
+  const withHasNotes = {
+    ...series,
+    books: series.books.map(book => ({
+      ...book,
+      chapters: book.chapters.map(({ note, ...chapter }) => ({ ...chapter, hasNotes: !!note?.body.trim() })),
+    })),
+  }
+  return NextResponse.json(withHasNotes)
 }
 
 export async function PATCH(req: Request, { params }: Params) {
