@@ -50,14 +50,19 @@ export function estimateDialoguePercent(text: string, totalWords: number): numbe
   return Math.round((Math.min(dialogueWords, totalWords) / totalWords) * 100)
 }
 
+// Shared with FilterWordHighlight (the eye-toggle in the stats popover) so a
+// word counted here is exactly the word that gets highlighted in the editor —
+// two independent implementations of "is this a filter word" would drift.
+export function isFilterWord(raw: string): boolean {
+  const w = raw.toLowerCase()
+  if (FILTER_WORDS.has(w)) return true
+  return w.length > 4 && w.endsWith('ly') && !LY_EXCLUSIONS.has(w)
+}
+
 export function countFilterWords(text: string): number {
   const words = text.match(/[A-Za-z']+/g) ?? []
   let count = 0
-  for (const raw of words) {
-    const w = raw.toLowerCase()
-    if (FILTER_WORDS.has(w)) { count++; continue }
-    if (w.length > 4 && w.endsWith('ly') && !LY_EXCLUSIONS.has(w)) count++
-  }
+  for (const raw of words) if (isFilterWord(raw)) count++
   return count
 }
 

@@ -103,6 +103,7 @@ import { writeAiPhotoUrl } from '@/lib/writerPortrait'
 import { matchesQuery, type WriterCharacter } from '@/lib/characterSearch'
 import { VariableHighlight } from '@/lib/extensions/variableHighlight'
 import { SearchHighlight } from '@/lib/extensions/searchHighlight'
+import { FilterWordHighlight } from '@/lib/extensions/filterWordHighlight'
 import { ParagraphIndent } from '@/lib/extensions/paragraphIndent'
 import type { SearchOptions } from '@/lib/searchMatch'
 import VariableSuggestionList from './VariableSuggestionList'
@@ -136,6 +137,9 @@ type Props = {
   searchQuery?: string
   // Match-case / whole-word toggles that shape what counts as a match.
   searchOptions?: SearchOptions
+  // The stats popover's eye toggle. When true, every filter word (was, just,
+  // suddenly, -ly adverbs...) gets a purple highlight via FilterWordHighlight.
+  highlightFilterWords?: boolean
   // Called with the editor on mount and with null on unmount, so the parent
   // can register/unregister this surface for search jump/replace.
   onEditorReady?: (editor: Editor | null) => void
@@ -228,7 +232,7 @@ function keepCaretInView(editor: { view: { coordsAtPos: (pos: number) => { top: 
   })
 }
 
-export default function TextBlock({ content, onChange, autoFocus, characters = [], variables = [], placeholder = 'Write your prose here…', searchQuery = '', searchOptions, onEditorReady, onBlur: onBlurProp }: Props) {
+export default function TextBlock({ content, onChange, autoFocus, characters = [], variables = [], placeholder = 'Write your prose here…', searchQuery = '', searchOptions, highlightFilterWords = false, onEditorReady, onBlur: onBlurProp }: Props) {
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
   // footnote state
   const [showInput, setShowInput] = useState(false)
@@ -255,6 +259,10 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
   searchQueryRef.current = searchQuery
   const searchOptionsRef = useRef<SearchOptions>(searchOptions ?? {})
   searchOptionsRef.current = searchOptions ?? {}
+  // Same live-ref trick as search: the plugin reads this each decoration
+  // pass, so toggling the eye icon never has to recreate the editor.
+  const highlightFilterWordsRef = useRef(highlightFilterWords)
+  highlightFilterWordsRef.current = highlightFilterWords
   const onBlurPropRef = useRef(onBlurProp)
   onBlurPropRef.current = onBlurProp
   const [varSuggest, setVarSuggest] = useState<{ from: number; query: string; coords: { x: number; y: number } } | null>(null)
@@ -273,6 +281,9 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
       SearchHighlight.configure({
         getQuery: () => searchQueryRef.current,
         getOptions: () => searchOptionsRef.current,
+      }),
+      FilterWordHighlight.configure({
+        getEnabled: () => highlightFilterWordsRef.current,
       }),
       TextAlign.configure({ types: ['paragraph', 'heading'] }),
       ParagraphIndent,
@@ -330,6 +341,13 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
     if (!prev.trim() && !searchQuery.trim()) return
     editor.view.dispatch(editor.state.tr)
   }, [editor, searchQuery, searchOptions?.caseSensitive, searchOptions?.wholeWord])
+
+  // Redraw nudge for the filter-word toggle — flipping it doesn't touch the
+  // doc, so nothing else would trigger the decorations plugin to re-run.
+  useEffect(() => {
+    if (!editor) return
+    editor.view.dispatch(editor.state.tr)
+  }, [editor, highlightFilterWords])
 
   // Native Cmd+C / Ctrl+C out of any text block (normal or conditional override)
   // produces the same Charter / 11px clipboard payload that the reader's

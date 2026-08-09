@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers, LuLightbulb, LuChartNoAxesColumn, LuSlidersHorizontal } from 'react-icons/lu'
+import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers, LuLightbulb, LuChartNoAxesColumn, LuSlidersHorizontal, LuEye, LuEyeOff } from 'react-icons/lu'
 import { computeChapterStats } from '@/lib/chapterStats'
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
@@ -69,6 +69,7 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
       { keys: '⌥⇧O', label: 'Toggle path config' },
       { keys: '⌥⇧F', label: 'Find in chapter' },
       { keys: '⌥⇧0', label: 'Toggle chapter stats' },
+      { keys: '⌥⇧H', label: 'Toggle filter-word highlighting' },
       { keys: '⌥⇧9', label: 'Collapse / expand all blocks' },
       { keys: '⌥⇧→ / ←', label: 'Next / previous match (while searching)' },
       { keys: '⌥⇧← / →', label: 'Previous / next chapter' },
@@ -123,6 +124,10 @@ export default function ChapterEditorPage() {
   const [actionMenuOpen, setActionMenuOpen] = useState(false)
   // Chapter stats panel (LOOM-109) — toggled by its header button or ⌥⇧0.
   const [statsOpen, setStatsOpen] = useState(false)
+  // Purple highlight for every filter word in the prose, toggled by the eye
+  // icon next to the "Filter words" stat. Off by default — it's a proofing
+  // aid, not something a writer wants lit up on every chapter open.
+  const [highlightFilterWords, setHighlightFilterWords] = useState(false)
   // Ticks every STATS_POLL_MS so chapterStats (below) recomputes on a timer
   // instead of only when some unrelated state change happens to re-render
   // this component. currentBlocksRef is a ref BlockEditor mutates on every
@@ -859,6 +864,7 @@ export default function ChapterEditorPage() {
         case 'KeyK': e.preventDefault(); setLocalSearchQuery(''); setLocalSearchReplaceMode(false); break
         case 'KeyW': e.preventDefault(); clearLensRef.current(); break
         case 'Digit0': case 'Numpad0': e.preventDefault(); setStatsOpen(v => !v); break
+        case 'KeyH': e.preventDefault(); setHighlightFilterWords(v => !v); break
         case 'Digit9': case 'Numpad9': e.preventDefault(); toggleCollapseAllRef.current(); break
         // An active chapter search owns these keys; with the search bar empty
         // they fall through to the footer's prev/next chapter navigation.
@@ -1416,7 +1422,20 @@ export default function ChapterEditorPage() {
                         </span>
                       </div>
                       <div className="flex flex-col gap-0.5 rounded-lg border border-accent/10 bg-surface-base px-3 py-2.5">
-                        <span className="text-[17px] font-bold tabular-nums text-accent">{chapterStats.filterWordCount}</span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-[17px] font-bold tabular-nums text-accent">{chapterStats.filterWordCount}</span>
+                          <button
+                            onClick={() => setHighlightFilterWords(v => !v)}
+                            title={highlightFilterWords ? 'Hide filter words in the prose (⌥⇧H)' : 'Highlight filter words in the prose (⌥⇧H)'}
+                            aria-label="Toggle filter-word highlighting"
+                            aria-pressed={highlightFilterWords}
+                            className={`ml-auto rounded p-0.5 transition ${
+                              highlightFilterWords ? 'text-purple-400 hover:text-purple-300' : 'text-ink-faint hover:text-ink'
+                            }`}
+                          >
+                            {highlightFilterWords ? <LuEye size={13} /> : <LuEyeOff size={13} />}
+                          </button>
+                        </span>
                         <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
                           <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-accent" />
                           Filter words
@@ -1632,6 +1651,7 @@ export default function ChapterEditorPage() {
           searchOptions={debouncedSearchQuery
             ? { caseSensitive: matchCase, wholeWord: matchWord }
             : { caseSensitive: searchParams?.get('qc') === '1', wholeWord: searchParams?.get('qw') === '1' }}
+          highlightFilterWords={highlightFilterWords}
           replaceAllRef={replaceAllRef}
           jumpToFirstMatchRef={jumpToFirstMatchRef}
           jumpToMatchRef={jumpToMatchRef}

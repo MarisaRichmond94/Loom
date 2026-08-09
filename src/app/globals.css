@@ -90,6 +90,23 @@ mark.search-match,
   text-decoration-thickness: 2px;
 }
 
+/* Highlight for the chapter stats popover's filter-word eye toggle. Purple,
+   deliberately distinct from .search-match's yellow — the two can be on at
+   once (a search query that happens to match a filter word), and matching
+   colours would make them unreadable as separate signals. Applied by the
+   TipTap FilterWordHighlight plugin (prose) on a <mark> wrapper. */
+.filter-word-match,
+mark.filter-word-match,
+.prose .filter-word-match,
+.prose-invert .filter-word-match,
+.ProseMirror .filter-word-match {
+  background-color: rgba(168, 85, 247, 0.28) !important;
+  color: inherit !important;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.4);
+  padding: 0 1px;
+}
+
 /* Reader prose, when the current user is the writer — overrides the global
    `*, *::before, *::after { user-select: none }` for the chapter content. */
 .reader-selectable, .reader-selectable * {

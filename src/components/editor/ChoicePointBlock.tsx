@@ -70,6 +70,7 @@ type Props = {
   activeChoiceId?: string | null
   searchQuery?: string
   searchOptions?: SearchOptions
+  highlightFilterWords?: boolean
   // Registers each choice's branch-text editor for search jump/replace, keyed
   // by choice id (null on unmount).
   onEditorReady?: (choiceId: string, editor: Editor | null) => void
@@ -97,7 +98,7 @@ function siblingValueFor(type: typeof VAR_TYPES[number], thisBranchValue: unknow
 
 function ChoicePanel({
   choice, slotPlaceholder, labelClass, bgClass, borderClass,
-  variables, characters, hasSibling, focusVarName, searchQuery, searchOptions, onEditorReady, onUpdateChoice, onCreateAndPair,
+  variables, characters, hasSibling, focusVarName, searchQuery, searchOptions, highlightFilterWords, onEditorReady, onUpdateChoice, onCreateAndPair,
   onDelete, onConditionChange, onPin, lensHighlight, lensDim,
 }: {
   choice: Choice; slotPlaceholder: string; labelClass: string; bgClass: string; borderClass: string
@@ -105,6 +106,7 @@ function ChoicePanel({
   characters?: Character[]
   searchQuery?: string
   searchOptions?: SearchOptions
+  highlightFilterWords?: boolean
   onEditorReady?: (choiceId: string, editor: Editor | null) => void
   hasSibling: boolean
   // Path lens: this branch is on-path (highlight) or off-path (dim).
@@ -446,6 +448,7 @@ function ChoicePanel({
           characters={characters}
           variables={variables}
           searchQuery={searchQuery} searchOptions={searchOptions}
+          highlightFilterWords={highlightFilterWords}
           onEditorReady={onEditorReady ? editor => onEditorReady(choice.id, editor) : undefined}
           placeholder={choice.isBadEnding
             ? 'What the reader sees on the full-screen overlay…'
@@ -487,7 +490,7 @@ function ChoicePanel({
 }
 
 
-export default function ChoicePointBlock({ prompt, displayType, condition, choices, variables, characters, lensActive, activeChoiceId, searchQuery, searchOptions, onEditorReady, onPinText, onUpdateBlock, onUpdateChoice, onAddChoice, onDeleteChoice, onCreateVariable }: Props) {
+export default function ChoicePointBlock({ prompt, displayType, condition, choices, variables, characters, lensActive, activeChoiceId, searchQuery, searchOptions, highlightFilterWords, onEditorReady, onPinText, onUpdateBlock, onUpdateChoice, onAddChoice, onDeleteChoice, onCreateVariable }: Props) {
   // Per-branch lens state: highlight the on-path branch, dim the rest. When
   // activeChoiceId is null (block gated off the path) every branch dims.
   const lensFor = (choiceId: string) => ({
@@ -569,7 +572,7 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             variables={variables} characters={characters}
             hasSibling={!!secondaryChoice}
             focusVarName={pairedFocus?.choiceId === primaryChoice.id ? pairedFocus.varName : null}
-            searchQuery={searchQuery} searchOptions={searchOptions} onEditorReady={onEditorReady}
+            searchQuery={searchQuery} searchOptions={searchOptions} highlightFilterWords={highlightFilterWords} onEditorReady={onEditorReady}
             onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
             onPin={onPinText ? () => onPinText(primaryChoice.endingMessage ?? '') : undefined}
             {...lensFor(primaryChoice.id)}
@@ -582,7 +585,7 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             variables={variables} characters={characters}
             hasSibling={!!primaryChoice}
             focusVarName={pairedFocus?.choiceId === secondaryChoice.id ? pairedFocus.varName : null}
-            searchQuery={searchQuery} searchOptions={searchOptions} onEditorReady={onEditorReady}
+            searchQuery={searchQuery} searchOptions={searchOptions} highlightFilterWords={highlightFilterWords} onEditorReady={onEditorReady}
             onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
             onPin={onPinText ? () => onPinText(secondaryChoice.endingMessage ?? '') : undefined}
             {...lensFor(secondaryChoice.id)}
@@ -600,7 +603,7 @@ export default function ChoicePointBlock({ prompt, displayType, condition, choic
             variables={variables} characters={characters}
             hasSibling={false}
             focusVarName={pairedFocus?.choiceId === choice.id ? pairedFocus.varName : null}
-            searchQuery={searchQuery} searchOptions={searchOptions} onEditorReady={onEditorReady}
+            searchQuery={searchQuery} searchOptions={searchOptions} highlightFilterWords={highlightFilterWords} onEditorReady={onEditorReady}
             onUpdateChoice={onUpdateChoice} onCreateAndPair={handleCreateAndPair}
             onDelete={() => onDeleteChoice(choice.id)}
             onConditionChange={next => onUpdateChoice(choice.id, { condition: next })}

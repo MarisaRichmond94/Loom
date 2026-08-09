@@ -67,6 +67,10 @@ type Props = {
   searchQuery?: string
   // Match-case / whole-word toggles applied to highlight, jump, and replace.
   searchOptions?: SearchOptions
+  // The stats popover's eye toggle — forwarded into every TipTap surface
+  // exactly like searchQuery is, so a purple filter-word highlight shows in
+  // prose, conditional overrides, and choice branch text alike.
+  highlightFilterWords?: boolean
   // Ref that receives a replaceAll function once editors mount. The chapter
   // page uses this to drive replace-all from the local chapter search bar.
   replaceAllRef?: React.MutableRefObject<((search: string, replacement: string) => number) | null>
@@ -304,7 +308,7 @@ type BlockRowApi = {
 // block's object in state — re-renders that row alone instead of the whole
 // chapter. All other props are primitives or identity-stable between
 // keystrokes.
-const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocus, variables, characters, searchQuery, searchOptions, api, lensActive, dimmed, activeOverrideId, activeChoiceId }: {
+const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocus, variables, characters, searchQuery, searchOptions, highlightFilterWords, api, lensActive, dimmed, activeOverrideId, activeChoiceId }: {
   block: Block
   isActive: boolean
   isCollapsed: boolean
@@ -313,6 +317,7 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
   characters: Character[]
   searchQuery: string
   searchOptions?: SearchOptions
+  highlightFilterWords?: boolean
   api: { current: BlockRowApi }
   // Path-lens hints, passed as primitives (not the resolution object) so an
   // unchanged row keeps its memo across keystrokes while a lens is active.
@@ -343,6 +348,7 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
           variables={variables}
           searchQuery={searchQuery}
           searchOptions={searchOptions}
+          highlightFilterWords={highlightFilterWords}
           onEditorReady={editor => api.current.registerEditor(block.id, editor)}
           onBlur={() => api.current.textBlockBlur()}
         />
@@ -360,6 +366,7 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
           activeChoiceId={activeChoiceId}
           searchQuery={searchQuery}
           searchOptions={searchOptions}
+          highlightFilterWords={highlightFilterWords}
           onEditorReady={(choiceId, editor) => api.current.registerEditor(`ch:${choiceId}`, editor)}
           onPinText={content => api.current.pinText(content)}
           onUpdateBlock={data => api.current.updateBlock(block.id, data)}
@@ -379,6 +386,7 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
           activeOverrideId={activeOverrideId}
           searchQuery={searchQuery}
           searchOptions={searchOptions}
+          highlightFilterWords={highlightFilterWords}
           onEditorReady={(overrideId, editor) => api.current.registerEditor(`ov:${overrideId}`, editor)}
           onPinText={content => api.current.pinText(content)}
           onAddOverride={(condition, content) => api.current.addOverride(block.id, condition, content)}
@@ -398,7 +406,7 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
   )
 })
 
-export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', searchOptions, replaceAllRef, jumpToFirstMatchRef, jumpToMatchRef, scrollToCursorRef, currentBlocksRef, onTextBlockBlur, onPinText, lensState, onMatchCountChange, savesRef }: Props) {
+export default function BlockEditor({ chapterId, blocks: initialBlocks, variables, characters, onBlocksChange, onChoicesChanged, onCreateVariable, onActiveBlockChange, collapsedIds, onCollapsedIdsChange, searchQuery = '', searchOptions, highlightFilterWords, replaceAllRef, jumpToFirstMatchRef, jumpToMatchRef, scrollToCursorRef, currentBlocksRef, onTextBlockBlur, onPinText, lensState, onMatchCountChange, savesRef }: Props) {
   const searchOpts = searchOptions ?? {}
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
@@ -1039,6 +1047,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                 characters={characters}
                 searchQuery={searchQuery}
                 searchOptions={searchOptions}
+                highlightFilterWords={highlightFilterWords}
                 api={blockApiRef}
                 lensActive={lensActive}
                 dimmed={lensActive && !!r && !r.included}

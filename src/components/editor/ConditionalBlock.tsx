@@ -20,6 +20,7 @@ type Props = {
   activeOverrideId?: string | null
   searchQuery?: string
   searchOptions?: SearchOptions
+  highlightFilterWords?: boolean
   // Registers each override's prose editor for search jump/replace, keyed by
   // override id (null on unmount).
   onEditorReady?: (overrideId: string, editor: Editor | null) => void
@@ -31,7 +32,7 @@ type Props = {
 
 const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
 
-export default function ConditionalBlock({ overrides, variables, characters, lensActive, activeOverrideId, searchQuery, searchOptions, onEditorReady, onPinText, onAddOverride, onUpdateOverride, onDeleteOverride }: Props) {
+export default function ConditionalBlock({ overrides, variables, characters, lensActive, activeOverrideId, searchQuery, searchOptions, highlightFilterWords, onEditorReady, onPinText, onAddOverride, onUpdateOverride, onDeleteOverride }: Props) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   function handleAddOverride() {
@@ -105,6 +106,7 @@ export default function ConditionalBlock({ overrides, variables, characters, len
               variables={variables}
               searchQuery={searchQuery}
               searchOptions={searchOptions}
+              highlightFilterWords={highlightFilterWords}
               onEditorReady={onEditorReady ? editor => onEditorReady(override.id, editor) : undefined}
             />
 
