@@ -8,7 +8,6 @@ import { useBookChapterTags } from './useBookChapterTags'
 import TagFilterSelect, { type FilterOption } from './TagFilterSelect'
 import EditableSummary from './EditableSummary'
 import ChaptersBoardSkeleton, {
-  CHAPTER_BOARD_H,
   CHAPTER_CARD_H,
   CHAPTER_GRID_GAP,
 } from './ChaptersBoardSkeleton'
@@ -311,7 +310,12 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-end gap-3">
+      {/* Sticky to whatever scrolls this tab — the book page's fillHeight tab
+          content. The filters are the thing you want reachable over a long
+          board, so they stay put while the cards scroll beneath them.
+          bg-surface-base matches the page's own background so cards don't
+          show through underneath it. */}
+      <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pb-3 pt-1">
         <TagFilterSelect
           label="Character"
           placeholder="Any character"
@@ -346,19 +350,16 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
         </p>
       )}
 
-      {/* Scrolls at three and a half rows, so the board never pushes the rest
-          of the page off screen on a 90-chapter book. `pr` leaves room for the
-          scrollbar so it does not sit on top of the last column, and `pt` keeps
-          the scroll edge off the first row's top border, which it otherwise
-          clips. Clicking the padding (i.e. not a card) hands the wheel back to
-          the board. */}
+      {/* No longer its own scroller — the board grows with its content and
+          the tab's own scrollable container (the page's fillHeight tab area)
+          handles overflow, which is what lets the filter bar above stay
+          sticky to it. Clicking the grid (i.e. not a card) hands the wheel
+          back to the board. */}
       <div
         ref={boardRef}
         onClick={e => {
           if (e.target === e.currentTarget) setActiveId(null)
         }}
-        className="overflow-y-auto pr-1 pt-1"
-        style={{ maxHeight: CHAPTER_BOARD_H }}
       >
         <div
           style={{

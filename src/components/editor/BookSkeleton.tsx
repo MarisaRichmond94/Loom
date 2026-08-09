@@ -7,56 +7,51 @@ import OutlineBoardSkeleton from './OutlineBoardSkeleton'
 // board arrived (LOOM-96); left at the old max-w-3xl, this drew a 768px column
 // that snapped to full width the moment data landed — a bigger jump than no
 // skeleton at all.
+//
+// Matches the page's h-full flex flex-col shape too (LOOM-141): the real page
+// fills the viewport below the header and scrolls its tab content internally
+// rather than the whole page, and a skeleton that doesn't claim the same
+// height/flex shape settles shorter, so the swap to real content jumps the
+// page's own scroll position — the same reasoning SeriesPageSkeleton documents.
 export default function BookSkeleton() {
   return (
-    <div className="max-w-[1600px] mx-auto px-8 py-8 animate-pulse">
-      {/* Action row — Published/Draft, Backup, Save, Preview. This was missing
-          entirely, so the cover and everything under it jumped up by the row's
-          height plus its margin the moment data landed (KAN-19).
-
-          KEEP THE COUNT AND WIDTHS IN STEP WITH THE REAL ROW in
-          author/[seriesId]/book/[bookId]/page.tsx. It has drifted once already:
-          KAN-20 added Backup and renamed Download to Save, and this skeleton
-          still drew three boxes sized for the old labels — so the row silently
-          resized on load, which is the exact jump the skeleton exists to
-          prevent. Widths approximate px-3 padding + a 12px icon + the label.
-
-          Preview is last and accent-filled, matching it as the primary action.
-
-          Widths are per-label at text-xs with px-3 padding, a 12px icon and a
-          gap-1.5: Published/Draft ~96 (dot, no icon), Backup ~82, Save ~69,
-          Preview ~89. The first can only match one of its two labels, so it is
-          sized for "Published"; a Draft book shows a small gap there. */}
-      {/* THREE controls, not four: the Published/Draft toggle moved to the
-          series page's status dropdown (LOOM-140). A skeleton that reserves a
-          button the page no longer renders makes the real content jump when it
-          arrives, which is the one thing a skeleton exists to prevent. */}
-      <div className="flex items-center justify-end gap-2 mb-6">
-        <div className="h-7 w-20 bg-surface-overlay rounded" />
-        <div className="h-7 w-16 bg-surface-overlay rounded" />
-        <div className="h-7 w-24 bg-accent/30 rounded" />
-      </div>
-
-      {/* Cover + title/synopsis row */}
-      <div className="flex gap-4 mb-4 items-stretch">
+    <div className="max-w-[1600px] mx-auto px-8 pt-4 pb-4 h-full flex flex-col animate-pulse">
+      <div className="flex-shrink-0 flex gap-4 mb-4">
         {/* surface-raised, matching the real cover well — it was surface-muted,
-            a tier lighter than anything on the loaded page. Fixed at 264x384
-            (w-[264px] h-96), the same size the real cover now renders at. */}
-        <div className="w-[264px] h-96 rounded-lg border-2 border-dashed border-accent/20 bg-surface-raised" />
-        <div className="flex-1 flex flex-col gap-4">
-          <div className="w-full h-12 bg-surface-raised border border-accent/20 rounded-lg" />
-          <div className="w-full flex-1 bg-surface-raised border border-accent/20 rounded-lg" style={{ minHeight: '200px' }} />
+            a tier lighter than anything on the loaded page. Fixed at 220x320
+            (w-[220px] h-[320px]), the same size the real cover now renders at
+            (shrunk a third from the original 264x384, then grown a quarter
+            back, LOOM-141). */}
+        <div className="w-[220px] h-[320px] rounded-lg border-2 border-dashed border-accent/20 bg-surface-raised shrink-0" />
+
+        {/* Title (+ actions) / Synopsis, stacked to the cover's height — same
+            shape as the real column. No stats stub: the grid moved behind
+            the chart icon below, so it costs no space here either. */}
+        <div className="flex-1 h-[320px] flex flex-col gap-3">
+          {/* Title + Stats/Front Matter icons + Backup/Save/Preview/Delete,
+              one row (LOOM-141). Icon buttons ~34 (h-[30px] w-[34px]).
+              Widths for the labelled controls are per-label at text-xs with
+              px-3 padding: Backup ~82 (12px icon + gap-1.5), Save ~69 (same),
+              Preview ~89 (same), Delete ~58 (text only, no icon). THREE
+              export controls, not four: the Published/Draft toggle moved to
+              the series page's status dropdown (LOOM-140). Delete is
+              separate again — red, matching bg-choice-kill on the real
+              button. */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0 h-12 bg-surface-raised border border-accent/20 rounded-lg" />
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="h-[30px] w-[34px] bg-surface-overlay rounded" />
+              <div className="h-[30px] w-[34px] bg-surface-overlay rounded" />
+              <div className="h-7 w-20 bg-surface-overlay rounded" />
+              <div className="h-7 w-16 bg-surface-overlay rounded" />
+              <div className="h-7 w-24 bg-accent/30 rounded" />
+              <div className="h-7 w-14 bg-choice-kill/60 rounded" />
+            </div>
+          </div>
+          <div className="w-full flex-1 min-h-0 bg-surface-raised border border-accent/20 rounded-lg" />
         </div>
       </div>
-      {/* Stats grid */}
-      <div className="grid grid-cols-4 gap-4 mb-4">
-        {[0, 1, 2, 3].map(i => (
-          <div key={i} className="bg-surface-raised border border-accent/10 rounded-lg px-4 py-5 flex flex-col items-center gap-1">
-            <div className="h-8 w-10 bg-surface-muted rounded" />
-            <div className="h-3 w-16 bg-surface-muted rounded" />
-          </div>
-        ))}
-      </div>
+
       {/* Section tab strip — Outline / Chapters / Character(s) / Soundtrack /
           Timeline / Explore, plus the active tab's action button.
 
@@ -69,40 +64,50 @@ export default function BookSkeleton() {
           in LOOM-103 and never landed here, then Chapters landed in
           LOOM-120/121 and did the same. All are added now. Sized the same way
           the series skeleton documents — roughly 11px per character plus 8px
-          of padding — rather than by eye. */}
-      <div className="mb-2 flex items-center justify-between border-b border-accent/10">
-        <div className="flex items-center gap-6">
-          <div className="-mb-px border-b-2 border-accent pb-2">
-            <div className="h-4 w-20 rounded bg-surface-muted" />
+          of padding — rather than by eye.
+
+          flex-1 min-h-0 flex flex-col, matching SectionTabs' own fillHeight
+          shape on this page (LOOM-141): the strip stays put and the content
+          below it claims the rest of the column instead of the block growing
+          past the viewport. */}
+      <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex-shrink-0 mb-2 flex items-center justify-between border-b border-accent/10">
+          <div className="flex items-center gap-6">
+            <div className="-mb-px border-b-2 border-accent pb-2">
+              <div className="h-4 w-20 rounded bg-surface-muted" />
+            </div>
+            {/* Chapters (8 chars), same width as Timeline below. */}
+            <div className="pb-2">
+              <div className="h-4 rounded bg-surface-overlay" style={{ width: 96 }} />
+            </div>
+            <div className="pb-2">
+              <div className="h-4 w-28 rounded bg-surface-overlay" />
+            </div>
+            <div className="pb-2">
+              <div className="h-4 w-24 rounded bg-surface-overlay" />
+            </div>
+            {/* Timeline (8 chars) and Explore (7 chars). */}
+            <div className="pb-2">
+              <div className="h-4 rounded bg-surface-overlay" style={{ width: 96 }} />
+            </div>
+            <div className="pb-2">
+              <div className="h-4 rounded bg-surface-overlay" style={{ width: 86 }} />
+            </div>
           </div>
-          {/* Chapters (8 chars), same width as Timeline below. */}
           <div className="pb-2">
-            <div className="h-4 rounded bg-surface-overlay" style={{ width: 96 }} />
-          </div>
-          <div className="pb-2">
-            <div className="h-4 w-28 rounded bg-surface-overlay" />
-          </div>
-          <div className="pb-2">
-            <div className="h-4 w-24 rounded bg-surface-overlay" />
-          </div>
-          {/* Timeline (8 chars) and Explore (7 chars). */}
-          <div className="pb-2">
-            <div className="h-4 rounded bg-surface-overlay" style={{ width: 96 }} />
-          </div>
-          <div className="pb-2">
-            <div className="h-4 rounded bg-surface-overlay" style={{ width: 86 }} />
+            <div className="h-7 w-24 rounded bg-accent/30" />
           </div>
         </div>
-        <div className="pb-2">
-          <div className="h-7 w-24 rounded bg-accent/30" />
+
+        {/* The outline board, which is the default tab. A writer whose last
+            tab was Characters gets a board-shaped wait and then a grid of
+            faces — the alternative is storing the tab twice, in the skeleton
+            and in the strip, and having them disagree. flex-1 min-h-0
+            overflow-y-auto, matching the real fillHeight scroll container. */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <OutlineBoardSkeleton />
         </div>
       </div>
-
-      {/* The outline board, which is the default tab. A writer whose last tab
-          was Characters gets a board-shaped wait and then a grid of faces —
-          the alternative is storing the tab twice, in the skeleton and in the
-          strip, and having them disagree. */}
-      <OutlineBoardSkeleton />
     </div>
   )
 }

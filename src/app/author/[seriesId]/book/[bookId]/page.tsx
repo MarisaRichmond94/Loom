@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { LuUser, LuCheck, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff, LuDownload, LuFileText, LuSave, LuDatabaseBackup } from 'react-icons/lu'
+import { LuUser, LuCheck, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff, LuDownload, LuFileText, LuFileCheck2, LuFilePlus2, LuSave, LuDatabaseBackup, LuChartNoAxesColumn } from 'react-icons/lu'
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import BookSkeleton from '@/components/editor/BookSkeleton'
+import { useClickOutside } from '@/components/editor/AnchoredPopover'
 import dynamic from 'next/dynamic'
 
 // Only rendered after "Export book…" is clicked — load its chunk then, not
@@ -29,7 +30,7 @@ const ChaptersSection = dynamic(() => import('@/components/chapters/ChaptersSect
 // surface AND issues its scope read on mount (LOOM-118).
 const ExplorePanel = dynamic(() => import('@/components/explore/ExplorePanel'), {
   ssr: false,
-  loading: () => <ExplorePanelSkeleton />,
+  loading: () => <ExplorePanelSkeleton fillHeight />,
 })
 import ExplorePanelSkeleton from '@/components/editor/ExplorePanelSkeleton'
 import { prefetchBookOutline } from '@/components/editor/outlineCache'
@@ -128,6 +129,14 @@ export default function BookDetailPage() {
   const [synopsis, setSynopsis] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Book stats popover (LOOM-141) — same shape as the chapter page's Chapter
+  // Stats panel, so the two read as one control rather than two inventions.
+  const [statsOpen, setStatsOpen] = useState(false)
+  const statsMenuRef = useRef<HTMLDivElement>(null)
+  useClickOutside([statsMenuRef], () => setStatsOpen(false), statsOpen)
+  // Front matter modal (LOOM-141) — the icon alone tells you whether one's
+  // uploaded; the modal is only for acting on it.
+  const [showFrontMatterModal, setShowFrontMatterModal] = useState(false)
   // Characters — list is resolved for THIS book (firstBookId filter + override merge)
   const [characters, setCharacters] = useState<Character[]>([])
   // One modal, not two. Editing a character opens the Characters tab's own
@@ -446,64 +455,14 @@ export default function BookDetailPage() {
           otherwise stretch the synopsis into a single unreadable line; 1600px
           is past the width of the laptops this is used on, so in practice the
           page fills the window. */}
-      <div className="max-w-[1600px] mx-auto px-8 py-8">
-        {/* Preview + Publish controls sit in their own row above the cover
-            so they don't crowd the title or get hidden behind the synopsis. */}
-        <div className="flex items-center justify-end gap-2 mb-6">
-          {/* The Published/Draft toggle lived here and moved to the series
-              page's book card (LOOM-140), where it is one Draft / In progress /
-              Published dropdown. Status was two booleans set by two toggles on
-              two different pages; comparing books against each other is what
-              the card view is for, and it is where publishing already happens. */}
-          {/* Export (.loom.json) sits beside Download deliberately (KAN-20).
-              A standalone project's landing page IS its book page — the
-              switcher routes name-clicks straight here, because a standalone
-              author has no series outline to see. Series-level export lives on
-              the series page, which nothing links to for a standalone, so
-              before this button the ONLY reachable data backup for those
-              projects was the root Write page. That is what blocked orphaning
-              `/`: the manuscript was downloadable, the data was not.
-
-              KAN-19 first split these as Export/Download, but both rendered
-              with the same download icon and read as near-synonyms — a real
-              coin-flip at the point of use. They are now Backup vs Save, with
-              distinct icons: the verb and the glyph both carry the difference.
-
-              Backup = .loom.json, the re-importable data. NOT a complete
-              system backup: chapter notes, narration audio, reader sessions
-              and cover image files live only in dev.db and public/covers. The
-              nightly chain covers those; this button is for portability. */}
-          <a
-            href={`/api/series/${seriesId}/books/${bookId}/export`}
-            download
-            title="Back up this book's story data as a .loom.json you can re-import. Covers prose, choices and characters — not chapter notes, narration or cover images."
-            className="px-3 py-1.5 rounded text-xs bg-surface-overlay text-ink-muted border border-accent/20 font-medium hover:text-ink transition flex items-center gap-1.5"
-          >
-            <LuDatabaseBackup size={12} /> Backup
-          </a>
-          {/* Save = the readable manuscript (Pages/Word), the thing you hand to
-              a person. Distinct verb AND icon from Backup above. */}
-          <button
-            onClick={() => setShowExportModal(true)}
-            title="Save this book as a Pages manuscript to read or share"
-            className="px-3 py-1.5 rounded text-xs bg-surface-overlay text-ink-muted border border-accent/20 font-medium hover:text-ink transition flex items-center gap-1.5"
-          >
-            <LuSave size={12} /> Save
-          </button>
-          <a
-            href={`/author/preview/book/${bookId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition flex items-center gap-1.5"
-          >
-            <LuEye size={12} /> Preview
-          </a>
-        </div>
-        <div className="flex gap-4 mb-4 items-stretch">
-          {/* Cover */}
+      <div className="max-w-[1600px] mx-auto px-8 pt-4 pb-4 h-full flex flex-col">
+        <div className="flex-shrink-0 flex gap-4 mb-4">
+          {/* Cover — 220x320. Shrunk a third from the original 264x384, then
+              grown a quarter back (LOOM-141), width scaled to match both
+              times so the cover's own proportions never drift. */}
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="w-[264px] h-96 rounded-lg border-2 border-dashed border-accent/20 flex items-center justify-center cursor-pointer hover:border-accent/50 transition overflow-hidden shrink-0 bg-surface-raised"
+            className="w-[220px] h-[320px] rounded-lg border-2 border-dashed border-accent/20 flex items-center justify-center cursor-pointer hover:border-accent/50 transition overflow-hidden shrink-0 bg-surface-raised"
           >
             {book.coverPath ? (
               <img src={book.coverPath} alt="Book cover" className="w-full h-full object-cover" />
@@ -514,39 +473,151 @@ export default function BookDetailPage() {
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
           <input ref={albumArtFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAlbumArtChange} />
 
-          {/* Title + Synopsis */}
-          <div className="flex-1 flex flex-col gap-4">
-            <input
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              onBlur={() => patchBook({ title })}
-              className="w-full bg-surface-raised border border-accent/20 rounded-lg px-4 py-3 text-xl font-semibold text-ink outline-none focus:border-accent"
-              placeholder="Book title"
-            />
+          {/* Title (+ actions) / Synopsis, stacked to exactly the cover's
+              height. The stats grid that used to sit below the synopsis is
+              gone — that space is the synopsis's now — and lives in the
+              popover behind the chart icon below instead (LOOM-141). */}
+          <div className="flex-1 h-[320px] flex flex-col gap-3">
+            {/* Backup/Save/Preview sit beside the title now rather than in
+                their own row above it — an 8px gap is enough to read as a
+                distinct cluster, and the title takes whatever width is left. */}
+            <div className="flex items-center gap-2">
+              <input
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                onBlur={() => patchBook({ title })}
+                className="flex-1 min-w-0 bg-surface-raised border border-accent/20 rounded-lg px-4 py-3 text-xl font-semibold text-ink outline-none focus:border-accent"
+                placeholder="Book title"
+              />
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Stats — the four badges (Chapters/Words/POVs/Choices) that
+                    used to sit below the synopsis, now behind one icon. Same
+                    shape as the chapter page's Chapter Stats panel, so the
+                    two read as one control rather than two inventions. */}
+                <div ref={statsMenuRef} className="relative">
+                  <button
+                    onClick={() => setStatsOpen(o => !o)}
+                    title="Book stats"
+                    aria-label="Book stats"
+                    aria-haspopup="menu"
+                    aria-expanded={statsOpen}
+                    className={`flex items-center h-[30px] px-2.5 rounded text-xs font-medium border transition ${
+                      statsOpen
+                        ? 'border-accent/40 text-ink bg-surface-raised'
+                        : 'border-accent/20 text-ink-muted hover:text-ink hover:border-accent/40 bg-surface-overlay'
+                    }`}
+                  >
+                    <LuChartNoAxesColumn size={14} className="text-accent" />
+                  </button>
+
+                  {statsOpen && (
+                    <div
+                      role="menu"
+                      className="absolute left-0 top-full mt-2 z-50 w-[260px] rounded-xl border border-accent/20 bg-surface-raised shadow-xl p-3.5"
+                    >
+                      <span className="mb-3 block px-0.5 text-[11px] font-bold uppercase tracking-widest text-ink-faint">
+                        Book Stats
+                      </span>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { label: 'Chapter(s)', value: book.stats.chapterCount },
+                          { label: 'Word(s)', value: book.stats.wordCount.toLocaleString() },
+                          { label: 'POV(s)', value: book.stats.uniquePovs },
+                          { label: 'Choice(s)', value: book.stats.choiceCount },
+                        ].map(({ label, value }) => (
+                          <div key={label} className="flex flex-col gap-0.5 rounded-lg border border-accent/10 bg-surface-base px-3 py-2.5">
+                            <span className="text-[17px] font-bold tabular-nums text-ink">{value}</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">{label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {/* Front matter — spliced ahead of Chapter 1 in manuscript
+                    exports. The icon alone says whether one's uploaded; the
+                    modal is only for acting on it (LOOM-141). */}
+                <button
+                  onClick={() => setShowFrontMatterModal(true)}
+                  title={frontMatter ? `Front matter: ${frontMatter.originalName}` : 'No front matter uploaded'}
+                  aria-label="Front matter"
+                  className={`flex items-center h-[30px] px-2.5 rounded text-xs font-medium border transition ${
+                    frontMatter
+                      ? 'border-accent/20 text-accent bg-surface-overlay hover:border-accent/40'
+                      : 'border-dashed border-accent/30 text-ink-faint bg-surface-overlay hover:text-ink hover:border-accent/50'
+                  }`}
+                >
+                  {frontMatter ? <LuFileCheck2 size={14} /> : <LuFilePlus2 size={14} />}
+                </button>
+                {/* The Published/Draft toggle lived here and moved to the series
+                    page's book card (LOOM-140), where it is one Draft / In progress /
+                    Published dropdown. Status was two booleans set by two toggles on
+                    two different pages; comparing books against each other is what
+                    the card view is for, and it is where publishing already happens. */}
+                {/* Export (.loom.json) sits beside Download deliberately (KAN-20).
+                    A standalone project's landing page IS its book page — the
+                    switcher routes name-clicks straight here, because a standalone
+                    author has no series outline to see. Series-level export lives on
+                    the series page, which nothing links to for a standalone, so
+                    before this button the ONLY reachable data backup for those
+                    projects was the root Write page. That is what blocked orphaning
+                    `/`: the manuscript was downloadable, the data was not.
+
+                    KAN-19 first split these as Export/Download, but both rendered
+                    with the same download icon and read as near-synonyms — a real
+                    coin-flip at the point of use. They are now Backup vs Save, with
+                    distinct icons: the verb and the glyph both carry the difference.
+
+                    Backup = .loom.json, the re-importable data. NOT a complete
+                    system backup: chapter notes, narration audio, reader sessions
+                    and cover image files live only in dev.db and public/covers. The
+                    nightly chain covers those; this button is for portability. */}
+                <a
+                  href={`/api/series/${seriesId}/books/${bookId}/export`}
+                  download
+                  title="Back up this book's story data as a .loom.json you can re-import. Covers prose, choices and characters — not chapter notes, narration or cover images."
+                  className="px-3 py-1.5 rounded text-xs bg-surface-overlay text-ink-muted border border-accent/20 font-medium hover:text-ink transition flex items-center gap-1.5"
+                >
+                  <LuDatabaseBackup size={12} /> Backup
+                </a>
+                {/* Save = the readable manuscript (Pages/Word), the thing you hand to
+                    a person. Distinct verb AND icon from Backup above. */}
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  title="Save this book as a Pages manuscript to read or share"
+                  className="px-3 py-1.5 rounded text-xs bg-surface-overlay text-ink-muted border border-accent/20 font-medium hover:text-ink transition flex items-center gap-1.5"
+                >
+                  <LuSave size={12} /> Save
+                </button>
+                <a
+                  href={`/author/preview/book/${bookId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition flex items-center gap-1.5"
+                >
+                  <LuEye size={12} /> Preview
+                </a>
+                {/* Red, distinct from the neutral controls beside it — the
+                    only action here that destroys something. Text alone (no
+                    icon), so it can't be mistaken at a glance for one of the
+                    export actions. */}
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  title="Delete this book"
+                  className="px-3 py-1.5 rounded text-xs bg-choice-kill text-white font-medium hover:opacity-90 transition"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
             <textarea
               value={synopsis}
               onChange={e => setSynopsis(e.target.value)}
               onBlur={() => patchBook({ synopsis })}
-              rows={7}
               placeholder="Write your synopsis here…"
-              className="w-full flex-1 bg-surface-raised border border-accent/20 rounded-lg px-4 py-3 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent resize-none leading-relaxed"
+              className="w-full flex-1 min-h-0 bg-surface-raised border border-accent/20 rounded-lg px-4 py-3 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent resize-none leading-relaxed"
             />
           </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-4 mb-8">
-          {[
-            { label: 'Chapter(s)', value: book.stats.chapterCount },
-            { label: 'Word(s)', value: book.stats.wordCount.toLocaleString() },
-            { label: 'POV(s)', value: book.stats.uniquePovs },
-            { label: 'Choice(s)', value: book.stats.choiceCount },
-          ].map(({ label, value }) => (
-            <div key={label} className="bg-surface-raised border border-accent/10 rounded-lg px-4 py-5 flex flex-col items-center gap-1">
-              <span className="text-2xl font-bold text-ink">{value}</span>
-              <span className="text-xs text-ink-faint uppercase tracking-widest">{label}</span>
-            </div>
-          ))}
         </div>
 
         {/* Outline, Characters and Soundtrack, as tabs rather than a stack —
@@ -557,6 +628,8 @@ export default function BookDetailPage() {
             is this book" where the other two answer "what is in it". Always
             the default on load — no persisted "last tab". */}
         <SectionTabs
+          className="flex-1 min-h-0 flex flex-col"
+          fillHeight
           sections={[{
             id: 'outline',
             label: 'Outline',
@@ -750,67 +823,9 @@ export default function BookDetailPage() {
             // than in the dropdown (LOOM-112/114).
             id: 'explore',
             label: 'Explore',
-            content: <ExplorePanel seriesId={seriesId} bookId={bookId} bookTitle={book.title} />,
+            content: <ExplorePanel seriesId={seriesId} bookId={bookId} bookTitle={book.title} fillHeight />,
           }]}
         />
-
-        {/* Front matter — spliced ahead of Chapter 1 in manuscript exports */}
-        <div className="mb-8">
-          <h2 className="text-sm font-semibold uppercase tracking-widest text-ink mb-2">Front Matter</h2>
-          <div className="px-4 py-3 rounded-lg bg-surface-raised border border-accent/10 flex items-center gap-3">
-            <input
-              ref={frontMatterInputRef}
-              type="file"
-              accept=".pages,.docx"
-              className="hidden"
-              onChange={handleFrontMatterChange}
-            />
-            <LuFileText size={16} className="text-accent shrink-0" />
-            <div className="flex-1 min-w-0">
-              {frontMatter ? (
-                <>
-                  <p className="text-sm text-ink truncate">{frontMatter.originalName}</p>
-                  <p className="text-xs text-ink-faint">
-                    Uploaded {new Date(frontMatter.uploadedAt).toLocaleDateString()} — included at the start of every export.
-                  </p>
-                </>
-              ) : (
-                <p className="text-xs text-ink-faint">
-                  Title page, copyright, dedication… Upload a <span className="font-mono">.pages</span> or{' '}
-                  <span className="font-mono">.docx</span> and exports will open with it.
-                </p>
-              )}
-              {frontMatterError && <p className="text-xs text-choice-kill mt-0.5">{frontMatterError}</p>}
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <button
-                onClick={() => frontMatterInputRef.current?.click()}
-                disabled={frontMatterBusy}
-                className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition disabled:opacity-50"
-              >
-                {frontMatterBusy ? 'Uploading…' : frontMatter ? 'Replace' : 'Upload'}
-              </button>
-              {frontMatter && !frontMatterBusy && (
-                <button
-                  onClick={removeFrontMatter}
-                  className="px-3 py-1.5 rounded text-xs text-ink-muted hover:text-choice-kill transition"
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Delete */}
-        <div className="flex justify-end">
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="px-5 py-2 rounded-lg bg-choice-kill text-white text-sm font-semibold hover:opacity-90 transition"
-          >
-            Delete Book
-          </button>
-        </div>
       </div>
 
       {/* WriteAI's own character editor, opened from this page rather than
@@ -852,6 +867,74 @@ export default function BookDetailPage() {
           onDeleted={() => { setWriterModal(null); setEditingOverlay(null) }}
           onClose={() => { setWriterModal(null); setEditingOverlay(null) }}
         />
+      )}
+
+      {/* Front matter — spliced ahead of Chapter 1 in manuscript exports.
+          Behind the icon button now rather than its own always-visible band
+          (LOOM-141), so the icon alone answers "is one uploaded" and this
+          modal is only for acting on it. */}
+      {showFrontMatterModal && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-start justify-center z-50"
+          style={{ paddingTop: 'calc(60px + 10vh)', paddingLeft: '14rem' }}
+          onClick={() => setShowFrontMatterModal(false)}
+        >
+          <div
+            className="bg-surface-raised border border-accent/20 rounded-xl p-6 max-w-lg w-full mx-8 shadow-2xl relative"
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowFrontMatterModal(false)}
+              className="absolute top-4 right-4 text-ink-faint hover:text-ink text-lg leading-none"
+            >
+              ✕
+            </button>
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-ink mb-4 pr-6">Front Matter</h2>
+            <input
+              ref={frontMatterInputRef}
+              type="file"
+              accept=".pages,.docx"
+              className="hidden"
+              onChange={handleFrontMatterChange}
+            />
+            <div className="px-4 py-3 rounded-lg bg-surface-base border border-accent/10 flex items-center gap-3">
+              <LuFileText size={16} className="text-accent shrink-0" />
+              <div className="flex-1 min-w-0">
+                {frontMatter ? (
+                  <>
+                    <p className="text-sm text-ink truncate">{frontMatter.originalName}</p>
+                    <p className="text-xs text-ink-faint">
+                      Uploaded {new Date(frontMatter.uploadedAt).toLocaleDateString()} — included at the start of every export.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-xs text-ink-faint">
+                    Title page, copyright, dedication… Upload a <span className="font-mono">.pages</span> or{' '}
+                    <span className="font-mono">.docx</span> and exports will open with it.
+                  </p>
+                )}
+                {frontMatterError && <p className="text-xs text-choice-kill mt-0.5">{frontMatterError}</p>}
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  onClick={() => frontMatterInputRef.current?.click()}
+                  disabled={frontMatterBusy}
+                  className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition disabled:opacity-50"
+                >
+                  {frontMatterBusy ? 'Uploading…' : frontMatter ? 'Replace' : 'Upload'}
+                </button>
+                {frontMatter && !frontMatterBusy && (
+                  <button
+                    onClick={removeFrontMatter}
+                    className="px-3 py-1.5 rounded text-xs text-ink-muted hover:text-choice-kill transition"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {showDeleteConfirm && (

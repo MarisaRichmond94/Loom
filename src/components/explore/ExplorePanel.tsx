@@ -50,11 +50,11 @@ export default function ExplorePanel({
    * a fixed 750px, so the chat window is exactly as tall as what's left on
    * screen rather than a constant that's sometimes too short and sometimes
    * leaves a gap. Opt-in: it only resolves to a real height when the tab
-   * strip mounting this is itself in fillHeight mode (currently only the
-   * series page) — see SectionTabs' own `fillHeight` for the other half of
-   * this. On the book page, contentRef has no defined height to flex
-   * against, so `flex-1` there would collapse to nothing; the fixed 750px
-   * stays correct there.
+   * strip mounting this is itself in fillHeight mode — see SectionTabs' own
+   * `fillHeight` for the other half of this. Both the series page and the
+   * book page pass it; a caller whose tab strip is NOT fillHeight would need
+   * the fixed 750px instead, since `flex-1` there has no defined height to
+   * flex against.
    */
   fillHeight?: boolean
 }) {
