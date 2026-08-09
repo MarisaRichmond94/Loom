@@ -191,7 +191,7 @@ export default function OutlineStalenessBanner({
   }
 
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-choice-amber-border bg-choice-amber-bg px-4 py-2.5 text-sm text-choice-amber">
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-choice-amber-border bg-choice-amber-bg px-4 py-2.5 text-sm text-choice-amber">
       <LuTriangleAlert size={15} className="shrink-0" />
 
       <div className="min-w-0 flex-1">
