@@ -266,7 +266,16 @@ export default function SectionTabs({
           and scroll-hold effects keep working against the right scroller
           without any change to that lookup. */}
       {fillHeight ? (
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        // overflow-x-hidden is deliberate, not decorative: per the CSS
+        // overflow spec, a box with one axis auto/hidden and the OTHER left
+        // at the default `visible` has that visible axis silently promoted
+        // to `auto` too. Left unset, this box picked up a horizontal
+        // scroller nothing asked for — invisible in the inspector because it
+        // only takes a sub-pixel rounding difference to trigger, but real
+        // enough to eat a few pixels of the box's own height for its
+        // scrollbar, which is what tipped otherwise-fitting tab content into
+        // needing a vertical scroll too.
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
           {/* flex flex-col h-full: gives a section that wants to fill the
               remaining space (Explore, with its own internal message-stream
               scroller) something definite to flex against. Sections that

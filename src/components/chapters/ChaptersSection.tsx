@@ -314,8 +314,14 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
           content. The filters are the thing you want reachable over a long
           board, so they stay put while the cards scroll beneath them.
           bg-surface-base matches the page's own background so cards don't
-          show through underneath it. */}
-      <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pb-3 pt-1">
+          show through underneath it. No pb here: the parent's own gap-3
+          already spaces this from the board below, and a sticky element's
+          own bottom padding stacks WITH that gap rather than replacing it
+          (it stays part of this box, which never scrolls away) — that
+          double-count was enough extra height to force a scrollbar the tab
+          didn't otherwise need. pt-1 alone keeps the filters off the scroll
+          container's very top edge. */}
+      <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pt-1">
         <TagFilterSelect
           label="Character"
           placeholder="Any character"

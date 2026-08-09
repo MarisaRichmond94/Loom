@@ -28,8 +28,9 @@ export default function ChaptersBoardSkeleton({ cards = 15 }: { cards?: number }
   return (
     <div className="flex flex-col gap-3">
       {/* Sticky, matching the real filter bar — the tab's own scroll
-          container is what this stays pinned to. */}
-      <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pb-3 pt-1">
+          container is what this stays pinned to. No pb — see the real
+          component for why stacking it with the parent's gap-3 is wrong. */}
+      <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pt-1">
         <FieldSkeleton />
         <FieldSkeleton />
       </div>

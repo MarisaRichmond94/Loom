@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   DndContext,
@@ -22,6 +22,9 @@ import OutlineBoardSkeleton from './editor/OutlineBoardSkeleton'
 import OutlineStalenessBanner from './editor/OutlineStalenessBanner'
 import { outlineCardLabels } from '@/lib/outlineCards'
 import { useBookOutline } from './editor/useBookOutline'
+import { useBookChapterTags } from './chapters/useBookChapterTags'
+import { useTimelineData } from './timeline/useTimelineData'
+import TagFilterSelect, { type FilterOption } from './chapters/TagFilterSelect'
 import type { OutlineCard as Card } from '@/lib/writerOutline'
 
 // The book page's Outline section (LOOM-96, editable in LOOM-97).
@@ -72,6 +75,8 @@ function SortableOutlineCard(props: {
   disabled: boolean
   active: boolean
   onToggleActive: () => void
+  faded: boolean
+  highlighted: boolean
 }) {
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
     id: props.card.id,
@@ -112,6 +117,34 @@ export default function OutlineSection({
   // A little distance before a drag starts, so a click on the card is still a
   // click and a stray twitch does not reorder the book.
   const sensors = useSensors(useSensor(NoDndPointerSensor, { activationConstraint: { distance: 4 } }))
+
+  // The character filter (LOOM-141) — same behaviour as the Chapters tab's:
+  // Loom's own chapter-character tags, joined onto a card through its
+  // `loom_id`. A planned card with no chapter behind it yet can never match,
+  // same as an off-canon chapter with no tags there.
+  const { chapters: chapterTags } = useBookChapterTags(seriesId, bookId)
+  const { characterPool } = useTimelineData()
+  const [characterId, setCharacterId] = useState<string | null>(null)
+  const charactersByChapterId = useMemo(
+    () => new Map(chapterTags.map(row => [row.chapterId, row.characters])),
+    [chapterTags],
+  )
+  // Only characters actually tagged somewhere in this book — offering the
+  // full cast would fill the list with names whose every selection returns
+  // nothing, the same reasoning ChaptersSection's own filter documents.
+  const characterOptions: FilterOption[] = useMemo(() => {
+    const tagged = new Set(chapterTags.flatMap(c => c.characters).map(e => e.id))
+    return characterPool
+      .filter(c => tagged.has(c.id))
+      .map(c => ({ id: c.id, name: c.name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [chapterTags, characterPool])
+  const filtering = characterId !== null
+  function cardMatches(card: Card): boolean {
+    if (characterId === null) return true
+    if (!card.loom_id) return false
+    return (charactersByChapterId.get(card.loom_id) ?? []).some(c => c.id === characterId)
+  }
 
   // The board's own shape while it loads, not a line of text: the tab is
   // opened often, and a wait that already looks like the answer is a shorter
@@ -205,6 +238,25 @@ export default function OutlineSection({
           actionSlot,
         )}
 
+      {/* Sticky to whatever scrolls this tab — the book page's fillHeight tab
+          content — same treatment as the Chapters tab's own filter bar. No
+          pb here: the parent's own gap-3 already spaces this from whatever
+          comes next, and a sticky element's own bottom padding stacks WITH
+          that gap (it stays part of this box, which never leaves the top of
+          the scroller) rather than replacing it — the double-count was
+          exactly the "little" extra scroll this tab had. pt-1 alone keeps
+          the control off the scroll container's very top edge. */}
+      <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pt-1">
+        <TagFilterSelect
+          label="Character"
+          placeholder="Any character"
+          options={characterOptions}
+          value={characterId}
+          onChange={setCharacterId}
+          emptyHint="No characters tagged in this book yet."
+        />
+      </div>
+
       {outline.syncState !== 'synced' && (
         <OutlineStalenessBanner
           seriesId={seriesId}
@@ -262,6 +314,8 @@ export default function OutlineSection({
                     disabled={saving}
                     active={activeCardId === card.id}
                     onToggleActive={() => setActiveCardId(id => (id === card.id ? null : card.id))}
+                    faded={filtering && !cardMatches(card)}
+                    highlighted={filtering && cardMatches(card)}
                   />
                   <button
                     data-no-dnd="true"

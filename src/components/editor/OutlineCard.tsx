@@ -41,6 +41,8 @@ export default function OutlineCard({
   isDragging = false,
   active = false,
   onToggleActive,
+  faded = false,
+  highlighted = false,
 }: {
   card: Card
   label: string
@@ -59,6 +61,12 @@ export default function OutlineCard({
    * board, not the card, so opening one closes any other. */
   active?: boolean
   onToggleActive?: () => void
+  /** The character filter's non-match — dimmed, never disabled: unlike the
+   *  Chapters board, every field here stays editable while filtering. */
+  faded?: boolean
+  /** The character filter's match — same ring treatment as the Chapters
+   *  board's matched cards, so the two filters read as one behaviour. */
+  highlighted?: boolean
 }) {
   const [pov, setPov] = useState(card.pov ?? '')
   const [povFocused, setPovFocused] = useState(false)
@@ -103,11 +111,13 @@ export default function OutlineCard({
       {...dragAttributes}
       {...dragListeners}
       onClick={() => onToggleActive?.()}
-      className={`group relative flex h-[250px] flex-col overflow-hidden rounded-lg transition-colors ${
+      className={`group relative flex h-[250px] flex-col overflow-hidden rounded-lg transition-[opacity,border-color,box-shadow] ${
         synced
           ? 'border border-accent/10 bg-surface-raised hover:border-accent/25'
           : 'border-2 border-dashed border-accent/40 bg-surface-raised/70 hover:border-accent/60'
-      } ${active ? 'ring-2 ring-purple-400/60' : ''} ${isDragging ? 'cursor-grabbing opacity-50' : 'cursor-grab'}`}
+      } ${active ? 'ring-2 ring-purple-400/60' : highlighted ? 'ring-1 ring-accent/40' : ''} ${
+        isDragging ? 'cursor-grabbing opacity-50' : 'cursor-grab'
+      } ${faded ? 'opacity-40' : ''}`}
     >
       <div className="flex min-h-0 flex-1 flex-col px-4 py-3">
         <div className="flex items-center justify-between">

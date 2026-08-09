@@ -6,6 +6,7 @@ import { LuUser, LuCheck, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff, LuDownl
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import BookSkeleton from '@/components/editor/BookSkeleton'
+import OutlineBoardSkeleton from '@/components/editor/OutlineBoardSkeleton'
 import { useClickOutside } from '@/components/editor/AnchoredPopover'
 import dynamic from 'next/dynamic'
 
@@ -18,7 +19,17 @@ import PinnedAudio from '@/components/PinnedAudio'
 import SectionTabs from '@/components/SectionTabs'
 // Loaded when the Outline tab is first opened, not with the page — it pulls in
 // the outline renderer for a section most page visits never look at.
-const OutlineSection = dynamic(() => import('@/components/OutlineSection'), { ssr: false })
+//
+// `loading` matters here specifically because Outline is the DEFAULT tab: with
+// none, the moment BookSkeleton hands off to the real page there is a gap
+// before this chunk finishes downloading, during which dynamic() renders
+// nothing — a flash of blank space between the page skeleton and the outline
+// board's own `loading && !outline` skeleton (LOOM-141). The two skeletons
+// are the same component, so the writer never sees the seam between them.
+const OutlineSection = dynamic(() => import('@/components/OutlineSection'), {
+  ssr: false,
+  loading: () => <div className="animate-pulse"><OutlineBoardSkeleton /></div>,
+})
 // Same treatment as the outline: the chart's SVG machinery should not ride in
 // the bundle for the many page visits that only open the cast.
 const TimelineSection = dynamic(() => import('@/components/timeline/TimelineSection'), { ssr: false })
