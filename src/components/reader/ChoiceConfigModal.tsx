@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { LuX } from 'react-icons/lu'
-import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
+import { useEffect, useMemo, useState } from 'react'
+import { LuChevronDown, LuX } from 'react-icons/lu'
+import { applyChoice } from '@/lib/storyEngine'
+import type { StoryState, HistoryEntry, ChoiceSetValue } from '@/lib/storyEngine'
 
 type ChoicePoint = {
   id: string
@@ -14,6 +15,52 @@ type ChoicePoint = {
 }
 
 type Variable = { id: string; name: string; type: string; defaultValue: string }
+
+// Render one choice's setsVariables payload as short "name op value"
+// fragments, e.g. "pregnancyHintCounter += 1" — shown under each choice
+// so the writer can see what picking it would write before they commit.
+function formatSetsVariables(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw || '{}') as Record<string, ChoiceSetValue>
+    return Object.entries(parsed).map(([name, v]) => {
+      if (v !== null && typeof v === 'object') return `${name} ${v.op} ${v.value}`
+      return `${name} = ${JSON.stringify(v)}`
+    })
+  } catch { return [] }
+}
+
+// Replays the current selections in book/chapter walk order to produce
+// both the history the session PATCH needs and the resulting final
+// state — the same computation apply() persists, reused here so the
+// catalogue preview can never drift from what Apply actually does.
+// Delegates each step to storyEngine's applyChoice so +=/-= choices
+// fold against the accumulated value instead of overwriting it with
+// the raw {op, value} instruction (a plain Object.assign merge would
+// leave a counter variable holding that instruction object instead of
+// a number the moment any choice used += or -=).
+function computeConfiguration(
+  selections: Record<string, string | null>,
+  choicePoints: ChoicePoint[],
+  variables: Variable[],
+): { history: HistoryEntry[]; finalState: StoryState } {
+  let state: StoryState = {}
+  for (const v of variables) {
+    try { state[v.name] = JSON.parse(v.defaultValue) } catch { /* ignore malformed */ }
+  }
+  let history: HistoryEntry[] = []
+  for (const cp of choicePoints) {
+    const choiceId = selections[cp.id]
+    if (!choiceId) continue
+    const choice = cp.choices.find(c => c.id === choiceId)
+    if (!choice) continue
+    let setsVariables: Record<string, ChoiceSetValue>
+    try { setsVariables = JSON.parse(choice.setsVariables) } catch { setsVariables = {} }
+    const result = applyChoice(state, history, cp.id, { id: choice.id, setsVariables, targetChapterId: null })
+    state = result.newState
+    history = result.newHistory
+  }
+  return { history, finalState: state }
+}
 
 type Props = {
   seriesId: string
@@ -45,6 +92,10 @@ export default function ChoiceConfigModal({ seriesId, sessionId, choiceHistory, 
   // On by default when we have a chapter context, off otherwise. The
   // writer flips it via the toggle next to the modal header.
   const [filterEnabled, setFilterEnabled] = useState<boolean>(!!currentChapterId)
+  // Collapsed by default — the catalogue is a reference/debugging aid,
+  // not something that needs to compete with the question list for
+  // attention every time the modal opens.
+  const [catalogOpen, setCatalogOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -80,24 +131,17 @@ export default function ChoiceConfigModal({ seriesId, sessionId, choiceHistory, 
     return () => { cancelled = true }
   }, [currentChapterId])
 
+  // Live preview of the resulting context given the current selections —
+  // drives the catalogue at the bottom of the modal. Recomputed whenever
+  // a selection, the choice-point list, or the variable defaults change.
+  const finalState = useMemo(
+    () => computeConfiguration(selections, choicePoints, variables).finalState,
+    [selections, choicePoints, variables],
+  )
+
   async function apply() {
     setApplying(true)
-    // Seed with variable defaults so variables never set by a chosen path
-    // still resolve to their declared default (matches buildInitialState behavior).
-    const newState: StoryState = {}
-    for (const v of variables) {
-      try { newState[v.name] = JSON.parse(v.defaultValue) } catch { /* ignore malformed */ }
-    }
-    const newHistory: HistoryEntry[] = []
-    for (const cp of choicePoints) {
-      const choiceId = selections[cp.id]
-      if (!choiceId) continue
-      const choice = cp.choices.find(c => c.id === choiceId)
-      if (!choice) continue
-      const stateSnapshot = { ...newState }
-      newHistory.push({ choicePointId: cp.id, choiceId: choice.id, stateSnapshot })
-      Object.assign(newState, JSON.parse(choice.setsVariables))
-    }
+    const { history: newHistory, finalState: newState } = computeConfiguration(selections, choicePoints, variables)
     const res = await fetch(`/api/sessions/${sessionId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -200,7 +244,7 @@ export default function ChoiceConfigModal({ seriesId, sessionId, choiceHistory, 
                         {chapter.items.map(cp => (
                           <div key={cp.id} className="bg-surface-overlay border border-accent/10 rounded-lg p-3">
                             <p className="text-sm text-ink mb-2 italic">{cp.prompt}</p>
-                            <div className="flex gap-2 flex-wrap">
+                            <div className="flex gap-2 flex-wrap items-start">
                               <button
                                 onClick={() => setSelections(s => ({ ...s, [cp.id]: null }))}
                                 className={`px-3 py-1 rounded text-xs transition border ${
@@ -211,19 +255,27 @@ export default function ChoiceConfigModal({ seriesId, sessionId, choiceHistory, 
                               >
                                 Unanswered
                               </button>
-                              {cp.choices.map(choice => (
-                                <button
-                                  key={choice.id}
-                                  onClick={() => setSelections(s => ({ ...s, [cp.id]: choice.id }))}
-                                  className={`px-3 py-1 rounded text-xs transition border ${
-                                    selections[cp.id] === choice.id
-                                      ? 'bg-accent/20 border-accent/40 text-ink font-medium'
-                                      : 'border-accent/10 text-ink-faint hover:text-ink'
-                                  }`}
-                                >
-                                  {choice.label}
-                                </button>
-                              ))}
+                              {cp.choices.map(choice => {
+                                const sets = formatSetsVariables(choice.setsVariables)
+                                return (
+                                  <button
+                                    key={choice.id}
+                                    onClick={() => setSelections(s => ({ ...s, [cp.id]: choice.id }))}
+                                    className={`flex flex-col items-start gap-0.5 px-3 py-1 rounded text-xs text-left transition border ${
+                                      selections[cp.id] === choice.id
+                                        ? 'bg-accent/20 border-accent/40 text-ink font-medium'
+                                        : 'border-accent/10 text-ink-faint hover:text-ink'
+                                    }`}
+                                  >
+                                    <span>{choice.label}</span>
+                                    {sets.length > 0 && (
+                                      <span className="font-mono text-[10px] font-normal text-ink-faint">
+                                        {sets.join(' · ')}
+                                      </span>
+                                    )}
+                                  </button>
+                                )
+                              })}
                             </div>
                           </div>
                         ))}
@@ -232,6 +284,52 @@ export default function ChoiceConfigModal({ seriesId, sessionId, choiceHistory, 
                   ))}
                 </div>
               ))}
+            </div>
+          )}
+
+          {!loading && choicePoints.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-accent/10">
+              <button
+                type="button"
+                onClick={() => setCatalogOpen(o => !o)}
+                aria-expanded={catalogOpen}
+                className="flex w-full items-center gap-2 text-left text-xs text-ink-muted hover:text-ink transition"
+              >
+                <span className="uppercase tracking-widest font-medium">Finalized context catalogue</span>
+                <span className="text-ink-faint">
+                  {Object.keys(finalState).length === 1 ? '1 variable' : `${Object.keys(finalState).length} variables`}
+                </span>
+                <LuChevronDown
+                  size={13}
+                  className={`ml-auto shrink-0 transition-transform duration-200 motion-reduce:transition-none ${catalogOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {/* 0fr/1fr grid trick animates open/closed without measuring content height. */}
+              <div
+                className={`grid transition-[grid-template-rows] duration-200 motion-reduce:transition-none ${
+                  catalogOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                }`}
+              >
+                <div className="overflow-hidden">
+                  <div className="mt-3 rounded-lg border border-accent/10 bg-surface-overlay p-3">
+                    {Object.keys(finalState).length === 0 ? (
+                      <p className="text-xs text-ink-faint italic text-center py-1">No context variables yet.</p>
+                    ) : (
+                      <div className="flex flex-col gap-1">
+                        {Object.entries(finalState)
+                          .sort(([a], [b]) => a.localeCompare(b))
+                          .map(([name, value]) => (
+                            <div key={name} className="flex items-center gap-2 text-xs font-mono">
+                              <span className="text-accent flex-1 min-w-0 truncate">{name}</span>
+                              <span className="text-ink-muted">{JSON.stringify(value)}</span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>

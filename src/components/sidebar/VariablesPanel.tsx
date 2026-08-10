@@ -296,16 +296,21 @@ export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete
                     const draft = drafts[v.id] ?? { name: v.name, type: v.type, defaultValue: parseDefault(v.defaultValue) }
                     const counts = usage?.[v.name]
                     const usageText = usage == null ? '…' : counts?.total ?? 0
+                    const writeCount = counts?.writeChapters.reduce((sum, c) => sum + c.count, 0) ?? 0
                     const usageTitle = counts
-                      ? `Conditions: ${counts.conditions} · Text/templates: ${counts.text}`
+                      ? `Conditions: ${counts.conditions} · Text/templates: ${counts.text} · Writes: ${writeCount}`
                       : 'Loading usage…'
                     // Row-level click drills in (same target as the eye
                     // action). Disabled when there are no usages —
-                    // matches the eye button's disabled state. The
-                    // Default and action cells stop propagation so
-                    // their own controls (input, save, eye, delete)
-                    // run without also triggering the drill.
-                    const canDrill = !!counts && counts.total > 0
+                    // matches the eye button's disabled state. Writes
+                    // count too: a write-only variable (e.g. a counter
+                    // that's set but never read back in a condition or
+                    // template) should still be drillable so its write
+                    // sites are reachable. The Default and action cells
+                    // stop propagation so their own controls (input,
+                    // save, eye, delete) run without also triggering
+                    // the drill.
+                    const canDrill = !!counts && (counts.total > 0 || counts.writeChapters.length > 0)
                     return (
                       <tr
                         key={v.id}
@@ -397,60 +402,83 @@ export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete
     )
   }
 
+  function renderUsageTable(chapters: Chapter[], emptyLabel: string) {
+    if (chapters.length === 0) {
+      return <p className="text-xs text-ink-faint italic text-center py-4">{emptyLabel}</p>
+    }
+    return (
+      <div className="overflow-y-auto min-h-0 -mr-3 pr-3 border border-accent/10 rounded-lg">
+        <table className="w-full text-xs">
+          <thead className="bg-surface-overlay sticky top-0 z-10">
+            <tr className="text-ink-faint uppercase tracking-widest">
+              <th className="text-left font-medium px-3 py-2.5">Book</th>
+              <th className="text-left font-medium px-2 py-2.5">Chapter</th>
+              <th className="text-left font-medium px-2 py-2.5">Count</th>
+              <th className="px-2 py-2.5 w-12" />
+            </tr>
+          </thead>
+          <tbody>
+            {chapters.map(c => (
+              <tr
+                key={c.chapterId}
+                onClick={() => navigateToChapter(c.bookId, c.chapterId, c.firstBlockId)}
+                className="border-t border-accent/10 group/row hover:bg-surface-overlay/40 transition cursor-pointer"
+              >
+                <td className="px-3 py-2 text-ink">{c.bookTitle}</td>
+                <td className="px-2 py-2 text-ink-muted">{c.chapterTitle}</td>
+                <td className="px-2 py-2 text-ink-muted">{c.count}</td>
+                <td className="px-2 py-2 text-right">
+                  <button
+                    onClick={e => { e.stopPropagation(); navigateToChapter(c.bookId, c.chapterId, c.firstBlockId) }}
+                    className="opacity-0 group-hover/row:opacity-100 text-ink-faint hover:text-ink transition"
+                    title={`Open ${c.chapterTitle}`}
+                  >
+                    <LuArrowRightToLine size={14} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
   function renderDrillIn(varName: string) {
     const counts = usage?.[varName]
     const total = counts?.total ?? 0
     const chapters = counts?.chapters ?? []
+    const writeChapters = counts?.writeChapters ?? []
+    const writeTotal = writeChapters.reduce((sum, c) => sum + c.count, 0)
     return (
       <>
         <div className="flex items-center justify-between mb-4 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <h2 className="text-sm font-semibold text-ink font-mono truncate" title={varName}>{varName}</h2>
             <span className="shrink-0 text-[10px] uppercase tracking-widest bg-accent/15 text-accent rounded-full px-2 py-0.5">
-              {total === 1 ? '1 usage' : `${total} usages`}
+              {total === 1 ? '1 read' : `${total} reads`}
+            </span>
+            <span className="shrink-0 text-[10px] uppercase tracking-widest bg-accent/15 text-accent rounded-full px-2 py-0.5">
+              {writeTotal === 1 ? '1 write' : `${writeTotal} writes`}
             </span>
           </div>
           <button onClick={() => setEditOpen(false)} className="text-ink-faint hover:text-ink"><LuX size={16} /></button>
         </div>
 
-        {chapters.length === 0 ? (
-          <p className="text-xs text-ink-faint italic text-center py-4">No chapters reference this variable.</p>
-        ) : (
-          <div className="overflow-y-auto min-h-0 -mr-3 pr-3 border border-accent/10 rounded-lg">
-            <table className="w-full text-xs">
-              <thead className="bg-surface-overlay sticky top-0 z-10">
-                <tr className="text-ink-faint uppercase tracking-widest">
-                  <th className="text-left font-medium px-3 py-2.5">Book</th>
-                  <th className="text-left font-medium px-2 py-2.5">Chapter</th>
-                  <th className="text-left font-medium px-2 py-2.5">Count</th>
-                  <th className="px-2 py-2.5 w-12" />
-                </tr>
-              </thead>
-              <tbody>
-                {chapters.map(c => (
-                  <tr
-                    key={c.chapterId}
-                    onClick={() => navigateToChapter(c.bookId, c.chapterId, c.firstBlockId)}
-                    className="border-t border-accent/10 group/row hover:bg-surface-overlay/40 transition cursor-pointer"
-                  >
-                    <td className="px-3 py-2 text-ink">{c.bookTitle}</td>
-                    <td className="px-2 py-2 text-ink-muted">{c.chapterTitle}</td>
-                    <td className="px-2 py-2 text-ink-muted">{c.count}</td>
-                    <td className="px-2 py-2 text-right">
-                      <button
-                        onClick={e => { e.stopPropagation(); navigateToChapter(c.bookId, c.chapterId, c.firstBlockId) }}
-                        className="opacity-0 group-hover/row:opacity-100 text-ink-faint hover:text-ink transition"
-                        title={`Open ${c.chapterTitle}`}
-                      >
-                        <LuArrowRightToLine size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="flex flex-col gap-4 overflow-y-auto min-h-0">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-ink-faint mb-1.5">Reads — conditions & text</div>
+            {renderUsageTable(chapters, 'No chapters read this variable.')}
           </div>
-        )}
+          <div>
+            {/* Writes come from a choice's setsVariables (question block
+                assignments). Shown separately from reads so numeric
+                counters like a running tally can be traced across every
+                place their value changes, not just the first one. */}
+            <div className="text-[10px] uppercase tracking-widest text-ink-faint mb-1.5">Writes — question block assignments</div>
+            {renderUsageTable(writeChapters, 'No chapters write this variable.')}
+          </div>
+        </div>
 
         <button
           onClick={() => setView({ kind: 'overview' })}
