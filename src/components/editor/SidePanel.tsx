@@ -244,7 +244,7 @@ export default function SidePanel({
           like Review) passes the gesture straight through to the editor
           behind. Two nested scrollers made that easy to hit. */}
       <div className="sticky top-0 h-[calc(100vh-3.75rem-var(--loom-footer-h,0px))] overflow-y-auto overscroll-contain flex flex-col">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-accent/10 shrink-0">
+        <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-3 border-b border-accent/10 shrink-0 bg-surface-raised">
           {/* All six, always, in the order they are reached for: the review
               is the reason the panel is usually open, events, characters and
               insights sit beside it because all four answer "what is this
