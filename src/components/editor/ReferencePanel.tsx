@@ -79,7 +79,7 @@ function RefProse({ content }: { content: string | null | undefined }) {
       // Font size tracks the body prose zoom (⌥⇧+ / ⌥⇧-) via the same
       // --loom-prose-scale var set on <html>, so both scale together.
       style={{ fontSize: 'calc(var(--loom-prose-scale, 1) * 1rem)' }}
-      className="prose prose-invert max-w-none text-ink text-base leading-relaxed [&_p]:text-justify [&_p]:indent-8 [&_p.no-indent]:indent-0 [&_p[style*='center']]:indent-0 [&_p]:my-0 [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-accent/20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-4 [&_.character-ref]:text-accent/80 [&_.character-ref]:underline [&_.character-ref]:decoration-dotted [&_.character-ref]:decoration-accent/40"
+      className="prose prose-invert max-w-none text-ink text-base leading-relaxed reader-selectable [&_p]:text-justify [&_p]:indent-8 [&_p.no-indent]:indent-0 [&_p[style*='center']]:indent-0 [&_p]:my-0 [&_hr]:border-none [&_hr]:h-px [&_hr]:bg-accent/20 [&_hr]:w-1/3 [&_hr]:mx-auto [&_hr]:my-4 [&_.character-ref]:text-accent/80 [&_.character-ref]:underline [&_.character-ref]:decoration-dotted [&_.character-ref]:decoration-accent/40"
       dangerouslySetInnerHTML={{ __html: html }}
     />
   )
