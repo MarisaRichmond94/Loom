@@ -241,44 +241,48 @@ export default function ChoiceConfigModal({ seriesId, sessionId, choiceHistory, 
                     <div key={chapter.chapterId} className="mb-4">
                       <div className="text-xs text-ink-muted mb-2">{chapter.chapterTitle}</div>
                       <div className="flex flex-col gap-3">
-                        {chapter.items.map(cp => (
-                          <div key={cp.id} className="bg-surface-overlay border border-accent/10 rounded-lg p-3">
-                            <p className="text-sm text-ink mb-2 italic">{cp.prompt}</p>
-                            <div className="flex gap-2 flex-wrap items-start">
-                              <button
-                                onClick={() => setSelections(s => ({ ...s, [cp.id]: null }))}
-                                className={`px-3 py-1 rounded text-xs transition border ${
-                                  selections[cp.id] == null
-                                    ? 'bg-surface-muted border-accent/40 text-ink'
-                                    : 'border-accent/10 text-ink-faint hover:text-ink'
-                                }`}
-                              >
-                                Unanswered
-                              </button>
-                              {cp.choices.map(choice => {
-                                const sets = formatSetsVariables(choice.setsVariables)
-                                return (
+                        {chapter.items.map(cp => {
+                          const selectedChoice = cp.choices.find(c => c.id === selections[cp.id])
+                          const selectedSets = selectedChoice ? formatSetsVariables(selectedChoice.setsVariables) : []
+                          return (
+                            <div key={cp.id} className="bg-surface-overlay border border-accent/10 rounded-lg p-3">
+                              <p className="text-sm text-ink mb-2 italic">{cp.prompt}</p>
+                              <div className="flex gap-2 flex-wrap">
+                                <button
+                                  onClick={() => setSelections(s => ({ ...s, [cp.id]: null }))}
+                                  className={`px-3 py-1 rounded text-xs transition border ${
+                                    selections[cp.id] == null
+                                      ? 'bg-surface-muted border-accent/40 text-ink'
+                                      : 'border-accent/10 text-ink-faint hover:text-ink'
+                                  }`}
+                                >
+                                  Unanswered
+                                </button>
+                                {cp.choices.map(choice => (
                                   <button
                                     key={choice.id}
                                     onClick={() => setSelections(s => ({ ...s, [cp.id]: choice.id }))}
-                                    className={`flex flex-col items-start gap-0.5 px-3 py-1 rounded text-xs text-left transition border ${
+                                    className={`px-3 py-1 rounded text-xs transition border ${
                                       selections[cp.id] === choice.id
                                         ? 'bg-accent/20 border-accent/40 text-ink font-medium'
                                         : 'border-accent/10 text-ink-faint hover:text-ink'
                                     }`}
                                   >
-                                    <span>{choice.label}</span>
-                                    {sets.length > 0 && (
-                                      <span className="font-mono text-[10px] font-normal text-ink-faint">
-                                        {sets.join(' · ')}
-                                      </span>
-                                    )}
+                                    {choice.label}
                                   </button>
-                                )
-                              })}
+                                ))}
+                              </div>
+                              {/* Separate line for the state the selected answer writes — keeping
+                                  it out of the pill row so the choices stay scannable as the
+                                  options the reader actually saw. */}
+                              {selectedSets.length > 0 && (
+                                <p className="mt-2 font-mono text-[10px] text-ink-faint">
+                                  Sets {selectedSets.join(' · ')}
+                                </p>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     </div>
                   ))}
@@ -312,21 +316,37 @@ export default function ChoiceConfigModal({ seriesId, sessionId, choiceHistory, 
                 }`}
               >
                 <div className="overflow-hidden">
-                  <div className="mt-3 rounded-lg border border-accent/10 bg-surface-overlay p-3">
-                    {Object.keys(finalState).length === 0 ? (
-                      <p className="text-xs text-ink-faint italic text-center py-1">No context variables yet.</p>
-                    ) : (
-                      <div className="flex flex-col gap-1">
-                        {Object.entries(finalState)
-                          .sort(([a], [b]) => a.localeCompare(b))
-                          .map(([name, value]) => (
-                            <div key={name} className="flex items-center gap-2 text-xs font-mono">
-                              <span className="text-accent flex-1 min-w-0 truncate">{name}</span>
-                              <span className="text-ink-muted">{JSON.stringify(value)}</span>
-                            </div>
-                          ))}
-                      </div>
-                    )}
+                  {/* max-h caps the body at ~5.5 rows (header + 5.5 * row height)
+                      before it scrolls — matches the Context modal's overview table. */}
+                  <div className="mt-3 max-h-[212px] overflow-y-auto border border-accent/10 rounded-lg">
+                    <table className="w-full text-xs">
+                      <thead className="bg-surface-overlay sticky top-0 z-10">
+                        <tr className="text-ink-faint uppercase tracking-widest">
+                          <th className="text-left font-medium px-3 py-2.5">Name</th>
+                          <th className="text-left font-medium px-2 py-2.5">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.keys(finalState).length === 0 ? (
+                          <tr>
+                            <td colSpan={2} className="px-3 py-6 text-xs text-ink-faint italic text-center">
+                              No context variables yet.
+                            </td>
+                          </tr>
+                        ) : (
+                          Object.entries(finalState)
+                            .sort(([a], [b]) => a.localeCompare(b))
+                            .map(([name, value]) => (
+                              <tr key={name} className="border-t border-accent/10">
+                                <td className="px-3 py-2 text-accent font-mono max-w-[220px]">
+                                  <span title={name} className="block truncate">{name}</span>
+                                </td>
+                                <td className="px-2 py-2 text-ink-muted font-mono">{JSON.stringify(value)}</td>
+                              </tr>
+                            ))
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>

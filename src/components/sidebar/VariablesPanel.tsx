@@ -272,7 +272,7 @@ export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete
               </div>
             </div>
 
-            <div className="overflow-y-auto min-h-0 -mr-3 pr-3 border border-accent/10 rounded-lg">
+            <div className="overflow-y-auto min-h-0 border border-accent/10 rounded-lg">
               <table className="w-full text-xs">
                 <thead className="bg-surface-overlay sticky top-0 z-10">
                   <tr className="text-ink-faint uppercase tracking-widest">
@@ -407,7 +407,7 @@ export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete
       return <p className="text-xs text-ink-faint italic text-center py-4">{emptyLabel}</p>
     }
     return (
-      <div className="overflow-y-auto min-h-0 -mr-3 pr-3 border border-accent/10 rounded-lg">
+      <div className="overflow-y-auto min-h-0 border border-accent/10 rounded-lg">
         <table className="w-full text-xs">
           <thead className="bg-surface-overlay sticky top-0 z-10">
             <tr className="text-ink-faint uppercase tracking-widest">
@@ -540,7 +540,7 @@ export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete
             Nothing in the series references this. Safe to delete.
           </p>
         ) : (
-          <div className="overflow-y-auto min-h-0 -mr-3 pr-3 border border-accent/10 rounded-lg">
+          <div className="overflow-y-auto min-h-0 border border-accent/10 rounded-lg">
             <table className="w-full text-xs">
               <thead className="bg-surface-overlay sticky top-0 z-10">
                 <tr className="text-ink-faint uppercase tracking-widest">
