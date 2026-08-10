@@ -358,6 +358,14 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
     const dom = editor.view.dom
     function onCopy(event: ClipboardEvent) {
       if (!editor) return
+      // This editor can still hold DOM focus while the real browser Selection
+      // lives elsewhere (e.g. a drag-select in the read-only Pins panel) —
+      // clicking a plain, non-focusable div doesn't blur a focused
+      // contenteditable. Defer to native copy unless the selection the user
+      // actually made is inside this block, or we'd hijack the clipboard
+      // with this editor's stale/empty ProseMirror selection instead.
+      const sel = window.getSelection()
+      if (!sel || sel.rangeCount === 0 || !dom.contains(sel.anchorNode)) return
       const { from, to, empty } = editor.state.selection
       if (empty) return
       const slice = editor.state.doc.slice(from, to)
