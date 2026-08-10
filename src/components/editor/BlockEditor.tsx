@@ -154,7 +154,7 @@ function collapsedSummary(block: Block): string {
     const firstOverride = [...block.overrides].sort((a, b) => a.order - b.order)[0]
     return firstOverride ? firstLine(extractTextFromTipTap(firstOverride.content)) : ''
   }
-  if (block.type === 'soundtrack') return block.content?.trim() || ''
+  if (block.type === 'soundtrack') return block.prompt?.trim() || block.content?.trim() || ''
   return ''
 }
 
