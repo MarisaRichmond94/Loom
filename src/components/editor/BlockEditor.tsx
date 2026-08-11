@@ -210,7 +210,7 @@ function SortableBlock({
           inside blocks (colour picker, character picker) that anchor to the
           card. The handle's -mt-2/-ml-2/mr-2 reproduce exactly where
           `absolute top-2 left-2` put it, content at the same 32px inset. */}
-      <div className={`flex-1 min-w-0 bg-surface-raised border border-t-0 border-accent/10 border-l-4 ${BLOCK_BORDER[block.type] ?? ''} rounded-r-lg p-4 relative flex flex-col transition-shadow duration-150 ${isActive ? 'ring-1 ring-inset ring-accent/40' : 'group-hover:ring-1 group-hover:ring-inset group-hover:ring-accent/20'}`}>
+      <div className={`flex-1 min-w-0 bg-surface-raised border border-t-0 border-accent/10 border-l-4 ${BLOCK_BORDER[block.type] ?? ''} rounded-r-lg p-4 relative flex flex-col transition-shadow duration-150 ${isActive ? 'border-r-accent/40 border-b-accent/40' : 'group-hover:border-r-accent/20 group-hover:border-b-accent/20'}`}>
         {/* The block's top edge: its border plus the 16px of card padding under
             it, pinned. -mt-4 against h-4 makes it cost nothing in layout — it
             simply occupies the padding that was already there. Being opaque is
