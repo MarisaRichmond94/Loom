@@ -5,7 +5,6 @@ import { useParams, useRouter } from 'next/navigation'
 import { LuChevronLeft, LuChevronRight } from 'react-icons/lu'
 import OutlineTree from '@/components/sidebar/OutlineTree'
 import VariablesPanel from '@/components/sidebar/VariablesPanel'
-import ChoicesPanel from '@/components/sidebar/ChoicesPanel'
 import AppHeader from '@/components/AppHeader'
 import ToastLayer from '@/components/ToastLayer'
 import SearchBar from '@/components/SearchBar'
@@ -278,19 +277,13 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
             onMouseLeave={onEdgeLeave}
           >
             <aside className={`h-full bg-surface-raised flex flex-col overflow-hidden transition-[width] duration-300 ease-in-out ${sidebarCollapsed ? 'w-0 border-r-0' : 'w-56 border-r border-accent/10'}`}>
-              <div className="flex flex-col min-h-0 max-h-[50%] p-4">
+              <div className="flex flex-col min-h-0 max-h-[75%] p-4">
                 <OutlineTree
                   seriesId={seriesId}
                   books={series.books}
                   onAddBook={addBook}
                   onAddChapter={addChapter}
                   onInsertChapter={insertChapter}
-                />
-              </div>
-              <div className="flex flex-col min-h-0 max-h-[25%] p-4 pt-3 border-t border-accent/10">
-                <ChoicesPanel
-                  seriesId={seriesId}
-                  questions={choiceQuestions}
                 />
               </div>
               <div className="flex flex-col min-h-0 max-h-[25%] p-4 pt-3 border-t border-accent/10">
