@@ -30,6 +30,10 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
   const [knownStringValues, setKnownStringValues] = useState<Record<string, string[]>>({})
   const { lightMode, toggleLightMode } = useLightMode()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  // The context (variables) modal, lifted up from VariablesPanel so the
+  // ⌥⇧3 hotkey below can toggle it the same way ⌥⇧1 toggles the sidebar
+  // (LOOM-144).
+  const [contextOpen, setContextOpen] = useState(false)
   const [edgeHovered, setEdgeHovered] = useState(false)
   const edgeLeaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
@@ -61,6 +65,9 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
           localStorage.setItem('loom-sidebar-collapsed', String(next))
           return next
         })
+      } else if (e.altKey && e.shiftKey && e.code === 'Digit3') {
+        e.preventDefault()
+        setContextOpen(prev => !prev)
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -181,18 +188,17 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
         />
 
         <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar — outline / variables panels mocked. */}
+          {/* Sidebar — outline mocked, context collapsed to its "View
+              Context" button stub (LOOM-144). */}
           <aside className={`h-full bg-surface-raised flex flex-col overflow-hidden animate-pulse transition-[width] duration-300 ease-in-out ${sidebarCollapsed ? 'w-0 border-r-0' : 'w-56 border-r border-accent/10'}`}>
-            <div className="flex flex-col gap-2 p-4 max-h-[75%]">
+            <div className="flex-1 min-h-0 flex flex-col gap-2 p-4">
               <div className="h-3 w-20 bg-surface-muted rounded mb-1" />
               {[0, 1, 2, 3, 4].map(i => (
                 <div key={i} className="h-4 bg-surface-muted rounded" style={{ width: `${70 + (i * 5) % 25}%` }} />
               ))}
             </div>
-            <div className="flex flex-col gap-2 p-4 pt-3 border-t border-accent/10 max-h-[25%]">
-              <div className="h-3 w-20 bg-surface-muted rounded mb-1" />
-              {[0, 1, 2].map(i => <div key={i} className="h-3 w-full bg-surface-muted rounded" />)}
-              <div className="h-7 w-full bg-accent/30 rounded mt-2" />
+            <div className="shrink-0 p-4 pt-3 border-t border-accent/10">
+              <div className="h-7 w-full bg-accent/30 rounded" />
             </div>
           </aside>
 
@@ -272,7 +278,10 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
             onMouseLeave={onEdgeLeave}
           >
             <aside className={`h-full bg-surface-raised flex flex-col overflow-hidden transition-[width] duration-300 ease-in-out ${sidebarCollapsed ? 'w-0 border-r-0' : 'w-56 border-r border-accent/10'}`}>
-              <div className="flex flex-col min-h-0 max-h-[75%] p-4">
+              {/* flex-1, not a percentage cap: the panel below is now just a
+                  button (LOOM-144), so the outline claims whatever height
+                  that no longer needs. */}
+              <div className="flex-1 min-h-0 flex flex-col p-4">
                 <OutlineTree
                   seriesId={seriesId}
                   books={series.books}
@@ -280,12 +289,14 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
                   onInsertChapter={insertChapter}
                 />
               </div>
-              <div className="flex flex-col min-h-0 max-h-[25%] p-4 pt-3 border-t border-accent/10">
+              <div className="shrink-0 p-4 pt-3 border-t border-accent/10">
                 <VariablesPanel
                   seriesId={seriesId}
                   variables={series.variables}
                   onUpdate={updateVariable}
                   onDelete={deleteVariable}
+                  open={contextOpen}
+                  onOpenChange={setContextOpen}
                 />
               </div>
             </aside>

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { LuPencil, LuX, LuEye, LuArrowUpDown, LuArrowRightToLine, LuRotateCcw, LuSearch } from 'react-icons/lu'
+import { useEffect, useState } from 'react'
+import { LuX, LuEye, LuArrowUpDown, LuArrowRightToLine, LuRotateCcw, LuSearch } from 'react-icons/lu'
 
 type Variable = { id: string; name: string; type: string; defaultValue: string }
 type Chapter = { bookId: string; bookTitle: string; bookOrder: number; chapterId: string; chapterTitle: string; chapterOrder: number; count: number; firstBlockId: string | null }
@@ -34,6 +34,10 @@ type Props = {
   variables: Variable[]
   onUpdate: (id: string, data: { name?: string; type?: string; defaultValue?: unknown }) => void
   onDelete: (id: string) => void
+  // Lifted to the author layout (LOOM-144) so the ⌥⇧3 hotkey can toggle the
+  // modal the same way ⌥⇧1 toggles the sidebar.
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
 const TYPE_SHORT: Record<string, string> = { boolean: 'bool', number: 'num', string: 'str' }
@@ -86,8 +90,7 @@ function DefaultInput({ type, value, onChange }: { type: string; value: unknown;
   )
 }
 
-export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete }: Props) {
-  const [editOpen, setEditOpen] = useState(false)
+export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete, open, onOpenChange }: Props) {
   // Local draft state for the modal: id → { name, type, defaultValue }
   const [drafts, setDrafts] = useState<Record<string, { name: string; type: string; defaultValue: unknown }>>({})
   // Per-variable usage data loaded when the modal opens. Keyed by
@@ -104,14 +107,16 @@ export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete
   // resets to 'overview' on open.
   const [view, setView] = useState<ModalView>({ kind: 'overview' })
 
-  function openEdit() {
+  // Resets the modal's local state every time it opens — including via the
+  // ⌥⇧3 hotkey, which calls onOpenChange(true) directly rather than through
+  // a click handler here, hence an effect on `open` rather than a plain
+  // function.
+  useEffect(() => {
+    if (!open) return
     const initial: Record<string, { name: string; type: string; defaultValue: unknown }> = {}
     variables.forEach(v => { initial[v.id] = { name: v.name, type: v.type, defaultValue: parseDefault(v.defaultValue) } })
     setDrafts(initial)
-    setEditOpen(true)
     setUsage(null)
-    // Reset to the default sort + overview view + empty search every
-    // time the modal opens.
     setSortMode('occurrence')
     setSearchQuery('')
     setView({ kind: 'overview' })
@@ -119,7 +124,8 @@ export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete
       .then(r => r.ok ? r.json() : null)
       .then(setUsage)
       .catch(() => setUsage(null))
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   function cycleSort() {
     const idx = SORT_CYCLE.indexOf(sortMode)
@@ -148,41 +154,24 @@ export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete
   }
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
-      {/* Heading with hover pencil */}
-      <div className="flex items-center gap-2 mb-2 shrink-0 group/heading">
-        <div className="text-xs uppercase tracking-widest text-ink-faint">Context</div>
-        {variables.length > 0 && (
-          <button
-            onClick={openEdit}
-            className="text-ink-faint hover:text-ink transition opacity-0 group-hover/heading:opacity-100"
-            title="Edit context variables"
-          >
-            <LuPencil size={12} />
-          </button>
-        )}
-      </div>
-
-      {/* Scrollable variable list */}
-      <div className="flex-1 overflow-y-auto min-h-0">
-        <div className="flex flex-col gap-1">
-          {variables.map(v => (
-            <div key={v.id} className="flex items-center gap-2 px-2 py-1" title={v.name}>
-              <span className="font-mono text-xs text-accent flex-1 min-w-0 truncate">{v.name}</span>
-              <span className="shrink-0 text-xs bg-accent/20 text-accent rounded-full px-2 py-0.5 leading-none">
-                {TYPE_SHORT[v.type] ?? v.type}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+    <div className="flex flex-col">
+      {/* The list of variables used to render here (LOOM-144) — replaced
+          with a single button, styled like OutlineTree's "Add Chapter", that
+          opens the same overview/drill-in/delete modal below. */}
+      <button
+        onClick={() => onOpenChange(true)}
+        title="View context (⌥⇧3)"
+        className="block px-2 py-1 text-xs bg-accent text-white rounded font-medium hover:opacity-90 transition"
+      >
+        View Context
+      </button>
 
       {/* Context modal — overview table by default, drill-in view per
           variable when the eye action is clicked on a row. */}
-      {editOpen && (
+      {open && (
         <div
           className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-          onClick={() => setEditOpen(false)}
+          onClick={() => onOpenChange(false)}
         >
           <div
             className="bg-surface-raised border border-accent/20 rounded-xl p-6 w-full max-w-3xl mx-4 shadow-2xl flex flex-col max-h-[70vh]"
@@ -228,7 +217,7 @@ export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete
       <>
         <div className="flex items-center justify-between mb-4 shrink-0">
           <h2 className="text-sm font-semibold text-ink uppercase tracking-widest">Context</h2>
-          <button onClick={() => setEditOpen(false)} className="text-ink-faint hover:text-ink"><LuX size={16} /></button>
+          <button onClick={() => onOpenChange(false)} className="text-ink-faint hover:text-ink"><LuX size={16} /></button>
         </div>
 
         {variables.length === 0 ? (
@@ -462,7 +451,7 @@ export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete
               {writeTotal === 1 ? '1 write' : `${writeTotal} writes`}
             </span>
           </div>
-          <button onClick={() => setEditOpen(false)} className="text-ink-faint hover:text-ink"><LuX size={16} /></button>
+          <button onClick={() => onOpenChange(false)} className="text-ink-faint hover:text-ink"><LuX size={16} /></button>
         </div>
 
         <div className="flex flex-col gap-4 overflow-y-auto min-h-0">
@@ -530,7 +519,7 @@ export default function VariablesPanel({ seriesId, variables, onUpdate, onDelete
               {total === 1 ? '1 usage' : `${total} usages`}
             </span>
           </div>
-          <button onClick={() => setEditOpen(false)} className="text-ink-faint hover:text-ink shrink-0"><LuX size={16} /></button>
+          <button onClick={() => onOpenChange(false)} className="text-ink-faint hover:text-ink shrink-0"><LuX size={16} /></button>
         </div>
 
         <p className="text-xs text-ink-muted font-mono mb-3 shrink-0">{varName}</p>

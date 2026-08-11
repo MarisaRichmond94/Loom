@@ -11,6 +11,7 @@ const GLOBAL_GROUP: ShortcutGroup = {
   items: [
     { keys: '⌥⇧G', label: 'Find in series (global)' },
     { keys: '⌥⇧1', label: 'Toggle sidebar' },
+    { keys: '⌥⇧3', label: 'Toggle context' },
   ],
 }
 
