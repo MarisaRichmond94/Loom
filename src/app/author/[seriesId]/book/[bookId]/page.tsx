@@ -102,9 +102,14 @@ type Soundtrack = {
 
 // Covers arrive straight from art tools as multi-MB PNGs; downscale to a
 // display-appropriate JPEG before upload so /covers never accumulates
-// 15MB originals (they render identically at a few hundred KB). 1600px on
-// the long edge is ~2x the largest size any view renders a cover at.
-async function downscaleCoverToBlob(file: File, maxEdge = 1600): Promise<Blob> {
+// 15MB originals. 2400px on the long edge is still several times the
+// largest size any view renders a cover at (220x320, ~440x640 at 2x
+// retina), leaving headroom the old 1600px cap didn't have. Quality 0.95
+// rather than 0.85 (LOOM-143) — 0.85 was visibly introducing JPEG
+// blocking artifacts on cover art with gradients/fine texture, which read
+// as "grainy" especially once object-fit:cover resamples it into the
+// series page's smaller card.
+async function downscaleCoverToBlob(file: File, maxEdge = 2400): Promise<Blob> {
   const url = URL.createObjectURL(file)
   try {
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -124,7 +129,7 @@ async function downscaleCoverToBlob(file: File, maxEdge = 1600): Promise<Blob> {
     ctx.fillRect(0, 0, canvas.width, canvas.height)
     ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
     return new Promise((resolve, reject) =>
-      canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas empty')), 'image/jpeg', 0.85),
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas empty')), 'image/jpeg', 0.95),
     )
   } finally {
     URL.revokeObjectURL(url)
@@ -237,10 +242,10 @@ export default function BookDetailPage() {
       await ensureMinDuration(start)
       isInitialBookLoadRef.current = false
     }
-    setBook({
-      ...data,
-      coverPath: data.coverPath ? `${data.coverPath}?t=${Date.now()}` : null,
-    })
+    // coverPath already carries its own cache-busting query param, persisted
+    // server-side by the upload route — no need to layer another one on
+    // top here (that used to double up into an invalid `?v=1?t=2` URL).
+    setBook(data)
     setTitle(data.title)
     setSynopsis(data.synopsis ?? '')
   }, [seriesId, bookId])
@@ -448,8 +453,11 @@ export default function BookDetailPage() {
       body: form,
     })
     if (res.ok) {
+      // coverPath already carries its own cache-busting query param (the
+      // upload route versions it), so it's used as-is here — appending
+      // another `?t=` on top would double up into an invalid `?v=1?t=2` URL.
       const { coverPath } = await res.json()
-      setBook(prev => prev ? { ...prev, coverPath: `${coverPath}?t=${Date.now()}` } : null)
+      setBook(prev => prev ? { ...prev, coverPath } : null)
     }
     e.target.value = ''
   }
