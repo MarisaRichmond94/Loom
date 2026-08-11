@@ -181,18 +181,13 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
         />
 
         <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar — outline / choices / variables panels mocked. */}
+          {/* Sidebar — outline / variables panels mocked. */}
           <aside className={`h-full bg-surface-raised flex flex-col overflow-hidden animate-pulse transition-[width] duration-300 ease-in-out ${sidebarCollapsed ? 'w-0 border-r-0' : 'w-56 border-r border-accent/10'}`}>
-            <div className="flex flex-col gap-2 p-4 max-h-[50%]">
+            <div className="flex flex-col gap-2 p-4 max-h-[75%]">
               <div className="h-3 w-20 bg-surface-muted rounded mb-1" />
               {[0, 1, 2, 3, 4].map(i => (
                 <div key={i} className="h-4 bg-surface-muted rounded" style={{ width: `${70 + (i * 5) % 25}%` }} />
               ))}
-              <div className="h-7 w-full bg-accent/30 rounded mt-2" />
-            </div>
-            <div className="flex flex-col gap-2 p-4 pt-3 border-t border-accent/10 max-h-[25%]">
-              <div className="h-3 w-20 bg-surface-muted rounded mb-1" />
-              {[0, 1].map(i => <div key={i} className="h-3 w-full bg-surface-muted rounded" />)}
             </div>
             <div className="flex flex-col gap-2 p-4 pt-3 border-t border-accent/10 max-h-[25%]">
               <div className="h-3 w-20 bg-surface-muted rounded mb-1" />
@@ -219,7 +214,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
     : null
 
   return (
-    <AuthorProvider value={{ series, loadSeries, loadChoices, lightMode, knownStringValues }}>
+    <AuthorProvider value={{ series, loadSeries, loadChoices, addBook, lightMode, knownStringValues }}>
       <ShortcutsProvider>
       <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
         {/* Book and chapter are no longer in the header — the sidebar's
@@ -281,7 +276,6 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
                 <OutlineTree
                   seriesId={seriesId}
                   books={series.books}
-                  onAddBook={addBook}
                   onAddChapter={addChapter}
                   onInsertChapter={insertChapter}
                 />

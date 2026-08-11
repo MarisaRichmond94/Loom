@@ -26,6 +26,7 @@ export type AuthorContextValue = {
   series: AuthorSeries
   loadSeries: () => Promise<void>
   loadChoices: () => Promise<void>
+  addBook: (title: string) => Promise<void>
   lightMode: boolean
   // Distinct string values written to each variable by any choice in
   // the series. Drives the condition-row datalist autocomplete so a

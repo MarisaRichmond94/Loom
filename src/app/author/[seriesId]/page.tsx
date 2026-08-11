@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuDatabaseBackup, LuEye, LuPencilLine, LuSend } from 'react-icons/lu'
+import { LuCheck, LuDatabaseBackup, LuEye, LuPencilLine, LuPlus, LuSend, LuX } from 'react-icons/lu'
 import dynamic from 'next/dynamic'
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import SeriesTagsEditor from '@/components/editor/SeriesTagsEditor'
-import SectionTabs from '@/components/SectionTabs'
+import SectionTabs, { useSectionActionSlot } from '@/components/SectionTabs'
 import PublishBadge from '@/components/series/PublishBadge'
 import { usePublishStatus } from '@/components/series/usePublishStatus'
 import SilentChaptersDialog, { type SilentChapter } from '@/components/series/SilentChaptersDialog'
@@ -91,6 +92,59 @@ type BookStatus = 'draft' | 'inProgress' | 'published'
 const statusOf = (book: { published: boolean; inProgress: boolean }): BookStatus =>
   book.inProgress ? 'inProgress' : book.published ? 'published' : 'draft'
 
+/**
+ * "Add Book", portalled into the tab strip's action slot (same convention as
+ * "Add Event"/"Add card") — moved here from the sidebar's OutlineTree so
+ * adding a book lives beside the rest of the Book(s) tab's actions instead of
+ * a control fixed to the bottom of the outline.
+ */
+function AddBookButton({ onAdd }: { onAdd: (title: string) => Promise<void> }) {
+  const actionSlot = useSectionActionSlot()
+  const [adding, setAdding] = useState(false)
+  const [title, setTitle] = useState('')
+
+  function cancel() {
+    setAdding(false)
+    setTitle('')
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault()
+    const trimmed = title.trim()
+    if (!trimmed) return
+    void onAdd(trimmed)
+    cancel()
+  }
+
+  if (!actionSlot) return null
+
+  return createPortal(
+    adding ? (
+      <form onSubmit={submit} className="flex items-center gap-1">
+        <input
+          autoFocus
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          onKeyDown={e => e.key === 'Escape' && cancel()}
+          placeholder="Title…"
+          className="bg-surface-base border border-accent/20 rounded px-2 py-1 text-xs text-ink outline-none focus:border-accent"
+        />
+        <button type="submit" className="text-accent px-1 py-1"><LuCheck size={13} /></button>
+        <button type="button" onClick={cancel} className="text-ink-faint px-1 py-1"><LuX size={13} /></button>
+      </form>
+    ) : (
+      <button
+        type="button"
+        onClick={() => setAdding(true)}
+        className="flex items-center gap-1.5 rounded bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90"
+      >
+        <LuPlus size={12} /> Add Book
+      </button>
+    ),
+    actionSlot,
+  )
+}
+
 export default function AuthorSeriesPage() {
   const { seriesId } = useParams() as { seriesId: string }
   const router = useRouter()
@@ -98,7 +152,7 @@ export default function AuthorSeriesPage() {
   // the chapter banner's "Show all issues" — so the plain series URL keeps
   // opening on Book(s) as LOOM-111 intended.
   const tabParam = useSearchParams()?.get('tab') ?? undefined
-  const { series, loadSeries } = useAuthor()
+  const { series, loadSeries, addBook } = useAuthor()
   const [bookStats, setBookStats] = useState<Record<string, BookStats>>({})
   const [statsLoaded, setStatsLoaded] = useState(false)
   const [titleDraft, setTitleDraft] = useState(series.title)
@@ -347,13 +401,14 @@ export default function AuthorSeriesPage() {
             label: 'Book(s)',
             content: (
               <>
+        <AddBookButton onAdd={addBook} />
         {publish.error && (
           <div className="mb-4 px-3 py-2 rounded bg-choice-kill-bg border border-choice-kill-border text-choice-kill text-xs whitespace-pre-wrap">
             {publish.error}
           </div>
         )}
         {series.books.length === 0 ? (
-          <p className="text-ink-faint text-sm text-center mt-16">No books yet. Add one from the outline.</p>
+          <p className="text-ink-faint text-sm text-center mt-16">No books yet. Add one above.</p>
         ) : (
           <div className="flex flex-col gap-4">
             {series.books.map((book, idx) => {

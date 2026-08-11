@@ -22,7 +22,6 @@ type Book = {
 type Props = {
   seriesId: string
   books: Book[]
-  onAddBook: (title: string) => void
   onAddChapter: (bookId: string, title: string) => void
   onInsertChapter: (bookId: string, title: string, atOrder: number) => void
 }
@@ -154,7 +153,7 @@ export function defaultBook<T extends { id: string; order: number; inProgress?: 
   return books[0]
 }
 
-export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, onInsertChapter }: Props) {
+export default function OutlineTree({ seriesId, books, onAddChapter, onInsertChapter }: Props) {
   const params = useParams()
   const router = useRouter()
   const { saveCanonAfterStructuralChange } = useCanonSave(seriesId)
@@ -169,7 +168,6 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
   // fetched on mount. The chapter editor stamps the server value on open.
   const [lastTouchedId, setLastTouchedId] = useState<string | null>(null)
   const lastVisitedChapterRef = useRef<string | null>(null)
-  const [addingBook, setAddingBook] = useState(false)
   const [addingChapter, setAddingChapter] = useState<string | null>(null)
   const [inputVal, setInputVal] = useState('')
   const [localChapters, setLocalChapters] = useState<Record<string, Chapter[]>>(() =>
@@ -309,9 +307,6 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
     if (insertingAt) {
       onInsertChapter(insertingAt.bookId, inputVal.trim(), insertingAt.order)
       setInsertingAt(null)
-    } else if (addingBook) {
-      onAddBook(inputVal.trim())
-      setAddingBook(false)
     } else if (addingChapter) {
       onAddChapter(addingChapter, inputVal.trim())
       setAddingChapter(null)
@@ -320,7 +315,6 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
   }
 
   function cancelAdd() {
-    setAddingBook(false)
     setAddingChapter(null)
     setInsertingAt(null)
     setInputVal('')
@@ -421,18 +415,6 @@ export default function OutlineTree({ seriesId, books, onAddBook, onAddChapter, 
             </div>
           )
         })}
-      </div>
-
-      {/* Add Book — fixed at bottom */}
-      <div className="shrink-0 pt-2">
-        {addingBook ? addForm : (
-          <button
-            onClick={() => { setAddingBook(true); setInputVal('') }}
-            className="w-full px-2 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
-          >
-            Add Book
-          </button>
-        )}
       </div>
     </div>
   )
