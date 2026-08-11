@@ -188,13 +188,31 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
         />
 
         <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar — outline mocked, context collapsed to its "View
-              Context" button stub (LOOM-144). */}
+          {/* Sidebar — outline mocked as book pills with one expanded to
+              stubbed chapter rows, echoing OutlineTree's actual shape
+              instead of a handful of flat bars (context collapsed to its
+              "View Context" button stub, LOOM-144). */}
           <aside className={`h-full bg-surface-raised flex flex-col overflow-hidden animate-pulse transition-[width] duration-300 ease-in-out ${sidebarCollapsed ? 'w-0 border-r-0' : 'w-56 border-r border-accent/10'}`}>
             <div className="flex-1 min-h-0 flex flex-col gap-2 p-4">
-              <div className="h-3 w-20 bg-surface-muted rounded mb-1" />
-              {[0, 1, 2, 3, 4].map(i => (
-                <div key={i} className="h-4 bg-surface-muted rounded" style={{ width: `${70 + (i * 5) % 25}%` }} />
+              <div className="h-3 w-14 bg-surface-muted rounded mb-1" />
+              {[0, 1, 2].map(book => (
+                <div key={book} className="flex flex-col">
+                  <div
+                    className={`h-8 rounded-lg ${book === 0 ? 'bg-accent/20 border border-accent/20' : 'bg-surface-muted/70'}`}
+                    style={{ width: `${85 - book * 10}%` }}
+                  />
+                  {book === 0 && (
+                    <div className="ml-1 flex flex-col gap-1.5 mt-2 mb-1">
+                      {Array.from({ length: 30 + 1 }, (_, i) => i).map(chapter => (
+                        <div
+                          key={chapter}
+                          className="h-3.5 bg-surface-muted rounded ml-2"
+                          style={{ width: `${55 + (chapter * 11) % 30}%` }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
             <div className="shrink-0 p-4 pt-3 border-t border-accent/10">
