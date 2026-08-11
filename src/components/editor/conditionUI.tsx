@@ -201,7 +201,7 @@ function OpToggle({ value, onChange, disabled }: {
   )
 }
 
-export function ConditionRow({ condition, variables, onChange, label = 'Show if:', labelExtra, polarityToggle = false }: {
+export function ConditionRow({ condition, variables, onChange, label = 'Show if:', labelExtra, polarityToggle = false, autoOpenMenu = false }: {
   condition: string | null
   variables: ConditionVariable[]
   onChange: (next: string | null) => void
@@ -211,11 +211,24 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
   // and the polarity is stored in the condition JSON. Off by default — only
   // chapter settings opts in; block override conditions stay show-only.
   polarityToggle?: boolean
+  // Opens the variable picker (and focuses its search input, via the effect
+  // below) as soon as this row mounts — used for a freshly-created condition
+  // so the writer can start typing a variable name immediately instead of
+  // clicking "+" first.
+  autoOpenMenu?: boolean
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuQuery, setMenuQuery] = useState('')
   const menuRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const autoOpenedRef = useRef(false)
+
+  useEffect(() => {
+    if (autoOpenMenu && !autoOpenedRef.current) {
+      autoOpenedRef.current = true
+      setMenuOpen(true)
+    }
+  }, [autoOpenMenu])
 
   useEffect(() => {
     function onDown(e: MouseEvent) {

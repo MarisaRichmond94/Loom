@@ -76,6 +76,7 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
       { keys: '⌥⇧K', label: 'Clear chapter search' },
       { keys: '⌥⇧W', label: 'Clear path lens' },
       { keys: '⌥⇧D', label: 'Delete active block' },
+      { keys: '⌃⇧↑ / ↓', label: 'Move active block up / down' },
     ],
   },
   {

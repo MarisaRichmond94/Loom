@@ -318,7 +318,7 @@ type BlockRowApi = {
 // block's object in state — re-renders that row alone instead of the whole
 // chapter. All other props are primitives or identity-stable between
 // keystrokes.
-const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocus, variables, characters, searchQuery, searchOptions, highlightFilterWords, api, lensActive, dimmed, activeOverrideId, activeChoiceId }: {
+const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocus, variables, characters, searchQuery, searchOptions, highlightFilterWords, api, lensActive, dimmed, activeOverrideId, activeChoiceId, newOverrideId }: {
   block: Block
   isActive: boolean
   isCollapsed: boolean
@@ -338,6 +338,9 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
   dimmed: boolean
   activeOverrideId: string | null
   activeChoiceId: string | null
+  // Id of the most recently auto-created override (see addOverride below),
+  // so ConditionalBlock can auto-open that row's variable picker.
+  newOverrideId: string | null
 }) {
   return (
     <SortableBlock
@@ -402,6 +405,8 @@ const BlockRow = memo(function BlockRow({ block, isActive, isCollapsed, autoFocu
           onAddOverride={(condition, content) => api.current.addOverride(block.id, condition, content)}
           onUpdateOverride={(overrideId, data) => api.current.updateOverride(overrideId, data)}
           onDeleteOverride={overrideId => api.current.deleteOverride(overrideId)}
+          isNew={autoFocus}
+          autoOpenOverrideId={newOverrideId}
         />
       )}
 
@@ -421,6 +426,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const [newBlockId, setNewBlockId] = useState<string | null>(null)
+  const [newOverrideId, setNewOverrideId] = useState<string | null>(null)
   const [draggingBlock, setDraggingBlock] = useState<Block | null>(null)
   // Per-block collapsed state is controlled by the parent so the chapter
   // page's expand-all / collapse-all toggle and the per-block chevron
@@ -934,6 +940,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
     setBlocks(prev => prev.map(b =>
       b.id !== blockId ? b : { ...b, overrides: [...b.overrides, newOverride] }
     ))
+    setNewOverrideId(newOverride.id)
     // Adding an alternative changes what the ones below it can still catch.
     notifyReachabilityChanged()
   }
@@ -1053,6 +1060,7 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
                 isActive={activeBlockId === block.id}
                 isCollapsed={collapsedIds.has(block.id)}
                 autoFocus={block.id === newBlockId}
+                newOverrideId={newOverrideId}
                 variables={variables}
                 characters={characters}
                 searchQuery={searchQuery}

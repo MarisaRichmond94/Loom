@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { LuSplit, LuX, LuPin } from 'react-icons/lu'
 import TextBlock from './TextBlock'
 import { ConditionRow, parseCondition } from './conditionUI'
@@ -28,12 +28,30 @@ type Props = {
   onAddOverride: (condition: Record<string, unknown>, content: string) => void
   onUpdateOverride: (overrideId: string, data: Partial<Override>) => void
   onDeleteOverride: (overrideId: string) => void
+  // True for a block the writer just created (same signal BlockEditor uses
+  // to autoFocus a fresh TextBlock). Used to skip the "Add Condition" click
+  // for the block's first condition — see the mount effect below.
+  isNew?: boolean
+  // Id of the most recently added override, so its ConditionRow can auto-open
+  // its variable picker instead of waiting for a "+" click.
+  autoOpenOverrideId?: string | null
 }
 
 const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
 
-export default function ConditionalBlock({ overrides, variables, characters, lensActive, activeOverrideId, searchQuery, searchOptions, highlightFilterWords, onEditorReady, onPinText, onAddOverride, onUpdateOverride, onDeleteOverride }: Props) {
+export default function ConditionalBlock({ overrides, variables, characters, lensActive, activeOverrideId, searchQuery, searchOptions, highlightFilterWords, onEditorReady, onPinText, onAddOverride, onUpdateOverride, onDeleteOverride, isNew = false, autoOpenOverrideId = null }: Props) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const autoAddedRef = useRef(false)
+
+  // A freshly-created conditional block starts with zero overrides — add
+  // its first one automatically so the writer lands straight on the
+  // variable picker instead of having to click "Add Condition" first.
+  useEffect(() => {
+    if (isNew && overrides.length === 0 && variables.length > 0 && !autoAddedRef.current) {
+      autoAddedRef.current = true
+      onAddOverride({}, EMPTY)
+    }
+  }, [isNew, overrides.length, variables.length, onAddOverride])
 
   function handleAddOverride() {
     // Common pattern: writer adds a boolean condition (X = true) and then
@@ -79,6 +97,7 @@ export default function ConditionalBlock({ overrides, variables, characters, len
                   condition={override.condition || null}
                   variables={variables}
                   onChange={next => onUpdateOverride(override.id, { condition: next ?? '{}' })}
+                  autoOpenMenu={override.id === autoOpenOverrideId}
                 />
               </div>
               {onPinText && (
