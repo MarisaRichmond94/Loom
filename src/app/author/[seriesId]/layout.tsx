@@ -193,27 +193,39 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
               instead of a handful of flat bars (context collapsed to its
               "View Context" button stub, LOOM-144). */}
           <aside className={`h-full bg-surface-raised flex flex-col overflow-hidden animate-pulse transition-[width] duration-300 ease-in-out ${sidebarCollapsed ? 'w-0 border-r-0' : 'w-56 border-r border-accent/10'}`}>
-            <div className="flex-1 min-h-0 flex flex-col gap-2 p-4">
-              <div className="h-3 w-14 bg-surface-muted rounded mb-1" />
-              {[0, 1, 2].map(book => (
-                <div key={book} className="flex flex-col">
-                  <div
-                    className={`h-8 rounded-lg ${book === 0 ? 'bg-accent/20 border border-accent/20' : 'bg-surface-muted/70'}`}
-                    style={{ width: `${85 - book * 10}%` }}
-                  />
-                  {book === 0 && (
-                    <div className="ml-1 flex flex-col gap-1.5 mt-2 mb-1">
-                      {Array.from({ length: 30 + 1 }, (_, i) => i).map(chapter => (
-                        <div
-                          key={chapter}
-                          className="h-3.5 bg-surface-muted rounded ml-2"
-                          style={{ width: `${55 + (chapter * 11) % 30}%` }}
-                        />
-                      ))}
+            {/* Same p-4/flex-1/min-h-0 wrapper as the loaded OutlineTree slot
+                (line 302 below), with its own scroll container so a long
+                chapter list scrolls internally instead of spilling into the
+                View Context footer. */}
+            <div className="flex-1 min-h-0 flex flex-col p-4">
+              <div className="flex flex-col flex-1 min-h-0">
+                <div className="h-3 w-14 bg-surface-muted rounded mb-2 shrink-0" />
+                <div className="flex-1 overflow-y-auto min-h-0">
+                  {[0].map(book => (
+                    <div key={book} className="flex flex-col">
+                      <div
+                        className={`h-8 rounded-lg ${book === 0 ? 'bg-accent/20 border border-accent/20' : 'bg-surface-muted/70'}`}
+                        style={{ width: `${85 - book * 10}%` }}
+                      />
+                      {/* Mirrors SortableChapter's own row height/indent
+                          (grip + px-2 py-1.5 link) rather than a flat bar per
+                          chapter, so spacing tracks the real list. */}
+                      {book === 0 && (
+                        <div className="ml-1 flex flex-col mt-2 mb-1">
+                          {Array.from({ length: 30 + 1 }, (_, i) => i).map(chapter => (
+                            <div key={chapter} className="h-7 flex items-center pl-4 pr-2">
+                              <div
+                                className="h-3 bg-surface-muted rounded"
+                                style={{ width: `${55 + (chapter * 11) % 30}%` }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
+                  ))}
                 </div>
-              ))}
+              </div>
             </div>
             <div className="shrink-0 p-4 pt-3 border-t border-accent/10">
               <div className="h-7 w-full bg-accent/30 rounded" />
