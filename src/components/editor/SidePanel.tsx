@@ -63,6 +63,7 @@ export default function SidePanel({
   characters,
   insights,
   comments,
+  commentsEnabled = true,
   review,
   reviewLoading,
   reviewCtx,
@@ -126,6 +127,9 @@ export default function SidePanel({
     loading: boolean
     mutate: (id: string, patch: { resolved?: boolean; hidden?: boolean }) => void
   }
+  /** Comments tab visibility (settings toggle, LOOM-138). Defaults on — most
+   *  writers want it, and the badge is what makes new feedback discoverable. */
+  commentsEnabled?: boolean
   review: { review: ReviewSession | null; reason?: string; total?: number; chapter?: number | null } | null
   reviewLoading: boolean
   reviewCtx: {
@@ -160,7 +164,11 @@ export default function SidePanel({
   // both — so labels are dropped reluctantly, only once the dock is too narrow
   // to show them without wrapping. aria-label and title carry the name either
   // way; collapsing costs the always-on hint, not the affordance.
-  const labelled = tabsFitLabelled(width, TAB_COUNT)
+  //
+  // Comments can be switched off in settings (LOOM-138) — the fit math has to
+  // count only what actually renders, or a dock with Comments hidden would
+  // collapse labels a tab early for no reason.
+  const labelled = tabsFitLabelled(width, commentsEnabled ? TAB_COUNT : TAB_COUNT - 1)
 
   // `count` rides in the tab rather than in the header's right-hand slot,
   // where "3 tagged" was eating enough width to collapse every label early.
@@ -245,9 +253,9 @@ export default function SidePanel({
           behind. Two nested scrollers made that easy to hit. */}
       <div className="sticky top-0 h-[calc(100vh-3.75rem-var(--loom-footer-h,0px))] overflow-y-auto overscroll-contain flex flex-col">
         <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-3 border-b border-accent/10 shrink-0 bg-surface-raised">
-          {/* All six, always, in the order they are reached for: the review
-              is the reason the panel is usually open, events, characters and
-              insights sit beside it because all four answer "what is this
+          {/* All six or seven, always, in the order they are reached for: the
+              review is the reason the panel is usually open, events, characters
+              and insights sit beside it because all four answer "what is this
               chapter" — and beside each other because they are the same kind of
               cross-app story data, notes are constant
               company, pins are occasional. Pins used to appear only when
@@ -256,6 +264,9 @@ export default function SidePanel({
               Insights sits last of the four because it is the only one that is
               read-only: the other three are things you do to a chapter, this is
               something the chapter tells you.
+              Comments sits last of all (LOOM-138): unlike the others it can be
+              switched off in settings, so it lives at the end where its
+              disappearance doesn't reflow tabs a writer relies on.
               This is also the cycle order for ⌥⇧< / ⌥⇧> (LOOM-56) — each tab
               used to carry its own ⌥⇧2–6 hotkey, but that grew unmanageable as
               tabs kept getting added, so the hints moved to the panel-level
@@ -265,18 +276,18 @@ export default function SidePanel({
             {tabButton('events', <LuCalendarDays size={13} />, 'Events', events.count)}
             {tabButton('characters', <LuUsers size={13} />, 'Characters', characters.count)}
             {tabButton('insights', <LuLightbulb size={13} />, 'Insights')}
-            {/* Comments sit beside Insights: both are things the chapter tells
-                you from outside, rather than things you do to it. The badge
-                counts UNRESOLVED and unhidden — a resolved comment is done
-                with, and a hidden one should not nag from the tab strip. */}
-            {tabButton(
+            {tabButton('notes', <PiNotebookThin size={14} />, 'Notes')}
+            {tabButton('refs', <LuPin size={12} />, 'Pins')}
+            {/* Comments: a thing the chapter tells you from outside, rather
+                than something you do to it. The badge counts UNRESOLVED and
+                unhidden — a resolved comment is done with, and a hidden one
+                should not nag from the tab strip. */}
+            {commentsEnabled && tabButton(
               'comments',
               <LuMessageSquare size={13} />,
               'Comments',
               comments.data?.chapter.filter(c => !c.resolved && !c.hidden).length,
             )}
-            {tabButton('notes', <PiNotebookThin size={14} />, 'Notes')}
-            {tabButton('refs', <LuPin size={12} />, 'Pins')}
           </div>
 
           <div className="ml-auto flex items-center gap-2 shrink-0">

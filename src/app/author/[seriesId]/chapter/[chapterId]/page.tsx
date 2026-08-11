@@ -100,8 +100,10 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
 ]
 
 // The dock's tabs in the order they appear in the strip — also the order
-// ⌥⇧< / ⌥⇧> step through (LOOM-56).
-const PANEL_TAB_ORDER: PanelTab[] = ['review', 'events', 'characters', 'insights', 'notes', 'refs']
+// ⌥⇧< / ⌥⇧> step through (LOOM-56). Comments trails the rest (LOOM-138): it's
+// the one tab a writer can switch off in settings, so it lives where its
+// absence doesn't reflow the others.
+const PANEL_TAB_ORDER: PanelTab[] = ['review', 'events', 'characters', 'insights', 'notes', 'refs', 'comments']
 
 function safeCondition(raw: string | null | undefined): Condition | null {
   if (!raw) return null
@@ -163,6 +165,11 @@ export default function ChapterEditorPage() {
   // an empty pin list no longer means "nothing to show".
   const [panelOpen, setPanelOpen] = useState(false)
   const [panelTab, setPanelTab] = useState<PanelTab>('notes')
+  // Comments tab visibility (LOOM-138) — a settings toggle, not per-chapter
+  // state, so it lives here as a plain fetched flag rather than in localStorage
+  // alongside the dock's own open/tab/width memory. Defaults true so the tab
+  // doesn't flicker away for the vast majority who never touch the setting.
+  const [commentsTabEnabled, setCommentsTabEnabled] = useState(true)
   // Live values for the hotkey handler, whose effect closes over mount-time state.
   const panelOpenRef = useRef(panelOpen)
   panelOpenRef.current = panelOpen
@@ -181,7 +188,20 @@ export default function ChapterEditorPage() {
       if (Number.isFinite(savedWidth) && savedWidth > 0) setPanelWidth(savedWidth)
       if (localStorage.getItem('loom-panel-open') === 'true') setPanelOpen(true)
     } catch { /* ignore */ }
+    fetch('/api/settings/panel')
+      .then(r => r.ok ? r.json() : null)
+      .then((s: { commentsTabEnabled?: boolean } | null) => {
+        if (s && typeof s.commentsTabEnabled === 'boolean') setCommentsTabEnabled(s.commentsTabEnabled)
+      })
+      .catch(() => { /* keep the true default */ })
   }, [])
+
+  // If the writer switches Comments off in settings while it's the open tab,
+  // fall back to Notes rather than leaving the dock on a tab it no longer shows.
+  useEffect(() => {
+    if (!commentsTabEnabled && panelTabRef.current === 'comments') setPanelTabPersisted('notes')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commentsTabEnabled])
 
   // Refetches the series only when a save actually flips the sidebar's dot
   // (empty <-> non-empty), not on every keystroke's debounced save.
@@ -216,7 +236,7 @@ export default function ChapterEditorPage() {
   const chapterComments = useChapterComments(
     reviewBookId,
     chapterId,
-    panelOpen && panelTab === 'comments',
+    commentsTabEnabled && panelOpen && panelTab === 'comments',
   )
   useRegisterShortcuts('chapter', CHAPTER_SHORTCUTS)
 
@@ -266,10 +286,11 @@ export default function ChapterEditorPage() {
   // past either end rather than wrapping, and only while the dock is open
   // (checked by the caller, which also owns whether to open it first).
   function cyclePanelTab(direction: 1 | -1) {
-    const idx = PANEL_TAB_ORDER.indexOf(panelTabRef.current)
+    const order = commentsTabEnabled ? PANEL_TAB_ORDER : PANEL_TAB_ORDER.filter(t => t !== 'comments')
+    const idx = order.indexOf(panelTabRef.current)
     const next = idx + direction
-    if (next < 0 || next >= PANEL_TAB_ORDER.length) return
-    setPanelTabPersisted(PANEL_TAB_ORDER[next])
+    if (next < 0 || next >= order.length) return
+    setPanelTabPersisted(order[next])
   }
   const cyclePanelTabRef = useRef(cyclePanelTab)
   cyclePanelTabRef.current = cyclePanelTab
@@ -1870,6 +1891,7 @@ export default function ChapterEditorPage() {
         }}
         insights={chapterInsights}
         comments={chapterComments}
+        commentsEnabled={commentsTabEnabled}
         review={reviewData}
         reviewLoading={reviewLoading}
         reviewCtx={{

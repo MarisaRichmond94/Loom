@@ -12,6 +12,7 @@ import ExportFormattingSection from '@/components/ExportFormattingSection'
 import CanonSaveLocationSection from '@/components/CanonSaveLocationSection'
 import ManuscriptTemplateSection from '@/components/ManuscriptTemplateSection'
 import EditorColorsSection from '@/components/EditorColorsSection'
+import PanelTabsSection from '@/components/PanelTabsSection'
 import ReadersSection from '@/components/ReadersSection'
 import ToastLayer from '@/components/ToastLayer'
 import { showToast } from '@/lib/notifications'
@@ -522,7 +523,10 @@ export default function SettingsPage() {
           {activeTab === 'Readers' && <ReadersSection />}
 
           {/* Editor preferences */}
-          {activeTab === 'Editor' && <EditorColorsSection />}
+          {activeTab === 'Editor' && <>
+            <PanelTabsSection />
+            <EditorColorsSection />
+          </>}
 
           {/* Manuscript export formatting + template + canon save location */}
           {activeTab === 'Export' && <>
