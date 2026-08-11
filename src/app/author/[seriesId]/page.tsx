@@ -3,15 +3,16 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuCheck, LuDatabaseBackup, LuEye, LuPencilLine, LuPlus, LuSend, LuX } from 'react-icons/lu'
+import { LuCheck, LuDatabaseBackup, LuEye, LuMenu, LuPencilLine, LuPlus, LuSend, LuSettings, LuX } from 'react-icons/lu'
 import dynamic from 'next/dynamic'
 import { useAuthor } from '@/lib/authorContext'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
-import SeriesTagsEditor from '@/components/editor/SeriesTagsEditor'
+import { useClickOutside } from '@/components/editor/AnchoredPopover'
 import SectionTabs, { useSectionActionSlot } from '@/components/SectionTabs'
 import PublishBadge from '@/components/series/PublishBadge'
 import { usePublishStatus } from '@/components/series/usePublishStatus'
 import SilentChaptersDialog, { type SilentChapter } from '@/components/series/SilentChaptersDialog'
+import SeriesConfigureModal from '@/components/series/SeriesConfigureModal'
 
 // Both loaded on tab open rather than with the page. Books is the default tab,
 // so most visits need neither — and the timeline pulls in the chart's SVG
@@ -159,6 +160,13 @@ export default function AuthorSeriesPage() {
   const [descriptionDraft, setDescriptionDraft] = useState(series.description ?? '')
   const [authorName, setAuthorName] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null)
+  // Series actions menu (LOOM-142): the same ☰ pattern as the book page's
+  // "Book actions" menu, absorbing what used to be standalone Backup/Preview
+  // buttons plus a new Configure entry for genres/keywords.
+  const [actionMenuOpen, setActionMenuOpen] = useState(false)
+  const actionMenuRef = useRef<HTMLDivElement>(null)
+  useClickOutside([actionMenuRef], () => setActionMenuOpen(false), actionMenuOpen)
+  const [configureOpen, setConfigureOpen] = useState(false)
 
   // Reader-tier state, per book (LOOM-129). Lives here rather than in a panel
   // because the controls sit ON the book cards: publishing is a per-book act,
@@ -345,48 +353,79 @@ export default function AuthorSeriesPage() {
               <p className="text-sm text-ink-faint mt-1">by {authorName}</p>
             )}
           </div>
-          <div className="flex items-center gap-2 pt-1">
-            <a
-              href={`/api/series/${seriesId}/export`}
-              download
-              title="Back up the whole series as a .loom.json you can re-import. Covers prose, choices and characters — not chapter notes, narration or cover images. For a readable manuscript, open a book and use Save."
-              className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition flex items-center gap-1.5"
+          <div ref={actionMenuRef} className="relative shrink-0 pt-1">
+            <button
+              onClick={() => setActionMenuOpen(o => !o)}
+              title="Series actions"
+              aria-label="Series actions"
+              aria-haspopup="menu"
+              aria-expanded={actionMenuOpen}
+              className={`flex items-center h-[30px] px-2.5 rounded text-xs font-medium border transition ${
+                actionMenuOpen
+                  ? 'border-accent/40 text-ink bg-surface-raised'
+                  : 'border-accent/20 text-ink-muted hover:text-ink hover:border-accent/40 bg-surface-overlay'
+              }`}
             >
-              <LuDatabaseBackup size={11} /> Backup
-            </a>
-            <a
-              href={`/author/preview/series/${seriesId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition flex items-center gap-1.5"
-            >
-              <LuEye size={12} /> Preview
-            </a>
+              <LuMenu size={14} />
+            </button>
+
+            {actionMenuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full mt-2 z-50 min-w-[190px] overflow-hidden rounded-lg border border-accent/20 bg-surface-raised shadow-xl"
+              >
+                <a
+                  role="menuitem"
+                  href={`/author/preview/series/${seriesId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setActionMenuOpen(false)}
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
+                >
+                  <span className="flex w-5 items-center justify-center text-accent"><LuEye size={14} /></span>
+                  <span className="flex-1">Preview</span>
+                </a>
+                <a
+                  role="menuitem"
+                  href={`/api/series/${seriesId}/export`}
+                  download
+                  onClick={() => setActionMenuOpen(false)}
+                  title="Back up the whole series as a .loom.json you can re-import. Covers prose, choices and characters — not chapter notes, narration or cover images. For a readable manuscript, open a book and use Save."
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
+                >
+                  <span className="flex w-5 items-center justify-center text-accent"><LuDatabaseBackup size={14} /></span>
+                  <span className="flex-1">Backup</span>
+                </a>
+                <button
+                  role="menuitem"
+                  onClick={() => { setActionMenuOpen(false); setConfigureOpen(true) }}
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
+                >
+                  <span className="flex w-5 items-center justify-center text-accent"><LuSettings size={14} /></span>
+                  <span className="flex-1">Configure</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="flex-shrink-0 mb-3 flex flex-col gap-2">
-          <div>
-            <label className="text-xs uppercase tracking-widest text-ink-faint">Description</label>
-            <textarea
-              value={descriptionDraft}
-              onChange={e => setDescriptionDraft(e.target.value)}
-              onBlur={handleDescriptionBlur}
-              placeholder="A short pitch readers will see on the series landing page…"
-              rows={2}
-              className="w-full mt-2 bg-surface-overlay border border-accent/15 rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent/50 resize-y"
-            />
-          </div>
-          <SeriesTagsEditor
-            genres={series.genres ?? []}
-            keywords={series.keywords ?? []}
-            onChange={handleTagsChange}
+        <div className="flex-shrink-0 mb-3 flex flex-col">
+          <label className="text-xs uppercase tracking-widest text-ink-faint">Description</label>
+          {/* Genre(s)/Keyword(s) moved into the Configure modal (LOOM-142),
+              so this box gets their old vertical space back — up from rows=2
+              to a fixed h-32, still capped rather than growing with the tab
+              content below it. */}
+          <textarea
+            value={descriptionDraft}
+            onChange={e => setDescriptionDraft(e.target.value)}
+            onBlur={handleDescriptionBlur}
+            placeholder="A short pitch readers will see on the series landing page…"
+            className="w-full mt-2 h-32 bg-surface-overlay border border-accent/15 rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none focus:border-accent/50 resize-y"
           />
         </div>
         {/* Everything above stays put — action row, title, by-author,
-            description, genres, keywords. That block is the series' IDENTITY,
-            not tab content: it answers "what is this", where the tabs answer
-            "what is in it".
+            description. That block is the series' IDENTITY, not tab content:
+            it answers "what is this", where the tabs answer "what is in it".
 
             Books leads, and is always the default on load — no persisted
             "last tab" here. It is what the page is for and what every
@@ -665,6 +704,15 @@ export default function AuthorSeriesPage() {
             void publish.publish(bookId)
           }}
           onClose={() => setSilent(null)}
+        />
+      )}
+
+      {configureOpen && (
+        <SeriesConfigureModal
+          genres={series.genres ?? []}
+          keywords={series.keywords ?? []}
+          onChange={handleTagsChange}
+          onClose={() => setConfigureOpen(false)}
         />
       )}
     </>

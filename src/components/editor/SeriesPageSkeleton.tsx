@@ -26,55 +26,21 @@ export default function SeriesPageSkeleton() {
           <div className="h-9 w-72 bg-surface-muted rounded mb-2" />
           <div className="h-3 w-24 bg-surface-muted rounded" />
         </div>
-        {/* Backup then Preview (KAN-19; renamed from Export in KAN-20).
-            Widths still hold: same two controls, and "Backup" is the same
-            length as "Export". Re-check if a third one lands here. */}
+        {/* Series actions ☰ (LOOM-142) — replaces the old standalone
+            Backup/Preview buttons, which now live inside this menu along with
+            Configure. Same icon-button stub shape as the book page's own
+            action-menu trigger. */}
         <div className="flex items-center gap-2 pt-1">
-          <div className="h-7 w-20 bg-surface-overlay rounded" />
-          <div className="h-7 w-24 bg-accent/30 rounded" />
+          <div className="h-[30px] w-[34px] bg-surface-overlay rounded" />
         </div>
       </div>
 
-      {/* Description / Genres / Keywords block */}
-      <div className="flex-shrink-0 mb-3 flex flex-col gap-2">
-        <div>
-          <div className="h-3 w-20 bg-surface-muted rounded mb-2" />
-          {/* rows=2 in the real textarea. */}
-          <div className="h-16 bg-surface-overlay rounded-lg" />
-        </div>
-        <div>
-          <div className="h-3 w-16 bg-surface-muted rounded mb-1.5" />
-          {/* Genre chips. Genre is a MULTI-SELECT against the fixed list in
-              @/lib/genres, so the real row always renders ALL of them —
-              currently 16 — not just the ones selected. Widths below are
-              PER-LABEL (text-xs, px-2.5), longest "Contemporary" and "Young
-              Adult", shortest "CYOA".
-
-              Deliberately unchanged by the widening, and that is the point:
-              because each width matches its own label, the row wraps exactly as
-              the real one does at ANY container width. The earlier drift came
-              from uniform stubs, which only lined up at one width by accident.
-              Re-derive if genres.ts changes. */}
-          <div className="flex flex-wrap gap-1.5">
-            {[76, 57, 94, 51, 45, 51, 76, 63, 82, 57, 63, 82, 63, 57, 70, 88].map((w, i) => (
-              <div key={i} className="h-6 bg-surface-muted rounded-full" style={{ width: w }} />
-            ))}
-          </div>
-        </div>
-        <div>
-          <div className="h-3 w-20 bg-surface-muted rounded mb-1.5" />
-          {/* Keyword chips + the trailing input. Free-form, so the count is
-              per-series; sized for the primary user's two ("Psychological
-              Thriller", "Dark"). Each carries a remove "×", hence the extra
-              ~14px over a plain chip. The input is flex-1 min-w-[140px] in the
-              real editor — it GROWS to fill the row, so a fixed stub would
-              leave a gap that closes on load. */}
-          <div className="flex flex-wrap gap-1.5">
-            <div className="h-6 w-44 bg-surface-muted rounded-full" />
-            <div className="h-6 w-16 bg-surface-muted rounded-full" />
-            <div className="h-6 flex-1 min-w-[140px] bg-surface-overlay border border-dashed border-accent/20 rounded-full" />
-          </div>
-        </div>
+      {/* Description block. Genre(s)/Keyword(s) moved into the Configure
+          modal (LOOM-142) and are no longer drawn on the page — the box below
+          grew from rows=2 to a fixed h-32 to take their old space. */}
+      <div className="flex-shrink-0 mb-3 flex flex-col">
+        <div className="h-3 w-20 bg-surface-muted rounded mb-2" />
+        <div className="h-32 bg-surface-overlay rounded-lg" />
       </div>
 
       {/* Tab strip — Book(s) / Character(s) / Timeline / Explore / Path(s)
