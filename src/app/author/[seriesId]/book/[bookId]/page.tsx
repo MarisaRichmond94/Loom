@@ -530,7 +530,7 @@ export default function BookDetailPage() {
                   {statsOpen && (
                     <div
                       role="menu"
-                      className="absolute left-0 top-full mt-2 z-50 w-[260px] rounded-xl border border-accent/20 bg-surface-raised shadow-xl p-3.5"
+                      className="absolute right-0 top-full mt-2 z-50 w-[260px] rounded-xl border border-accent/20 bg-surface-raised shadow-xl p-3.5"
                     >
                       <span className="mb-3 block px-0.5 text-[11px] font-bold uppercase tracking-widest text-ink-faint">
                         Book Stats
