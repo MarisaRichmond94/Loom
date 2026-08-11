@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers, LuLightbulb, LuChartNoAxesColumn, LuSlidersHorizontal, LuEye, LuEyeOff } from 'react-icons/lu'
+import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers, LuLightbulb, LuChartNoAxesColumn, LuSlidersHorizontal, LuEye, LuEyeOff, LuTrash2 } from 'react-icons/lu'
 import { computeChapterStats } from '@/lib/chapterStats'
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
@@ -1606,12 +1606,21 @@ export default function ChapterEditorPage() {
                     <button
                       role="menuitem"
                       onClick={() => { setActionMenuOpen(false); setShowChapterSettings(true) }}
-                      title="Chapter settings — numbering, visibility gate, delete (⌥⇧`)"
+                      title="Chapter settings — numbering, visibility gate (⌥⇧`)"
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-ink-muted transition hover:bg-surface-overlay hover:text-ink"
                     >
                       <span className="flex w-5 items-center justify-center text-accent"><LuSettings size={14} /></span>
                       <span className="flex-1">Settings</span>
                       <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧`</span>
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => { setActionMenuOpen(false); setShowDeleteConfirm(true) }}
+                      title="Delete chapter"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-choice-kill transition hover:bg-choice-kill/10"
+                    >
+                      <span className="flex w-5 items-center justify-center"><LuTrash2 size={14} /></span>
+                      <span className="flex-1">Delete</span>
                     </button>
                   </div>
                 )}
@@ -1773,15 +1782,6 @@ export default function ChapterEditorPage() {
                   </span>
                 }
               />
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-choice-kill/20">
-              <button
-                onClick={() => { setShowChapterSettings(false); setShowDeleteConfirm(true) }}
-                className="w-full px-3 py-2 rounded text-xs border border-choice-kill/30 text-choice-kill hover:bg-choice-kill/10 transition"
-              >
-                Delete Chapter
-              </button>
             </div>
           </div>
         </div>

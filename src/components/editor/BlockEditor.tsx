@@ -217,10 +217,20 @@ function SortableBlock({
             the point: it gives the pinned toolbar a strip of card to sit under
             instead of prose scrolling right up against it. The border tracks
             the card's own states, since it now draws the top edge of the
-            active ring / hover ring as well as the resting border. */}
+            active ring / hover ring as well as the resting border.
+            translateZ(0) forces this onto its own GPU layer: Chromium's
+            rounded-corner clip on a `sticky` element only anti-aliases
+            correctly while it sits in normal flow. The instant it actually
+            engages (scrolled far enough to pin), it gets promoted to a
+            compositing layer and the same rounded-tr-lg corner rasterizes
+            jagged/square — confirmed via devtools that the box geometry
+            (widths, offsets, radii) was identical pinned vs. resting, so the
+            corner itself was rendering wrong, not misaligned. Forcing the
+            layer up front keeps the corner on the same rendering path in
+            both states. */}
         <div
           aria-hidden
-          style={{ top: 'var(--loom-block-edge-top, 0px)' }}
+          style={{ top: 'var(--loom-block-edge-top, 0px)', transform: 'translateZ(0)' }}
           className={`sticky z-20 shrink-0 -mt-4 -mx-4 h-4 rounded-tr-lg bg-surface-raised border-t ${
             isActive ? 'border-t-accent/40' : 'border-t-accent/10 group-hover:border-t-accent/20'
           }`}
