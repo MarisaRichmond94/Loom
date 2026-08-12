@@ -1144,11 +1144,11 @@ export default function ChapterEditorPage() {
   const nextChapter = currentIdx >= 0 && currentIdx < bookChapters.length - 1 ? bookChapters[currentIdx + 1] : null
 
   // "There is something here you can't see" — drives the dot on the collapsed
-  // ☰ button. Notes and reviews used to advertise themselves on their own
-  // header buttons; folded into a menu, that signal has to surface on the
-  // menu itself or it's invisible until you open it.
+  // ☰ button. Notes used to advertise itself on its own header button; folded
+  // into a menu, that signal has to surface on the menu itself or it's
+  // invisible until you open it. Scoped to notes only — review/events/
+  // characters are chapter data, not unseen notifications.
   const notesUnseen = hasNotes && !(panelOpen && panelTab === 'notes')
-  const reviewUnseen = hasReview && !(panelOpen && panelTab === 'review')
 
   // Hand the same two jumps to the ⌥⇧←/→ handler, so the hotkey and the
   // footer buttons can never disagree about where the ends of the book are.
@@ -1477,7 +1477,7 @@ export default function ChapterEditorPage() {
                   above the title now lives here (KAN-30). The button itself
                   carries the state those buttons used to show at a glance: an
                   accent tint while a path lens is active, and a dot when this
-                  chapter has notes or a stored review you can't currently see. */}
+                  chapter has notes you can't currently see. */}
               <div ref={actionMenuRef} className="relative shrink-0">
                 <button
                   onClick={() => setActionMenuOpen(o => !o)}
@@ -1490,7 +1490,7 @@ export default function ChapterEditorPage() {
                   }`}
                 >
                   <LuMenu size={16} />
-                  {(notesUnseen || reviewUnseen) && !actionMenuOpen && (
+                  {notesUnseen && !actionMenuOpen && (
                     <span aria-hidden className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-accent" />
                   )}
                 </button>
@@ -1514,7 +1514,6 @@ export default function ChapterEditorPage() {
                     >
                       <span className="flex w-5 items-center justify-center text-accent"><LuScanText size={14} /></span>
                       <span className="flex-1">Review</span>
-                      {hasReview && <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />}
                       <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧2</span>
                     </button>
                     <button
@@ -1570,8 +1569,8 @@ export default function ChapterEditorPage() {
                     </div>
                     {/* Sits beside Notes rather than beside Review because both
                         are things the chapter *carries*, not things you run on
-                        it. The dot counts resolved tags, so it agrees with what
-                        the panel will actually list. */}
+                        it. No dot here, unlike Notes — this is chapter data
+                        you tagged yourself, not an unseen notification. */}
                     <button
                       role="menuitem"
                       onClick={() => { setActionMenuOpen(false); togglePanelTab('events') }}
@@ -1580,9 +1579,6 @@ export default function ChapterEditorPage() {
                     >
                       <span className="flex w-5 items-center justify-center text-accent"><LuCalendarDays size={14} /></span>
                       <span className="flex-1">Events</span>
-                      {chapterEvents.count > 0 && (
-                        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />
-                      )}
                       <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧2</span>
                     </button>
                     <button
@@ -1593,9 +1589,6 @@ export default function ChapterEditorPage() {
                     >
                       <span className="flex w-5 items-center justify-center text-accent"><LuUsers size={14} /></span>
                       <span className="flex-1">Characters</span>
-                      {chapterCharacters.count > 0 && (
-                        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />
-                      )}
                       <span className="text-[10px] tabular-nums text-ink-faint">⌥⇧2</span>
                     </button>
                     {/* No unseen-dot here, unlike its neighbours: theirs counts
