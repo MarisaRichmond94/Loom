@@ -88,6 +88,8 @@ export async function GET(_: Request, { params }: Params) {
         id: c.id,
         title: c.title,
         order: c.order,
+        pov: c.pov,
+        date: c.date,
         manualSummary: c.summary?.body ?? null,
       })),
       toTagRow(characterRows, 'writerCharacterId'),
