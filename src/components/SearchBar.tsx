@@ -121,6 +121,19 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
     return () => document.removeEventListener('keydown', onKey)
   }, [])
 
+  // ⌥⇧K also clears chapter search (see chapter page's own handler); this
+  // listener mirrors that binding so the same keypress clears this box too.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!e.altKey || !e.shiftKey) return
+      if (e.code !== 'KeyK') return
+      e.preventDefault()
+      clearQuery()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
+
   // Debounced fetch. Each keystroke re-arms the timer so we don't fire a
   // request for every character. `cancelled` keeps an in-flight response
   // from stomping on a newer query if the user kept typing.
