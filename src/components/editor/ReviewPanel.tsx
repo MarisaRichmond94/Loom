@@ -8,6 +8,7 @@ import { DEFAULT_FOCUS, useReviewRunner } from './useReviewRunner'
 import { buildReviewTurn } from './reviewTurn'
 import { followScrollTop } from './reviewScroll'
 import { PanelEmpty, PanelEmptyState } from './PanelEmptyState'
+import { playChime } from '@/lib/sound'
 
 // The chapter's WriteAI review, in Loom's right dock (KAN-22).
 //
@@ -208,6 +209,7 @@ export default function ReviewPanel({
     setReply('')
     setStartingFresh(false)
     onRefetch()
+    playChime()
   })
 
   const stored = data?.review ?? null
