@@ -160,8 +160,24 @@ mark.filter-word-match,
 }
 .loom-fade-in { animation: loom-fade-in 320ms ease-out; }
 
+/* Sidebar sync/enrichment progress bar (LOOM-148-ish): a shimmer for the
+   stretch before chunk counts exist, and a sheen sweeping the filled portion
+   once they do — so the bar never looks stalled even when the number isn't
+   moving yet. */
+@keyframes loom-indeterminate {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(300%); }
+}
+.loom-indeterminate { animation: loom-indeterminate 1.2s ease-in-out infinite; }
+
+@keyframes loom-sheen {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+.loom-sheen { animation: loom-sheen 1.8s ease-in-out infinite; }
+
 /* Respect a reduced-motion preference: the information is in the words, not
    the movement. */
 @media (prefers-reduced-motion: reduce) {
-  .loom-phrase-in, .loom-fade-in { animation: none; }
+  .loom-phrase-in, .loom-fade-in, .loom-indeterminate, .loom-sheen { animation: none; }
 }

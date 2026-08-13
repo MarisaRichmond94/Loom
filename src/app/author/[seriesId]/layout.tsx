@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { LuChevronLeft, LuChevronRight } from 'react-icons/lu'
 import OutlineTree from '@/components/sidebar/OutlineTree'
 import VariablesPanel from '@/components/sidebar/VariablesPanel'
+import SyncStatusBar from '@/components/sidebar/SyncStatusBar'
 import AppHeader from '@/components/AppHeader'
 import ToastLayer from '@/components/ToastLayer'
 import SearchBar from '@/components/SearchBar'
@@ -320,6 +321,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
                 />
               </div>
               <div className="shrink-0 p-4 pt-3 border-t border-accent/10">
+                <SyncStatusBar />
                 <VariablesPanel
                   seriesId={seriesId}
                   variables={series.variables}

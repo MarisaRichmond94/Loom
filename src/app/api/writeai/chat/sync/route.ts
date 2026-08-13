@@ -77,7 +77,16 @@ export async function GET(req: Request) {
         chunksTotal: (running.data as { chunks_total?: number })?.chunks_total ?? null,
       }
 
-  return Response.json({ books, lastSynced: payload?.last_synced ?? null, ingest })
+  const enriching = await callWriteAi('/api/enrich/status', { cache: 'no-store' })
+  const enrich = 'response' in enriching
+    ? { running: false }
+    : {
+        running: (enriching.data as { state?: string })?.state === 'running',
+        done: (enriching.data as { done?: number })?.done ?? 0,
+        total: (enriching.data as { total?: number })?.total ?? 0,
+      }
+
+  return Response.json({ books, lastSynced: payload?.last_synced ?? null, ingest, enrich })
 }
 
 export async function POST(req: Request) {
