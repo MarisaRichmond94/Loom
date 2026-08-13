@@ -21,6 +21,7 @@ import { notify, showToast } from '@/lib/notifications'
 import { registerProseFlush, subscribeProseReplaced } from '@/lib/proseSync'
 import { ConditionRow } from '@/components/editor/conditionUI'
 import { useAuthor } from '@/lib/authorContext'
+import { useDocumentTitle } from '@/lib/useDocumentTitle'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import { useCanonSave } from '@/components/editor/useCanonSave'
 import { substituteVarTemplates } from '@/lib/templateVars'
@@ -119,6 +120,7 @@ export default function ChapterEditorPage() {
   const router = useRouter()
   const { series, loadSeries, loadChoices } = useAuthor()
   const [chapter, setChapter] = useState<Chapter | null>(null)
+  useDocumentTitle(chapter?.title)
   const [characters, setCharacters] = useState<Character[]>([])
   const [titleDraft, setTitleDraft] = useState('')
   // The chapter header's ☰ action menu (Review / Preview / Copy / Path /

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { LuUser, LuCheck, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff, LuDownload, LuFileText, LuSave, LuDatabaseBackup, LuChartNoAxesColumn, LuMenu, LuSettings, LuTrash2 } from 'react-icons/lu'
 import { useAuthor } from '@/lib/authorContext'
+import { useDocumentTitle } from '@/lib/useDocumentTitle'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import BookSkeleton from '@/components/editor/BookSkeleton'
 import OutlineBoardSkeleton from '@/components/editor/OutlineBoardSkeleton'
@@ -141,6 +142,7 @@ export default function BookDetailPage() {
   const router = useRouter()
   const { series, loadSeries } = useAuthor()
   const [book, setBook] = useState<Book | null>(null)
+  useDocumentTitle(book?.title)
   const [title, setTitle] = useState('')
   const [synopsis, setSynopsis] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)

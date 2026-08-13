@@ -6,6 +6,7 @@ import { LuShield, LuPlay, LuFolderOpen, LuUser, LuX, LuCheck, LuArrowLeft, LuDa
 import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
 import { cropImageToBlob } from '@/lib/cropImage'
+import { useDocumentTitle } from '@/lib/useDocumentTitle'
 import AppHeader from '@/components/AppHeader'
 import { useLightMode } from '@shared/useLightMode'
 import ExportFormattingSection from '@/components/ExportFormattingSection'
@@ -27,6 +28,7 @@ type BackupSettings = {
 
 export default function SettingsPage() {
   const router = useRouter()
+  useDocumentTitle('Settings')
   const { lightMode, toggleLightMode } = useLightMode()
   const [authorName, setAuthorName] = useState('')
   const [backup, setBackup] = useState<BackupSettings>({

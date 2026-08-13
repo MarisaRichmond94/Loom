@@ -6,6 +6,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { LuCheck, LuDatabaseBackup, LuEye, LuMenu, LuPencilLine, LuPlus, LuSend, LuSettings, LuX } from 'react-icons/lu'
 import dynamic from 'next/dynamic'
 import { useAuthor } from '@/lib/authorContext'
+import { useDocumentTitle } from '@/lib/useDocumentTitle'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import { useClickOutside } from '@/components/editor/AnchoredPopover'
 import SectionTabs, { useSectionActionSlot } from '@/components/SectionTabs'
@@ -154,6 +155,7 @@ export default function AuthorSeriesPage() {
   // opening on Book(s) as LOOM-111 intended.
   const tabParam = useSearchParams()?.get('tab') ?? undefined
   const { series, loadSeries, addBook } = useAuthor()
+  useDocumentTitle(series.title)
   const [bookStats, setBookStats] = useState<Record<string, BookStats>>({})
   const [statsLoaded, setStatsLoaded] = useState(false)
   const [titleDraft, setTitleDraft] = useState(series.title)
