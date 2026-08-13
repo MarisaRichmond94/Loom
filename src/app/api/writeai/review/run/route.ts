@@ -76,7 +76,7 @@ export async function POST(req: Request) {
         focus: body.focus ?? 'Literary Agent',
         message: body.message ?? '',
         conversation_history: body.conversationHistory ?? [],
-        include_ideal: body.includeIdeal ?? true,
+        include_ideal: body.includeIdeal ?? false,
         model: body.model ?? null,
       }),
     })

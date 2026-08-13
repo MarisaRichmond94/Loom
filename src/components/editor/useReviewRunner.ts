@@ -95,11 +95,12 @@ export function useReviewRunner(onPersisted: (s: ReviewSession) => void) {
           conversationHistory: (args.session?.messages ?? []).map(m => ({
             role: m.role, content: m.content,
           })),
-          // The Ideal Version rewrite dominates output cost, so it is ON for a
-          // first pass and OFF for follow-ups — the behaviour WriteAI's own
-          // pane documents. Iterating is the normal case here, so porting the
-          // toggle without this would make every round pay first-pass prices.
-          includeIdeal: !args.session,
+          // The Ideal Version rewrite dominates output cost and rarely earns
+          // it on a first pass — WriteAI's own pane now defaults it off in
+          // favour of targeted, prioritized suggestions. Loom follows suit;
+          // a full rewrite is still available from WriteAI's pane via its
+          // Ideal Version toggle.
+          includeIdeal: false,
         }),
       })
 
