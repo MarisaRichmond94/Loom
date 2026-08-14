@@ -6,6 +6,7 @@ import ReaderView from '@/components/reader/ReaderView'
 import type { StoryState, HistoryEntry, Condition } from '@/lib/storyEngine'
 import { matchesCondition, solveCondition } from '@/lib/storyEngine'
 import { computeChapterLabels } from '@/lib/chapterLabels'
+import { ShortcutsProvider } from '@/lib/shortcuts'
 
 type Block = {
   id: string; order: number; type: string
@@ -244,27 +245,29 @@ export default function ReaderPage() {
     : returnTo
 
   return (
-    <ReaderView
-      sessionId={sessionId}
-      seriesId={seriesId}
-      blocks={blocks}
-      storyState={mergedStoryState}
-      choiceHistory={choiceHistory}
-      variables={variables}
-      seriesTitle={seriesTitle}
-      chapterLabel={displayChapterLabel}
-      chapterPov={chapterPov}
-      chapterDate={chapterDate}
-      returnTo={dynamicReturnTo}
-      characters={characters}
-      currentBookId={currentBookId}
-      books={seriesBooks}
-      chapterLabels={chapterLabels}
-      currentChapterId={currentChapterId ?? undefined}
-      highlightConditionals={highlightConditionals}
-      onHighlightConditionalsChange={setHighlightConditionals}
-      onSessionUpdate={handleSessionUpdate}
-      onNavigate={handleNavigate}
-    />
+    <ShortcutsProvider>
+      <ReaderView
+        sessionId={sessionId}
+        seriesId={seriesId}
+        blocks={blocks}
+        storyState={mergedStoryState}
+        choiceHistory={choiceHistory}
+        variables={variables}
+        seriesTitle={seriesTitle}
+        chapterLabel={displayChapterLabel}
+        chapterPov={chapterPov}
+        chapterDate={chapterDate}
+        returnTo={dynamicReturnTo}
+        characters={characters}
+        currentBookId={currentBookId}
+        books={seriesBooks}
+        chapterLabels={chapterLabels}
+        currentChapterId={currentChapterId ?? undefined}
+        highlightConditionals={highlightConditionals}
+        onHighlightConditionalsChange={setHighlightConditionals}
+        onSessionUpdate={handleSessionUpdate}
+        onNavigate={handleNavigate}
+      />
+    </ShortcutsProvider>
   )
 }

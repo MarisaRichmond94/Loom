@@ -29,10 +29,21 @@ import InlineBadEnding from './InlineBadEnding'
 const ChoiceConfigModal = dynamic(() => import('./ChoiceConfigModal'), { ssr: false })
 const BadEndingModal = dynamic(() => import('./BadEndingModal'), { ssr: false })
 import AppHeader from '@/components/AppHeader'
+import ShortcutsMenu from '@/components/ShortcutsMenu'
+import { useRegisterShortcuts, type ShortcutGroup } from '@/lib/shortcuts'
 import { useLightMode } from '@shared/useLightMode'
 import PinnedAudio from '@/components/PinnedAudio'
 import NarrationBar from './NarrationBar'
 import { stripEmptyParagraphs, htmlToPlainText, inlineParagraphStyles, educateHtml, educateQuotes, PASTE_FONT_FAMILY } from '@/lib/clipboardFormatting'
+
+const PREVIEW_SHORTCUTS: ShortcutGroup[] = [
+  { group: 'Preview', items: [
+    { keys: '⌥⇧P', label: 'Return to write mode' },
+    { keys: '⌥⇧O', label: 'Toggle configure panel' },
+    { keys: '⌥⇧X', label: 'Copy chapter text' },
+    { keys: '⌥⇧< / >', label: 'Previous / next chapter' },
+  ] },
+]
 
 type Override = { id: string; order: number; condition: string; content: string; endingMessage?: string | null; endsChapter?: boolean }
 type Choice = { id: string; order: number; label: string; setsVariables: string; targetChapterId: string | null; endingMessage?: string | null; isBadEnding?: boolean; endsChapter?: boolean; condition?: string | null }
@@ -192,6 +203,8 @@ export default function ReaderView({
   const pendingScrollBlockRef = useRef<string | null>(null)
   const prevHistoryLengthRef = useRef(choiceHistory.length)
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
+
+  useRegisterShortcuts('preview', PREVIEW_SHORTCUTS)
 
   // Belt-and-suspenders modal dismissal. The modal's onApply already calls
   // setEndingMessage(null), but if anything in the React batch happens to
@@ -508,9 +521,38 @@ export default function ReaderView({
     } catch { /* clipboard unavailable; silently ignore */ }
   }
 
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!e.altKey || !e.shiftKey) return
+      switch (e.code) {
+        case 'KeyP':
+          e.preventDefault()
+          router.push(returnTo ?? `/author/${seriesId}`)
+          break
+        case 'KeyO':
+          e.preventDefault()
+          setShowConfig(v => !v)
+          break
+        case 'KeyX':
+          e.preventDefault()
+          copyChapter()
+          break
+        case 'Comma':
+          if (prevChapter) { e.preventDefault(); onNavigate(prevChapter.id) }
+          break
+        case 'Period':
+          if (nextChapter) { e.preventDefault(); onNavigate(nextChapter.id) }
+          break
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [returnTo, seriesId, prevChapter, nextChapter, onNavigate])
+
   return (
     <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
-      <AppHeader lightMode={lightMode} onToggleLightMode={toggleLightMode} />
+      <AppHeader lightMode={lightMode} onToggleLightMode={toggleLightMode} tools={<ShortcutsMenu />} />
 
       <main ref={mainRef} className={`flex-1 overflow-y-auto px-8${lightMode ? ' light-body' : ''}`}>
         {/* Sticky action row */}

@@ -66,6 +66,7 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
       { keys: '⌥⇧E', label: 'Export canon' },
       { keys: '⌥⇧P', label: 'Preview chapter' },
       { keys: '⌥⇧X', label: 'Copy canon text' },
+      { keys: '⌥⇧U', label: 'Duplicate chapter in new tab' },
       { keys: '⌥⇧`', label: 'Chapter settings' },
       { keys: '⌥⇧O', label: 'Toggle path config' },
       { keys: '⌥⇧F', label: 'Find in chapter' },
@@ -881,6 +882,7 @@ export default function ChapterEditorPage() {
         case 'KeyE': e.preventDefault(); saveCanonRef.current(); break
         case 'KeyP': e.preventDefault(); startPreviewRef.current(); break
         case 'KeyX': e.preventDefault(); copyCanonTextRef.current(); break
+        case 'KeyU': e.preventDefault(); window.open(window.location.href, '_blank'); break
         case 'Backquote': e.preventDefault(); setShowChapterSettings(v => !v); break
         case 'KeyO': e.preventDefault(); setShowPathConfig(v => !v); break
         case 'KeyF': e.preventDefault(); setTimeout(() => { localSearchInputRef.current?.focus(); localSearchInputRef.current?.select() }, 0); break
