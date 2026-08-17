@@ -3,6 +3,7 @@ import BookLanding, { type BookChapter, type BookCharacter, type BookTrack } fro
 import { hasContent, query } from '@/lib/db'
 import { requireReader, readerDbHandle } from '@/lib/readers'
 import { getProgress } from '@/shared/readerDb'
+import { resumeFor } from '@/lib/progress'
 
 export const dynamic = 'force-dynamic'
 
@@ -74,9 +75,20 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
   // and a row that no longer exists simply highlights nothing.
   const saved = getProgress(readerDbHandle(), reader.id, bookId)
 
+  // Where "Start reading" / "Continue reading" goes — resolved through the
+  // ladder (same as the series landing's primary button) so a saved position
+  // pointing at a since-unpublished chapter lands somewhere real instead of
+  // 404-ing. Null only for a published book with no chapters yet.
+  const resume = resumeFor(reader.id, bookId)
+  const startHref = resume
+    ? `/book/${bookId}/chapter/${resume.chapterId}?resume=1${resume.notice ? '&moved=previous' : ''}`
+    : null
+
   return (
     <BookLanding
       currentChapterId={saved?.chapterId ?? null}
+      startHref={startHref}
+      started={!!saved}
       bookId={bookId}
       characters={characters}
       tracks={tracks}

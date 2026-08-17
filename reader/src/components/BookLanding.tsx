@@ -98,6 +98,8 @@ export default function BookLanding({
   book,
   chapters,
   currentChapterId = null,
+  startHref = null,
+  started = false,
   characters,
   tracks,
 }: {
@@ -107,6 +109,11 @@ export default function BookLanding({
   chapters: BookChapter[]
   /** The chapter this reader left off in, if any (LOOM-133). */
   currentChapterId?: string | null
+  /** Where "Start reading" goes, ladder-resolved. Null only for a published
+   *  book with no chapters yet. */
+  startHref?: string | null
+  /** Whether this reader has already opened the book — swaps the button's label. */
+  started?: boolean
   characters: BookCharacter[]
   tracks: BookTrack[]
 }) {
@@ -165,14 +172,22 @@ export default function BookLanding({
                 )}
               </div>
 
-              {/* Disabled until reading progress exists (LOOM-133). */}
-              <button
-                disabled
-                title="Reading is not available yet."
-                className="mt-4 mb-4 self-start px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-medium opacity-40 cursor-not-allowed flex items-center gap-2"
-              >
-                Start reading <LuArrowRight size={14} />
-              </button>
+              {startHref ? (
+                <Link
+                  href={startHref}
+                  className="mt-4 mb-4 self-start px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors flex items-center gap-2"
+                >
+                  {started ? 'Continue reading' : 'Start reading'} <LuArrowRight size={14} />
+                </Link>
+              ) : (
+                <button
+                  disabled
+                  title="Reading is not available yet."
+                  className="mt-4 mb-4 self-start px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-medium opacity-40 cursor-not-allowed flex items-center gap-2"
+                >
+                  Start reading <LuArrowRight size={14} />
+                </button>
+              )}
 
               {book.synopsis && (
                 <Scrollable className="pr-2">
