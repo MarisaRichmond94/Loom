@@ -78,7 +78,7 @@ type Props = {
   // end of the first match in document order and focuses that editor.
   jumpToFirstMatchRef?: React.MutableRefObject<((query: string) => void) | null>
   // Jump to the next/previous search match relative to the caret, wrapping
-  // around at the ends. Drives ⌥⇧→ / ⌥⇧← from the chapter search bar.
+  // around at the ends. Drives ⌃⇧→ / ⌃⇧← from the chapter search bar.
   jumpToMatchRef?: React.MutableRefObject<((query: string, dir: 'next' | 'prev') => void) | null>
   // Reports how many matches `searchQuery` currently has across the mounted
   // prose editors, so the find bar can show a count that tracks live edits.

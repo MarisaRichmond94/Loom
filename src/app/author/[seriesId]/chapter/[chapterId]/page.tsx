@@ -73,7 +73,7 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
       { keys: '⌥⇧0', label: 'Toggle chapter stats' },
       { keys: '⌥⇧H', label: 'Toggle filter-word highlighting' },
       { keys: '⌥⇧9', label: 'Collapse / expand all blocks' },
-      { keys: '⌥⇧→ / ←', label: 'Next / previous match (while searching)' },
+      { keys: '⌃⇧→ / ←', label: 'Next / previous match (while searching)' },
       { keys: '⌥⇧← / →', label: 'Previous / next chapter' },
       { keys: '⌥⇧K', label: 'Clear chapter / series search' },
       { keys: '⌥⇧W', label: 'Clear path lens' },
@@ -378,7 +378,7 @@ export default function ChapterEditorPage() {
   function toggleMatchCase() { setMatchCase(v => { const n = !v; localStorage.setItem('loom-search-case', String(n)); return n }) }
   function toggleMatchWord() { setMatchWord(v => { const n = !v; localStorage.setItem('loom-search-word', String(n)); return n }) }
   const localSearchInputRef = useRef<HTMLInputElement>(null)
-  // Live query for the empty-dep global hotkey handler (⌥⇧→ / ⌥⇧←).
+  // Live query for the empty-dep global hotkey handler (⌃⇧→ / ⌃⇧←).
   const localSearchQueryRef = useRef(localSearchQuery)
   localSearchQueryRef.current = localSearchQuery
   const replaceAllRef = useRef<((search: string, replacement: string) => number) | null>(null)
@@ -868,6 +868,12 @@ export default function ChapterEditorPage() {
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      // ⌃⇧←/→ steps through search matches — kept off ⌥⇧ (which doubles as
+      // chapter navigation below) so the two never fight over the same keys.
+      if (e.ctrlKey && e.shiftKey && !e.altKey && localSearchQueryRef.current.trim()) {
+        if (e.code === 'ArrowRight') { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'next'); return }
+        if (e.code === 'ArrowLeft') { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'prev'); return }
+      }
       if (!e.altKey || !e.shiftKey) return
       // ⌥⇧←/→ means "extend selection by word" inside prose, so chapter
       // navigation only claims it when the writer isn't in a text box.
@@ -892,15 +898,11 @@ export default function ChapterEditorPage() {
         case 'Digit0': case 'Numpad0': e.preventDefault(); setStatsOpen(v => !v); break
         case 'KeyH': e.preventDefault(); setHighlightFilterWords(v => !v); break
         case 'Digit9': case 'Numpad9': e.preventDefault(); toggleCollapseAllRef.current(); break
-        // An active chapter search owns these keys; with the search bar empty
-        // they fall through to the footer's prev/next chapter navigation.
         case 'ArrowRight':
-          if (localSearchQueryRef.current.trim()) { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'next') }
-          else if (!inTextBox && goChapterRef.current.next) { e.preventDefault(); goChapterRef.current.next() }
+          if (!inTextBox && goChapterRef.current.next) { e.preventDefault(); goChapterRef.current.next() }
           break
         case 'ArrowLeft':
-          if (localSearchQueryRef.current.trim()) { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'prev') }
-          else if (!inTextBox && goChapterRef.current.prev) { e.preventDefault(); goChapterRef.current.prev() }
+          if (!inTextBox && goChapterRef.current.prev) { e.preventDefault(); goChapterRef.current.prev() }
           break
         case 'Equal': case 'NumpadAdd': e.preventDefault(); adjustProseScale(0.1); break
         case 'Minus': case 'NumpadSubtract': e.preventDefault(); adjustProseScale(-0.1); break
@@ -929,7 +931,7 @@ export default function ChapterEditorPage() {
   // refetched on structural changes, so counting that snapshot kept
   // searching pre-edit prose — after replacing "cat" with "dog" the bar
   // still reported matches for "cat". Sourcing it from the editors also
-  // makes the number agree with the highlights and with what ⌥⇧→ / ⌥⇧←
+  // makes the number agree with the highlights and with what ⌃⇧→ / ⌃⇧←
   // and Replace All actually operate on.
   const [localSearchMatchCount, setLocalSearchMatchCount] = useState(0)
 
