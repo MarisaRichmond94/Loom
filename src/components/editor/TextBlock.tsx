@@ -413,6 +413,10 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
     ? variables.filter(v => v.name.toLowerCase().includes(varSuggest.query.toLowerCase()))
     : []
 
+  const filteredCharacters = showCharPicker
+    ? characters.filter(c => matchesQuery({ name: c.name, aliases: c.aliases ?? null } as WriterCharacter, charSearch))
+    : []
+
   // Keep selectedIdx in bounds when filter narrows
   useEffect(() => {
     if (varSelectedIdx >= filteredVars.length && filteredVars.length > 0) {
@@ -704,18 +708,18 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
                 ref={charSearchRef}
                 value={charSearch}
                 onChange={e => setCharSearch(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Escape') cancel() }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && filteredCharacters.length > 0) applyCharacter(filteredCharacters[0])
+                  if (e.key === 'Escape') cancel()
+                }}
                 placeholder="Search…"
                 className="px-3 py-1.5 text-xs bg-transparent text-ink outline-none w-full placeholder:text-ink-faint border-b border-accent/10"
               />
               <div className="overflow-y-auto" style={{ maxHeight: '144px' }}>
                 {(() => {
-                  const filtered = characters.filter(c =>
-                    matchesQuery({ name: c.name, aliases: c.aliases ?? null } as WriterCharacter, charSearch),
-                  )
                   if (characters.length === 0) return <span className="block px-3 py-2 text-xs text-ink-faint italic">No characters yet</span>
-                  if (filtered.length === 0) return <span className="block px-3 py-2 text-xs text-ink-faint italic">No matches</span>
-                  return filtered.map(c => (
+                  if (filteredCharacters.length === 0) return <span className="block px-3 py-2 text-xs text-ink-faint italic">No matches</span>
+                  return filteredCharacters.map(c => (
                     <button
                       key={c.id}
                       onClick={() => applyCharacter(c)}
