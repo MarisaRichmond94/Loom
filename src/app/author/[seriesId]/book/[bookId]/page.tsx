@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { LuUser, LuCheck, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff, LuDownload, LuFileText, LuSave, LuDatabaseBackup, LuChartNoAxesColumn, LuMenu, LuSettings, LuTrash2 } from 'react-icons/lu'
+import { LuUser, LuCheck, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff, LuDownload, LuFileText, LuSave, LuDatabaseBackup, LuChartNoAxesColumn, LuMenu, LuSettings, LuTrash2, LuRefreshCw } from 'react-icons/lu'
 import { useAuthor } from '@/lib/authorContext'
 import { useDocumentTitle } from '@/lib/useDocumentTitle'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
@@ -15,6 +15,7 @@ import dynamic from 'next/dynamic'
 // with the page.
 const ExportBookModal = dynamic(() => import('@/components/editor/ExportBookModal'), { ssr: false })
 import { useCanonSave } from '@/components/editor/useCanonSave'
+import { useRegisterShortcuts, type ShortcutGroup } from '@/lib/shortcuts'
 import { pinLabel } from '@/lib/pinLabel'
 import PinnedAudio from '@/components/PinnedAudio'
 import SectionTabs from '@/components/SectionTabs'
@@ -137,6 +138,18 @@ async function downscaleCoverToBlob(file: File, maxEdge = 2400): Promise<Blob> {
   }
 }
 
+// Published to the header's shortcut menu while this page is mounted. Module
+// level so the identity is stable across renders (it's an effect dependency).
+const BOOK_SHORTCUTS: ShortcutGroup[] = [
+  {
+    group: 'Book',
+    items: [
+      { keys: '⌥⇧E', label: 'Save canon' },
+      { keys: '⌥⇧U', label: 'Duplicate book in new tab' },
+    ],
+  },
+]
+
 export default function BookDetailPage() {
   const { seriesId, bookId } = useParams() as { seriesId: string; bookId: string }
   const router = useRouter()
@@ -194,6 +207,7 @@ export default function BookDetailPage() {
   // editing. 'create' opens it empty.
   const [writerPool, setWriterPool] = useState<WriterCharacter[]>([])
   const [writerModal, setWriterModal] = useState<'create' | WriterCharacter | null>(null)
+  const [refreshingCast, setRefreshingCast] = useState(false)
   // The resolved row behind the open modal — Loom's half of the same person.
   const [editingOverlay, setEditingOverlay] = useState<Character | null>(null)
 
@@ -227,13 +241,17 @@ export default function BookDetailPage() {
   saveCanonRef.current = saveCanon
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (!e.altKey || !e.shiftKey || e.code !== 'KeyE') return
-      e.preventDefault()
-      saveCanonRef.current(bookId)
+      if (!e.altKey || !e.shiftKey) return
+      switch (e.code) {
+        case 'KeyE': e.preventDefault(); saveCanonRef.current(bookId); break
+        case 'KeyU': e.preventDefault(); window.open(window.location.href, '_blank'); break
+      }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [bookId])
+
+  useRegisterShortcuts('book', BOOK_SHORTCUTS)
 
   const loadBook = useCallback(async () => {
     const start = Date.now()
@@ -281,6 +299,21 @@ export default function BookDetailPage() {
     const res = await fetch('/api/writeai/characters/snapshot')
     if (res.ok) setWriterPool(await res.json())
   }, [])
+
+  // Manual escape hatch for the snapshot's staleness. It only otherwise
+  // refreshes after a save/delete made THROUGH Loom's Character modal, so a
+  // character created or edited directly in WriteAI (its own UI) leaves this
+  // page showing a stale or dead entry — including one no longer resolvable
+  // to any real WriteAI record — until someone forces this.
+  const refreshWriterPool = useCallback(async () => {
+    setRefreshingCast(true)
+    try {
+      await fetch('/api/writeai/characters/snapshot', { method: 'POST' })
+      await Promise.all([loadCharacters(), loadWriterPool()])
+    } finally {
+      setRefreshingCast(false)
+    }
+  }, [loadCharacters, loadWriterPool])
 
   const loadSoundtracks = useCallback(async () => {
     const res = await fetch(`/api/series/${seriesId}/books/${bookId}/soundtracks`)
@@ -703,12 +736,23 @@ export default function BookDetailPage() {
             id: 'characters',
             label: 'Character(s)',
             action: (
-              <button
-                onClick={openCreateModal}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
-              >
-                <LuPlus size={12} /> Add Character
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={refreshWriterPool}
+                  disabled={refreshingCast}
+                  title="Refresh from WriteAI — picks up characters created, edited, or deleted there directly"
+                  aria-label="Refresh character list from WriteAI"
+                  className="flex items-center gap-1.5 px-2 py-1.5 rounded text-xs text-ink-faint hover:text-ink transition disabled:opacity-50"
+                >
+                  <LuRefreshCw size={13} className={refreshingCast ? 'animate-spin' : ''} />
+                </button>
+                <button
+                  onClick={openCreateModal}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-accent text-white font-medium hover:opacity-90 transition"
+                >
+                  <LuPlus size={12} /> Add Character
+                </button>
+              </div>
             ),
             content: (
               <>

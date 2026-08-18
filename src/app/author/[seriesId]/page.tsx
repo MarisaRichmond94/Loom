@@ -14,6 +14,7 @@ import PublishBadge from '@/components/series/PublishBadge'
 import { usePublishStatus } from '@/components/series/usePublishStatus'
 import SilentChaptersDialog, { type SilentChapter } from '@/components/series/SilentChaptersDialog'
 import SeriesConfigureModal from '@/components/series/SeriesConfigureModal'
+import { useRegisterShortcuts, type ShortcutGroup } from '@/lib/shortcuts'
 
 // Both loaded on tab open rather than with the page. Books is the default tab,
 // so most visits need neither — and the timeline pulls in the chart's SVG
@@ -147,6 +148,17 @@ function AddBookButton({ onAdd }: { onAdd: (title: string) => Promise<void> }) {
   )
 }
 
+// Published to the header's shortcut menu while this page is mounted. Module
+// level so the identity is stable across renders (it's an effect dependency).
+const SERIES_SHORTCUTS: ShortcutGroup[] = [
+  {
+    group: 'Series',
+    items: [
+      { keys: '⌥⇧U', label: 'Duplicate series in new tab' },
+    ],
+  },
+]
+
 export default function AuthorSeriesPage() {
   const { seriesId } = useParams() as { seriesId: string }
   const router = useRouter()
@@ -169,6 +181,19 @@ export default function AuthorSeriesPage() {
   const actionMenuRef = useRef<HTMLDivElement>(null)
   useClickOutside([actionMenuRef], () => setActionMenuOpen(false), actionMenuOpen)
   const [configureOpen, setConfigureOpen] = useState(false)
+
+  // ⌥⇧U — open the current URL in a new tab.
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!e.altKey || !e.shiftKey || e.code !== 'KeyU') return
+      e.preventDefault()
+      window.open(window.location.href, '_blank')
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  useRegisterShortcuts('series', SERIES_SHORTCUTS)
 
   // Reader-tier state, per book (LOOM-129). Lives here rather than in a panel
   // because the controls sit ON the book cards: publishing is a per-book act,
