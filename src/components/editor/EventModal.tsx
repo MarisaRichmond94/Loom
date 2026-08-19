@@ -251,6 +251,13 @@ type AppearanceGroup = { bookId: string; bookTitle: string; appearances: BookEve
  * already ordered by book then chapter (groupSeriesEvents), so Map insertion
  * order is enough — no re-sort needed here.
  */
+/** "Ch. 3", or the chapter's own title for the prologue (chapter 0), which
+ *  has no natural "Ch. 0" reading. */
+function chapterLabel(a: Pick<BookEventAppearance, 'chapterNumber' | 'chapterTitle'>): string {
+  if (a.chapterNumber === null || a.chapterNumber === 0) return a.chapterTitle
+  return `Ch. ${a.chapterNumber}`
+}
+
 function groupAppearances(appearances: BookEventAppearance[]): AppearanceGroup[] {
   const groups = new Map<string, AppearanceGroup>()
   for (const a of appearances) {
@@ -568,7 +575,7 @@ export default function EventModal({
                             title={
                               a.nonCanon
                                 ? 'Referenced here only on a non-canon branch — opens in a new tab'
-                                : `Open ${a.chapterNumber === null ? a.chapterTitle : `Ch. ${a.chapterNumber}`} in a new tab`
+                                : `Open ${chapterLabel(a)} in a new tab`
                             }
                             className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition hover:text-ink ${
                               a.nonCanon
@@ -577,7 +584,7 @@ export default function EventModal({
                             }`}
                           >
                             <LuExternalLink size={10} className="opacity-70" />
-                            {a.chapterNumber === null ? a.chapterTitle : `Ch. ${a.chapterNumber}`}
+                            {chapterLabel(a)}
                           </a>
                         ))}
                       </div>

@@ -26,10 +26,17 @@ import type { EventAppearance, TaggedEvent } from './useChapterEvents'
 /** "Also in Ch. 7, Ch. 12" — or with the book named, when the event reaches
  *  into another one. Unnumbered chapters have no canon address, so they are
  *  named rather than numbered rather than being dropped. */
+/** "Ch. 3", or the chapter's own title for the prologue (chapter 0), which
+ *  has no natural "Ch. 0" reading. */
+function chapterLabel(a: Pick<EventAppearance, 'chapterNumber' | 'chapterTitle'>): string {
+  if (a.chapterNumber === null || a.chapterNumber === 0) return a.chapterTitle
+  return `Ch. ${a.chapterNumber}`
+}
+
 function describeSpread(alsoIn: EventAppearance[], thisBookId: string | undefined): string {
   return alsoIn
     .map(a => {
-      const where = a.chapterNumber === null ? a.chapterTitle : `Ch. ${a.chapterNumber}`
+      const where = chapterLabel(a)
       return thisBookId && a.bookId !== thisBookId ? `${a.bookTitle} ${where}` : where
     })
     .join(', ')
@@ -38,35 +45,34 @@ function describeSpread(alsoIn: EventAppearance[], thisBookId: string | undefine
 type SpreadGroup = {
   bookId: string
   bookTitle: string
+  bookOrder: number
   isThisBook: boolean
   chapters: { chapterId: string; chapterNumber: number | null; label: string }[]
 }
 
 /** Buckets `alsoIn` by book for the expanded card's "Referenced in" pills
- *  (LOOM-138). The current book sorts first and gets its own accent
- *  treatment — the "you are here" book among however many others reach the
- *  same event — everything else follows alphabetically. */
+ *  (LOOM-138), in book reading order (`Book.order`) rather than
+ *  alphabetically — the current book keeps its own accent treatment as the
+ *  "you are here" book, but no longer jumps the queue. */
 function groupSpread(alsoIn: EventAppearance[], thisBookId: string | undefined): SpreadGroup[] {
   const groups = new Map<string, SpreadGroup>()
   for (const a of alsoIn) {
     let group = groups.get(a.bookId)
     if (!group) {
-      group = { bookId: a.bookId, bookTitle: a.bookTitle, isThisBook: a.bookId === thisBookId, chapters: [] }
+      group = { bookId: a.bookId, bookTitle: a.bookTitle, bookOrder: a.bookOrder, isThisBook: a.bookId === thisBookId, chapters: [] }
       groups.set(a.bookId, group)
     }
     group.chapters.push({
       chapterId: a.chapterId,
       chapterNumber: a.chapterNumber,
-      label: a.chapterNumber === null ? a.chapterTitle : `Ch. ${a.chapterNumber}`,
+      label: chapterLabel(a),
     })
   }
   const result = [...groups.values()]
   for (const group of result) {
     group.chapters.sort((x, y) => (x.chapterNumber ?? Infinity) - (y.chapterNumber ?? Infinity))
   }
-  result.sort((a, b) =>
-    a.isThisBook === b.isThisBook ? a.bookTitle.localeCompare(b.bookTitle) : a.isThisBook ? -1 : 1,
-  )
+  result.sort((a, b) => a.bookOrder - b.bookOrder || a.bookTitle.localeCompare(b.bookTitle))
   return result
 }
 

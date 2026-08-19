@@ -22,6 +22,9 @@ export type EventAppearance = {
   chapterNumber: number | null
   bookId: string
   bookTitle: string
+  /** Book.order — reading order, so a spread across books lists them in the
+   *  order they're read rather than alphabetically. */
+  bookOrder: number
   /** That appearance is on a non-canon branch (LOOM-78). */
   nonCanon?: boolean
 }
