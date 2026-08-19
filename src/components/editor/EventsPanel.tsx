@@ -23,23 +23,11 @@ import type { EventAppearance, TaggedEvent } from './useChapterEvents'
 // A search field that is always on screen is chrome you need for a few seconds
 // at a time. The empty state carries the discovery burden instead.
 
-/** "Also in Ch. 7, Ch. 12" — or with the book named, when the event reaches
- *  into another one. Unnumbered chapters have no canon address, so they are
- *  named rather than numbered rather than being dropped. */
 /** "Ch. 3", or the chapter's own title for the prologue (chapter 0), which
  *  has no natural "Ch. 0" reading. */
 function chapterLabel(a: Pick<EventAppearance, 'chapterNumber' | 'chapterTitle'>): string {
   if (a.chapterNumber === null || a.chapterNumber === 0) return a.chapterTitle
   return `Ch. ${a.chapterNumber}`
-}
-
-function describeSpread(alsoIn: EventAppearance[], thisBookId: string | undefined): string {
-  return alsoIn
-    .map(a => {
-      const where = chapterLabel(a)
-      return thisBookId && a.bookId !== thisBookId ? `${a.bookTitle} ${where}` : where
-    })
-    .join(', ')
 }
 
 type SpreadGroup = {
@@ -74,6 +62,21 @@ function groupSpread(alsoIn: EventAppearance[], thisBookId: string | undefined):
   }
   result.sort((a, b) => a.bookOrder - b.bookOrder || a.bookTitle.localeCompare(b.bookTitle))
   return result
+}
+
+/** Past this many chapters, naming each one is just noise — the collapsed
+ *  row switches to a count instead. */
+const MAX_PREVIEW_CHAPTERS = 8
+
+/** "Also in Nobody's Hero Ch. 24, Ch. 25, Faded Ch. 25, Ch. 29, Ch. 31" — the
+ *  collapsed row's preview, grouped by book (in reading order, via
+ *  `groupSpread`) so the book name appears once per book rather than once
+ *  per chapter. */
+function describeSpread(alsoIn: EventAppearance[], thisBookId: string | undefined): string {
+  if (alsoIn.length > MAX_PREVIEW_CHAPTERS) return `${alsoIn.length} other chapters`
+  return groupSpread(alsoIn, thisBookId)
+    .map(group => `${group.bookTitle} ${group.chapters.map(c => c.label).join(', ')}`)
+    .join(', ')
 }
 
 function EventRow({
