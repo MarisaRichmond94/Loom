@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { assertReaderSafe, CONTENT_DB_PATH } from '@/lib/db'
+import FootnoteTooltipClamp from '@/components/FootnoteTooltipClamp'
 
 // Same type treatment as Loom (LOOM-21): Inter for content, self-hosted by
 // next/font, exposed as a CSS variable so the shared @theme can point
@@ -46,7 +47,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body className="min-h-screen bg-surface-base text-ink">{children}</body>
+      <body className="min-h-screen bg-surface-base text-ink">
+        <FootnoteTooltipClamp />
+        {children}
+      </body>
     </html>
   )
 }

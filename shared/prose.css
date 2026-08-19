@@ -21,7 +21,9 @@
   position: absolute;
   bottom: calc(100% + 6px);
   left: 50%;
-  transform: translateX(-50%);
+  /* --footnote-shift is a px correction written by footnoteTooltip.ts on
+     hover, keeping this off-viewport-relative pseudo-element on screen. */
+  transform: translateX(calc(-50% + var(--footnote-shift, 0px)));
   /* Tokenised (LOOM-6): the footnote tooltip used to hardcode the old violet
      overlay and cream ink, so it stayed on the old palette under the flag. */
   background: var(--color-surface-overlay);

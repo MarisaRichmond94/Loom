@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import FootnoteTooltipClamp from '@/components/FootnoteTooltipClamp'
 
 // Inter for content (KAN-21). next/font self-hosts it — no external request and
 // no layout shift. Exposed as a CSS variable so globals.css's @theme can point
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={inter.variable}>
       <body className="min-h-screen bg-surface-base text-ink">
+        <FootnoteTooltipClamp />
         {children}
       </body>
     </html>
