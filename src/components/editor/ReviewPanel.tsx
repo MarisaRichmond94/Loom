@@ -642,6 +642,14 @@ export default function ReviewPanel({
           <textarea
             value={reply}
             onChange={e => setReply(e.target.value)}
+            // Cmd/Ctrl+Enter sends without reaching for the button. Plain
+            // Enter still inserts a newline — replies run to paragraphs.
+            onKeyDown={e => {
+              if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey)) return
+              e.preventDefault()
+              if (!canRun) return
+              start(reply.trim() || undefined)
+            }}
             rows={2}
             placeholder="Reply, or leave blank to re-review the revised chapter…"
             // No size class, so it inherits the panel's scaled body size.
