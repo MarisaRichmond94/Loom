@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuArrowUp, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers, LuLightbulb, LuChartNoAxesColumn, LuSlidersHorizontal, LuEye, LuEyeOff, LuTrash2 } from 'react-icons/lu'
+import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers, LuLightbulb, LuChartNoAxesColumn, LuSlidersHorizontal, LuEye, LuEyeOff, LuTrash2 } from 'react-icons/lu'
 import { computeChapterStats } from '@/lib/chapterStats'
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
@@ -353,7 +353,27 @@ export default function ChapterEditorPage() {
   // LOADED chapter's id — firing after the new content has rendered means
   // it wins over both late layout shifts and Chrome's scroll restoration
   // of the inner scroller on a full page reload.
-  useEffect(() => { document.querySelector('main')?.scrollTo(0, 0) }, [chapter?.id])
+  useEffect(() => { document.querySelector('main')?.scrollTo(0, 0); applyScrollProgress(0) }, [chapter?.id])
+  // Footer progress bar, mirroring the reader's (ReaderView.tsx): written
+  // straight to the DOM (bar width) instead of React state so a per-scroll
+  // setState doesn't re-render the whole chapter.
+  const scrollProgressRef = useRef(0)
+  const progressFillRef = useRef<HTMLDivElement>(null)
+  function applyScrollProgress(p: number) {
+    scrollProgressRef.current = p
+    if (progressFillRef.current) progressFillRef.current.style.width = `${p * 100}%`
+  }
+  useEffect(() => {
+    const el = document.querySelector('main')
+    if (!el) return
+    function onScroll() {
+      const { scrollTop, scrollHeight, clientHeight } = el!
+      const max = scrollHeight - clientHeight
+      applyScrollProgress(max > 0 ? scrollTop / max : 0)
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
   const [localSearchQuery, setLocalSearchQuery] = useState('')
   // Highlighting and match-counting run against this debounced copy: each
   // keystroke in the find bar otherwise forces every TipTap editor in the
@@ -1094,12 +1114,6 @@ export default function ChapterEditorPage() {
   }
   startPreviewRef.current = startPreview
 
-  function scrollToTop() {
-    // The author layout's <main> is the scroll container; scrollTo it
-    // directly so the chapter page glides back to the top.
-    document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
   async function addChoiceBlock() {
     await addBlock('choice_point')
   }
@@ -1725,12 +1739,13 @@ export default function ChapterEditorPage() {
           </button>
         ) : <div />}
 
-        <button
-          onClick={scrollToTop}
-          className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition"
-        >
-          <LuArrowUp size={13} /> Scroll To The Top
-        </button>
+        <div className="flex-1 relative h-1 bg-surface-muted rounded-full">
+          <div
+            ref={progressFillRef}
+            className="h-full bg-accent/60 rounded-full transition-[width] duration-75"
+            style={{ width: `${scrollProgressRef.current * 100}%` }}
+          />
+        </div>
 
         {nextChapter ? (
           <button

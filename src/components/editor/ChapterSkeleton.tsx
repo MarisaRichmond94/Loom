@@ -68,13 +68,13 @@ export default function ChapterSkeleton() {
         </div>
       </div>
 
-      {/* Footer placeholder — three slots match the prev / scroll / next
-          layout the real page renders. .chrome-dark keeps the bar dark inside
-          light mode; it previously hardcoded the dark hexes inline, which
-          pinned it to the old palette regardless of the flag (KAN-17). */}
+      {/* Footer placeholder — prev / progress-bar / next, matching the real
+          page's layout. .chrome-dark keeps the bar dark inside light mode; it
+          previously hardcoded the dark hexes inline, which pinned it to the
+          old palette regardless of the flag (KAN-17). */}
       <div className="chrome-dark sticky bottom-0 z-20 -mx-8 px-8 py-4 bg-surface-raised border-t border-accent/10 flex items-center justify-between gap-4">
         <div className="h-4 w-24 bg-surface-muted rounded" />
-        <div className="h-4 w-32 bg-surface-muted rounded" />
+        <div className="flex-1 h-1 bg-surface-muted rounded-full" />
         <div className="h-4 w-24 bg-surface-muted rounded" />
       </div>
     </div>
