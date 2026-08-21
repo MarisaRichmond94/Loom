@@ -105,6 +105,7 @@ import { VariableHighlight } from '@/lib/extensions/variableHighlight'
 import { SearchHighlight } from '@/lib/extensions/searchHighlight'
 import { FilterWordHighlight } from '@/lib/extensions/filterWordHighlight'
 import { ParagraphIndent } from '@/lib/extensions/paragraphIndent'
+import { ParagraphSelect } from '@/lib/extensions/paragraphSelect'
 import type { SearchOptions } from '@/lib/searchMatch'
 import VariableSuggestionList from './VariableSuggestionList'
 import { buildCharterClipboard } from '@/lib/clipboardFormatting'
@@ -287,6 +288,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
       }),
       TextAlign.configure({ types: ['paragraph', 'heading'] }),
       ParagraphIndent,
+      ParagraphSelect,
       TextStyleColor,
       EmDash,
       SectionBreak,
