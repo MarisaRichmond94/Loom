@@ -17,7 +17,16 @@ export async function GET(_: Request, { params }: Params) {
             // Note bodies are short scratchpad text, so selecting them here to
             // compute hasNotes (never shipped to the client) doesn't reintroduce
             // the bulk-payload cost ChapterNote's separate table avoids.
-            include: { note: { select: { body: true } } },
+            //
+            // blocks: only wordCount (an already-maintained cache column, see
+            // src/lib/wordCounts.ts) and a choices COUNT — no content, no
+            // choice rows — so the series page can derive chapter/word/POV/
+            // choice stats from this one load instead of a per-book deep
+            // fetch (see AuthorSeriesPage).
+            include: {
+              note: { select: { body: true } },
+              blocks: { select: { wordCount: true, _count: { select: { choices: true } } } },
+            },
           },
         },
       },

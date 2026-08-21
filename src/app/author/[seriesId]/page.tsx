@@ -7,7 +7,7 @@ import { LuCheck, LuDatabaseBackup, LuEye, LuMenu, LuPencilLine, LuPlus, LuSend,
 import dynamic from 'next/dynamic'
 import { useAuthor } from '@/lib/authorContext'
 import { useDocumentTitle } from '@/lib/useDocumentTitle'
-import { ensureMinDuration } from '@/lib/minLoadDuration'
+import { bookStats } from '@/lib/bookStats'
 import { useClickOutside } from '@/components/editor/AnchoredPopover'
 import SectionTabs, { useSectionActionSlot } from '@/components/SectionTabs'
 import PublishBadge from '@/components/series/PublishBadge'
@@ -44,8 +44,6 @@ import { prefetchScope } from '@/components/explore/scopeCache'
 import { prefetchSeriesCharacters } from '@/components/series/seriesCharactersCache'
 import { prefetchSeriesEvents, useSeriesEvents } from '@/components/timeline/useBookEvents'
 import { prefetchTimelineData } from '@/components/timeline/timelineDataCache'
-
-type BookStats = { chapterCount: number; wordCount: number; uniquePovs: number; choiceCount: number; coverPath: string | null }
 
 /**
  * The series Timeline tab.
@@ -168,8 +166,6 @@ export default function AuthorSeriesPage() {
   const tabParam = useSearchParams()?.get('tab') ?? undefined
   const { series, loadSeries, addBook } = useAuthor()
   useDocumentTitle(series.title)
-  const [bookStats, setBookStats] = useState<Record<string, BookStats>>({})
-  const [statsLoaded, setStatsLoaded] = useState(false)
   const [titleDraft, setTitleDraft] = useState(series.title)
   const [descriptionDraft, setDescriptionDraft] = useState(series.description ?? '')
   const [authorName, setAuthorName] = useState('')
@@ -221,28 +217,6 @@ export default function AuthorSeriesPage() {
     }
     void publish.publish(bookId)
   }, [seriesId, publish])
-
-  const isInitialStatsLoadRef = useRef(true)
-  const loadStats = useCallback(async () => {
-    const start = Date.now()
-    const stats = await Promise.all(
-      series.books.map(b =>
-        fetch(`/api/series/${seriesId}/books/${b.id}`).then(r => r.ok ? r.json() : null),
-      ),
-    )
-    const statsMap: Record<string, BookStats> = {}
-    series.books.forEach((b, i) => {
-      if (stats[i]?.stats) statsMap[b.id] = { ...stats[i].stats, coverPath: stats[i].coverPath ?? null }
-    })
-    if (isInitialStatsLoadRef.current) {
-      await ensureMinDuration(start)
-      isInitialStatsLoadRef.current = false
-    }
-    setBookStats(statsMap)
-    setStatsLoaded(true)
-  }, [seriesId, series.books])
-
-  useEffect(() => { loadStats() }, [loadStats])
 
   // Unreachable branches per book, for the badge on each book card (LOOM-122).
   //
@@ -478,7 +452,7 @@ export default function AuthorSeriesPage() {
         ) : (
           <div className="flex flex-col gap-4">
             {series.books.map((book, idx) => {
-              const stats = bookStats[book.id]
+              const stats = bookStats(book)
               return (
                 <div
                   key={book.id}
@@ -486,10 +460,8 @@ export default function AuthorSeriesPage() {
                   className="flex gap-5 p-5 rounded-lg bg-accent/25 border border-accent/20 hover:border-accent/40 hover:scale-[1.01] transition-all duration-150 cursor-pointer"
                 >
                   <div className="w-28 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 flex items-center justify-center" style={{ minHeight: '9rem' }}>
-                    {!statsLoaded ? (
-                      <div className="w-full h-full bg-surface-muted animate-pulse" />
-                    ) : stats?.coverPath ? (
-                      <img src={stats.coverPath} alt="" className="w-full h-full object-cover" />
+                    {book.coverPath ? (
+                      <img src={book.coverPath} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <span className="text-xs text-ink-faint text-center px-1">No cover</span>
                     )}
@@ -561,17 +533,13 @@ export default function AuthorSeriesPage() {
                       </div>
                       <div className="grid grid-cols-4 gap-3">
                         {[
-                          { label: 'Chapter(s)', value: stats?.chapterCount ?? '—' },
-                          { label: 'Word(s)', value: stats ? stats.wordCount.toLocaleString() : '—' },
-                          { label: 'POV(s)', value: stats?.uniquePovs ?? '—' },
-                          { label: 'Choice(s)', value: stats?.choiceCount ?? '—' },
+                          { label: 'Chapter(s)', value: stats.chapterCount },
+                          { label: 'Word(s)', value: stats.wordCount.toLocaleString() },
+                          { label: 'POV(s)', value: stats.uniquePovs },
+                          { label: 'Choice(s)', value: stats.choiceCount },
                         ].map(({ label, value }) => (
                           <div key={label} className="bg-surface-overlay border border-accent/10 rounded-lg px-3 py-4 flex flex-col items-center gap-1">
-                            {statsLoaded ? (
-                              <span className="text-xl font-bold text-ink">{value}</span>
-                            ) : (
-                              <div className="h-7 w-10 bg-surface-muted rounded animate-pulse" />
-                            )}
+                            <span className="text-xl font-bold text-ink">{value}</span>
                             <span className="text-xs text-ink-faint uppercase tracking-widest">{label}</span>
                           </div>
                         ))}

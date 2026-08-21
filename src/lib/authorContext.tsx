@@ -2,8 +2,17 @@
 
 import { createContext, useContext } from 'react'
 
-type Chapter = { id: string; title: string; order: number; pov?: string | null }
-type Book = { id: string; title: string; order: number; published: boolean; inProgress: boolean; chapters: Chapter[] }
+type Chapter = {
+  id: string
+  title: string
+  order: number
+  pov?: string | null
+  // Lean per-block numbers only (see GET /api/series/[seriesId]) — no
+  // content, no choice rows — so book cards can derive word/choice counts
+  // without a separate per-book fetch.
+  blocks: { wordCount: number; _count: { choices: number } }[]
+}
+type Book = { id: string; title: string; synopsis: string; order: number; published: boolean; inProgress: boolean; coverPath: string | null; chapters: Chapter[] }
 type Variable = { id: string; name: string; type: string; defaultValue: string }
 export type AuthorSeries = {
   id: string

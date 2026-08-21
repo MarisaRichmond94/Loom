@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { LuUser, LuCheck, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff, LuDownload, LuFileText, LuSave, LuDatabaseBackup, LuChartNoAxesColumn, LuMenu, LuSettings, LuTrash2, LuRefreshCw } from 'react-icons/lu'
 import { useAuthor } from '@/lib/authorContext'
 import { useDocumentTitle } from '@/lib/useDocumentTitle'
-import { ensureMinDuration } from '@/lib/minLoadDuration'
+import { bookStats } from '@/lib/bookStats'
 import BookSkeleton from '@/components/editor/BookSkeleton'
 import OutlineBoardSkeleton from '@/components/editor/OutlineBoardSkeleton'
 import { useClickOutside } from '@/components/editor/AnchoredPopover'
@@ -58,8 +58,6 @@ import type { WriterCharacter } from '@/lib/characterSearch'
 // verbatim-PUT rule. Loaded on demand: this page usually renders without it.
 const CharacterModal = dynamic(() => import('@/components/editor/CharacterModal'), { ssr: false })
 
-type Stats = { chapterCount: number; uniquePovs: number; choiceCount: number; wordCount: number }
-type Book = { id: string; title: string; synopsis: string; coverPath: string | null; published: boolean; stats: Stats }
 // Resolved-for-this-book shape from
 // /api/series/[seriesId]/books/[bookId]/writer-characters (LOOM-88).
 //
@@ -154,7 +152,15 @@ export default function BookDetailPage() {
   const { seriesId, bookId } = useParams() as { seriesId: string; bookId: string }
   const router = useRouter()
   const { series, loadSeries } = useAuthor()
-  const [book, setBook] = useState<Book | null>(null)
+  // Derived from series.books (already loaded by AuthorLayout before this
+  // page ever mounts) instead of a separate per-book fetch — that fetch used
+  // to be a deep Prisma include (every chapter/block/choice/override,
+  // including full prose) just to read four numbers and a cover path, all of
+  // which are already in memory by the time a book card is clicked.
+  const seriesBook = series.books.find(b => b.id === bookId)
+  const book = seriesBook
+    ? { title: seriesBook.title, synopsis: seriesBook.synopsis, coverPath: seriesBook.coverPath, stats: bookStats(seriesBook) }
+    : null
   useDocumentTitle(book?.title)
   const [title, setTitle] = useState('')
   const [synopsis, setSynopsis] = useState('')
@@ -218,7 +224,6 @@ export default function BookDetailPage() {
     setCharAvatarTs(Date.now())
     setWriterModal(record)
   }
-  const isInitialBookLoadRef = useRef(true)
   // Manuscript export + front matter (title page / copyright pages the
   // writer keeps in Pages; spliced ahead of Chapter 1 on export).
   const [showExportModal, setShowExportModal] = useState(false)
@@ -253,22 +258,15 @@ export default function BookDetailPage() {
 
   useRegisterShortcuts('book', BOOK_SHORTCUTS)
 
-  const loadBook = useCallback(async () => {
-    const start = Date.now()
-    const res = await fetch(`/api/series/${seriesId}/books/${bookId}`)
-    if (!res.ok) return
-    const data = await res.json()
-    if (isInitialBookLoadRef.current) {
-      await ensureMinDuration(start)
-      isInitialBookLoadRef.current = false
-    }
-    // coverPath already carries its own cache-busting query param, persisted
-    // server-side by the upload route — no need to layer another one on
-    // top here (that used to double up into an invalid `?v=1?t=2` URL).
-    setBook(data)
-    setTitle(data.title)
-    setSynopsis(data.synopsis ?? '')
-  }, [seriesId, bookId])
+  // Fresh sync only when navigating to a different book — not on every
+  // series reload (a save elsewhere shouldn't clobber an in-progress edit
+  // here), matching what the old per-book fetch's [seriesId, bookId]
+  // dependency array did.
+  useEffect(() => {
+    const b = series.books.find(bk => bk.id === bookId)
+    if (b) { setTitle(b.title); setSynopsis(b.synopsis ?? '') }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookId])
 
   const loadCharacters = useCallback(async () => {
     // Book-scoped: WriteAI's records joined to Loom's overlay for this book.
@@ -376,7 +374,6 @@ export default function BookDetailPage() {
   }
 
   useEffect(() => { loadSoundtracks() }, [loadSoundtracks])
-  useEffect(() => { loadBook() }, [loadBook])
   useEffect(() => { loadCharacters() }, [loadCharacters])
   useEffect(() => { loadWriterPool() }, [loadWriterPool])
   useEffect(() => { loadFrontMatter() }, [loadFrontMatter])
@@ -487,13 +484,7 @@ export default function BookDetailPage() {
       method: 'POST',
       body: form,
     })
-    if (res.ok) {
-      // coverPath already carries its own cache-busting query param (the
-      // upload route versions it), so it's used as-is here — appending
-      // another `?t=` on top would double up into an invalid `?v=1?t=2` URL.
-      const { coverPath } = await res.json()
-      setBook(prev => prev ? { ...prev, coverPath } : null)
-    }
+    if (res.ok) await loadSeries()
     e.target.value = ''
   }
 
