@@ -395,7 +395,12 @@ export default function ExplorePanel({
           )}
 
           <div className="flex min-h-0 flex-1">
-            <div ref={streamRef} className="flex min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-4">
+            {/* reader-selectable opts the transcript out of the app-wide
+                `user-select: none`. On the scroller rather than each bubble, so
+                a drag can run across turns — a non-selectable wrapper between
+                selectable islands makes selection jump siblings in
+                Chromium/WebKit. */}
+            <div ref={streamRef} className="flex min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-4 reader-selectable">
               {chat.messages.length === 0 ? (
                 <div className="m-auto max-w-md text-center">
                   <p className="text-sm font-semibold text-ink">

@@ -492,7 +492,14 @@ export default function ReviewPanel({
           onTouchMove={takeOver}
           onPointerDown={takeOver}
           onKeyDown={takeOver}
-          className="flex-1 flex flex-col overflow-y-auto overscroll-contain px-4 py-3"
+          // reader-selectable opts the conversation out of the app-wide
+          // `user-select: none` — reviews are text the writer wants to lift
+          // back into the chapter. It sits on the scroller, not on each
+          // message, so a drag can run across turns: mixing user-select:none
+          // wrappers between selectable islands makes selection jump siblings
+          // in Chromium/WebKit (same reason it lives on the pin stack root in
+          // ReferencePanel).
+          className="flex-1 flex flex-col overflow-y-auto overscroll-contain px-4 py-3 reader-selectable"
           // Turn OFF the browser's scroll anchoring for this scroller.
           //
           // Scroll anchoring exists to keep the view stable when content

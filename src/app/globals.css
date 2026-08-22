@@ -107,8 +107,14 @@ mark.filter-word-match,
   padding: 0 1px;
 }
 
-/* Reader prose, when the current user is the writer — overrides the global
-   `*, *::before, *::after { user-select: none }` for the chapter content. */
+/* The opt-in escape hatch from the global
+   `*, *::before, *::after { user-select: none }`, for any subtree whose text
+   the writer legitimately wants to copy: reader prose when the current user is
+   the writer, the pinned-reference stack, the review and Explore transcripts.
+
+   Put it on the subtree ROOT, not on each island of text — a non-selectable
+   wrapper sitting between two selectable nodes makes drag-selection jump
+   across siblings in Chromium/WebKit. */
 .reader-selectable, .reader-selectable * {
   -webkit-user-select: text;
   user-select: text;
