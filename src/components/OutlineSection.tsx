@@ -221,7 +221,17 @@ export default function OutlineSection({
   const draggingCard = draggingId ? outline.cards.find(c => c.id === draggingId) : null
 
   return (
-    <div className="flex flex-col gap-3">
+    // px/pb here because the tab's scroller (SectionTabs' fillHeight wrapper)
+    // is overflow-y-auto + overflow-x-hidden with no padding of its own, and a
+    // card's selected/matched RING is a box-shadow: it paints outside the
+    // border box and adds nothing to scrollWidth/scrollHeight, so at the
+    // left, right and bottom edges it was simply clipped away — the card read
+    // as unselected exactly where it mattered. The insert "+" between cards
+    // straddles the seam (translate-x-1/2 of w-5 = 10px), so the rightmost
+    // column's button was half-eaten too; 10px of side padding clears both.
+    // The top needs nothing: the sticky filter bar below already holds the
+    // first row clear of the scroller's top edge.
+    <div className="flex flex-col gap-3 px-2.5 pb-2.5">
       {/* "Add card" belongs beside the tab labels, where "Add Character"
           already lives — same page, same kind of action, same place. It is
           portalled up rather than passed down because the handler needs the
@@ -246,7 +256,12 @@ export default function OutlineSection({
           the scroller) rather than replacing it — the double-count was
           exactly the "little" extra scroll this tab had. pt-1 alone keeps
           the control off the scroll container's very top edge. */}
-      <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pb-1">
+      {/* -mx-2.5 px-2.5 cancels the root's side padding for this bar alone: it
+          is opaque and cards scroll UNDER it, so its background has to reach
+          the scroller's real edges or a 10px strip of moving card shows
+          through on each side. The px puts its own content back in line with
+          the board below. */}
+      <div className="sticky top-0 z-10 -mx-2.5 px-2.5 bg-surface-base flex flex-wrap items-end gap-3 pb-1">
         <TagFilterSelect
           label="Character"
           placeholder="Any character"
