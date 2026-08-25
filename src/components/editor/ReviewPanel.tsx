@@ -241,6 +241,12 @@ export default function ReviewPanel({
   // Shown once the top is genuinely out of reach.
   const [scrolledDown, setScrolledDown] = useState(false)
 
+  // The mirror image: sitting at the top with the end of the conversation
+  // genuinely out of reach below. Deliberately exclusive with `scrolledDown` —
+  // they share one spot, so the same 240px threshold decides which (or
+  // neither) applies.
+  const [scrolledUp, setScrolledUp] = useState(false)
+
   // Has the writer taken the scroller over? Once she has, the reply streams in
   // without the view moving — she is reading something, and pulling her away
   // from it is the whole problem this behaviour exists to avoid.
@@ -261,11 +267,20 @@ export default function ReviewPanel({
     writerTookOver.current = true
   }
 
-  function onConversationScroll() {
+  function measureScroll() {
     const el = scrollerRef.current
     if (!el) return
-    setScrolledDown(el.scrollTop > 240)
+    const fromTop = el.scrollTop
+    const fromBottom = el.scrollHeight - el.clientHeight - fromTop
+    setScrolledDown(fromTop > 240)
+    setScrolledUp(fromTop <= 240 && fromBottom > 240)
   }
+
+  // Scrolling is not the only thing that moves these controls in and out: a
+  // reply streaming in grows the content below an unmoved viewport, which is
+  // exactly the "sitting at the top with more below" case and fires no scroll
+  // event of its own.
+  useEffect(measureScroll, [runner.streamText, review?.messages?.length])
 
   // A revision pass says different things than a first read, and claiming to
   // be "reading the chapter" when it is diffing two drafts would be wrong.
@@ -296,6 +311,14 @@ export default function ReviewPanel({
     // right: having deliberately gone to the top mid-stream, she should not be
     // dragged back down by the next chunk.
     scrollerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function scrollToBottom() {
+    const s = scrollerRef.current
+    if (!s) return
+    // Same reasoning as scrollToTop: going somewhere deliberately mid-stream
+    // counts as taking the scroller over.
+    s.scrollTo({ top: s.scrollHeight - s.clientHeight, behavior: 'smooth' })
   }
 
   /** Distance from the top of the scroller's content to the top of `el`. */
@@ -482,7 +505,7 @@ export default function ReviewPanel({
             centre itself; with content present the children simply stack. */}
         <div
           ref={scrollerRef}
-          onScroll={onConversationScroll}
+          onScroll={measureScroll}
           // Gestures, not scroll positions. Each of these only fires because
           // the writer did something, so none of them can be confused with the
           // browser's own adjustments or with our following.
@@ -632,6 +655,17 @@ export default function ReviewPanel({
             className="absolute bottom-2 left-1/2 z-20 -translate-x-1/2 rounded-full border border-accent/30 bg-surface-raised/95 px-3 py-1 text-[11px] font-medium text-accent shadow-lg backdrop-blur-sm transition hover:bg-accent/10"
           >
             Scroll back to top
+          </button>
+        )}
+
+        {/* Its mirror: at the top of a long review, the end of the
+            conversation — and the newest reply — is the part she wants. */}
+        {scrolledUp && (
+          <button
+            onClick={scrollToBottom}
+            className="absolute bottom-2 left-1/2 z-20 -translate-x-1/2 rounded-full border border-accent/30 bg-surface-raised/95 px-3 py-1 text-[11px] font-medium text-accent shadow-lg backdrop-blur-sm transition hover:bg-accent/10"
+          >
+            Scroll to bottom
           </button>
         )}
       </div>
