@@ -10,6 +10,9 @@ import BookSkeleton from '@/components/editor/BookSkeleton'
 import OutlineBoardSkeleton from '@/components/editor/OutlineBoardSkeleton'
 import { useClickOutside } from '@/components/editor/AnchoredPopover'
 import dynamic from 'next/dynamic'
+// Aliased: this file also constructs a DOM `new Image()` for the
+// upload-time downscale below, and a bare `Image` import shadows it.
+import NextImage from 'next/image'
 
 // Only rendered after "Export book…" is clicked — load its chunk then, not
 // with the page.
@@ -513,10 +516,20 @@ export default function BookDetailPage() {
               times so the cover's own proportions never drift. */}
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="w-[220px] h-[320px] rounded-lg border-2 border-dashed border-accent/20 flex items-center justify-center cursor-pointer hover:border-accent/50 transition overflow-hidden shrink-0 bg-surface-raised"
+            className="relative w-[220px] h-[320px] rounded-lg border-2 border-dashed border-accent/20 flex items-center justify-center cursor-pointer hover:border-accent/50 transition overflow-hidden shrink-0 bg-surface-raised"
           >
             {book.coverPath ? (
-              <img src={book.coverPath} alt="Book cover" className="w-full h-full object-cover" />
+              // Optimized like the series card's cover: the source art is
+              // print-resolution, this box is 220x320. quality={90} because
+              // this is the writer looking at the cover they just uploaded.
+              <NextImage
+                src={book.coverPath}
+                alt="Book cover"
+                fill
+                sizes="220px"
+                quality={90}
+                className="object-cover"
+              />
             ) : (
               <span className="text-xs text-ink-faint text-center px-2">Click to upload cover</span>
             )}

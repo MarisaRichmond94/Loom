@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { LuCheck, LuDatabaseBackup, LuEye, LuMenu, LuPencilLine, LuPlus, LuSend, LuSettings, LuX } from 'react-icons/lu'
 import dynamic from 'next/dynamic'
+import Image from 'next/image'
 import { useAuthor } from '@/lib/authorContext'
 import { useDocumentTitle } from '@/lib/useDocumentTitle'
 import { bookStats } from '@/lib/bookStats'
@@ -459,9 +460,29 @@ export default function AuthorSeriesPage() {
                   onClick={() => router.push(`/author/${seriesId}/book/${book.id}`)}
                   className="flex gap-5 p-5 rounded-lg bg-accent/25 border border-accent/20 hover:border-accent/40 hover:scale-[1.01] transition-all duration-150 cursor-pointer"
                 >
-                  <div className="w-28 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 flex items-center justify-center" style={{ minHeight: '9rem' }}>
+                  {/* `relative` is load-bearing: it's the containing block for
+                      the filled Image below. The box still takes its height
+                      from the card row (stretch, floored at 9rem) exactly as
+                      it did with the raw <img>. */}
+                  <div className="relative w-28 shrink-0 rounded overflow-hidden bg-surface-overlay border border-accent/10 flex items-center justify-center" style={{ minHeight: '9rem' }}>
                     {book.coverPath ? (
-                      <img src={book.coverPath} alt="" className="w-full h-full object-cover" />
+                      // next/image rather than a raw <img>, matching the
+                      // preview and Explore pages. Covers are uploaded at
+                      // print resolution (1100–1650px wide, 200–450KB) and
+                      // drawn into a 112px box, so a raw <img> made the
+                      // browser fetch ~1.8MB and decode ~45MB of bitmap on
+                      // every visit — the covers then painted one at a time,
+                      // in DOM order, as each decode finished. The optimizer
+                      // serves a ~7KB WebP at the size actually needed, with
+                      // an ETag and a real max-age behind it.
+                      <Image
+                        src={book.coverPath}
+                        alt=""
+                        fill
+                        sizes="112px"
+                        quality={90}
+                        className="object-cover"
+                      />
                     ) : (
                       <span className="text-xs text-ink-faint text-center px-1">No cover</span>
                     )}

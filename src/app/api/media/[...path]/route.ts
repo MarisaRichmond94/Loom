@@ -45,19 +45,55 @@ function resolveSafe(segments: string[]): string | null {
   return abs
 }
 
+// True when the client already holds this exact file. If-None-Match wins over
+// If-Modified-Since when both are present, per RFC 9110.
+function isFresh(req: Request, etag: string, mtimeSec: number): boolean {
+  const inm = req.headers.get('if-none-match')
+  if (inm) {
+    // A list, and entries may be weak ("W/\"abc\""). We only ever emit one
+    // strong tag, so compare on the bare value.
+    return inm
+      .split(',')
+      .map(t => t.trim().replace(/^W\//, ''))
+      .some(t => t === '*' || t === etag)
+  }
+  const ims = req.headers.get('if-modified-since')
+  if (ims) {
+    const since = Date.parse(ims)
+    if (!Number.isNaN(since)) return mtimeSec <= Math.floor(since / 1000)
+  }
+  return false
+}
+
 export async function GET(req: Request, { params }: Params) {
   const { path: segments } = await params
   const abs = resolveSafe(segments)
   if (!abs) return new Response('Bad path', { status: 400 })
 
   let size: number
+  let mtimeMs: number
   try {
     const s = await stat(abs)
     if (!s.isFile()) return new Response('Not found', { status: 404 })
     size = s.size
+    mtimeMs = s.mtimeMs
   } catch {
     return new Response('Not found', { status: 404 })
   }
+
+  // Validators, so `must-revalidate` can actually resolve to a 304.
+  //
+  // Without these the revalidation had nothing to compare against and every
+  // request re-sent the whole body — book covers alone meant ~1.8MB
+  // re-downloaded and re-decoded on every visit to the series page. The
+  // identity is (size, mtime): both change when a file is replaced in place,
+  // which is exactly the case the `must-revalidate` policy exists to catch.
+  //
+  // HTTP dates have one-second granularity, so Last-Modified is floored to
+  // the second and If-Modified-Since is compared at that resolution.
+  const mtimeSec = Math.floor(mtimeMs / 1000)
+  const etag = `"${size.toString(16)}-${mtimeSec.toString(16)}"`
+  const lastModified = new Date(mtimeSec * 1000).toUTCString()
 
   const type = MIME[path.extname(abs).toLowerCase()] ?? 'application/octet-stream'
   const baseHeaders: Record<string, string> = {
@@ -66,10 +102,20 @@ export async function GET(req: Request, { params }: Params) {
     // These files can be replaced in place (e.g. avatar.jpg), so revalidate
     // rather than let a stale copy stick. Callers also append ?t= where needed.
     'Cache-Control': 'public, max-age=0, must-revalidate',
+    ETag: etag,
+    'Last-Modified': lastModified,
   }
 
   // Honor Range requests so <audio>/<video> can seek and Safari can play.
   const range = req.headers.get('range')
+
+  // Conditional GET. Skipped entirely when the client asked for a range:
+  // answering a seek with a bodyless 304 is a good way to break audio
+  // playback, and a ranged request is never the cheap "do I still have the
+  // current file?" check this branch is here to short-circuit.
+  if (!range && isFresh(req, etag, mtimeSec)) {
+    return new Response(null, { status: 304, headers: baseHeaders })
+  }
   if (range) {
     const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim())
     if (m) {
