@@ -269,10 +269,8 @@ export default function ReviewPanel({
 
   // A revision pass says different things than a first read, and claiming to
   // be "reading the chapter" when it is diffing two drafts would be wrong.
-  const phrase = useCyclingPhrase(
-    review ? REVISION_PHRASES : READING_PHRASES,
-    runner.streaming && !runner.streamText,
-  )
+  const phrases = review ? REVISION_PHRASES : READING_PHRASES
+  const phrase = useCyclingPhrase(phrases, runner.streaming)
 
   // The waiting state and the reply occupy different places — one centred in
   // the panel, the other at the top — so they cannot cross-fade in place.
@@ -565,7 +563,7 @@ export default function ReviewPanel({
           // reply can take its place underneath without the two briefly
           // stacking and doubling the height.
           <div className={runner.streamText ? 'relative' : 'relative flex-1 flex flex-col'}>
-            {(!runner.streamText || handingOff) && (
+            {!review && (!runner.streamText || handingOff) && (
               <div
                 className={`flex flex-col items-center justify-center gap-3 py-8 text-center transition-opacity duration-300 ${
                   runner.streamText ? 'pointer-events-none absolute inset-0' : 'flex-1'
@@ -573,8 +571,9 @@ export default function ReviewPanel({
               >
                 {/* The graphic earns its place on a first pass, where the wait
                     is long. A follow-up returns fast enough that it would be
-                    theatre, so that case gets the words alone. */}
-                {!review && <ReviewAnimation />}
+                    theatre, so that case skips this block entirely and says its
+                    piece in the action bar instead. */}
+                <ReviewAnimation />
                 <p
                   // Re-keying on the phrase restarts the animation, so each
                   // line rises in rather than swapping in place.
@@ -692,8 +691,17 @@ export default function ReviewPanel({
               cancel
             </button>
           )}
+          {/* One status line per run. A first pass says it centred, under the
+              animation; a revision has no centred state to say it in, so the
+              same cycling phrase lands here. Once text is arriving the phrase
+              stops cycling — it holds on the last one rather than looping back
+              to "re-reading", which by then would be a lie. */}
           <span className="ml-auto text-[10px] text-ink-faint">
-            {runner.streaming ? 'reviewing…' : 'reads the live editor'}
+            {!runner.streaming
+              ? 'reads the live editor'
+              : review
+                ? (runner.streamText ? phrases[phrases.length - 1] : phrase.text)
+                : ''}
           </span>
         </div>
       </div>
