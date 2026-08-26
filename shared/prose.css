@@ -78,3 +78,15 @@
    keeps adjacent matches from blurring together. Applied by the
    TipTap SearchHighlight plugin (prose) on a <mark> wrapper. The
    compound selector beats Typography's prose-* mark color reset. */
+
+/* The word currently being spoken by the chapter editor's read-aloud
+   (Alt-Shift-R). Deliberately the same accent wash as the reader's
+   `.narration-word.is-active` above — it is the same signal, and the writer
+   moving between the editor and Preview should not have to learn two.
+   Applied as a ProseMirror inline decoration by NarrationHighlight, so it
+   styles a plain <span> rather than a wrapped token. */
+.narration-speaking {
+  border-radius: 2px;
+  background-color: color-mix(in srgb, var(--color-accent) 32%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 30%, transparent);
+}

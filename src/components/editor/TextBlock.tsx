@@ -6,7 +6,8 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import TextAlign from '@tiptap/extension-text-align'
 import { Extension, InputRule, Mark, mergeAttributes } from '@tiptap/core'
-import { substituteVarTemplates } from '@/lib/templateVars'
+import { buildSpokenDoc, wordRangeAt } from '@/lib/narration/spokenDoc'
+import { NarrationHighlight, SET_NARRATION_RANGE } from '@/lib/extensions/narrationHighlight'
 
 // Custom mark — addAttributes() path guarantees color renders in the live editor
 const TextStyleColor = Mark.create({
@@ -65,14 +66,13 @@ const ReadAloud = Extension.create<{ getVariables: () => ReadAloudVariable[] }>(
       'Alt-Shift-r': ({ editor }) => {
         if (!window.speechSynthesis) return false
         if (window.speechSynthesis.speaking) {
+          // cancel() fires the utterance's onend, which clears the highlight.
           window.speechSynthesis.cancel()
           return true
         }
         const { from, to, empty } = editor.state.selection
-        const raw = empty
-          ? editor.state.doc.textBetween(from, editor.state.doc.content.size, ' ')
-          : editor.state.doc.textBetween(from, to, ' ')
-        if (!raw.trim()) return false
+        const readFrom = from
+        const readTo = empty ? editor.state.doc.content.size : to
 
         // Build a canon story state from each variable's default value so
         // {{condition ? 'a' : 'b'}} resolves to the same branch the export uses.
@@ -82,9 +82,35 @@ const ReadAloud = Extension.create<{ getVariables: () => ReadAloudVariable[] }>(
           else if (v.type === 'number') storyState[v.name] = Number(v.defaultValue ?? 0)
           else storyState[v.name] = v.defaultValue ?? ''
         }
-        const text = substituteVarTemplates(raw, storyState, s => s)
 
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance(text))
+        // The spoken string plus a per-character map back to document
+        // positions — see spokenDoc.ts for why the raw text is not enough.
+        const spoken = buildSpokenDoc(editor.state.doc, readFrom, readTo, storyState)
+        if (!spoken.text.trim()) return false
+
+        // Meta-only transactions: no steps, so `docChanged` stays false and
+        // TipTap never emits onUpdate. Highlighting cannot write prose.
+        const setRange = (range: { from: number; to: number } | null) => {
+          if (editor.isDestroyed) return
+          editor.view.dispatch(editor.state.tr.setMeta(SET_NARRATION_RANGE, range))
+        }
+
+        const utterance = new SpeechSynthesisUtterance(spoken.text)
+        utterance.onboundary = event => {
+          // Engines also emit 'sentence' boundaries; only words move the
+          // highlight. A boundary landing on whitespace resolves to null, and
+          // we hold the previous word rather than flickering to nothing.
+          if (event.name && event.name !== 'word') return
+          const range = wordRangeAt(spoken, event.charIndex, event.charLength)
+          if (range) setRange(range)
+        }
+        utterance.onend = () => setRange(null)
+        utterance.onerror = () => setRange(null)
+
+        // Safari and friends may never fire a word boundary. Speech still
+        // works; the highlight simply never appears, which is the intended
+        // degradation rather than a broken read-aloud.
+        window.speechSynthesis.speak(utterance)
         return true
       },
     }
@@ -292,6 +318,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
       TextStyleColor,
       EmDash,
       SectionBreak,
+      NarrationHighlight,
       ReadAloud.configure({ getVariables: () => variablesRef.current }),
     ],
     editorProps: { attributes: { spellcheck: 'true' } },
@@ -305,6 +332,19 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
     onFocus: () => setFocused(true),
     onBlur: ({ editor }) => { setFocused(false); editor.commands.setTextSelection(editor.state.selection.anchor); onBlurPropRef.current?.() },
   })
+
+  // A block can unmount while it is still being read — navigating away,
+  // deleting the block, or the chapter re-rendering. speechSynthesis is a
+  // singleton owned by the window, so without this the voice keeps reading a
+  // block that is no longer on screen, and its onend fires against a
+  // destroyed editor.
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && window.speechSynthesis?.speaking) {
+        window.speechSynthesis.cancel()
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (editor && content) {
