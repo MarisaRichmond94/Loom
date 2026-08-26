@@ -178,6 +178,33 @@ export default function ExplorePanel({
     if (still.length !== selectedPovs.size) setSelectedPovs(new Set(still))
   }, [scope, selectedPovs])
 
+  // Has the reader taken the scroller over? Once she has, the answer streams in
+  // without the view moving — she is reading something further up, and dragging
+  // her back to the bottom on every chunk is the whole problem this avoids.
+  // Same behaviour as the chapter page's review pane.
+  const readerTookOver = useRef(false)
+
+  // Detected from INPUT events, not from watching scrollTop change: CSS scroll
+  // anchoring silently adjusts scrollTop as content grows, and those
+  // browser-authored `scroll` events are indistinguishable from a real drag.
+  // A wheel, a touch drag, a scrollbar grab or an arrow key only happen
+  // because she did something.
+  const takeOver = useCallback(() => { readerTookOver.current = true }, [])
+
+  // Returning to the bottom hands following back — the ordinary chat gesture
+  // for "catch me up again". Safe to read scrollTop for: content growing below
+  // an unmoved viewport only ever moves her further FROM the bottom, so scroll
+  // anchoring cannot fake this.
+  const onStreamScroll = useCallback(() => {
+    const el = streamRef.current
+    if (!el) return
+    if (el.scrollHeight - el.clientHeight - el.scrollTop <= 48) readerTookOver.current = false
+  }, [])
+
+  // A new turn — a send, or a thread opened from history — starts pinned again.
+  const userTurns = chat.messages.filter(m => m.role === 'user').length
+  useEffect(() => { readerTookOver.current = false }, [userTurns, chat.sessionId])
+
   // Keep the conversation pinned to the newest message by moving ITS OWN
   // scrollTop — never `scrollIntoView`, which walks every scrollable ancestor
   // and therefore scrolled the whole book page. That was the jump when opening
@@ -187,7 +214,7 @@ export default function ExplorePanel({
   // Loading a thread should land already at the bottom, not animate there.
   useEffect(() => {
     const el = streamRef.current
-    if (!el) return
+    if (!el || readerTookOver.current) return
     el.scrollTo({
       top: el.scrollHeight,
       behavior: chat.isStreaming ? 'smooth' : 'auto',
@@ -400,7 +427,15 @@ export default function ExplorePanel({
                 a drag can run across turns — a non-selectable wrapper between
                 selectable islands makes selection jump siblings in
                 Chromium/WebKit. */}
-            <div ref={streamRef} className="flex min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-4 reader-selectable">
+            <div
+              ref={streamRef}
+              onScroll={onStreamScroll}
+              onWheel={takeOver}
+              onTouchMove={takeOver}
+              onPointerDown={takeOver}
+              onKeyDown={takeOver}
+              className="flex min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-4 reader-selectable"
+            >
               {chat.messages.length === 0 ? (
                 <div className="m-auto max-w-md text-center">
                   <p className="text-sm font-semibold text-ink">
