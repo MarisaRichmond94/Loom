@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { LuCalendar, LuExternalLink } from 'react-icons/lu'
 import { useClickOutside } from '@/components/editor/AnchoredPopover'
 import { useBookChapterTags } from './useBookChapterTags'
-import TagFilterSelect, { type FilterOption } from './TagFilterSelect'
+import TagFilterSelect, { ClearFiltersButton, type FilterOption } from './TagFilterSelect'
 import EditableSummary from './EditableSummary'
 import ChaptersBoardSkeleton, {
   CHAPTER_CARD_H,
@@ -239,7 +239,8 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
   // it when it has not).
   const { events, characterPool, unreachable } = useTimelineData()
 
-  const [characterId, setCharacterId] = useState<string | null>(null)
+  const [characterIds, setCharacterIds] = useState<string[]>([])
+  const [pov, setPov] = useState<string | null>(null)
   const [eventId, setEventId] = useState<string | null>(null)
 
   /**
@@ -286,15 +287,29 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [chapters, events])
 
-  const filtering = characterId !== null || eventId !== null
-  // AND, not OR: two filters set means "chapters that have both". OR would
-  // make adding a second filter widen the result, which is the opposite of
-  // what setting a filter is for.
+  // A POV is a free-text name, not a tagged entity, so it is its own id. Same
+  // outline-card-wins-over-Loom resolution the card itself uses, so the list
+  // offers exactly the POVs the board is showing.
+  const povOf = useCallback(
+    (row: BookChapterRow) => summaries[row.chapterId]?.pov ?? row.pov,
+    [summaries],
+  )
+  const povOptions: FilterOption[] = useMemo(() => {
+    const used = new Set(chapters.map(povOf).filter((p): p is string => !!p))
+    return [...used].sort((a, b) => a.localeCompare(b)).map(p => ({ id: p, name: p }))
+  }, [chapters, povOf])
+
+  const filtering = characterIds.length > 0 || pov !== null || eventId !== null
+  // AND, not OR — across fields and WITHIN the character field alike. Two
+  // filters set means "chapters that have both"; two characters means "the
+  // chapters where they are together". OR would make adding a name widen the
+  // result, which is the opposite of what setting a filter is for.
   const matches = useMemo(
     () => (row: BookChapterRow) =>
-      (characterId === null || row.characters.some(c => c.id === characterId)) &&
+      characterIds.every(id => row.characters.some(c => c.id === id)) &&
+      (pov === null || povOf(row) === pov) &&
       (eventId === null || row.events.some(e => e.id === eventId)),
-    [characterId, eventId],
+    [characterIds, pov, eventId, povOf],
   )
 
   const gaps = useMemo(
@@ -354,12 +369,21 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
           container's very top edge. */}
       <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pb-1">
         <TagFilterSelect
+          multiple
           label="Character"
           placeholder="Any character"
           options={characterOptions}
-          value={characterId}
-          onChange={setCharacterId}
+          value={characterIds}
+          onChange={setCharacterIds}
           emptyHint="No characters tagged in this book yet."
+        />
+        <TagFilterSelect
+          label="POV"
+          placeholder="Any POV"
+          options={povOptions}
+          value={pov}
+          onChange={setPov}
+          emptyHint="No chapter in this book has a POV yet."
         />
         <TagFilterSelect
           label="Event"
@@ -368,6 +392,11 @@ export default function ChaptersSection({ seriesId, bookId }: { seriesId: string
           value={eventId}
           onChange={setEventId}
           emptyHint="No events tagged in this book yet."
+        />
+
+        <ClearFiltersButton
+          disabled={!filtering}
+          onClick={() => { setCharacterIds([]); setPov(null); setEventId(null) }}
         />
 
         {/* Pushed to the far right — the filters are the controls, this is the

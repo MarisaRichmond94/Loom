@@ -24,7 +24,7 @@ import { outlineCardLabels } from '@/lib/outlineCards'
 import { useBookOutline } from './editor/useBookOutline'
 import { useBookChapterTags } from './chapters/useBookChapterTags'
 import { useTimelineData } from './timeline/useTimelineData'
-import TagFilterSelect, { type FilterOption } from './chapters/TagFilterSelect'
+import TagFilterSelect, { ClearFiltersButton, type FilterOption } from './chapters/TagFilterSelect'
 import type { OutlineCard as Card } from '@/lib/writerOutline'
 
 // The book page's Outline section (LOOM-96, editable in LOOM-97).
@@ -124,7 +124,8 @@ export default function OutlineSection({
   // same as an off-canon chapter with no tags there.
   const { chapters: chapterTags } = useBookChapterTags(seriesId, bookId)
   const { characterPool } = useTimelineData()
-  const [characterId, setCharacterId] = useState<string | null>(null)
+  const [characterIds, setCharacterIds] = useState<string[]>([])
+  const [pov, setPov] = useState<string | null>(null)
   const charactersByChapterId = useMemo(
     () => new Map(chapterTags.map(row => [row.chapterId, row.characters])),
     [chapterTags],
@@ -139,11 +140,17 @@ export default function OutlineSection({
       .map(c => ({ id: c.id, name: c.name }))
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [chapterTags, characterPool])
-  const filtering = characterId !== null
+  const filtering = characterIds.length > 0 || pov !== null
   function cardMatches(card: Card): boolean {
-    if (characterId === null) return true
+    // POV lives on the card itself, so it is answerable for a planned card
+    // with no chapter behind it — unlike the character tags below.
+    if (pov !== null && card.pov !== pov) return false
+    if (characterIds.length === 0) return true
     if (!card.loom_id) return false
-    return (charactersByChapterId.get(card.loom_id) ?? []).some(c => c.id === characterId)
+    // AND, not OR: two names means "the cards where they are together".
+    // Adding a name must never widen the result.
+    const tagged = charactersByChapterId.get(card.loom_id) ?? []
+    return characterIds.every(id => tagged.some(c => c.id === id))
   }
 
   // The board's own shape while it loads, not a line of text: the tab is
@@ -180,6 +187,9 @@ export default function OutlineSection({
   // Every POV already used in this book, for the chip's autocomplete. Sorted so
   // the list does not reshuffle as cards move.
   const povSuggestions = [...new Set(outline.cards.map(c => c.pov).filter(Boolean))].sort()
+  // The same set, shaped for the filter — a POV is a free-text name, so it is
+  // its own id.
+  const povOptions: FilterOption[] = povSuggestions.map(p => ({ id: p, name: p }))
 
   function onDragEnd(event: DragEndEvent) {
     setDraggingId(null)
@@ -263,12 +273,26 @@ export default function OutlineSection({
           the board below. */}
       <div className="sticky top-0 z-10 -mx-2.5 px-2.5 bg-surface-base flex flex-wrap items-end gap-3 pb-1">
         <TagFilterSelect
+          multiple
           label="Character"
           placeholder="Any character"
           options={characterOptions}
-          value={characterId}
-          onChange={setCharacterId}
+          value={characterIds}
+          onChange={setCharacterIds}
           emptyHint="No characters tagged in this book yet."
+        />
+        <TagFilterSelect
+          label="POV"
+          placeholder="Any POV"
+          options={povOptions}
+          value={pov}
+          onChange={setPov}
+          emptyHint="No card in this book has a POV yet."
+        />
+
+        <ClearFiltersButton
+          disabled={!filtering}
+          onClick={() => { setCharacterIds([]); setPov(null) }}
         />
       </div>
 

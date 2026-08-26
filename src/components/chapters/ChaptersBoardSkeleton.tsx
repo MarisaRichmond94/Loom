@@ -6,9 +6,10 @@
 // settles and then jumps when the guess turns out wrong, which is the very
 // thing a skeleton is for.
 //
-// It also draws the FILTER BAR, not just the cards. The bar is two fields tall
-// and sits above the board; a skeleton that omits it lets the whole board slide
-// down the moment the real one appears.
+// It also draws the FILTER BAR, not just the cards — one field per real filter
+// (Character, POV, Event) plus the Clear button beside them. The bar sits above
+// the board, so a skeleton that omits it, or draws the wrong number of
+// controls, lets the board shift the moment the real one appears.
 
 /** The real card height. Imported by ChaptersSection — do not duplicate. */
 export const CHAPTER_CARD_H = 208
@@ -33,6 +34,14 @@ export default function ChaptersBoardSkeleton({ cards = 15 }: { cards?: number }
       <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pb-1">
         <FieldSkeleton />
         <FieldSkeleton />
+        <FieldSkeleton />
+        {/* The Clear button, which the real bar always renders (disabled when
+            nothing is set) — so it always belongs here too. A text bar rather
+            than a bordered box, because the real control is a ghost: the
+            h-9 wrapper is what keeps it on the fields' centre line. */}
+        <div className="flex h-9 items-center">
+          <div className="h-3.5 w-10 rounded bg-surface-overlay" />
+        </div>
       </div>
 
       <div

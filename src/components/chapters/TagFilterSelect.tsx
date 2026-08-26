@@ -11,33 +11,68 @@ import { AnchoredPopover, LIST_MAX_HEIGHT, useClickOutside } from '@/components/
 // memory rather than two. A wall of chips was the first attempt and does not
 // survive contact with a 63-character cast.
 //
-// One deliberate divergence from that picker: this is SINGLE-select, so
-// choosing closes the popover and clears the query. CharacterPicker stays open
-// because it is building a cast of several; here the choice is complete the
-// moment it is made, and leaving the list up would mean a second click to
-// dismiss something already finished.
+// Single-select by default: choosing closes the popover and clears the query,
+// because the choice is complete the moment it is made and leaving the list up
+// would mean a second click to dismiss something already finished.
+//
+// `multiple` opts into CharacterPicker's behaviour instead — clicking toggles
+// and the popover STAYS open, because you are building a set and closing after
+// each name would mean reopening for the next. Enter additionally empties the
+// search box while holding focus, so a set can be built as
+// type-Enter-type-Enter.
 
 export type FilterOption = { id: string; name: string }
 
-export default function TagFilterSelect({
-  label,
-  placeholder,
-  options,
-  value,
-  onChange,
-  emptyHint,
-}: {
-  /** Sits above the control, so the two filters are distinguishable when both
-   *  read "None". */
+/**
+ * "Clear filters" — resets every field at once, sitting to the right of them.
+ *
+ * Always rendered, disabled when nothing is set, rather than appearing only
+ * while filtering: a control that pops into existence shifts whatever sits
+ * beside it, and the skeleton above the board would have to guess whether to
+ * draw it. Disabled it is always in the same place, and the skeleton can
+ * always draw it.
+ *
+ * A ghost control — text only, no border, no fill, no icon. The fields beside
+ * it are the boxes; giving the reset the same weight would read as a fourth
+ * one. Padding, not a height class: it is a sibling of those fields in an
+ * `items-end` row, so matching their py/text keeps the bottoms in line however
+ * the type scale moves.
+ */
+export function ClearFiltersButton({ disabled, onClick }: { disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title="Clear all filters"
+      className="px-1 py-2 text-sm text-ink-faint transition enabled:hover:text-accent disabled:opacity-40"
+    >
+      Clear
+    </button>
+  )
+}
+
+type Base = {
+  /** Sits above the control, so the filters are distinguishable when they all
+   *  read the same placeholder. */
   label: string
   placeholder: string
   options: FilterOption[]
-  value: string | null
-  onChange: (id: string | null) => void
   /** Shown in place of the list when nothing is taggable — "no events tagged
    *  in this book yet" is a different state from "your search matched none". */
   emptyHint: string
-}) {
+}
+
+// A discriminated union rather than one `string[]` shape for both: a
+// single-select caller holding a one-element array would have to unwrap it at
+// every use, and nothing would stop it holding two.
+type Props = Base & (
+  | { multiple?: false; value: string | null; onChange: (id: string | null) => void }
+  | { multiple: true; value: string[]; onChange: (ids: string[]) => void }
+)
+
+export default function TagFilterSelect(props: Props) {
+  const { label, placeholder, options, emptyHint } = props
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   // The whole field is the anchor now, not the trigger button — so the popover
@@ -49,12 +84,49 @@ export default function TagFilterSelect({
   useClickOutside([anchorRef, popRef], () => setOpen(false), open)
 
   const matches = options.filter(o => o.name.toLowerCase().includes(query.trim().toLowerCase()))
-  const selected = value ? options.find(o => o.id === value) ?? null : null
+  const selectedIds = props.multiple ? props.value : props.value ? [props.value] : []
+  const selectedSet = new Set(selectedIds)
+  // Named from `options`, not from the ids: an id whose option has gone away
+  // (a character untagged out of the book while the filter was set) should
+  // drop out of the summary rather than render as a raw cuid.
+  const selectedNames = selectedIds
+    .map(id => options.find(o => o.id === id)?.name)
+    .filter((n): n is string => !!n)
+  // "Kira +2" rather than "3 selected": the first name is the one she is most
+  // likely to be checking, and the count carries the rest.
+  const display =
+    selectedNames.length === 0
+      ? placeholder
+      : selectedNames.length === 1
+        ? selectedNames[0]
+        : `${selectedNames[0]} +${selectedNames.length - 1}`
 
-  function choose(id: string) {
-    onChange(id === value ? null : id)
+  function choose(id: string, viaEnter = false) {
+    if (props.multiple) {
+      props.onChange(
+        props.value.includes(id) ? props.value.filter(v => v !== id) : [...props.value, id],
+      )
+      // Enter is the "type a name, commit it, type the next" gesture, so it
+      // clears the query — otherwise the second name means reaching for
+      // backspace first. A CLICK keeps the query: a search like "gat" may have
+      // several names under it, and clearing would make picking the second one
+      // a retype.
+      if (viaEnter) setQuery('')
+      // Focus comes back to the search box either way, so typing continues to
+      // go where she is looking. After a click it sits on the option button,
+      // where the next keystroke would do nothing.
+      inputRef.current?.focus()
+      return
+    }
+    props.onChange(id === props.value ? null : id)
     setQuery('')
     setOpen(false)
+  }
+
+  function clear() {
+    if (props.multiple) props.onChange([])
+    else props.onChange(null)
+    setQuery('')
   }
 
   return (
@@ -69,7 +141,7 @@ export default function TagFilterSelect({
       <div
         ref={anchorRef}
         className={`flex w-52 items-center gap-1 rounded-lg border bg-surface-overlay/40 py-2 pl-3 pr-2 text-sm transition ${
-          selected ? 'border-accent/40 text-ink' : 'border-accent/20 text-ink-faint'
+          selectedNames.length > 0 ? 'border-accent/40 text-ink' : 'border-accent/20 text-ink-faint'
         } hover:border-accent/50`}
       >
         <button
@@ -79,15 +151,15 @@ export default function TagFilterSelect({
           aria-haspopup="listbox"
           className="min-w-0 flex-1 truncate text-left focus:outline-none"
         >
-          {selected?.name ?? placeholder}
+          {display}
         </button>
 
         {/* Clearing is its own control: "show me everything again" is one
             click, not open-then-find-and-untoggle. */}
-        {selected && (
+        {selectedNames.length > 0 && (
           <button
             type="button"
-            onClick={() => { onChange(null); setQuery('') }}
+            onClick={clear}
             title={`Clear ${label.toLowerCase()} filter`}
             aria-label={`Clear ${label.toLowerCase()} filter`}
             className="shrink-0 rounded p-0.5 text-ink-faint transition hover:text-accent"
@@ -126,10 +198,12 @@ export default function TagFilterSelect({
                 onKeyDown={e => {
                   // Enter takes the first match — the same keyboard contract
                   // CharacterPicker has, so typing a few letters and pressing
-                  // Enter works in both places.
+                  // Enter works in both places. In `multiple` mode it also
+                  // clears the box and keeps focus, so several names can be
+                  // added as type-Enter-type-Enter without touching the mouse.
                   if (e.key === 'Enter' && matches.length > 0) {
                     e.preventDefault()
-                    choose(matches[0].id)
+                    choose(matches[0].id, true)
                   }
                   if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setOpen(false) }
                 }}
@@ -146,7 +220,7 @@ export default function TagFilterSelect({
               </p>
             ) : (
               matches.map(o => {
-                const isSelected = o.id === value
+                const isSelected = selectedSet.has(o.id)
                 return (
                   <button
                     key={o.id}

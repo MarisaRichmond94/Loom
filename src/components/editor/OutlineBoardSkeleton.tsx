@@ -13,17 +13,33 @@
 
 export const OUTLINE_CARD_H = 250
 
+/** One filter field: its label, then the control. */
+function FieldSkeleton() {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="h-3 w-16 rounded bg-surface-overlay" />
+      <div className="h-9 w-52 rounded-lg border-2 border-accent/10 bg-surface-overlay/40" />
+    </div>
+  )
+}
+
 export default function OutlineBoardSkeleton({ cards = 8 }: { cards?: number }) {
   return (
     <div className="flex flex-col gap-3">
-      {/* Sticky, matching the real character filter (LOOM-141) — non-
-          interactive here, just the same footprint so the board doesn't slide
-          up the moment the real filter mounts. No pb — see the real
-          component for why stacking it with the parent's gap-3 is wrong. */}
+      {/* Sticky, matching the real filter bar (LOOM-141) — one field per real
+          filter (Character, POV), plus Clear. Non-interactive here, just the same
+          footprint so the board doesn't slide up the moment the real filters
+          mount. No pb — see the real component for why stacking it with the
+          parent's gap-3 is wrong. */}
       <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pb-1">
-        <div className="flex flex-col gap-1">
-          <div className="h-3 w-16 rounded bg-surface-overlay" />
-          <div className="h-9 w-52 rounded-lg border-2 border-accent/10 bg-surface-overlay/40" />
+        <FieldSkeleton />
+        <FieldSkeleton />
+        {/* The Clear button, which the real bar always renders (disabled when
+            nothing is set) — so it always belongs here too. A text bar rather
+            than a bordered box, because the real control is a ghost: the
+            h-9 wrapper is what keeps it on the fields' centre line. */}
+        <div className="flex h-9 items-center">
+          <div className="h-3.5 w-10 rounded bg-surface-overlay" />
         </div>
       </div>
 

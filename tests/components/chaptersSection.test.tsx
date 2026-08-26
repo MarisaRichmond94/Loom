@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import ChaptersSection from '@/components/chapters/ChaptersSection'
 import type { BookChapterRow } from '@/lib/bookChapterTags'
 import { CHAPTER_CARD_H } from '@/components/chapters/ChaptersBoardSkeleton'
+import { prefetchBookOutline } from '@/components/editor/outlineCache'
 
 // The Chapters tab (LOOM-120/121). The cases worth pinning are the ones the
 // Outline tab gets wrong by construction: a branch chapter must appear, under
@@ -151,9 +152,44 @@ describe('ChaptersSection', () => {
     )
     await userEvent.keyboard('{Enter}')
 
-    // Selected, and the popover closed — single-select is complete on choice.
-    await waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument())
-    expect(screen.getByRole('button', { name: /Emma Bradford/ })).toBeInTheDocument()
+    // Selected — and the popover STAYS open, because the character filter is
+    // multi-select and the next name should be one click away rather than
+    // reopen-and-retype. (The single-select Event filter still closes.)
+    expect(await screen.findByRole('button', { name: /Emma Bradford/ })).toBeInTheDocument()
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+
+    // The box empties and keeps focus, so the whole cast can be filtered in
+    // one pass: type, Enter, type, Enter.
+    const search = screen.getByLabelText('Search character')
+    expect(search).toHaveValue('')
+    expect(search).toHaveFocus()
+
+    await userEvent.keyboard('chas{Enter}')
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Chase Gatlin \+1|Emma Bradford \+1/ })).toBeInTheDocument(),
+    )
+    expect(screen.getByLabelText('Search character')).toHaveValue('')
+  })
+
+  it('clears every filter at once from the Clear button', async () => {
+    setup()
+    await pick(/Any character/, 'Chase Gatlin')
+    await pick(/Any event/, 'The Heist')
+    await waitFor(() => expect(screen.getByText('1 of 6 chapter(s)')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear' }))
+
+    await waitFor(() => expect(screen.queryByText(/of 6 chapter\(s\)/)).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Any character' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Any POV' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Any event' })).toBeInTheDocument()
+  })
+
+  it('offers Clear as a disabled control before anything is filtered', async () => {
+    // Present but inert, never absent: a control that appears only once a
+    // filter is set would shift the bar the moment it did.
+    setup()
+    expect(await screen.findByRole('button', { name: 'Clear' })).toBeDisabled()
   })
 
   it('keeps non-matching chapters in place, and counts the gap', async () => {
@@ -223,9 +259,10 @@ describe('ChaptersSection loading', () => {
       expect((card as HTMLElement).style.height).toBe(`${CHAPTER_CARD_H}px`)
     }
 
-    // The filter bar is drawn too — omitting it lets the whole board slide down
-    // the moment the real one arrives.
-    expect(container.querySelectorAll('.w-52')).toHaveLength(2)
+    // The filter bar is drawn too — omitting it, or drawing the wrong number
+    // of fields, lets the whole board slide the moment the real one arrives.
+    // One per real filter: Character, POV, Event.
+    expect(container.querySelectorAll('.w-52')).toHaveLength(3)
   })
 })
 
@@ -376,6 +413,10 @@ describe('ChaptersSection summaries', () => {
     setup()
     await pick(/Any character/, 'Chase Gatlin')
     await waitFor(() => expect(screen.getByText('2 of 6 chapter(s)')).toBeInTheDocument())
+    // Multi-select leaves the list up, so close it first — what the ✕ does to
+    // the popover is the only thing this case is measuring.
+    await userEvent.click(screen.getByRole('button', { name: 'Open character list' }))
+    await waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: 'Clear character filter' }))
     await waitFor(() => expect(screen.queryByText('2 of 6 chapter(s)')).not.toBeInTheDocument())
@@ -391,6 +432,62 @@ describe('ChaptersSection summaries', () => {
     await waitFor(() => expect(screen.getByText('2 of 6 chapter(s)')).toBeInTheDocument())
 
     await pick(/Any event/, 'The Heist')
+    await waitFor(() => expect(screen.getByText('1 of 6 chapter(s)')).toBeInTheDocument())
+  })
+
+  it('narrows to the chapters where EVERY chosen character appears', async () => {
+    // Chase is in two chapters, Emma in two, and they share exactly one.
+    // Picking both must land on that one: within the character field, as
+    // across fields, adding a name narrows. An OR would widen to three.
+    mockChapterState.chapters = CHAPTERS.map(c =>
+      c.chapterId === 'c4'
+        ? { ...c, characters: [...c.characters, { id: 'wc-emma', nonCanon: true }] }
+        : c,
+    )
+    setup()
+    const list = await openFilter(/Any character/)
+    await userEvent.click(within(list).getByRole('option', { name: /Chase Gatlin/ }))
+    await waitFor(() => expect(screen.getByText('2 of 6 chapter(s)')).toBeInTheDocument())
+
+    await userEvent.click(within(list).getByRole('option', { name: /Emma Bradford/ }))
+    await waitFor(() => expect(screen.getByText('1 of 6 chapter(s)')).toBeInTheDocument())
+    // The trigger carries the first name and a count for the rest.
+    expect(screen.getByRole('button', { name: /Chase Gatlin \+1/ })).toBeInTheDocument()
+
+    // Clicking a chosen name again takes it back off.
+    await userEvent.click(within(list).getByRole('option', { name: /Chase Gatlin/ }))
+    await waitFor(() => expect(screen.getByText('2 of 6 chapter(s)')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /^Emma Bradford$/ })).toBeInTheDocument()
+  })
+
+  it('offers only the POVs this book actually uses, and filters by one', async () => {
+    setup()
+    const list = await openFilter(/Any POV/)
+    // Loom's own column is the only POV source for the branch chapter, and
+    // the one card in the outline mock has none — so "Chase" is the whole list.
+    expect(within(list).getAllByRole('option')).toHaveLength(1)
+    await userEvent.click(within(list).getByRole('option', { name: 'Chase' }))
+
+    await waitFor(() => expect(screen.getByText('1 of 6 chapter(s)')).toBeInTheDocument())
+  })
+
+  it('takes the POV from the outline card where one exists', async () => {
+    // The card wins over Loom's own column — the same resolution the card
+    // face shows — so filtering can never disagree with what is on screen.
+    ;(prefetchBookOutline as jest.Mock).mockResolvedValueOnce({
+      outline: {
+        cards: [{
+          id: 'ch-1', loom_id: 'c1', chapter: 1, position: 1, status: 'synced',
+          heading: 'Chapter 1', pov: 'Emma', date: null,
+          writer_summary: '<p>Chase meets Emma.</p>', extracted_bullets: [], notes: null,
+        }],
+        syncState: 'synced',
+        writeaiNumber: 1,
+      },
+      reason: null,
+    })
+    setup()
+    await pick(/Any POV/, 'Emma')
     await waitFor(() => expect(screen.getByText('1 of 6 chapter(s)')).toBeInTheDocument())
   })
 
