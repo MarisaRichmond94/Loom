@@ -6,6 +6,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import TextAlign from '@tiptap/extension-text-align'
 import { Extension, InputRule, Mark, mergeAttributes } from '@tiptap/core'
+import { Mapping } from '@tiptap/pm/transform'
 import { buildSpokenDoc, wordRangeAt } from '@/lib/narration/spokenDoc'
 import { NarrationHighlight, SET_NARRATION_RANGE } from '@/lib/extensions/narrationHighlight'
 
@@ -85,8 +86,21 @@ const ReadAloud = Extension.create<{ getVariables: () => ReadAloudVariable[] }>(
 
         // The spoken string plus a per-character map back to document
         // positions — see spokenDoc.ts for why the raw text is not enough.
+        // Those positions are a snapshot of `editor.state.doc` right now; the
+        // writer can keep typing while speech plays, so we track every
+        // transaction dispatched from here on and remap each boundary's raw
+        // position through it before highlighting — otherwise the highlight
+        // is computed against a doc that no longer exists and drifts further
+        // off with every edit.
         const spoken = buildSpokenDoc(editor.state.doc, readFrom, readTo, storyState)
         if (!spoken.text.trim()) return false
+
+        const mapping = new Mapping()
+        const onTransaction = ({ transaction }: { transaction: { mapping: Mapping } }) => {
+          mapping.appendMapping(transaction.mapping)
+        }
+        editor.on('transaction', onTransaction)
+        const stopTracking = () => editor.off('transaction', onTransaction)
 
         // Meta-only transactions: no steps, so `docChanged` stays false and
         // TipTap never emits onUpdate. Highlighting cannot write prose.
@@ -102,10 +116,13 @@ const ReadAloud = Extension.create<{ getVariables: () => ReadAloudVariable[] }>(
           // we hold the previous word rather than flickering to nothing.
           if (event.name && event.name !== 'word') return
           const range = wordRangeAt(spoken, event.charIndex, event.charLength)
-          if (range) setRange(range)
+          if (!range) return
+          const from = mapping.map(range.from, -1)
+          const to = mapping.map(range.to, 1)
+          if (to > from) setRange({ from, to })
         }
-        utterance.onend = () => setRange(null)
-        utterance.onerror = () => setRange(null)
+        utterance.onend = () => { stopTracking(); setRange(null) }
+        utterance.onerror = () => { stopTracking(); setRange(null) }
 
         // Safari and friends may never fire a word boundary. Speech still
         // works; the highlight simply never appears, which is the intended
