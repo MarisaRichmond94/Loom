@@ -25,8 +25,15 @@ const dbIt = hasDb ? it : it.skip
 // structurally safe rather than safe-by-convention. `sql()` interpolates its
 // argument, so without it a future query that is not a SELECT would write to
 // the manuscript and nothing would stop it.
+// maxBuffer is sized for a manuscript that keeps growing. Node's default is
+// 1MiB, and the template-bearing prose of the two books queried below crossed
+// it in Aug 2026 (~1.05MiB) — the failure is an opaque `spawnSync sqlite3
+// ENOBUFS`, which reads like a broken query rather than "the book got longer".
 function sql(query: string): string {
-  return execFileSync('sqlite3', ['-readonly', DB, query], { encoding: 'utf8' })
+  return execFileSync('sqlite3', ['-readonly', DB, query], {
+    encoding: 'utf8',
+    maxBuffer: 256 * 1024 * 1024,
+  })
 }
 
 function storyStateFromDefaults(): StoryState {
