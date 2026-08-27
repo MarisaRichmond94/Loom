@@ -3,6 +3,7 @@ import type { ExportFormatting, ManuscriptStyle } from '@/lib/exportFormatting'
 import type { TemplateStyles } from '@/lib/templateStyles'
 import type { ManuscriptChapter } from './walk'
 import { serializeTipTapDoc, escapeXml, type FootnoteCollector } from './tiptapToOoxml'
+import { educateQuotes } from '@/lib/clipboardFormatting'
 
 // Assembles a complete .docx (WordprocessingML zip) for a walked manuscript.
 // The XML is built by hand rather than through a docx library so the output
@@ -138,7 +139,7 @@ function buildFootnotesXml(notes: string[]): string {
   const items = notes.map((text, i) =>
     `<w:footnote w:id="${i + 1}"><w:p><w:pPr><w:pStyle w:val="Footnotes"/></w:pPr>` +
     '<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteRef/></w:r>' +
-    `<w:r><w:t xml:space="preserve"> ${escapeXml(text)}</w:t></w:r>` +
+    `<w:r><w:t xml:space="preserve"> ${escapeXml(educateQuotes(text))}</w:t></w:r>` +
     '</w:p></w:footnote>',
   ).join('')
   return `${XML_DECL}<w:footnotes ${W_NS}>${sep}${items}</w:footnotes>`

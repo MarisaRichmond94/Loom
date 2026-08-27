@@ -1,6 +1,7 @@
 import { substituteVarTemplates, findVarTemplates, findTopLevel, evalCondition, type TemplateMatch } from '@/lib/templateVars'
 import type { StoryState } from '@/lib/storyEngine'
 import { nearestColorStyle, type TemplateColorStyle } from '@/lib/templateStyles'
+import { educateQuotes } from '@/lib/clipboardFormatting'
 
 // Serializes a TipTap doc JSON string into a sequence of WordprocessingML
 // <w:p> elements. Marks map to run properties; footnote marks become real
@@ -89,7 +90,7 @@ function runProps(marks: TipTapMark[] | undefined, opts: SerializeOptions, suppr
 function textRun(text: string, marks: TipTapMark[] | undefined, opts: SerializeOptions, suppressColor?: string | null): string {
   const substituted = substituteVarTemplates(text, opts.storyState, s => s)
   if (!substituted) return ''
-  return `<w:r>${runProps(marks, opts, suppressColor)}<w:t xml:space="preserve">${escapeXml(substituted)}</w:t></w:r>`
+  return `<w:r>${runProps(marks, opts, suppressColor)}<w:t xml:space="preserve">${escapeXml(educateQuotes(substituted))}</w:t></w:r>`
 }
 
 function footnoteRefRun(id: number): string {
