@@ -11,7 +11,6 @@ import {
   aliasList,
   isPovCharacter,
   matchesQuery,
-  sortCharacters,
   sortTaggedCharacters,
   type WriterCharacter,
 } from '@/lib/characterSearch'
@@ -317,7 +316,7 @@ export default function CharactersPanel({
   }, [tagMode])
 
   const visible = useMemo(() => {
-    if (tagMode) return sortCharacters(characters.filter(c => matchesQuery(c, query)), direction)
+    if (tagMode) return sortTaggedCharacters(characters.filter(c => matchesQuery(c, query)), pov, direction)
     return sortTaggedCharacters(tagged, pov, direction)
   }, [tagMode, characters, tagged, query, direction, pov])
 
