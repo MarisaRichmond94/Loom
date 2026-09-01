@@ -237,6 +237,11 @@ export default function ReviewPanel({
   // anchors — see the follow effect below.
   const turnRef = useRef<HTMLDivElement>(null)
   const responseRef = useRef<HTMLDivElement>(null)
+  // The most recently stored round's question — where "scroll to bottom"
+  // lands once a reply has been saved and `turnRef`'s pending question has
+  // been swapped over. Same anchor, same reasoning, later in the round's
+  // life.
+  const lastStoredTurnRef = useRef<HTMLDivElement>(null)
 
   // Shown once the top is genuinely out of reach.
   const [scrolledDown, setScrolledDown] = useState(false)
@@ -318,6 +323,18 @@ export default function ReviewPanel({
     if (!s) return
     // Same reasoning as scrollToTop: going somewhere deliberately mid-stream
     // counts as taking the scroller over.
+    // "Bottom" means the top of the newest round, not the literal end of the
+    // scroller's content — landing past it would bury the reply's opening
+    // line above the fold instead of surfacing it. Prefer the reply in
+    // progress, then the question that opened this round (streamed or
+    // saved), and only fall back to the true bottom if none of those anchors
+    // are mounted.
+    const el = responseRef.current ?? turnRef.current ?? lastStoredTurnRef.current
+    if (el) {
+      const top = Math.min(offsetWithin(s, el) - 8, s.scrollHeight - s.clientHeight)
+      s.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+      return
+    }
     s.scrollTo({ top: s.scrollHeight - s.clientHeight, behavior: 'smooth' })
   }
 
@@ -535,8 +552,13 @@ export default function ReviewPanel({
         {/* Each writer turn opens a round, so those are the dividers. */}
         {(review?.messages ?? []).map((m, i) => {
           const mine = m.role === 'user'
+          const isLastTurn = mine && !(review?.messages ?? []).slice(i + 1).some(later => later.role === 'user')
           return (
-            <div key={m.id ?? i} className={mine ? (i === 0 ? 'mb-3' : 'mt-6 mb-3') : 'mb-4'}>
+            <div
+              key={m.id ?? i}
+              ref={isLastTurn ? lastStoredTurnRef : undefined}
+              className={mine ? (i === 0 ? 'mb-3' : 'mt-6 mb-3') : 'mb-4'}
+            >
               <div className={`mb-1 text-[10px] font-semibold uppercase tracking-wider ${mine ? 'text-accent' : 'text-ink-faint'}`}>
                 {mine ? 'You' : (review?.focus ?? 'Reviewer')}
               </div>
