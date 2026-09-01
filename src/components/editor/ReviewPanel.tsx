@@ -648,7 +648,8 @@ export default function ReviewPanel({
             title="This chapter has never been reviewed"
           >
             It will be read exactly as it stands in the editor right now —
-            nothing is exported or synced first.
+            nothing is exported or synced first. If there’s something you want
+            the reviewer to weigh, add a note below before you submit.
           </PanelEmptyState>
         )}
 
@@ -700,7 +701,7 @@ export default function ReviewPanel({
             last review cost ${runner.cost.toFixed(3)}
           </div>
         )}
-        {review && !runner.streaming && (
+        {!runner.streaming && (
           <textarea
             value={reply}
             onChange={e => setReply(e.target.value)}
@@ -713,7 +714,13 @@ export default function ReviewPanel({
               start(reply.trim() || undefined)
             }}
             rows={2}
-            placeholder="Reply, or leave blank to re-review the revised chapter…"
+            // Before the first review this is an OPTIONAL steering note sent
+            // with the opening pass ("watch the pacing in the middle third");
+            // WriteAI folds it into the review ask rather than treating it as
+            // a standalone question, so the full review still arrives.
+            placeholder={review
+              ? 'Reply, or leave blank to re-review the revised chapter…'
+              : 'Optional: anything the reviewer should weigh or focus on…'}
             // No size class, so it inherits the panel's scaled body size.
             // Reading a review at 16px and typing the reply at 12px would be
             // an odd seam in what is one conversation.
