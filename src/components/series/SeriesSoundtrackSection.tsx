@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { LuMusic, LuExternalLink } from 'react-icons/lu'
 import PinnedAudio from '@/components/PinnedAudio'
-import { pinLabel } from '@/lib/pinLabel'
 import SeriesSoundtrackSkeleton from './SeriesSoundtrackSkeleton'
 
 type SeriesSoundtrack = {
@@ -70,39 +69,43 @@ export default function SeriesSoundtrackSection({ seriesId }: { seriesId: string
         <div key={bookTitle} className="flex flex-col gap-2">
           <p className="text-xs uppercase tracking-widest text-ink-faint">{bookTitle}</p>
           {tracks.map((s, idx) => {
-            const label = pinLabel(s.pinStart, s.pinEnd)
             const chapterDisplay = s.chapterTitle?.trim() || `Chapter ${s.chapterOrder}`
             const artUrl = s.hasAlbumArt ? `/music/${s.id}-art.jpg` : null
             return (
-              <div key={s.id} className="px-4 py-3 rounded-lg bg-surface-raised border border-accent/10">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-ink-faint shrink-0 w-6 text-right">{idx + 1}</span>
-                  <div className="shrink-0 w-10 h-10 rounded overflow-hidden flex items-center justify-center border border-accent/10 bg-surface-overlay">
+              // Fixed at 104px — the exact height the content column resolves
+              // to (20px title line + 32px PinnedAudio + 16px chapter line +
+              // 2×6px gaps + 2×12px padding). See the book page's soundtrack
+              // tab for why the row needs a definite height here.
+              <div key={s.id} className="rounded-lg bg-surface-raised border border-accent/10 overflow-hidden flex h-[104px]">
+                <span className="shrink-0 w-7 flex items-center justify-center text-xs text-ink-faint">{idx + 1}</span>
+                {/* Inset from the row's full 104px height by 1.5rem (the same
+                    top+bottom the content column's own py-3 uses) so the
+                    cover isn't flush top-to-bottom; width follows from
+                    aspect-square off that shrunken height to stay square. */}
+                <div className="shrink-0 flex h-full items-center justify-center">
+                  <div className="h-[calc(100%-1.5rem)] aspect-square overflow-hidden rounded flex items-center justify-center bg-surface-overlay">
                     {artUrl
                       ? <img src={artUrl} alt="" className="w-full h-full object-cover" />
-                      : <LuMusic size={14} className="text-accent" />}
+                      : <LuMusic size={16} className="text-accent" />}
                   </div>
-                  <div className="shrink-0 w-[40%] pr-3">
-                    <p className="text-sm text-ink truncate">{s.title?.trim() || '(untitled)'}</p>
-                    <button
-                      onClick={() => router.push(`/author/${seriesId}/chapter/${s.chapterId}`)}
-                      title={`Go to ${chapterDisplay}`}
-                      className="group/chapter block w-full text-left truncate text-xs text-ink-faint italic hover:text-accent transition"
-                    >
-                      {chapterDisplay}
-                      <LuExternalLink size={10} className="inline-block ml-1 mb-px opacity-0 group-hover/chapter:opacity-100 transition" />
-                    </button>
-                  </div>
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5 px-4 py-3">
+                  <p className="text-sm text-ink truncate">{s.title?.trim() || '(untitled)'}</p>
                   <PinnedAudio
                     src={s.audioPath}
                     pinStart={s.pinStart}
                     pinEnd={s.pinEnd}
-                    className="flex-1 min-w-0"
+                    className="w-full"
                   />
+                  <button
+                    onClick={() => router.push(`/author/${seriesId}/chapter/${s.chapterId}`)}
+                    title={`Go to ${chapterDisplay}`}
+                    className="group/chapter block w-full text-left truncate text-xs text-ink-faint italic hover:text-accent transition"
+                  >
+                    {chapterDisplay}
+                    <LuExternalLink size={10} className="inline-block ml-1 mb-px opacity-0 group-hover/chapter:opacity-100 transition" />
+                  </button>
                 </div>
-                {label && (
-                  <p className="text-xs text-ink-faint italic mt-2 pl-[3.75rem]">{label}</p>
-                )}
               </div>
             )
           })}

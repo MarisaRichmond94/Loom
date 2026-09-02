@@ -19,7 +19,6 @@ import NextImage from 'next/image'
 const ExportBookModal = dynamic(() => import('@/components/editor/ExportBookModal'), { ssr: false })
 import { useCanonSave } from '@/components/editor/useCanonSave'
 import { useRegisterShortcuts, type ShortcutGroup } from '@/lib/shortcuts'
-import { pinLabel } from '@/lib/pinLabel'
 import PinnedAudio from '@/components/PinnedAudio'
 import SectionTabs from '@/components/SectionTabs'
 // Loaded when the Outline tab is first opened, not with the page — it pulls in
@@ -836,25 +835,38 @@ export default function BookDetailPage() {
           ) : (
             <div className="flex flex-col gap-2">
               {soundtracks.map((s, idx) => {
-                const label = pinLabel(s.pinStart, s.pinEnd)
                 const chapterDisplay = s.chapterTitle?.trim() || `Chapter ${s.chapterOrder}`
                 const artUrl = s.hasAlbumArt ? `/music/${s.id}-art.jpg?t=${albumArtTs[s.id] ?? 0}` : null
                 return (
-                  <div key={s.id} className="px-4 py-3 rounded-lg bg-surface-raised border border-accent/10">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-ink-faint shrink-0 w-6 text-right">{idx + 1}</span>
-                      <button
-                        onClick={() => openAlbumArtPicker(s.id)}
-                        title={artUrl ? 'Replace album art' : 'Upload album art'}
-                        className={`group/art relative shrink-0 w-10 h-10 rounded overflow-hidden flex items-center justify-center transition ${
-                          artUrl
-                            ? 'border border-accent/10 hover:border-accent/40'
-                            : 'border border-dashed border-accent/30 hover:border-accent/60 bg-surface-overlay'
+                  // Fixed at 104px — the exact height the content column
+                  // resolves to (20px title line + 32px PinnedAudio + 16px
+                  // chapter line + 2×6px gaps + 2×12px padding). A row height
+                  // has to be definite for the art's `h-full` below to mean
+                  // anything: `aspect-square` on an auto-height flex item has
+                  // no cross-axis size to derive from before stretch resolves,
+                  // so the browser fell back to the image's own intrinsic
+                  // size instead — hence the oversized cover.
+                  <div key={s.id} className="rounded-lg bg-surface-raised border border-accent/10 overflow-hidden flex h-[104px]">
+                    <span className="shrink-0 w-7 flex items-center justify-center text-xs text-ink-faint">{idx + 1}</span>
+                    <button
+                      onClick={() => openAlbumArtPicker(s.id)}
+                      title={artUrl ? 'Replace album art' : 'Upload album art'}
+                      className="group/art relative shrink-0 h-full flex items-center justify-center transition"
+                    >
+                      {/* The square itself, inset from the button's full
+                          104px height by the same 1.5rem (12px top + 12px
+                          bottom) the content column's own py-3 uses — width
+                          then follows from aspect-square off that shrunken
+                          height, so the cover stays square rather than
+                          stretching to fill the button's untouched width. */}
+                      <span
+                        className={`relative flex h-[calc(100%-1.5rem)] aspect-square items-center justify-center overflow-hidden rounded transition ${
+                          artUrl ? '' : 'border border-dashed border-accent/30 hover:border-accent/60 bg-surface-overlay'
                         }`}
                       >
                         {artUrl
                           ? <img src={artUrl} alt="" className="w-full h-full object-cover" />
-                          : <LuMusic size={14} className="text-accent" />}
+                          : <LuMusic size={16} className="text-accent" />}
                         {artUrl && (
                           <span
                             role="button"
@@ -866,28 +878,25 @@ export default function BookDetailPage() {
                             <LuX size={10} />
                           </span>
                         )}
-                      </button>
-                      <div className="shrink-0 w-[40%] pr-3">
-                        <p className="text-sm text-ink truncate">{s.title?.trim() || '(untitled)'}</p>
-                        <button
-                          onClick={() => router.push(`/author/${seriesId}/chapter/${s.chapterId}`)}
-                          title={`Go to ${chapterDisplay}`}
-                          className="group/chapter block w-full text-left truncate text-xs text-ink-faint italic hover:text-accent transition"
-                        >
-                          {chapterDisplay}
-                          <LuExternalLink size={10} className="inline-block ml-1 mb-px opacity-0 group-hover/chapter:opacity-100 transition" />
-                        </button>
-                      </div>
+                      </span>
+                    </button>
+                    <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5 px-4 py-3">
+                      <p className="text-sm text-ink truncate">{s.title?.trim() || '(untitled)'}</p>
                       <PinnedAudio
                         src={s.audioPath}
                         pinStart={s.pinStart}
                         pinEnd={s.pinEnd}
-                        className="flex-1 min-w-0"
+                        className="w-full"
                       />
+                      <button
+                        onClick={() => router.push(`/author/${seriesId}/chapter/${s.chapterId}`)}
+                        title={`Go to ${chapterDisplay}`}
+                        className="group/chapter block w-full text-left truncate text-xs text-ink-faint italic hover:text-accent transition"
+                      >
+                        {chapterDisplay}
+                        <LuExternalLink size={10} className="inline-block ml-1 mb-px opacity-0 group-hover/chapter:opacity-100 transition" />
+                      </button>
                     </div>
-                    {label && (
-                      <p className="text-xs text-ink-faint italic mt-2 pl-[3.75rem]">{label}</p>
-                    )}
                   </div>
                 )
               })}
