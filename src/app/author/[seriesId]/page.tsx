@@ -40,6 +40,13 @@ const ExplorePanel = dynamic(() => import('@/components/explore/ExplorePanel'), 
 const ReachabilityLedger = dynamic(() => import('@/components/series/ReachabilityLedger'), {
   ssr: false,
 })
+// Same treatment: audio elements and per-track state have no business in the
+// bundle for someone who came to open a book.
+const SeriesSoundtrackSection = dynamic(() => import('@/components/series/SeriesSoundtrackSection'), {
+  ssr: false,
+  loading: () => <SeriesSoundtrackSkeleton />,
+})
+import SeriesSoundtrackSkeleton from '@/components/series/SeriesSoundtrackSkeleton'
 import ExplorePanelSkeleton from '@/components/editor/ExplorePanelSkeleton'
 import { prefetchScope } from '@/components/explore/scopeCache'
 import { prefetchSeriesCharacters } from '@/components/series/seriesCharactersCache'
@@ -643,6 +650,13 @@ export default function AuthorSeriesPage() {
             id: 'timeline',
             label: 'Timeline',
             content: <SeriesTimelineTab seriesId={seriesId} />,
+          }, {
+            // Every book's soundtrack blocks, grouped by book in reading
+            // order — the series-wide counterpart to the book page's tab,
+            // which only ever answers for the one book it's opened on.
+            id: 'soundtrack',
+            label: 'Soundtrack',
+            content: <SeriesSoundtrackSection seriesId={seriesId} />,
           }, {
             // Last in the strip: it is the only tab that is a conversation
             // rather than a list, and it is the one you go to deliberately.

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { LuUser, LuCheck, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff, LuDownload, LuFileText, LuSave, LuDatabaseBackup, LuChartNoAxesColumn, LuMenu, LuSettings, LuTrash2, LuRefreshCw } from 'react-icons/lu'
+import { LuUser, LuCheck, LuPlus, LuMusic, LuX, LuEye, LuStar, LuEyeOff, LuDownload, LuFileText, LuSave, LuDatabaseBackup, LuChartNoAxesColumn, LuMenu, LuSettings, LuTrash2, LuRefreshCw, LuExternalLink } from 'react-icons/lu'
 import { useAuthor } from '@/lib/authorContext'
 import { useDocumentTitle } from '@/lib/useDocumentTitle'
 import { bookStats } from '@/lib/bookStats'
@@ -867,9 +867,16 @@ export default function BookDetailPage() {
                           </span>
                         )}
                       </button>
-                      <div className="shrink-0 min-w-0 max-w-[40%]">
+                      <div className="shrink-0 w-[40%] pr-3">
                         <p className="text-sm text-ink truncate">{s.title?.trim() || '(untitled)'}</p>
-                        <p className="text-xs text-ink-faint italic truncate">{chapterDisplay}</p>
+                        <button
+                          onClick={() => router.push(`/author/${seriesId}/chapter/${s.chapterId}`)}
+                          title={`Go to ${chapterDisplay}`}
+                          className="group/chapter block w-full text-left truncate text-xs text-ink-faint italic hover:text-accent transition"
+                        >
+                          {chapterDisplay}
+                          <LuExternalLink size={10} className="inline-block ml-1 mb-px opacity-0 group-hover/chapter:opacity-100 transition" />
+                        </button>
                       </div>
                       <PinnedAudio
                         src={s.audioPath}
