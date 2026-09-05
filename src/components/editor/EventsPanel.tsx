@@ -370,7 +370,14 @@ export default function EventsPanel({
 }) {
   const [tagMode, setTagMode] = useState(false)
   const [query, setQuery] = useState('')
-  const [direction, setDirection] = useState<'asc' | 'desc'>('asc')
+  // Separate per-mode, so switching modes doesn't clobber a direction the user
+  // already picked in the other one. Tag mode defaults to newest-first (you're
+  // usually tagging something that just happened); browse mode defaults to
+  // oldest-first (reading the chapter's events in story order).
+  const [browseDirection, setBrowseDirection] = useState<'asc' | 'desc'>('asc')
+  const [tagDirection, setTagDirection] = useState<'asc' | 'desc'>('desc')
+  const direction = tagMode ? tagDirection : browseDirection
+  const setDirection = tagMode ? setTagDirection : setBrowseDirection
   const searchRef = useRef<HTMLInputElement>(null)
   // null = closed; { event: undefined } = creating.
   const [editorFor, setEditorFor] = useState<{ event?: WriterEvent } | null>(null)
