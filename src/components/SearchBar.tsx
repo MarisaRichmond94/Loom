@@ -123,12 +123,22 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
 
   // ⌥⇧K also clears chapter search (see chapter page's own handler); this
   // listener mirrors that binding so the same keypress clears this box too.
+  // A full reset, not just the query: book filter, match case/word, and
+  // replace mode all go back to their defaults too, so the hotkey leaves
+  // search in the same state a first-time visitor would see.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!e.altKey || !e.shiftKey) return
       if (e.code !== 'KeyK') return
       e.preventDefault()
       clearQuery()
+      setBookFilter(new Set())
+      setMatchCase(false)
+      localStorage.setItem('loom-search-case', 'false')
+      setMatchWord(false)
+      localStorage.setItem('loom-search-word', 'false')
+      setReplaceMode(false)
+      setReplaceWith('')
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)

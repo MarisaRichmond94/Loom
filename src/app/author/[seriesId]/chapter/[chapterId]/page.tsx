@@ -913,7 +913,16 @@ export default function ChapterEditorPage() {
         case 'KeyO': e.preventDefault(); setShowPathConfig(v => !v); break
         case 'KeyF': e.preventDefault(); setTimeout(() => { localSearchInputRef.current?.focus(); localSearchInputRef.current?.select() }, 0); break
         case 'KeyJ': e.preventDefault(); scrollToCursorRef.current?.(); break
-        case 'KeyK': e.preventDefault(); setLocalSearchQuery(''); setLocalSearchReplaceMode(false); break
+        case 'KeyK':
+          e.preventDefault()
+          setLocalSearchQuery('')
+          setLocalSearchReplace('')
+          setLocalSearchReplaceMode(false)
+          setMatchCase(false)
+          localStorage.setItem('loom-search-case', 'false')
+          setMatchWord(false)
+          localStorage.setItem('loom-search-word', 'false')
+          break
         case 'KeyW': e.preventDefault(); clearLensRef.current(); break
         case 'Digit0': case 'Numpad0': e.preventDefault(); setStatsOpen(v => !v); break
         case 'KeyH': e.preventDefault(); setHighlightFilterWords(v => !v); break
