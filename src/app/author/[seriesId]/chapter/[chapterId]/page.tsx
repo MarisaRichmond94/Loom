@@ -16,6 +16,7 @@ import { useChapterCharacters } from '@/components/editor/useChapterCharacters'
 import { useChapterInsights } from '@/components/editor/useChapterInsights'
 import { useChapterComments } from '@/components/editor/useChapterComments'
 import { useRegisterShortcuts, type ShortcutGroup } from '@/lib/shortcuts'
+import { SoundtrackBlockRegistryProvider, useSoundtrackBlockRegistry } from '@/lib/soundtrackBlockRegistry'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import { notify, showToast } from '@/lib/notifications'
 import { registerProseFlush, subscribeProseReplaced } from '@/lib/proseSync'
@@ -92,6 +93,12 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
     ],
   },
   {
+    group: 'Soundtrack',
+    items: [
+      { keys: '⌥⇧Space', label: 'Play/Pause the last-touched song block (or the first, if none yet)' },
+    ],
+  },
+  {
     group: 'Side Panel',
     items: [
       { keys: '⌥⇧2', label: 'Open / close side panel' },
@@ -107,6 +114,18 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
 // the one tab a writer can switch off in settings, so it lives where its
 // absence doesn't reflow the others.
 const PANEL_TAB_ORDER: PanelTab[] = ['review', 'events', 'characters', 'insights', 'notes', 'refs', 'comments']
+
+// Bridges SoundtrackBlockRegistryProvider's context out to the page's own
+// document-level keydown handler, which can't call useSoundtrackBlockRegistry
+// itself — the provider is rendered as this component's own JSX output, so
+// it's a descendant, not an ancestor, of the page component's render.
+function SoundtrackHotkeyBridge({ toggleRef }: { toggleRef: React.MutableRefObject<() => void> }) {
+  const registry = useSoundtrackBlockRegistry()
+  useEffect(() => {
+    toggleRef.current = () => registry?.toggleTarget()
+  }, [registry, toggleRef])
+  return null
+}
 
 function safeCondition(raw: string | null | undefined): Condition | null {
   if (!raw) return null
@@ -885,6 +904,11 @@ export default function ChapterEditorPage() {
   // Mirrors the footer's prev/next buttons for the ⌥⇧←/→ hotkey. Null on
   // either end of the book, which is how the handler knows to do nothing.
   const goChapterRef = useRef<{ prev: (() => void) | null; next: (() => void) | null }>({ prev: null, next: null })
+  // Bridged in from SoundtrackHotkeyBridge, rendered inside
+  // SoundtrackBlockRegistryProvider below — the registry context isn't
+  // reachable from this component's own render, since the provider is a
+  // descendant of it, not an ancestor.
+  const toggleSoundtrackRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -909,6 +933,7 @@ export default function ChapterEditorPage() {
         case 'KeyP': e.preventDefault(); startPreviewRef.current(); break
         case 'KeyX': e.preventDefault(); copyCanonTextRef.current(); break
         case 'KeyU': e.preventDefault(); window.open(window.location.href, '_blank'); break
+        case 'Space': e.preventDefault(); toggleSoundtrackRef.current(); break
         case 'Backquote': e.preventDefault(); setShowChapterSettings(v => !v); break
         case 'KeyO': e.preventDefault(); setShowPathConfig(v => !v); break
         case 'KeyF': e.preventDefault(); setTimeout(() => { localSearchInputRef.current?.focus(); localSearchInputRef.current?.select() }, 0); break
@@ -1687,6 +1712,8 @@ export default function ChapterEditorPage() {
             over the column's right padding lands the card edges symmetrically
             inside px-8 — the space the floating add button used to justify. */}
         <div className="-mr-[23px]">
+        <SoundtrackBlockRegistryProvider>
+        <SoundtrackHotkeyBridge toggleRef={toggleSoundtrackRef} />
         <BlockEditor
           key={`${chapter.id}:${editorRevision}`}
           chapterId={chapterId}
@@ -1715,6 +1742,7 @@ export default function ChapterEditorPage() {
           onTextBlockBlur={handleTextBlockBlur}
           onPinText={handlePinText}
         />
+        </SoundtrackBlockRegistryProvider>
         </div>
       </div>
 

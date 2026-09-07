@@ -1,15 +1,16 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { LuMusic, LuUpload, LuX, LuDownload } from 'react-icons/lu'
 import { formatPinTime, parsePinTime, pinLabel } from '@/lib/pinLabel'
-import PinnedAudio from '@/components/PinnedAudio'
+import PinnedAudio, { type PinnedAudioHandle } from '@/components/PinnedAudio'
+import { useSoundtrackBlockRegistry } from '@/lib/soundtrackBlockRegistry'
 import { ConditionRow } from './conditionUI'
 
 type Variable = { id: string; name: string; type: string; defaultValue?: string }
 
 type Props = {
-  block: { id: string; prompt?: string | null; content?: string | null; pinStart?: number | null; pinEnd?: number | null; hasAlbumArt?: boolean; condition?: string | null }
+  block: { id: string; order?: number; prompt?: string | null; content?: string | null; pinStart?: number | null; pinEnd?: number | null; hasAlbumArt?: boolean; condition?: string | null }
   variables: Variable[]
   onUpdateBlock: (data: { prompt?: string; content?: string | null; pinStart?: number | null; pinEnd?: number | null; condition?: string | null }) => void
 }
@@ -31,6 +32,20 @@ export default function SoundtrackBlock({ block, variables, onUpdateBlock }: Pro
   const [hasAlbumArt, setHasAlbumArt] = useState(block.hasAlbumArt ?? false)
   const [albumArtTs, setAlbumArtTs] = useState(0)
   const albumArtInputRef = useRef<HTMLInputElement>(null)
+  const audioHandleRef = useRef<PinnedAudioHandle>(null)
+
+  // Registers with the chapter page's ⌥⇧Space hotkey registry so it can
+  // target this block. Only while there's actually audio to play, and only
+  // for as long as this block is mounted — SoundtrackBlockRegistryProvider
+  // drops the entry itself on unmount.
+  const registry = useSoundtrackBlockRegistry()
+  useEffect(() => {
+    if (!registry || !audioSrc) return
+    return registry.register(block.id, {
+      order: block.order ?? 0,
+      togglePlay: () => audioHandleRef.current?.togglePlay(),
+    })
+  }, [registry, block.id, block.order, audioSrc])
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -195,10 +210,12 @@ export default function SoundtrackBlock({ block, variables, onUpdateBlock }: Pro
               />
               <div className="flex items-center gap-2">
                 <PinnedAudio
+                  ref={audioHandleRef}
                   src={audioSrc}
                   pinStart={block.pinStart}
                   pinEnd={block.pinEnd}
                   className="flex-1 min-w-0"
+                  onInteract={() => registry?.markInteracted(block.id)}
                 />
                 <button
                   onClick={handleRemove}

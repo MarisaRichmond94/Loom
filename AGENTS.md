@@ -54,3 +54,14 @@ For hot-reload development against real data: `bootout` the agent first (so
 its `next start` isn't fighting `next dev` for port 3000/the `.next` dir),
 then `npm run dev`.
 
+**⚠️ Claude: never do the `bootout` + `npm run dev` sequence above on your own
+initiative — ask first, every time, even mid-task.** The launchd service is
+Marisa's live production app: she is actively writing in it, and stopping it
+to spin up a dev server pulls the rug out from under her session without
+warning. This applies even when you're trying to visually verify a change
+before reporting it done — "I can't verify in the browser without touching
+the live service" is a fine thing to say to her; taking the service down
+without asking is not. If she wants to see a change working, tell her what
+changed and let her restart the app herself when she's ready, or explicitly
+ask permission before touching the launchd service at all.
+

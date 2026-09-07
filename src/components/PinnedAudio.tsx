@@ -1,13 +1,21 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { LuPlay, LuPause, LuVolume2, LuVolumeX } from 'react-icons/lu'
+
+export type PinnedAudioHandle = {
+  togglePlay: () => void
+}
 
 type Props = {
   src: string
   pinStart?: number | null
   pinEnd?: number | null
   className?: string
+  /** Fired on any user interaction with this player's controls (play, seek,
+   *  mute, pin toggle) — lets a container track "which track did the writer
+   *  most recently touch" without this component knowing why that matters. */
+  onInteract?: () => void
 }
 
 // Custom audio player used wherever a soundtrack track is rendered (editor,
@@ -15,7 +23,11 @@ type Props = {
 // progress bar can't be visually augmented with a highlighted pin segment.
 // Default mode plays the full track; when a pin is set the writer/reader can
 // toggle "Pin only" to clamp playback to [pinStart, pinEnd].
-export default function PinnedAudio({ src, pinStart, pinEnd, className = '' }: Props) {
+//
+// forwardRef + togglePlay: the chapter page's ⌥⇧Space hotkey needs to
+// control whichever soundtrack block's audio the writer last touched, from
+// outside this component's own state.
+const PinnedAudio = forwardRef<PinnedAudioHandle, Props>(function PinnedAudio({ src, pinStart, pinEnd, className = '', onInteract }, ref) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -84,6 +96,8 @@ export default function PinnedAudio({ src, pinStart, pinEnd, className = '' }: P
     }
   }
 
+  useImperativeHandle(ref, () => ({ togglePlay }))
+
   function toggleMute() {
     const a = audioRef.current
     if (!a) return
@@ -118,7 +132,7 @@ export default function PinnedAudio({ src, pinStart, pinEnd, className = '' }: P
       <audio ref={audioRef} src={src} preload="metadata" />
       <button
         type="button"
-        onClick={togglePlay}
+        onClick={() => { onInteract?.(); togglePlay() }}
         title={playing ? 'Pause' : 'Play'}
         className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-ink hover:bg-accent/10 transition"
       >
@@ -128,7 +142,7 @@ export default function PinnedAudio({ src, pinStart, pinEnd, className = '' }: P
         {fmt(currentTime)} / {fmt(duration)}
       </span>
       <div
-        onMouseDown={e => seekFromEvent(e.clientX, e.currentTarget)}
+        onMouseDown={e => { onInteract?.(); seekFromEvent(e.clientX, e.currentTarget) }}
         className="flex-1 min-w-0 h-2 rounded-full bg-accent/10 relative cursor-pointer overflow-hidden"
       >
         {hasPin && duration > 0 && pinEndPct > pinStartPct && (
@@ -144,7 +158,7 @@ export default function PinnedAudio({ src, pinStart, pinEnd, className = '' }: P
       </div>
       <button
         type="button"
-        onClick={toggleMute}
+        onClick={() => { onInteract?.(); toggleMute() }}
         title={muted ? 'Unmute' : 'Mute'}
         className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-ink hover:bg-accent/10 transition"
       >
@@ -153,7 +167,7 @@ export default function PinnedAudio({ src, pinStart, pinEnd, className = '' }: P
       {hasPin && (
         <button
           type="button"
-          onClick={() => setPinMode(p => !p)}
+          onClick={() => { onInteract?.(); setPinMode(p => !p) }}
           title={pinMode ? 'Restricted to the pinned snippet — click for full track' : 'Click to play just the pinned snippet'}
           className={`shrink-0 text-[11px] uppercase tracking-widest px-2 h-7 rounded transition ${
             pinMode
@@ -166,4 +180,6 @@ export default function PinnedAudio({ src, pinStart, pinEnd, className = '' }: P
       )}
     </div>
   )
-}
+})
+
+export default PinnedAudio
