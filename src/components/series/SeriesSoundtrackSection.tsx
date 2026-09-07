@@ -1,9 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { LuMusic, LuExternalLink } from 'react-icons/lu'
-import PinnedAudio from '@/components/PinnedAudio'
+import SoundtrackRowControl from '@/components/SoundtrackRowControl'
+import SoundtrackPlayerBar from '@/components/SoundtrackPlayerBar'
+import { SoundtrackPlayerProvider, soundtrackRowDomId } from '@/lib/soundtrackPlayer'
+import { parseSoundtrackName } from '@/lib/soundtrackName'
 import SeriesSoundtrackSkeleton from './SeriesSoundtrackSkeleton'
 
 type SeriesSoundtrack = {
@@ -41,6 +44,15 @@ export default function SeriesSoundtrackSection({ seriesId }: { seriesId: string
     return () => { cancelled = true }
   }, [seriesId])
 
+  // Already ordered book → chapter → position by the API, which is exactly
+  // the order a continuous series-wide playlist should walk.
+  const playlistTracks = useMemo(() => (soundtracks ?? []).map(s => ({
+    id: s.id,
+    ...parseSoundtrackName(s.title),
+    src: s.audioPath,
+    albumArtUrl: s.hasAlbumArt ? `/music/${s.id}-art.jpg` : null,
+  })), [soundtracks])
+
   if (soundtracks === null) {
     return <SeriesSoundtrackSkeleton />
   }
@@ -64,19 +76,22 @@ export default function SeriesSoundtrackSection({ seriesId }: { seriesId: string
   const books = [...byBook.values()].sort((a, b) => a.bookOrder - b.bookOrder)
 
   return (
-    <div className="flex flex-col gap-6">
+    <SoundtrackPlayerProvider tracks={playlistTracks}>
+    <div className="flex flex-col gap-3">
+      <SoundtrackPlayerBar />
       {books.map(({ bookTitle, tracks }) => (
         <div key={bookTitle} className="flex flex-col gap-2">
           <p className="text-xs uppercase tracking-widest text-ink-faint">{bookTitle}</p>
           {tracks.map((s, idx) => {
+            const { name, artist } = parseSoundtrackName(s.title)
             const chapterDisplay = s.chapterTitle?.trim() || `Chapter ${s.chapterOrder}`
             const artUrl = s.hasAlbumArt ? `/music/${s.id}-art.jpg` : null
             return (
               // Fixed at 104px — the exact height the content column resolves
-              // to (20px title line + 32px PinnedAudio + 16px chapter line +
+              // to (20px title line + 32px SoundtrackRowControl + 16px chapter line +
               // 2×6px gaps + 2×12px padding). See the book page's soundtrack
               // tab for why the row needs a definite height here.
-              <div key={s.id} className="rounded-lg bg-surface-raised border border-accent/10 overflow-hidden flex h-[104px]">
+              <div key={s.id} id={soundtrackRowDomId(s.id)} className="rounded-lg bg-surface-raised border border-accent/10 overflow-hidden flex h-[104px]">
                 <span className="shrink-0 w-7 flex items-center justify-center text-xs text-ink-faint">{idx + 1}</span>
                 {/* Inset from the row's full 104px height by 1.5rem (the same
                     top+bottom the content column's own py-3 uses) so the
@@ -90,13 +105,11 @@ export default function SeriesSoundtrackSection({ seriesId }: { seriesId: string
                   </div>
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5 px-4 py-3">
-                  <p className="text-sm text-ink truncate">{s.title?.trim() || '(untitled)'}</p>
-                  <PinnedAudio
-                    src={s.audioPath}
-                    pinStart={s.pinStart}
-                    pinEnd={s.pinEnd}
-                    className="w-full"
-                  />
+                  <div className="min-w-0 truncate">
+                    <span className="text-sm text-ink">{name}</span>
+                    {artist && <span className="text-sm text-ink-faint"> — {artist}</span>}
+                  </div>
+                  <SoundtrackRowControl trackId={s.id} className="w-full" />
                   <a
                     href={`/author/${seriesId}/chapter/${s.chapterId}`}
                     onClick={e => {
@@ -117,5 +130,6 @@ export default function SeriesSoundtrackSection({ seriesId }: { seriesId: string
         </div>
       ))}
     </div>
+    </SoundtrackPlayerProvider>
   )
 }

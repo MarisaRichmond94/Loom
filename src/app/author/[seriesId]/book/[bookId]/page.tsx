@@ -19,7 +19,10 @@ import NextImage from 'next/image'
 const ExportBookModal = dynamic(() => import('@/components/editor/ExportBookModal'), { ssr: false })
 import { useCanonSave } from '@/components/editor/useCanonSave'
 import { useRegisterShortcuts, type ShortcutGroup } from '@/lib/shortcuts'
-import PinnedAudio from '@/components/PinnedAudio'
+import SoundtrackRowControl from '@/components/SoundtrackRowControl'
+import SoundtrackPlayerBar from '@/components/SoundtrackPlayerBar'
+import { SoundtrackPlayerProvider, soundtrackRowDomId } from '@/lib/soundtrackPlayer'
+import { parseSoundtrackName } from '@/lib/soundtrackName'
 import SectionTabs from '@/components/SectionTabs'
 // Loaded when the Outline tab is first opened, not with the page — it pulls in
 // the outline renderer for a section most page visits never look at.
@@ -238,6 +241,14 @@ export default function BookDetailPage() {
   // Cache-buster keyed by song id so a fresh upload re-renders the thumbnail
   // without flushing the whole list. Updated when album art changes.
   const [albumArtTs, setAlbumArtTs] = useState<Record<string, number>>({})
+  // Already ordered chapter → position by the API — exactly the order the
+  // playlist should walk.
+  const playlistTracks = useMemo(() => soundtracks.map(s => ({
+    id: s.id,
+    ...parseSoundtrackName(s.title),
+    src: s.audioPath,
+    albumArtUrl: s.hasAlbumArt ? `/music/${s.id}-art.jpg?t=${albumArtTs[s.id] ?? 0}` : null,
+  })), [soundtracks, albumArtTs])
   const albumArtFileInputRef = useRef<HTMLInputElement>(null)
   const albumArtTargetIdRef = useRef<string | null>(null)
 
@@ -833,20 +844,23 @@ export default function BookDetailPage() {
               </p>
             </div>
           ) : (
+            <SoundtrackPlayerProvider tracks={playlistTracks}>
             <div className="flex flex-col gap-2">
+              <SoundtrackPlayerBar />
               {soundtracks.map((s, idx) => {
+                const { name, artist } = parseSoundtrackName(s.title)
                 const chapterDisplay = s.chapterTitle?.trim() || `Chapter ${s.chapterOrder}`
                 const artUrl = s.hasAlbumArt ? `/music/${s.id}-art.jpg?t=${albumArtTs[s.id] ?? 0}` : null
                 return (
                   // Fixed at 104px — the exact height the content column
-                  // resolves to (20px title line + 32px PinnedAudio + 16px
+                  // resolves to (20px title line + 32px SoundtrackRowControl + 16px
                   // chapter line + 2×6px gaps + 2×12px padding). A row height
                   // has to be definite for the art's `h-full` below to mean
                   // anything: `aspect-square` on an auto-height flex item has
                   // no cross-axis size to derive from before stretch resolves,
                   // so the browser fell back to the image's own intrinsic
                   // size instead — hence the oversized cover.
-                  <div key={s.id} className="rounded-lg bg-surface-raised border border-accent/10 overflow-hidden flex h-[104px]">
+                  <div key={s.id} id={soundtrackRowDomId(s.id)} className="rounded-lg bg-surface-raised border border-accent/10 overflow-hidden flex h-[104px]">
                     <span className="shrink-0 w-7 flex items-center justify-center text-xs text-ink-faint">{idx + 1}</span>
                     <button
                       onClick={() => openAlbumArtPicker(s.id)}
@@ -881,13 +895,11 @@ export default function BookDetailPage() {
                       </span>
                     </button>
                     <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5 px-4 py-3">
-                      <p className="text-sm text-ink truncate">{s.title?.trim() || '(untitled)'}</p>
-                      <PinnedAudio
-                        src={s.audioPath}
-                        pinStart={s.pinStart}
-                        pinEnd={s.pinEnd}
-                        className="w-full"
-                      />
+                      <div className="min-w-0 truncate">
+                        <span className="text-sm text-ink">{name}</span>
+                        {artist && <span className="text-sm text-ink-faint"> — {artist}</span>}
+                      </div>
+                      <SoundtrackRowControl trackId={s.id} className="w-full" />
                       <button
                         onClick={() => router.push(`/author/${seriesId}/chapter/${s.chapterId}`)}
                         title={`Go to ${chapterDisplay}`}
@@ -901,6 +913,7 @@ export default function BookDetailPage() {
                 )
               })}
             </div>
+            </SoundtrackPlayerProvider>
           )}
               </>
             ),
