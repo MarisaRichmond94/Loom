@@ -106,7 +106,6 @@ export function SoundtrackPlayerProvider({ tracks, children }: { tracks: Soundtr
   // Manual skip always moves to a different track regardless of loop mode —
   // only natural end-of-track playback (below) repeats the current one.
   const next = useCallback(() => advance(1), [advance])
-  const previous = useCallback(() => advance(-1), [advance])
 
   const replayCurrent = useCallback(() => {
     const a = audioRef.current
@@ -115,6 +114,29 @@ export function SoundtrackPlayerProvider({ tracks, children }: { tracks: Soundtr
     setCurrentTime(0)
     a.play().catch(() => {})
   }, [])
+
+  // Media-player convention: previous restarts the current track on the
+  // first press; a second press within 1s (an intentional double-tap, not
+  // two separate "start over" clicks) skips back to the prior track
+  // instead. On the first track (no wrap, loop off) there's nowhere to
+  // skip back to, so it just keeps restarting — this is also what fixes
+  // the old "wonky" state, where advance(-1) silently stopped playback
+  // instead of doing anything visible.
+  const lastPreviousAtRef = useRef(0)
+  const previous = useCallback(() => {
+    const now = Date.now()
+    const isDoubleTap = now - lastPreviousAtRef.current < 1000
+    lastPreviousAtRef.current = now
+    const seq = order()
+    const idx = currentId ? seq.indexOf(currentId) : -1
+    const hasPriorTrack = idx > 0 || (idx === 0 && loopMode === 'all' && seq.length > 1)
+    if (isDoubleTap && hasPriorTrack) {
+      advance(-1)
+    } else {
+      replayCurrent()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [advance, replayCurrent, currentId, shuffle, loopMode, trackIds])
 
   // timeupdate/loadedmetadata don't depend on component state (everything
   // reads back off the element), but `ended` needs the current loop mode and
