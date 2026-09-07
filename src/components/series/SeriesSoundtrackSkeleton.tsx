@@ -14,7 +14,9 @@ export default function SeriesSoundtrackSkeleton() {
               <div className="shrink-0 w-7 flex items-center justify-center">
                 <div className="w-3 h-3 rounded bg-surface-overlay" />
               </div>
-              <div className="shrink-0 h-full aspect-square bg-surface-overlay" />
+              <div className="shrink-0 flex h-full items-center justify-center">
+                <div className="h-[calc(100%-1.5rem)] aspect-square rounded bg-surface-overlay" />
+              </div>
               <div className="flex-1 min-w-0 flex flex-col justify-center gap-2 px-4 py-3">
                 <div className="h-4 w-1/2 rounded bg-surface-overlay" />
                 <div className="h-8 w-full rounded bg-surface-overlay" />

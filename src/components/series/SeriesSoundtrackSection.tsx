@@ -97,14 +97,19 @@ export default function SeriesSoundtrackSection({ seriesId }: { seriesId: string
                     pinEnd={s.pinEnd}
                     className="w-full"
                   />
-                  <button
-                    onClick={() => router.push(`/author/${seriesId}/chapter/${s.chapterId}`)}
+                  <a
+                    href={`/author/${seriesId}/chapter/${s.chapterId}`}
+                    onClick={e => {
+                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+                      e.preventDefault()
+                      router.push(`/author/${seriesId}/chapter/${s.chapterId}`)
+                    }}
                     title={`Go to ${chapterDisplay}`}
-                    className="group/chapter block w-full text-left truncate text-xs text-ink-faint italic hover:text-accent transition"
+                    className="group/chapter flex items-center gap-1 w-full text-left text-xs text-ink-faint italic hover:text-accent transition"
                   >
-                    {chapterDisplay}
-                    <LuExternalLink size={10} className="inline-block ml-1 mb-px opacity-0 group-hover/chapter:opacity-100 transition" />
-                  </button>
+                    <span className="truncate">{chapterDisplay}</span>
+                    <LuExternalLink size={10} className="shrink-0 opacity-0 group-hover/chapter:opacity-100 transition" />
+                  </a>
                 </div>
               </div>
             )
