@@ -150,7 +150,6 @@ export default function SoundtrackPopover() {
                           className={`shrink-0 transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`}
                         />
                         <span className="truncate">{bookTitle}</span>
-                        <span className="ml-auto tabular-nums normal-case tracking-normal">{bookTracks.length}</span>
                       </button>
                       {!isCollapsed && bookTracks.map(t => {
                         const isActive = current?.id === t.id
