@@ -21,7 +21,7 @@ import { useCanonSave } from '@/components/editor/useCanonSave'
 import { useRegisterShortcuts, type ShortcutGroup } from '@/lib/shortcuts'
 import SoundtrackRowControl from '@/components/SoundtrackRowControl'
 import SoundtrackPlayerBar from '@/components/SoundtrackPlayerBar'
-import { SoundtrackPlayerProvider, soundtrackRowDomId } from '@/lib/soundtrackPlayer'
+import { soundtrackRowDomId } from '@/lib/soundtrackPlayer'
 import { parseSoundtrackName } from '@/lib/soundtrackName'
 import SectionTabs from '@/components/SectionTabs'
 // Loaded when the Outline tab is first opened, not with the page — it pulls in
@@ -241,14 +241,10 @@ export default function BookDetailPage() {
   // Cache-buster keyed by song id so a fresh upload re-renders the thumbnail
   // without flushing the whole list. Updated when album art changes.
   const [albumArtTs, setAlbumArtTs] = useState<Record<string, number>>({})
-  // Already ordered chapter → position by the API — exactly the order the
-  // playlist should walk.
-  const playlistTracks = useMemo(() => soundtracks.map(s => ({
-    id: s.id,
-    ...parseSoundtrackName(s.title),
-    src: s.audioPath,
-    albumArtUrl: s.hasAlbumArt ? `/music/${s.id}-art.jpg?t=${albumArtTs[s.id] ?? 0}` : null,
-  })), [soundtracks, albumArtTs])
+  // This tab no longer builds a playlist of its own: the player is mounted in
+  // the author layout and holds the whole series, so these rows drive the same
+  // one the header popover does. Playing a song here and walking to another
+  // book keeps it playing, which a tab-scoped player could never do.
   const albumArtFileInputRef = useRef<HTMLInputElement>(null)
   const albumArtTargetIdRef = useRef<string | null>(null)
 
@@ -844,7 +840,6 @@ export default function BookDetailPage() {
               </p>
             </div>
           ) : (
-            <SoundtrackPlayerProvider tracks={playlistTracks}>
             <div className="flex flex-col gap-2">
               <SoundtrackPlayerBar />
               {soundtracks.map((s, idx) => {
@@ -913,7 +908,6 @@ export default function BookDetailPage() {
                 )
               })}
             </div>
-            </SoundtrackPlayerProvider>
           )}
               </>
             ),

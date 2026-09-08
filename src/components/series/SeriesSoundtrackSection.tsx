@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { LuMusic, LuExternalLink } from 'react-icons/lu'
 import SoundtrackRowControl from '@/components/SoundtrackRowControl'
 import SoundtrackPlayerBar from '@/components/SoundtrackPlayerBar'
-import { SoundtrackPlayerProvider, soundtrackRowDomId } from '@/lib/soundtrackPlayer'
+import { soundtrackRowDomId } from '@/lib/soundtrackPlayer'
 import { parseSoundtrackName } from '@/lib/soundtrackName'
 import SeriesSoundtrackSkeleton from './SeriesSoundtrackSkeleton'
 
@@ -44,14 +44,9 @@ export default function SeriesSoundtrackSection({ seriesId }: { seriesId: string
     return () => { cancelled = true }
   }, [seriesId])
 
-  // Already ordered book → chapter → position by the API, which is exactly
-  // the order a continuous series-wide playlist should walk.
-  const playlistTracks = useMemo(() => (soundtracks ?? []).map(s => ({
-    id: s.id,
-    ...parseSoundtrackName(s.title),
-    src: s.audioPath,
-    albumArtUrl: s.hasAlbumArt ? `/music/${s.id}-art.jpg` : null,
-  })), [soundtracks])
+  // No playlist is built here any more: the player lives in the author layout
+  // and already holds every track in the series, in this same order. These
+  // rows are a view onto it, so playback survives leaving this tab.
 
   if (soundtracks === null) {
     return <SeriesSoundtrackSkeleton />
@@ -76,7 +71,6 @@ export default function SeriesSoundtrackSection({ seriesId }: { seriesId: string
   const books = [...byBook.values()].sort((a, b) => a.bookOrder - b.bookOrder)
 
   return (
-    <SoundtrackPlayerProvider tracks={playlistTracks}>
     <div className="flex flex-col gap-3">
       <SoundtrackPlayerBar />
       {books.map(({ bookTitle, tracks }) => (
@@ -130,6 +124,5 @@ export default function SeriesSoundtrackSection({ seriesId }: { seriesId: string
         </div>
       ))}
     </div>
-    </SoundtrackPlayerProvider>
   )
 }

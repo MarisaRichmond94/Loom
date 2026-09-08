@@ -95,14 +95,14 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
   {
     group: 'Soundtrack',
     items: [
-      { keys: '⌥⇧Space', label: 'Play/Pause the last-touched song block (or the first, if none yet)' },
+      { keys: '⌃⇧Space', label: 'Play/Pause the last-touched song block (or the first, if none yet)' },
     ],
   },
   {
     group: 'Side Panel',
     items: [
       { keys: '⌥⇧2', label: 'Open / close side panel' },
-      { keys: '⌥⇧< / >', label: 'Previous / next side panel tab' },
+      { keys: '⌃⇧< / >', label: 'Previous / next side panel tab' },
       { keys: '⌥⇧⏎', label: 'Save (in a dialog)' },
       { keys: '⌥⇧⎋', label: 'Cancel (in a dialog)' },
     ],
@@ -912,6 +912,17 @@ export default function ChapterEditorPage() {
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      // ⌃⇧Space and ⌃⇧< / ⌃⇧> — the two shortcuts that gave up ⌥⇧ when the
+      // soundtrack player went global (it owns ⌥⇧Space and ⌥⇧< / ⌥⇧> app-wide
+      // now). The dock used to carry one hotkey per tab (⌥⇧2–6), numbered in
+      // strip order; that grew unmanageable as tabs kept being added (Events
+      // in LOOM-36, Characters in LOOM-44), so LOOM-56 collapsed it to one
+      // hotkey to open/close the dock and two to step through its tabs.
+      if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey) {
+        if (e.code === 'Space') { e.preventDefault(); toggleSoundtrackRef.current(); return }
+        if (e.code === 'Comma' && panelOpenRef.current) { e.preventDefault(); cyclePanelTabRef.current(-1); return }
+        if (e.code === 'Period' && panelOpenRef.current) { e.preventDefault(); cyclePanelTabRef.current(1); return }
+      }
       // ⌃⇧←/→ steps through search matches — kept off ⌥⇧ (which doubles as
       // chapter navigation below) so the two never fight over the same keys.
       if (e.ctrlKey && e.shiftKey && !e.altKey && localSearchQueryRef.current.trim()) {
@@ -933,7 +944,6 @@ export default function ChapterEditorPage() {
         case 'KeyP': e.preventDefault(); startPreviewRef.current(); break
         case 'KeyX': e.preventDefault(); copyCanonTextRef.current(); break
         case 'KeyU': e.preventDefault(); window.open(window.location.href, '_blank'); break
-        case 'Space': e.preventDefault(); toggleSoundtrackRef.current(); break
         case 'Backquote': e.preventDefault(); setShowChapterSettings(v => !v); break
         case 'KeyO': e.preventDefault(); setShowPathConfig(v => !v); break
         case 'KeyF': e.preventDefault(); setTimeout(() => { localSearchInputRef.current?.focus(); localSearchInputRef.current?.select() }, 0); break
@@ -960,13 +970,7 @@ export default function ChapterEditorPage() {
           break
         case 'Equal': case 'NumpadAdd': e.preventDefault(); adjustProseScale(0.1); break
         case 'Minus': case 'NumpadSubtract': e.preventDefault(); adjustProseScale(-0.1); break
-        // The dock used to carry one hotkey per tab (⌥⇧2–6), numbered in strip
-        // order — that grew unmanageable as tabs kept getting added (Events in
-        // LOOM-36, Characters in LOOM-44). LOOM-56 collapsed it to one hotkey
-        // to open/close the dock and two to step through its tabs.
         case 'Digit2': case 'Numpad2': e.preventDefault(); toggleDockRef.current(); break
-        case 'Comma': if (panelOpenRef.current) { e.preventDefault(); cyclePanelTabRef.current(-1) } break
-        case 'Period': if (panelOpenRef.current) { e.preventDefault(); cyclePanelTabRef.current(1) } break
       }
     }
     document.addEventListener('keydown', handleKeyDown)

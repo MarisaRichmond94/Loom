@@ -182,8 +182,21 @@ mark.filter-word-match,
 }
 .loom-sheen { animation: loom-sheen 1.8s ease-in-out infinite; }
 
+/* Header soundtrack button (LOOM-15x): three bars keeping time, shown in place
+   of the music note while something is playing. Staggered by inline
+   animation-delay per bar rather than nth-child rules, so the markup stays
+   readable next to the icon it replaces. */
+@keyframes loom-eq-bar {
+  0%, 100% { height: 30%; }
+  50%      { height: 100%; }
+}
+.loom-eq-bar { animation: loom-eq-bar 900ms ease-in-out infinite; height: 30%; }
+
 /* Respect a reduced-motion preference: the information is in the words, not
    the movement. */
 @media (prefers-reduced-motion: reduce) {
   .loom-phrase-in, .loom-fade-in, .loom-indeterminate, .loom-sheen { animation: none; }
+  /* The bars still show as a static level meter — the state is in the icon
+     swap, not the motion. */
+  .loom-eq-bar { animation: none; height: 60%; }
 }

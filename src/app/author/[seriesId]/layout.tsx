@@ -13,6 +13,8 @@ import ShortcutsMenu from '@/components/ShortcutsMenu'
 import { ShortcutsProvider } from '@/lib/shortcuts'
 import { useLightMode } from '@shared/useLightMode'
 import { AuthorProvider, type AuthorSeries } from '@/lib/authorContext'
+import { SoundtrackPlayerProvider } from '@/lib/soundtrackPlayer'
+import SoundtrackPopover from '@/components/SoundtrackPopover'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
 import { useCanonSave } from '@/components/editor/useCanonSave'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
@@ -170,6 +172,13 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
     loadSeries()
   }
 
+  // Which book the soundtrack popover means by "this book". A book route says
+  // so outright; a chapter route only carries the chapter, so it's resolved
+  // through the series' own outline rather than an extra fetch. Null on the
+  // series page, where "this book" has no referent and the toggle hides.
+  const activeBookId = bookId
+    ?? (chapterId ? series?.books.find(b => b.chapters.some(c => c.id === chapterId))?.id ?? null : null)
+
   if (!series) {
     return (
       <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
@@ -253,6 +262,10 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
   return (
     <AuthorProvider value={{ series, loadSeries, loadChoices, addBook, lightMode, knownStringValues }}>
       <ShortcutsProvider>
+      {/* Above the page, not inside it: this owns the one <audio> element, and
+          a layout is what Next keeps mounted across client-side navigation —
+          which is the whole point of playing music while writing. */}
+      <SoundtrackPlayerProvider seriesId={seriesId} activeBookId={activeBookId}>
       <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
         {/* Book and chapter are no longer in the header — the sidebar's
             OutlineTree already lists them and marks the active one, which a
@@ -271,6 +284,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
             standalone: series.standalone,
             firstBookId: series.standalone ? (series.books[0]?.id ?? null) : null,
           }}
+          afterProject={<SoundtrackPopover />}
           tools={
             /* Shortcuts sits 8px from the search bar rather than the header's
                usual 12px — the tighter seam reads as one "find things" cluster
@@ -357,6 +371,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
           </main>
         </div>
       </div>
+      </SoundtrackPlayerProvider>
       </ShortcutsProvider>
     </AuthorProvider>
   )

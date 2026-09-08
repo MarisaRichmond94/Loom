@@ -1,7 +1,7 @@
 'use client'
 
 import { LuShuffle, LuSkipBack, LuPlay, LuPause, LuSkipForward, LuRepeat, LuRepeat1, LuMusic } from 'react-icons/lu'
-import { useSoundtrackPlayer, soundtrackRowDomId } from '@/lib/soundtrackPlayer'
+import { useSoundtrackPlayer, soundtrackRowDomId, soundtrackPopoverRowDomId } from '@/lib/soundtrackPlayer'
 
 function fmt(s: number): string {
   if (!isFinite(s) || s < 0) return '0:00'
@@ -18,7 +18,10 @@ function fmt(s: number): string {
 export default function SoundtrackPlayerBar() {
   const { tracks, current, isPlaying, shuffle, loopMode, currentTime, duration, play, togglePlay, previous, next, seek, toggleShuffle, cycleLoop } = useSoundtrackPlayer()
 
-  if (tracks.length === 0) return null
+  // `|| current` matters in the popover: scoping to a book with no songs
+  // empties the queue while a series track is still playing, and hiding the
+  // transport there would leave no way to pause it.
+  if (tracks.length === 0 && !current) return null
 
   const display = current ?? tracks[0]
   const pct = duration > 0 ? (currentTime / duration) * 100 : 0
@@ -30,8 +33,14 @@ export default function SoundtrackPlayerBar() {
     seek(ratio * duration)
   }
 
+  // The bar renders in three places now (book tab, series tab, header
+  // popover), so "scroll to this song" has to find whichever list is actually
+  // up. The popover's copy wins when both are mounted — it's the one the
+  // writer is looking at.
   function scrollToDisplayed() {
-    document.getElementById(soundtrackRowDomId(display.id))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const row = document.getElementById(soundtrackPopoverRowDomId(display.id))
+      ?? document.getElementById(soundtrackRowDomId(display.id))
+    row?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   return (

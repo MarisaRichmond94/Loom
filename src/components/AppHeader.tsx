@@ -43,6 +43,13 @@ type Props = {
    * cluster behind `mounted` — would flash a stray separator and placeholder.
    */
   hasProject?: boolean
+  /**
+   * Rendered immediately after the project switcher, and only when there IS a
+   * project — the author app's soundtrack button. It belongs to the project
+   * half of the header rather than `tools` because it is scoped to the project
+   * the switcher names, not to finding things.
+   */
+  afterProject?: ReactNode
   /** Surface-specific controls, e.g. the author header's shortcuts + search. */
   tools?: ReactNode
   /**
@@ -69,6 +76,7 @@ function Bar({ className }: { className: string }) {
 export default function AppHeader({
   project,
   hasProject = false,
+  afterProject,
   tools,
   hasTools = false,
   showBell = false,
@@ -110,6 +118,8 @@ export default function AppHeader({
           LOOM
         </span>
       )}
+
+      {project && afterProject}
 
       {showAppSwitch && (
         /* Jump to the companion WriteAI app (same tab — the browser's back
