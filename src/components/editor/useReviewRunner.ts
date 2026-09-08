@@ -8,6 +8,13 @@ import type { ReviewMessage, ReviewSession } from './ReviewPanel'
 // Nothing here starts on its own. Opening the panel must never spend money —
 // the writer presses the button when the chapter is ready.
 //
+// This hook is owned by the CHAPTER PAGE, not by ReviewPanel — deliberately.
+// The panel unmounts whenever the dock closes or another tab is selected, and
+// while the runner lived inside it, that unmount aborted the request: a review
+// already paid for was thrown away by a stray ⌘-tab or a closed sidebar. Held a
+// level up, the run outlives every panel-level unmount and only a chapter
+// change (or the writer's own Stop) cancels it.
+//
 // WriteAI makes the model call and books the cost; Loom has no API key. The
 // `usage` event carries `cost_usd`, which the panel shows at the point of
 // action rather than leaving spend to be discovered later (the KAN-25 lesson,
@@ -46,6 +53,10 @@ export function useReviewRunner(onPersisted: (s: ReviewSession) => void) {
   // conversation assembled backwards: progress and reply first, and the
   // writer's own message appearing under them at the very end.
   const [pending, setPending] = useState<ReviewMessage | null>(null)
+  // Bumped once per completed, persisted run. The panel watches it to clear
+  // the reply box and drop out of "starting fresh" — things it used to be told
+  // directly by the persist callback, back when it owned the runner.
+  const [completions, setCompletions] = useState(0)
   const abortRef = useRef<AbortController | null>(null)
 
   const cancel = useCallback(() => {
@@ -174,6 +185,7 @@ export function useReviewRunner(onPersisted: (s: ReviewSession) => void) {
         setError(`Review ran but could not be saved: ${d.error ?? put.status}`)
       }
       onPersisted(session)
+      setCompletions(n => n + 1)
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         setError(err instanceof Error ? err.message : 'review failed')
@@ -189,5 +201,7 @@ export function useReviewRunner(onPersisted: (s: ReviewSession) => void) {
     }
   }, [onPersisted])
 
-  return { run, cancel, streaming, streamText, error, cost, setError, pending }
+  return { run, cancel, streaming, streamText, error, cost, setError, pending, completions }
 }
+
+export type ReviewRunner = ReturnType<typeof useReviewRunner>

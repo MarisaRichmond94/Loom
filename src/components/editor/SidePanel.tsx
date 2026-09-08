@@ -6,6 +6,7 @@ import { PiNotebookThin } from 'react-icons/pi'
 import { ReferenceList, type PinnedText } from './ReferencePanel'
 import NotesPanel from './NotesPanel'
 import ReviewPanel, { type ReviewSession } from './ReviewPanel'
+import type { ReviewRunner } from './useReviewRunner'
 import EventsPanel from './EventsPanel'
 import CharactersPanel from './CharactersPanel'
 import InsightsPanel from './InsightsPanel'
@@ -140,6 +141,8 @@ export default function SidePanel({
     getCanonText: () => string
     onSession: (s: ReviewSession | null) => void
     onRefetch: () => void
+    /** Lives on the page, not in the panel, so a run outlives this unmount. */
+    runner: ReviewRunner
   }
   width: number
   onWidthChange: (width: number) => void
@@ -179,14 +182,16 @@ export default function SidePanel({
     icon: ReactNode,
     label: string,
     count?: number,
+    /** A run in flight, shown as a pulsing dot instead of a count. */
+    running?: boolean,
   ) {
     const active = tab === value
     return (
       <button
         role="tab"
         aria-selected={active}
-        aria-label={count ? `${label}, ${count} tagged` : label}
-        title={count ? `${label} — ${count} tagged` : label}
+        aria-label={running ? `${label}, running` : count ? `${label}, ${count} tagged` : label}
+        title={running ? `${label} — a review is running` : count ? `${label} — ${count} tagged` : label}
         onClick={() => onTabChange(value)}
         className={`flex items-center gap-1.5 h-7 rounded-md text-[11px] font-medium transition ${
           labelled ? 'px-2' : 'px-1.5'
@@ -199,7 +204,14 @@ export default function SidePanel({
         {/* After the label when there is one, beside the icon when there is
             not — a count that trails the word reads as "Events: 3", where one
             wedged before it reads as a badge on the icon and competes with it. */}
-        {count ? (
+        {/* A review keeps running while this tab is not the visible one — the
+            dot says so, so switching away doesn't look like it killed it. */}
+        {running ? (
+          <span
+            aria-hidden
+            className="size-1.5 shrink-0 rounded-full bg-accent animate-pulse"
+          />
+        ) : count ? (
           <span
             className={`rounded-full px-1 text-[9px] tabular-nums leading-[1.4] ${
               active ? 'bg-accent/25 text-accent' : 'bg-surface-overlay text-ink-faint'
@@ -272,7 +284,7 @@ export default function SidePanel({
               tabs kept getting added, so the hints moved to the panel-level
               open (⌥⇧2) and step (⌥⇧< / >) shortcuts instead. */}
           <div role="tablist" className="flex items-center gap-0.5">
-            {tabButton('review', <LuScanText size={13} />, 'Reviews')}
+            {tabButton('review', <LuScanText size={13} />, 'Reviews', undefined, reviewCtx.runner.streaming)}
             {tabButton('events', <LuCalendarDays size={13} />, 'Events', events.count)}
             {tabButton('characters', <LuUsers size={13} />, 'Characters', characters.count)}
             {tabButton('insights', <LuLightbulb size={13} />, 'Insights')}

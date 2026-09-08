@@ -4,17 +4,21 @@ import { useEffect, useRef, useState } from 'react'
 import { LuScanText, LuTrash2, LuPlus, LuSend, LuUnplug, LuCircleSlash } from 'react-icons/lu'
 import { ReviewMarkdown } from './reviewMarkdown'
 import ReviewAnimation from './ReviewAnimation'
-import { DEFAULT_FOCUS, useReviewRunner } from './useReviewRunner'
+import { DEFAULT_FOCUS, type ReviewRunner } from './useReviewRunner'
 import { buildReviewTurn } from './reviewTurn'
 import { followScrollTop } from './reviewScroll'
 import { PanelEmpty, PanelEmptyState } from './PanelEmptyState'
-import { playChime } from '@/lib/sound'
 
 // The chapter's WriteAI review, in Loom's right dock (KAN-22).
 //
 // The review runs end to end here: the panel arrives pre-populated with this
 // book, this chapter and the Literary Agent persona, and waits. Nothing starts
 // on open — that would spend money on a page load.
+//
+// The RUN itself is not owned here. `runner` is held by the chapter page and
+// passed in, because this component unmounts every time the dock closes or
+// another tab is picked, and a run owned here died with it. See
+// useReviewRunner's header.
 //
 // `chapter_text` is sent from the LIVE editor, which is what removes the
 // resync step the old two-tab loop needed.
@@ -175,6 +179,7 @@ export default function ReviewPanel({
   getCanonText,
   onSession,
   onRefetch,
+  runner,
 }: {
   data: Payload | null
   loading: boolean
@@ -183,8 +188,11 @@ export default function ReviewPanel({
   chapterId: string
   bookTitle?: string
   getCanonText: () => string
+  /** Still needed for delete — a run's own persist is handled by the page. */
   onSession: (s: ReviewSession | null) => void
   onRefetch: () => void
+  /** The page's runner, so a review survives this panel unmounting. */
+  runner: ReviewRunner
 }) {
   const [reply, setReply] = useState('')
   // Set when the writer asks for a fresh review while one exists. Both are
@@ -204,13 +212,14 @@ export default function ReviewPanel({
     setNotice(null)
   }, [chapterId])
 
-  const runner = useReviewRunner(s => {
-    onSession(s)
+  // A run that lands clears the reply box and drops the panel out of "starting
+  // fresh". The runner belongs to the page now, so this arrives as a bumped
+  // counter rather than as a callback into this component's state — which is
+  // the point: the run can complete while this component is not even mounted.
+  useEffect(() => {
     setReply('')
     setStartingFresh(false)
-    onRefetch()
-    playChime()
-  })
+  }, [runner.completions])
 
   const stored = data?.review ?? null
   const review = startingFresh ? null : stored
@@ -373,9 +382,6 @@ export default function ReviewPanel({
       s.scrollTop = next
     }
   }, [runner.streamText])
-
-  // Leaving the chapter mid-stream would otherwise keep the request alive.
-  useEffect(() => () => runner.cancel(), [chapterId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function start(message?: string) {
     if (!canRun || runner.streaming) return

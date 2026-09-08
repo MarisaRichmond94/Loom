@@ -9,6 +9,7 @@ import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
 import SidePanel, { minWidthForTab, type PanelTab } from '@/components/editor/SidePanel'
 import { useChapterReview } from '@/components/editor/ReviewPanel'
+import { useReviewRunner } from '@/components/editor/useReviewRunner'
 import { type PinnedText } from '@/components/editor/ReferencePanel'
 import { useChapterNotes } from '@/components/editor/useChapterNotes'
 import { useChapterEvents } from '@/components/editor/useChapterEvents'
@@ -19,6 +20,7 @@ import { useRegisterShortcuts, type ShortcutGroup } from '@/lib/shortcuts'
 import { SoundtrackBlockRegistryProvider, useSoundtrackBlockRegistry } from '@/lib/soundtrackBlockRegistry'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import { notify, showToast } from '@/lib/notifications'
+import { playChime } from '@/lib/sound'
 import { registerProseFlush, subscribeProseReplaced } from '@/lib/proseSync'
 import { ConditionRow } from '@/components/editor/conditionUI'
 import { useAuthor } from '@/lib/authorContext'
@@ -245,6 +247,28 @@ export default function ChapterEditorPage() {
     setData: setReviewData,
     refetch: refetchReview,
   } = useChapterReview(seriesId, reviewBookId, chapterId)
+  // The review runner lives HERE, not in ReviewPanel, because the panel
+  // unmounts whenever the dock is closed or another tab is selected — and
+  // while the runner lived down there, that unmount aborted a review already
+  // paid for. Closing the sidebar mid-review is now free: the run carries on,
+  // lands in WriteAI, and the panel picks it up whenever it comes back.
+  const reviewRunner = useReviewRunner(s => {
+    setReviewData(d => ({ ...(d ?? {}), review: s }))
+    refetchReview()
+    playChime()
+    // If she isn't looking at the Review tab, the chime alone doesn't say what
+    // finished or where it went.
+    if (!(panelOpenRef.current && panelTabRef.current === 'review')) {
+      showToast({
+        kind: 'ok',
+        message: 'Review ready',
+        actions: [{ label: 'Open', onClick: () => openPanelRef.current('review') }],
+      })
+    }
+  })
+  // Only leaving the chapter cancels a run. Every lesser dismissal — closing
+  // the dock, switching tabs — deliberately does not.
+  useEffect(() => () => reviewRunner.cancel(), [chapterId]) // eslint-disable-line react-hooks/exhaustive-deps
   // Fetched only while the tab is actually open. Not a side-effect worry — the
   // endpoint behind it is a pure read, unlike the character pool — but it is a
   // WriteAI round trip per chapter, and the answer changes about once a day.
@@ -285,6 +309,8 @@ export default function ChapterEditorPage() {
       return next
     })
   }
+  const openPanelRef = useRef(openPanel)
+  openPanelRef.current = openPanel
   function closePanel() {
     setPanelOpen(false)
     try { localStorage.setItem('loom-panel-open', 'false') } catch { /* ignore */ }
@@ -1960,6 +1986,7 @@ export default function ChapterEditorPage() {
           getCanonText: () => buildCanonTextRef.current(),
           onSession: s => setReviewData(d => ({ ...(d ?? {}), review: s })),
           onRefetch: refetchReview,
+          runner: reviewRunner,
         }}
         width={panelWidth}
         onWidthChange={w => {
