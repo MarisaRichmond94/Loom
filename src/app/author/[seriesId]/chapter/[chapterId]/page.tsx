@@ -93,9 +93,11 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
     ],
   },
   {
-    group: 'Soundtrack',
+    // Not "Soundtrack" — the header player owns that group name, and this is a
+    // different thing: the one song block in front of you, not the playlist.
+    group: 'Song Block',
     items: [
-      { keys: '⌃⇧Space', label: 'Play/Pause the last-touched song block (or the first, if none yet)' },
+      { keys: '⌃⇧Space', label: 'Play/Pause' },
     ],
   },
   {
