@@ -99,7 +99,7 @@ export default function SoundtrackPopover() {
         aria-label="Soundtrack"
         aria-expanded={open}
         className={`flex items-center justify-center w-7 h-7 rounded transition ${
-          open || isPlaying ? 'text-accent bg-accent/10' : 'text-ink-faint hover:text-accent hover:bg-accent/10'
+          open || isPlaying ? 'text-accent' : 'text-ink-faint hover:text-accent'
         }`}
       >
         {isPlaying ? <EqualizerIcon /> : <LuMusic size={14} />}
@@ -116,7 +116,7 @@ export default function SoundtrackPopover() {
             </p>
           ) : (
             <>
-              <div className="p-2 pb-0"><SoundtrackPlayerBar /></div>
+              <div className="p-2 pb-0"><SoundtrackPlayerBar compact /></div>
 
               {/* Series / this book. Hidden off a book — with no active book
                   there is no second thing to toggle between, and a dead

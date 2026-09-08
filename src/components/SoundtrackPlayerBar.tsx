@@ -3,6 +3,26 @@
 import { LuShuffle, LuSkipBack, LuPlay, LuPause, LuSkipForward, LuRepeat, LuRepeat1, LuMusic } from 'react-icons/lu'
 import { useSoundtrackPlayer, soundtrackRowDomId, soundtrackPopoverRowDomId } from '@/lib/soundtrackPlayer'
 
+function IconButton({ onClick, title, active = false, children }: {
+  onClick: () => void
+  title: string
+  active?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition ${
+        active ? 'text-accent' : 'text-ink-faint hover:text-ink hover:bg-accent/10'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
 function fmt(s: number): string {
   if (!isFinite(s) || s < 0) return '0:00'
   const m = Math.floor(s / 60)
@@ -15,7 +35,7 @@ function fmt(s: number): string {
 // transport controls, and a seekable progress bar. `sticky top-0` pins it to
 // the top of the tab's own scroll area — the tab content is left in normal
 // flow (see SectionTabs), so this needs no portal or layout change to work.
-export default function SoundtrackPlayerBar() {
+export default function SoundtrackPlayerBar({ compact = false }: { compact?: boolean }) {
   const { tracks, current, isPlaying, shuffle, loopMode, currentTime, duration, play, togglePlay, previous, next, seek, toggleShuffle, cycleLoop } = useSoundtrackPlayer()
 
   // `|| current` matters in the popover: scoping to a book with no songs
@@ -41,6 +61,61 @@ export default function SoundtrackPlayerBar() {
     const row = document.getElementById(soundtrackPopoverRowDomId(display.id))
       ?? document.getElementById(soundtrackRowDomId(display.id))
     row?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  // The header popover is ~1/3 the width this bar was drawn for, and one row
+  // of transport + art + title + seek + elapsed does not fit: the time
+  // readout — the part you actually watch — is what slides off the end. So the
+  // compact variant stacks, which also gives the seek bar the full width
+  // rather than whatever the buttons leave over.
+  if (compact) {
+    return (
+      <div className="flex flex-col gap-2 rounded-lg border border-accent/10 bg-surface-raised px-2.5 py-2">
+        <div className="flex items-center gap-2.5">
+          <div className="shrink-0 w-9 h-9 rounded overflow-hidden flex items-center justify-center bg-surface-overlay">
+            {display.albumArtUrl
+              ? <img src={display.albumArtUrl} alt="" className="w-full h-full object-cover" />
+              : <LuMusic size={14} className="text-accent" />}
+          </div>
+          <button
+            type="button"
+            onClick={scrollToDisplayed}
+            title="Scroll to this song in the list"
+            className="flex-1 min-w-0 text-left"
+          >
+            <p className="text-sm font-semibold text-ink truncate hover:text-accent transition">{display.name}</p>
+            {display.artist && <p className="text-xs text-ink-faint truncate">{display.artist}</p>}
+          </button>
+          <div className="shrink-0 flex items-center gap-0.5">
+            <IconButton onClick={toggleShuffle} title="Shuffle" active={shuffle}><LuShuffle size={13} /></IconButton>
+            <IconButton onClick={previous} title="Previous (⌥⇧<)"><LuSkipBack size={15} /></IconButton>
+            <button
+              type="button"
+              onClick={() => (current ? togglePlay() : play())}
+              title={`${isPlaying ? 'Pause' : 'Play'} (⌥⇧Space)`}
+              className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center bg-accent text-white hover:bg-accent/90 transition"
+            >
+              {isPlaying ? <LuPause size={14} /> : <LuPlay size={14} className="ml-0.5" />}
+            </button>
+            <IconButton onClick={next} title="Next (⌥⇧>)"><LuSkipForward size={15} /></IconButton>
+            <IconButton onClick={cycleLoop} active={loopMode !== 'off'} title={loopMode === 'off' ? 'Repeat' : loopMode === 'all' ? 'Repeat all (click for repeat one)' : 'Repeat one'}>
+              {loopMode === 'one' ? <LuRepeat1 size={13} /> : <LuRepeat size={13} />}
+            </IconButton>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div
+            onMouseDown={e => seekFromEvent(e.clientX, e.currentTarget)}
+            className="flex-1 min-w-0 h-1.5 rounded-full bg-accent/10 relative cursor-pointer overflow-hidden"
+          >
+            <div className="absolute top-0 left-0 h-full bg-accent" style={{ width: `${pct}%` }} />
+          </div>
+          <span className="text-[11px] text-ink-faint tabular-nums shrink-0 select-none">
+            {fmt(currentTime)} / {fmt(duration)}
+          </span>
+        </div>
+      </div>
+    )
   }
 
   return (
