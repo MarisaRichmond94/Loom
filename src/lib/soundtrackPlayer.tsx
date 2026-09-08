@@ -94,6 +94,7 @@ const SHORTCUT_GROUPS = [
   {
     group: 'Soundtrack',
     items: [
+      { keys: '⌥⇧M', label: 'Open / close the soundtrack popover' },
       { keys: '⌥⇧<', label: 'Previous track' },
       { keys: '⌥⇧Space', label: 'Play/Pause' },
       { keys: '⌥⇧>', label: 'Next track' },

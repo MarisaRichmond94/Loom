@@ -30,6 +30,20 @@ export default function SoundtrackPopover() {
 
   useClickOutside([rootRef], () => setOpen(false), open)
 
+  // ⌥⇧M — open/close, the same as clicking the button. preventDefault matters
+  // even when the popover is only closing: ⌥⇧M inserts "Â" in a focused
+  // editor on macOS, and this hotkey is meant to be usable mid-sentence.
+  useEffect(() => {
+    function onKeydown(e: KeyboardEvent) {
+      if (!e.altKey || !e.shiftKey || e.ctrlKey || e.metaKey) return
+      if (e.code !== 'KeyM') return
+      e.preventDefault()
+      setOpen(v => !v)
+    }
+    window.addEventListener('keydown', onKeydown)
+    return () => window.removeEventListener('keydown', onKeydown)
+  }, [])
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(COLLAPSED_STORAGE_KEY)
@@ -95,7 +109,7 @@ export default function SoundtrackPopover() {
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        title={hasMusic ? 'Soundtrack (⌥⇧Space to play/pause)' : 'No soundtrack yet'}
+        title={hasMusic ? 'Soundtrack (⌥⇧M)' : 'No soundtrack yet (⌥⇧M)'}
         aria-label="Soundtrack"
         aria-expanded={open}
         className={`flex items-center justify-center w-7 h-7 rounded transition ${
