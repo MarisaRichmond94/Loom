@@ -860,7 +860,7 @@ export default function BookDetailPage() {
                   // no cross-axis size to derive from before stretch resolves,
                   // so the browser fell back to the image's own intrinsic
                   // size instead — hence the oversized cover.
-                  <div key={s.id} id={soundtrackRowDomId(s.id)} className="rounded-lg bg-surface-raised border border-accent/10 overflow-hidden flex h-[104px]">
+                  <div key={s.id} id={soundtrackRowDomId(s.id)} className="scroll-mt-16 rounded-lg bg-surface-raised border border-accent/10 overflow-hidden flex h-[104px]">
                     <span className="shrink-0 w-7 flex items-center justify-center text-xs text-ink-faint">{idx + 1}</span>
                     <button
                       onClick={() => openAlbumArtPicker(s.id)}

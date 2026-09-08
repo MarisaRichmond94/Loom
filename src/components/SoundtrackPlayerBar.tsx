@@ -31,7 +31,7 @@ export default function SoundtrackPlayerBar() {
   }
 
   function scrollToDisplayed() {
-    document.getElementById(soundtrackRowDomId(display.id))?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    document.getElementById(soundtrackRowDomId(display.id))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   return (

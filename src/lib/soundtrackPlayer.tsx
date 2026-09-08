@@ -186,6 +186,14 @@ export function SoundtrackPlayerProvider({ tracks, children }: { tracks: Soundtr
     }
   }, [])
 
+  // Whenever a track starts up (fresh pick, skip, or auto-advance), bring its
+  // row into view — the user is free to scroll away afterward, this only
+  // fires on the track change itself, not on every render/seek/pause.
+  useEffect(() => {
+    if (!current) return
+    document.getElementById(soundtrackRowDomId(current.id))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [current?.id])
+
   const play = useCallback((id?: string) => {
     const a = audioRef.current
     if (!a) return

@@ -91,7 +91,7 @@ export default function SeriesSoundtrackSection({ seriesId }: { seriesId: string
               // to (20px title line + 32px SoundtrackRowControl + 16px chapter line +
               // 2×6px gaps + 2×12px padding). See the book page's soundtrack
               // tab for why the row needs a definite height here.
-              <div key={s.id} id={soundtrackRowDomId(s.id)} className="rounded-lg bg-surface-raised border border-accent/10 overflow-hidden flex h-[104px]">
+              <div key={s.id} id={soundtrackRowDomId(s.id)} className="scroll-mt-16 rounded-lg bg-surface-raised border border-accent/10 overflow-hidden flex h-[104px]">
                 <span className="shrink-0 w-7 flex items-center justify-center text-xs text-ink-faint">{idx + 1}</span>
                 {/* Inset from the row's full 104px height by 1.5rem (the same
                     top+bottom the content column's own py-3 uses) so the
