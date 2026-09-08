@@ -71,6 +71,17 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
       } else if (e.altKey && e.shiftKey && e.code === 'Digit3') {
         e.preventDefault()
         setContextOpen(prev => !prev)
+      } else if (e.altKey && e.shiftKey && e.code === 'KeyR' && !e.defaultPrevented) {
+        // ⌥⇧R starts/stops read-aloud inside a text block (see ReadAloud in
+        // TextBlock.tsx), which preventDefaults when it handles the key. Focus
+        // anywhere else — sidebar, dock, a modal — never reached that handler,
+        // so speech started in a block had no way to be stopped without
+        // clicking back into it. Here the key only ever stops: it must not
+        // start a read with no cursor to read from.
+        if (typeof window !== 'undefined' && window.speechSynthesis?.speaking) {
+          e.preventDefault()
+          window.speechSynthesis.cancel()
+        }
       }
     }
     window.addEventListener('keydown', onKeyDown)

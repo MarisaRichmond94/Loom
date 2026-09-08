@@ -88,7 +88,7 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
       { keys: '⌥⇧J', label: 'Jump to cursor' },
       { keys: '⌥⇧I', label: 'Toggle paragraph indent' },
       { keys: '⌥⇧+ / -', label: 'Enlarge / shrink text' },
-      { keys: '⌥⇧R', label: 'Read aloud from cursor' },
+      { keys: '⌥⇧R', label: 'Read aloud from cursor / stop' },
       { keys: '⌥⇧B', label: 'Insert scene break' },
     ],
   },
