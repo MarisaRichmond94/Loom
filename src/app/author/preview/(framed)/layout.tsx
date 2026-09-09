@@ -23,11 +23,6 @@ import { useLightMode } from '@shared/useLightMode'
  * for a sticky footer — it lived at /read/<id> with no layout at all. Putting
  * it under this one gave it two headers and swallowed its footer. A route group
  * scopes the layout without touching a single URL.
- *
- * NO APP SWITCH. `(home)` gated it on `pathname === '/'`, so these pages never
- * had it; passing false here preserves that exactly. The WriteAI jump is an
- * author tool, but these pages are also what the author uses to LOOK at a book
- * as a reader would, and the switch has no place in that view.
  */
 export default function AuthorPreviewLayout({ children }: { children: React.ReactNode }) {
   const { lightMode, toggleLightMode, mounted } = useLightMode()
@@ -35,7 +30,6 @@ export default function AuthorPreviewLayout({ children }: { children: React.Reac
   return (
     <div className="h-screen bg-surface-base flex flex-col overflow-hidden">
       <AppHeader
-        showAppSwitch={false}
         lightMode={lightMode}
         onToggleLightMode={toggleLightMode}
         loading={!mounted}

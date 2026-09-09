@@ -201,7 +201,6 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
           hasProject
           hasTools
           showBell
-          showAppSwitch
           compactGreeting
           lightMode={lightMode}
           onToggleLightMode={toggleLightMode}
@@ -309,7 +308,6 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
             </div>
           }
           showBell
-          showAppSwitch
           compactGreeting
           lightMode={lightMode}
           onToggleLightMode={toggleLightMode}

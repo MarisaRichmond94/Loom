@@ -301,7 +301,7 @@ export default function SettingsPage() {
       {/* No project context here, so no switcher. The app switch is present on
           every Loom surface except the reader (KAN-8) — it used to sit only on
           author pages, which read as incidental rather than chosen. */}
-      <AppHeader showAppSwitch lightMode={lightMode} onToggleLightMode={toggleLightMode} />
+      <AppHeader lightMode={lightMode} onToggleLightMode={toggleLightMode} />
       {/* Settings sits outside the author layout, which is where ToastLayer is
           normally mounted — so it needs its own.
 

@@ -69,8 +69,11 @@ form (fallback, retained indefinitely). WriteAI configures `VITE_LOOM_URL`
 
   Title matching is case-insensitive and punctuation-normalized (NFC, curly
   apostrophes folded) on **both** routes.
-- **Loom → WriteAI:** plain link to `NEXT_PUBLIC_WRITEAI_URL`
-  (default `http://localhost:5173`), plus the review deep link below.
+- **Loom → WriteAI:** no longer a user-facing jump. The header's sparkle link
+  to `NEXT_PUBLIC_WRITEAI_URL` is gone — reviews, insights, events, characters
+  and comments all come to the chapter now, so there was nothing left the
+  writer had to leave Loom for. The env var stays: Loom's server-side proxies
+  below still read it.
 
 ### 3. Review — now runs inside Loom (LOOM-22)
 

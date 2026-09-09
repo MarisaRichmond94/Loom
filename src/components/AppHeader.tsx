@@ -2,7 +2,7 @@
 
 import { ReactNode } from 'react'
 import Link from 'next/link'
-import { LuMoon, LuSparkles, LuSun } from 'react-icons/lu'
+import { LuMoon, LuSun } from 'react-icons/lu'
 import AvatarButton from '@/components/AvatarButton'
 import NotificationBell from '@/components/NotificationBell'
 import Greeting from '@/components/Greeting'
@@ -15,11 +15,17 @@ import ProjectSwitcher, { type SwitcherProject } from '@/components/ProjectSwitc
  * plus a fifth copy that existed only as the author layout's loading skeleton
  * and had to be kept in sync by hand. Three of the four were already
  * near-identical (brand + greeting + light toggle + avatar); only the author
- * header added breadcrumbs, tools, a bell, and the WriteAI jump.
+ * header added breadcrumbs, tools, and a bell.
  *
  * Anatomy, in order. WriteAI mirrors this in KAN-7:
  *
- *   [ logo ] [ project ▾ | LOOM ] [ app switch ]  ...  [ tools ] [ identity ]
+ *   [ logo ] [ project ▾ | LOOM ]  ...  [ tools ] [ identity ]
+ *
+ * The WriteAI jump that used to sit after the wordmark is gone. It existed
+ * when the two apps were separate places you moved between; reviews, insights,
+ * events, characters and comments now come to the chapter, so the trip is the
+ * exception rather than the workflow, and it was holding a header slot on
+ * every surface to be it.
  *
  * The identity cluster is greeting → light toggle → bell → avatar.
  *
@@ -60,7 +66,6 @@ type Props = {
    */
   hasTools?: boolean
   showBell?: boolean
-  showAppSwitch?: boolean
   /** Hide the greeting below lg — same reason. */
   compactGreeting?: boolean
   lightMode: boolean
@@ -80,7 +85,6 @@ export default function AppHeader({
   tools,
   hasTools = false,
   showBell = false,
-  showAppSwitch = false,
   compactGreeting = false,
   lightMode,
   onToggleLightMode,
@@ -120,27 +124,6 @@ export default function AppHeader({
       )}
 
       {project && afterProject}
-
-      {showAppSwitch && (
-        /* Jump to the companion WriteAI app (same tab — the browser's back
-           button is the return trip).
-
-           Present on every Loom surface EXCEPT the reader (KAN-8). It used to
-           sit only on author pages, which read as incidental. The reader is
-           excluded deliberately: read mode is for reading, and a jump to the
-           analysis tool mid-chapter is a different mode of attention.
-
-           Icon + tooltip rather than a label — the header already carries a
-           project switcher, search, greeting, toggle, bell and avatar. WriteAI
-           mirrors this exactly. */
-        <a
-          href={process.env.NEXT_PUBLIC_WRITEAI_URL ?? 'http://localhost:5173'}
-          title="Open WriteAI"
-          className="self-center shrink-0 ml-1 p-1 rounded text-ink-faint hover:text-accent hover:bg-accent/10 transition"
-        >
-          <LuSparkles size={14} />
-        </a>
-      )}
 
       <div className="ml-auto flex items-center gap-3 min-w-0">
         {loading ? (
