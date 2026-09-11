@@ -59,6 +59,63 @@ type SeriesSoundtrackRow = {
   hasAlbumArt: boolean
 }
 
+// ---------------------------------------------------------------------------
+// Cross-tab sync
+//
+// A browser can't share one <audio> element between tabs, so the tabs share
+// *state* instead: exactly one tab — the owner — holds the element that makes
+// sound, and every other tab renders the same header/popover UI from the
+// owner's broadcasts and sends commands back over the channel. Pressing pause
+// in a follower posts a message; the owner is what actually pauses.
+//
+// Before this, each tab mounted its own provider and its own element, so two
+// open tabs meant two songs playing over each other. Single ownership is what
+// fixes that, and showing the state everywhere falls out of it for free.
+// ---------------------------------------------------------------------------
+
+const CHANNEL_NAME = 'loom-soundtrack'
+
+/** How often the owner republishes its playhead so followers' scrubbers move.
+ *  Deliberately not on `timeupdate` (which fires several times a second) — a
+ *  progress bar reading in whole seconds needs nothing finer. */
+const TICK_MS = 1000
+
+/** If the owner doesn't answer a command within this long, assume its tab died
+ *  without getting to fire `pagehide` (a crash, a force-quit) and take
+ *  playback over here instead of leaving the button dead forever. */
+const TAKEOVER_MS = 1000
+
+type Snapshot = {
+  currentId: string | null
+  isPlaying: boolean
+  currentTime: number
+  duration: number
+  shuffle: boolean
+  loopMode: LoopMode
+  scopePref: ScopePref
+}
+
+type Command =
+  | { type: 'play'; id?: string }
+  | { type: 'togglePlay' }
+  | { type: 'previous' }
+  | { type: 'next' }
+  | { type: 'seek'; time: number }
+
+/** Preferences ride their own message rather than a command: they're plain
+ *  state every tab can hold, so they don't need an owner to exist and must not
+ *  cause one to be claimed (changing scope shouldn't decide which tab makes
+ *  sound the next time you press play). */
+type PrefPatch = { shuffle?: boolean; loopMode?: LoopMode; scopePref?: ScopePref }
+
+type Message =
+  | { type: 'hello'; from: string }
+  | { type: 'claim'; from: string }
+  | { type: 'bye'; from: string }
+  | { type: 'state'; from: string; snapshot: Snapshot }
+  | { type: 'cmd'; from: string; cmd: Command }
+  | { type: 'pref'; from: string; pref: PrefPatch }
+
 type PlayerState = {
   /** The active queue — the scope-filtered list prev/next walks. */
   tracks: SoundtrackTrack[]
@@ -76,6 +133,10 @@ type PlayerState = {
   activeBookId: string | null
   /** True while `scopePref` is 'book' AND a book is actually active. */
   scopedToBook: boolean
+  /** True when this tab is the one holding the playing <audio> element. Every
+   *  surface renders identically either way; this is here for the few places
+   *  that care whether sound is coming from *here*. */
+  isPlaybackOwner: boolean
   /** Re-read the series' soundtrack blocks — the popover calls this on open,
    *  so a song added mid-session appears without a reload. */
   refresh: () => void
@@ -117,7 +178,8 @@ function shuffledIds(ids: string[]): string[] {
 /**
  * Owns the single <audio> element for the whole author app, so exactly one
  * track plays at a time no matter how many rows, bars or popovers want to
- * start and stop it.
+ * start and stop it — and, since the cross-tab channel above, no matter how
+ * many tabs are open either.
  *
  * It used to be mounted per Soundtrack tab and died with it, on the reasoning
  * that playback was a tab feature. It isn't — the point is music while
@@ -125,7 +187,9 @@ function shuffledIds(ids: string[]): string[] {
  * placement is load-bearing: Next keeps a layout mounted across client-side
  * navigation within its segment, which is the only reason a song survives
  * walking from chapter to chapter. Anything forcing a full document load (an
- * external link, a hard refresh) still stops the music, unavoidably.
+ * external link, a hard refresh) still stops the music in THIS tab — though
+ * with the channel in place, another tab still holding the song keeps playing
+ * and this one rejoins as a follower on mount.
  *
  * It also owns the track list now rather than being handed one. With two
  * playlists (series and current book) and three surfaces rendering rows, one
@@ -153,16 +217,35 @@ export function SoundtrackPlayerProvider({
   const [duration, setDuration] = useState(0)
   const shuffleOrderRef = useRef<string[]>([])
 
+  // This tab's address on the channel. Only ever compared, never displayed, so
+  // a random string is enough and there's nothing to keep stable across loads.
+  const tabIdRef = useRef('')
+  if (!tabIdRef.current) tabIdRef.current = Math.random().toString(36).slice(2)
+
+  const channelRef = useRef<BroadcastChannel | null>(null)
+  /** Which tab holds the sounding element, or null when nothing is playing
+   *  anywhere. Kept in a ref alongside the state because the channel handler
+   *  and the takeover timer both read it outside of a render. */
+  const [ownerId, setOwnerId] = useState<string | null>(null)
+  const ownerIdRef = useRef<string | null>(null)
+  const takeoverRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const setOwner = useCallback((id: string | null) => {
+    ownerIdRef.current = id
+    setOwnerId(id)
+  }, [])
+
+  const owns = useCallback(() => ownerIdRef.current !== null && ownerIdRef.current === tabIdRef.current, [])
+
+  const post = useCallback((msg: Message) => {
+    channelRef.current?.postMessage(msg)
+  }, [])
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(SCOPE_STORAGE_KEY)
       if (stored === 'series' || stored === 'book') setScopePrefState(stored)
     } catch { /* private mode; the default stands */ }
-  }, [])
-
-  const setScopePref = useCallback((pref: ScopePref) => {
-    setScopePrefState(pref)
-    try { localStorage.setItem(SCOPE_STORAGE_KEY, pref) } catch { /* ignore */ }
   }, [])
 
   // The series list arrives already ordered book → chapter → position, which
@@ -199,6 +282,122 @@ export function SoundtrackPlayerProvider({
   // transport bar rather than blanking out — playback deliberately continues.
   const current = pool.find(t => t.id === currentId) ?? null
 
+  // Everything the channel handlers need to read at message time, without
+  // making the channel itself re-subscribe on every state change.
+  const latestRef = useRef({
+    currentId, isPlaying, currentTime, duration, shuffle, loopMode, scopePref, pool, trackIds, refresh,
+  })
+  latestRef.current = {
+    currentId, isPlaying, currentTime, duration, shuffle, loopMode, scopePref, pool, trackIds, refresh,
+  }
+
+  const postState = useCallback(() => {
+    if (!owns()) return
+    const s = latestRef.current
+    post({
+      type: 'state',
+      from: tabIdRef.current,
+      snapshot: {
+        currentId: s.currentId,
+        isPlaying: s.isPlaying,
+        currentTime: s.currentTime,
+        duration: s.duration,
+        shuffle: s.shuffle,
+        loopMode: s.loopMode,
+        scopePref: s.scopePref,
+      },
+    })
+  }, [owns, post])
+
+  const applySnapshot = useCallback((s: Snapshot) => {
+    setCurrentId(s.currentId)
+    setIsPlaying(s.isPlaying)
+    setCurrentTime(s.currentTime)
+    setDuration(s.duration)
+    setShuffle(s.shuffle)
+    setLoopMode(s.loopMode)
+    setScopePrefState(s.scopePref)
+    // A song added in another tab isn't in our pool yet, and then the header
+    // can't name what's playing. Go and get it.
+    if (s.currentId && !latestRef.current.pool.some(t => t.id === s.currentId)) latestRef.current.refresh()
+  }, [])
+
+  const applyPref = useCallback((p: PrefPatch) => {
+    if (p.shuffle !== undefined) setShuffle(p.shuffle)
+    if (p.loopMode !== undefined) setLoopMode(p.loopMode)
+    if (p.scopePref !== undefined) {
+      setScopePrefState(p.scopePref)
+      try { localStorage.setItem(SCOPE_STORAGE_KEY, p.scopePref) } catch { /* ignore */ }
+    }
+  }, [])
+
+  const setScopePref = useCallback((pref: ScopePref) => {
+    applyPref({ scopePref: pref })
+    post({ type: 'pref', from: tabIdRef.current, pref: { scopePref: pref } })
+  }, [applyPref, post])
+
+  const claim = useCallback(() => {
+    setOwner(tabIdRef.current)
+    post({ type: 'claim', from: tabIdRef.current })
+  }, [post, setOwner])
+
+  /** Load this tab's element with whatever the last owner was playing, so a
+   *  takeover picks the song up where it left off instead of from silence. */
+  const adopt = useCallback(() => {
+    const a = audioRef.current
+    const s = latestRef.current
+    const track = s.pool.find(t => t.id === s.currentId)
+    if (!a || !track) return
+    a.src = track.src
+    a.currentTime = s.currentTime
+  }, [])
+
+  // The transport's actual implementations, reached through a ref so
+  // `runCommand` can stay stable while they change every render.
+  const actionsRef = useRef({
+    play: (_id?: string) => {},
+    togglePlay: () => {},
+    previous: () => {},
+    next: () => {},
+    seek: (_time: number) => {},
+  })
+
+  const runCommand = useCallback((cmd: Command) => {
+    const a = actionsRef.current
+    switch (cmd.type) {
+      case 'play': a.play(cmd.id); break
+      case 'togglePlay': a.togglePlay(); break
+      case 'previous': a.previous(); break
+      case 'next': a.next(); break
+      case 'seek': a.seek(cmd.time); break
+    }
+  }, [])
+
+  /**
+   * Every public transport call goes through here: run it locally if we're the
+   * owner, hand it to the owner if there is one, or claim ownership and run it
+   * if nobody is playing. That last branch is why sound comes out of the tab
+   * you pressed play in — and why the browser lets it, since that tab has the
+   * user gesture autoplay policy wants.
+   */
+  const dispatch = useCallback((cmd: Command) => {
+    if (owns()) { runCommand(cmd); return }
+    if (ownerIdRef.current !== null) {
+      post({ type: 'cmd', from: tabIdRef.current, cmd })
+      if (takeoverRef.current) clearTimeout(takeoverRef.current)
+      takeoverRef.current = setTimeout(() => {
+        takeoverRef.current = null
+        claim()
+        adopt()
+        runCommand(cmd)
+      }, TAKEOVER_MS)
+      return
+    }
+    claim()
+    adopt()
+    runCommand(cmd)
+  }, [owns, post, claim, adopt, runCommand])
+
   function order(): string[] {
     return shuffle ? shuffleOrderRef.current : trackIds
   }
@@ -225,7 +424,7 @@ export function SoundtrackPlayerProvider({
 
   // Manual skip always moves to a different track regardless of loop mode —
   // only natural end-of-track playback (below) repeats the current one.
-  const next = useCallback(() => advance(1), [advance])
+  const runNext = useCallback(() => advance(1), [advance])
 
   const replayCurrent = useCallback(() => {
     const a = audioRef.current
@@ -243,7 +442,7 @@ export function SoundtrackPlayerProvider({
   // the old "wonky" state, where advance(-1) silently stopped playback
   // instead of doing anything visible.
   const lastPreviousAtRef = useRef(0)
-  const previous = useCallback(() => {
+  const runPrevious = useCallback(() => {
     const now = Date.now()
     const isDoubleTap = now - lastPreviousAtRef.current < 1000
     lastPreviousAtRef.current = now
@@ -258,69 +457,7 @@ export function SoundtrackPlayerProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [advance, replayCurrent, currentId, shuffle, loopMode, trackIds])
 
-  // timeupdate/loadedmetadata don't depend on component state (everything
-  // reads back off the element), but `ended` needs the current loop mode and
-  // `next` — a stale closure here would always act on whatever they were on
-  // the FIRST mount, not wherever they actually are now.
-  useEffect(() => {
-    const a = audioRef.current
-    if (!a) return
-    const onTime = () => setCurrentTime(a.currentTime)
-    const onLoadedMeta = () => setDuration(a.duration || 0)
-    const onEnded = () => (loopMode === 'one' ? replayCurrent() : next())
-    a.addEventListener('timeupdate', onTime)
-    a.addEventListener('loadedmetadata', onLoadedMeta)
-    a.addEventListener('ended', onEnded)
-    return () => {
-      a.removeEventListener('timeupdate', onTime)
-      a.removeEventListener('loadedmetadata', onLoadedMeta)
-      a.removeEventListener('ended', onEnded)
-    }
-  }, [next, loopMode, replayCurrent])
-
-  // Swap the source and (re)start playback whenever the current track
-  // changes. Play state is otherwise driven by the audio element's own
-  // play/pause, mirrored back into isPlaying below.
-  useEffect(() => {
-    const a = audioRef.current
-    if (!a || !current) return
-    if (a.src !== current.src) {
-      a.src = current.src
-      a.currentTime = 0
-      setCurrentTime(0)
-    }
-    if (isPlaying) a.play().catch(() => { /* autoplay denied or unmount race; nothing to do */ })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.id])
-
-  useEffect(() => {
-    const a = audioRef.current
-    if (!a) return
-    const onPlay = () => setIsPlaying(true)
-    const onPause = () => setIsPlaying(false)
-    a.addEventListener('play', onPlay)
-    a.addEventListener('pause', onPause)
-    return () => {
-      a.removeEventListener('play', onPlay)
-      a.removeEventListener('pause', onPause)
-    }
-  }, [])
-
-  // Whenever a track starts up (fresh pick, skip, or auto-advance), bring its
-  // row into view — the user is free to scroll away afterward, this only
-  // fires on the track change itself, not on every render/seek/pause.
-  //
-  // Both list surfaces are optional now: with the player global, most track
-  // changes happen with no list mounted at all (mid-chapter, hotkey-driven),
-  // and getElementById simply finds nothing. That's the intended no-op.
-  useEffect(() => {
-    if (!current) return
-    for (const domId of [soundtrackPopoverRowDomId(current.id), soundtrackRowDomId(current.id)]) {
-      document.getElementById(domId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }, [current?.id])
-
-  const play = useCallback((id?: string) => {
+  const runPlay = useCallback((id?: string) => {
     const a = audioRef.current
     if (!a) return
     if (id) {
@@ -338,23 +475,23 @@ export function SoundtrackPlayerProvider({
       setIsPlaying(true)
       return
     }
-    a.play().catch(() => {})
+    a.play().catch(() => setIsPlaying(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentId, trackIds, pool, setScopePref])
 
-  const togglePlay = useCallback(() => {
+  const runTogglePlay = useCallback(() => {
     const a = audioRef.current
     if (!a) return
     if (!currentId) {
-      play()
+      runPlay()
       return
     }
-    if (a.paused) a.play().catch(() => {})
+    if (a.paused) a.play().catch(() => setIsPlaying(false))
     else a.pause()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentId, play])
+  }, [currentId, runPlay])
 
-  const seek = useCallback((time: number) => {
+  const runSeek = useCallback((time: number) => {
     const a = audioRef.current
     if (!a || !duration) return
     const clamped = Math.max(0, Math.min(duration, time))
@@ -362,14 +499,31 @@ export function SoundtrackPlayerProvider({
     setCurrentTime(clamped)
   }, [duration])
 
+  actionsRef.current = { play: runPlay, togglePlay: runTogglePlay, previous: runPrevious, next: runNext, seek: runSeek }
+
+  const play = useCallback((id?: string) => dispatch({ type: 'play', id }), [dispatch])
+  const togglePlay = useCallback(() => dispatch({ type: 'togglePlay' }), [dispatch])
+  const previous = useCallback(() => dispatch({ type: 'previous' }), [dispatch])
+  const next = useCallback(() => dispatch({ type: 'next' }), [dispatch])
+  const seek = useCallback((time: number) => {
+    // Optimistic locally so a follower's scrubber doesn't snap back for the
+    // round trip; the owner's next snapshot is the authority either way.
+    setCurrentTime(time)
+    dispatch({ type: 'seek', time })
+  }, [dispatch])
+
   const toggleShuffle = useCallback(() => {
-    setShuffle(prev => {
-      const next = !prev
-      if (next) shuffleOrderRef.current = shuffledIds(trackIds)
-      return next
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trackIds])
+    const value = !latestRef.current.shuffle
+    setShuffle(value)
+    post({ type: 'pref', from: tabIdRef.current, pref: { shuffle: value } })
+  }, [post])
+
+  const cycleLoop = useCallback(() => {
+    const prev = latestRef.current.loopMode
+    const value: LoopMode = prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off'
+    setLoopMode(value)
+    post({ type: 'pref', from: tabIdRef.current, pref: { loopMode: value } })
+  }, [post])
 
   // A shuffled order is a permutation of one specific queue, so it goes stale
   // the moment the queue changes (scope toggled, a song added mid-session).
@@ -378,17 +532,210 @@ export function SoundtrackPlayerProvider({
     if (shuffle) shuffleOrderRef.current = shuffledIds(trackIds)
   }, [shuffle, trackIds])
 
-  const cycleLoop = useCallback(() => {
-    setLoopMode(prev => (prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off'))
-  }, [])
+  // Open the channel once. Every handler it reaches for is a stable callback
+  // reading refs, so this subscribes on mount and stays put.
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return
+    const ch = new BroadcastChannel(CHANNEL_NAME)
+    channelRef.current = ch
+    ch.onmessage = (e: MessageEvent<Message>) => {
+      const msg = e.data
+      if (!msg || msg.from === tabIdRef.current) return
+      switch (msg.type) {
+        case 'hello':
+          // A tab just opened. If we're the one playing, tell it what's on so
+          // its header paints the equalizer immediately instead of waiting for
+          // the next state change.
+          if (owns()) postState()
+          break
+        case 'cmd':
+          if (owns()) {
+            runCommand(msg.cmd)
+            // Answer even when the command changed nothing we publish on (a
+            // seek to where the playhead already was): the sender is holding a
+            // takeover timer that fires if we look dead. A task, not a
+            // microtask, so React has flushed the command's state first.
+            setTimeout(postState, 0)
+          }
+          break
+        case 'pref':
+          applyPref(msg.pref)
+          break
+        case 'claim':
+        case 'state':
+          // Someone else is (or has just become) the tab making sound. If we
+          // thought we were, stand down — two elements playing at once is the
+          // exact thing this mechanism exists to prevent, and the newest claim
+          // wins so a takeover can't deadlock against a tab that comes back.
+          if (owns()) audioRef.current?.pause()
+          setOwner(msg.from)
+          if (msg.type === 'state') applySnapshot(msg.snapshot)
+          if (takeoverRef.current) { clearTimeout(takeoverRef.current); takeoverRef.current = null }
+          break
+        case 'bye':
+          // The owner closed. Keep the track on screen but stopped, rather
+          // than blanking the header out from under her.
+          if (ownerIdRef.current === msg.from) {
+            setOwner(null)
+            setIsPlaying(false)
+          }
+          break
+      }
+    }
+    ch.postMessage({ type: 'hello', from: tabIdRef.current } satisfies Message)
+    return () => {
+      ch.onmessage = null
+      ch.close()
+      channelRef.current = null
+    }
+  }, [owns, postState, runCommand, applyPref, applySnapshot, setOwner])
+
+  // `pagehide` rather than `beforeunload`: it fires for the bfcache path too,
+  // which `unload` misses entirely on mobile Safari and increasingly elsewhere.
+  useEffect(() => {
+    const onHide = () => { if (owns()) post({ type: 'bye', from: tabIdRef.current }) }
+    window.addEventListener('pagehide', onHide)
+    return () => window.removeEventListener('pagehide', onHide)
+  }, [owns, post])
+
+  const isPlaybackOwner = ownerId !== null && ownerId === tabIdRef.current
+
+  // Publish on every edge the other tabs render from. `currentTime` is
+  // deliberately absent — it changes constantly and rides the tick below.
+  useEffect(() => {
+    if (isPlaybackOwner) postState()
+  }, [isPlaybackOwner, currentId, isPlaying, shuffle, loopMode, duration, scopePref, postState])
+
+  useEffect(() => {
+    if (!isPlaybackOwner || !isPlaying) return
+    const id = setInterval(postState, TICK_MS)
+    return () => clearInterval(id)
+  }, [isPlaybackOwner, isPlaying, postState])
+
+  // timeupdate/loadedmetadata don't depend on component state (everything
+  // reads back off the element), but `ended` needs the current loop mode and
+  // `next` — a stale closure here would always act on whatever they were on
+  // the FIRST mount, not wherever they actually are now.
+  //
+  // All of them are gated on ownership: a follower's element has no source and
+  // fires nothing, but a tab that was *just* demoted still holds a loaded one,
+  // and its events must not fight the snapshot it's now rendering.
+  useEffect(() => {
+    const a = audioRef.current
+    if (!a) return
+    const onTime = () => { if (owns()) setCurrentTime(a.currentTime) }
+    const onLoadedMeta = () => { if (owns()) setDuration(a.duration || 0) }
+    const onEnded = () => {
+      if (!owns()) return
+      if (loopMode === 'one') replayCurrent()
+      else runNext()
+    }
+    a.addEventListener('timeupdate', onTime)
+    a.addEventListener('loadedmetadata', onLoadedMeta)
+    a.addEventListener('ended', onEnded)
+    return () => {
+      a.removeEventListener('timeupdate', onTime)
+      a.removeEventListener('loadedmetadata', onLoadedMeta)
+      a.removeEventListener('ended', onEnded)
+    }
+  }, [runNext, loopMode, replayCurrent, owns])
+
+  // Swap the source and (re)start playback whenever the current track
+  // changes. Play state is otherwise driven by the audio element's own
+  // play/pause, mirrored back into isPlaying below. Owner-only: in a follower
+  // this same state change is just something to draw.
+  useEffect(() => {
+    const a = audioRef.current
+    if (!a || !current || !owns()) return
+    if (a.src !== current.src) {
+      a.src = current.src
+      a.currentTime = 0
+      setCurrentTime(0)
+    }
+    if (isPlaying) a.play().catch(() => { /* autoplay denied or unmount race; nothing to do */ })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.id])
+
+  useEffect(() => {
+    const a = audioRef.current
+    if (!a) return
+    const onPlay = () => { if (owns()) setIsPlaying(true) }
+    const onPause = () => { if (owns()) setIsPlaying(false) }
+    a.addEventListener('play', onPlay)
+    a.addEventListener('pause', onPause)
+    return () => {
+      a.removeEventListener('play', onPlay)
+      a.removeEventListener('pause', onPause)
+    }
+  }, [owns])
+
+  // Whenever a track starts up (fresh pick, skip, or auto-advance), bring its
+  // row into view — the user is free to scroll away afterward, this only
+  // fires on the track change itself, not on every render/seek/pause.
+  //
+  // Both list surfaces are optional now: with the player global, most track
+  // changes happen with no list mounted at all (mid-chapter, hotkey-driven),
+  // and getElementById simply finds nothing. That's the intended no-op. It
+  // stays per-tab on purpose — a follower shows the new track, but a song
+  // changing elsewhere shouldn't yank the scroll position of a tab she isn't
+  // looking at the soundtrack in.
+  useEffect(() => {
+    if (!current) return
+    for (const domId of [soundtrackPopoverRowDomId(current.id), soundtrackRowDomId(current.id)]) {
+      document.getElementById(domId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [current?.id])
+
+  // macOS Control Center / the hardware media keys talk to whichever app owns
+  // the system "Now Playing" session, and `navigator.mediaSession` is how a
+  // page becomes that app. Only the owning tab registers — the OS has one
+  // session, and a follower claiming it would point the media keys at a tab
+  // holding no sound.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
+    const ms = navigator.mediaSession
+    const actions: MediaSessionAction[] = ['play', 'pause', 'previoustrack', 'nexttrack', 'seekto']
+    const clear = () => {
+      for (const action of actions) {
+        try { ms.setActionHandler(action, null) } catch { /* unsupported action; nothing to clear */ }
+      }
+    }
+    if (!isPlaybackOwner || !current) {
+      ms.metadata = null
+      ms.playbackState = 'none'
+      clear()
+      return
+    }
+    ms.metadata = new MediaMetadata({
+      title: current.name,
+      artist: current.artist ?? '',
+      album: current.bookTitle,
+      artwork: current.albumArtUrl ? [{ src: current.albumArtUrl, sizes: '512x512', type: 'image/jpeg' }] : [],
+    })
+    ms.playbackState = isPlaying ? 'playing' : 'paused'
+    const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
+      ['play', () => togglePlay()],
+      ['pause', () => togglePlay()],
+      ['previoustrack', () => previous()],
+      ['nexttrack', () => next()],
+      ['seekto', d => { if (d.seekTime != null) seek(d.seekTime) }],
+    ]
+    for (const [action, handler] of handlers) {
+      try { ms.setActionHandler(action, handler) } catch { /* browser doesn't support it */ }
+    }
+    return clear
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaybackOwner, current?.id, current?.name, isPlaying, togglePlay, previous, next, seek])
 
   // F7/F8/F9 are macOS hardware media keys — the OS's media-remote system
   // routes them (as a special event type, not a normal keystroke) to
-  // whichever app owns the system "Now Playing" session, so a page's keydown
-  // listener can miss them entirely no matter what modifier rides along.
-  // ⌥⇧Space / ⌥⇧< / ⌥⇧> are ordinary keystrokes that always reach the focused
-  // window, and don't collide with this app's existing ⌥⇧<letter/digit>
-  // shortcuts (sidebar toggle, canon save, etc).
+  // whichever app owns the system "Now Playing" session, which is what the
+  // mediaSession block above now claims for the owning tab. ⌥⇧Space / ⌥⇧< /
+  // ⌥⇧> are ordinary keystrokes that always reach the focused window, and
+  // don't collide with this app's existing ⌥⇧<letter/digit> shortcuts
+  // (sidebar toggle, canon save, etc) — so they keep working in every tab,
+  // follower or not, because they dispatch through the channel like any
+  // other press of the transport.
   //
   // The comma/period pair replaced ⌥⇧←/→ when the player went global: the
   // arrows are previous/next CHAPTER on the chapter page, which this listener
@@ -410,7 +757,7 @@ export function SoundtrackPlayerProvider({
 
   const value: PlayerState = {
     tracks, pool, current, isPlaying, shuffle, loopMode, currentTime, duration,
-    scopePref, setScopePref, activeBookId, scopedToBook, refresh,
+    scopePref, setScopePref, activeBookId, scopedToBook, isPlaybackOwner, refresh,
     play, togglePlay, previous, next, seek, toggleShuffle, cycleLoop,
   }
 
