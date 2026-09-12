@@ -238,6 +238,26 @@ function ToolBtn({ active, onClick, title, children }: {
 // We scroll proactively once the caret enters a margin zone at the top
 // or bottom of the scrolling ancestor.
 const CARET_MARGIN = 96
+// When the caret is *entirely* off-screen — typing into a block that
+// scrolled away, or a dictation/programmatic insert far from the viewport —
+// a minimal nudge would drag it in at whichever edge it left from, showing
+// nothing of what follows. Anchor it near the top instead, so the writer
+// lands with the line they're on at the top and the rest of the block below.
+const CARET_TOP_ANCHOR = 24
+// The chapter page parks a sticky header at the top of <main>'s scroll area
+// and a sticky footer at its bottom, both of which paint over the prose.
+// Scrolling to the container's own edges therefore puts the caret *behind*
+// that chrome — it scrolls, but the writer still can't see the line. These
+// are the same vars globals.css uses for block scroll-margin-top; they're
+// unset (→ 0) anywhere a TextBlock renders without that chrome.
+function stickyInsets() {
+  const style = getComputedStyle(document.documentElement)
+  const px = (name: string) => {
+    const value = parseFloat(style.getPropertyValue(name))
+    return Number.isFinite(value) ? value : 0
+  }
+  return { top: px('--loom-chapter-header-h'), bottom: px('--loom-footer-h') }
+}
 function keepCaretInView(editor: { view: { coordsAtPos: (pos: number) => { top: number; bottom: number }; dom: HTMLElement; hasFocus: () => boolean }; state: { selection: { head: number } } }) {
   // Only chase the caret while the writer is actually editing this block.
   // onUpdate/onSelectionUpdate also fire when a block's content is set
@@ -262,16 +282,22 @@ function keepCaretInView(editor: { view: { coordsAtPos: (pos: number) => { top: 
     }
     const root = el && el !== document.body ? el : (document.scrollingElement as HTMLElement | null) ?? document.documentElement
     const usesWindow = root === document.scrollingElement || root === document.documentElement
-    const viewTop = usesWindow ? 0 : root.getBoundingClientRect().top
-    const viewBottom = usesWindow ? window.innerHeight : root.getBoundingClientRect().bottom
-    if (caret.bottom > viewBottom - CARET_MARGIN) {
-      const delta = caret.bottom - (viewBottom - CARET_MARGIN)
+    const rootRect = usesWindow ? null : root.getBoundingClientRect()
+    const inset = stickyInsets()
+    const viewTop = (rootRect ? rootRect.top : 0) + inset.top
+    const viewBottom = (rootRect ? rootRect.bottom : window.innerHeight) - inset.bottom
+    const scrollBy = (delta: number) => {
       if (usesWindow) window.scrollBy(0, delta)
       else root.scrollTop += delta
+    }
+    // Fully outside the viewport: re-anchor near the top rather than
+    // nudging it just inside the edge it fell off.
+    if (caret.top >= viewBottom || caret.bottom <= viewTop) {
+      scrollBy(caret.top - (viewTop + CARET_TOP_ANCHOR))
+    } else if (caret.bottom > viewBottom - CARET_MARGIN) {
+      scrollBy(caret.bottom - (viewBottom - CARET_MARGIN))
     } else if (caret.top < viewTop + CARET_MARGIN) {
-      const delta = caret.top - (viewTop + CARET_MARGIN)
-      if (usesWindow) window.scrollBy(0, delta)
-      else root.scrollTop += delta
+      scrollBy(caret.top - (viewTop + CARET_MARGIN))
     }
   })
 }
