@@ -46,7 +46,7 @@ export type SearchHit = {
 
 const SNIPPET_RADIUS = 60
 
-function snippetAround(haystack: string, needle: string, opts: SearchOptions): { snippet: string; matchStart: number } | null {
+function snippetAround(haystack: string, needle: string, opts: SearchOptions): { snippet: string; matchStart: number; matchLength: number } | null {
   // Same matcher the editor highlight uses, so match-case / whole-word behave
   // identically in the result list and the in-chapter highlight.
   const hits = matchRanges(haystack, needle, opts)
@@ -64,6 +64,9 @@ function snippetAround(haystack: string, needle: string, opts: SearchOptions): {
   return {
     snippet: `${leading}${raw}${trailing}`,
     matchStart: leading.length + Math.max(0, collapsedIdx),
+    // The matched span's length, NOT the query's: a `--` query matches a
+    // 1-char em dash, so highlighting query.length would bleed past the hit.
+    matchLength: hits[0].length,
   }
 }
 
@@ -91,7 +94,7 @@ function emit(
     field: record.field,
     snippet: found.snippet,
     matchStart: found.matchStart,
-    matchLength: needle.length,
+    matchLength: found.matchLength,
   })
 }
 

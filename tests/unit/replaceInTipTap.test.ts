@@ -31,3 +31,25 @@ describe('replaceInString — match case / whole word', () => {
     expect(r.value).toBe("the dog's toy")
   })
 })
+
+describe('replaceInString — em dash', () => {
+  // Must agree with matchRanges, or the series search reports hits that
+  // Replace then silently declines to touch.
+  it('a `--` find matches the em dash the editor stored', () => {
+    const r = replaceInString('She stopped—then ran.', '--', ', ')
+    expect(r.count).toBe(1)
+    expect(r.value).toBe('She stopped, then ran.')
+  })
+
+  it('still matches a literal double hyphen', () => {
+    const r = replaceInString('raw -- text', '--', '—')
+    expect(r.count).toBe(1)
+    expect(r.value).toBe('raw — text')
+  })
+
+  it('matches both spellings in one pass', () => {
+    const r = replaceInString('a--b c—d', '--', '+')
+    expect(r.count).toBe(2)
+    expect(r.value).toBe('a+b c+d')
+  })
+})

@@ -26,7 +26,12 @@ function escapeRegex(s: string): string {
 // Unicode word-class lookarounds so the boundary rule matches matchRanges
 // exactly (the search that produced the count the writer just confirmed).
 function buildPattern(find: string, opts: SearchOptions): RegExp {
-  const esc = escapeRegex(find.trim())
+  // `--` matches either spelling, mirroring matchRanges: the editor's EmDash
+  // input rule turns a typed `--` into `—`, so most prose stores the em dash
+  // while imported text can still hold the literal hyphens. Without this the
+  // series search would report N hits and Replace would change none of them.
+  // escapeRegex never emits a `-`, so rewriting after escaping is safe.
+  const esc = escapeRegex(find.trim()).replace(/--/g, '(?:--|\u2014)')
   const body = opts.wholeWord ? `(?<![\\p{L}\\p{N}_])${esc}(?![\\p{L}\\p{N}_])` : esc
   const flags = (opts.caseSensitive ? 'g' : 'gi') + (opts.wholeWord ? 'u' : '')
   return new RegExp(body, flags)

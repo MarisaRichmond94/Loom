@@ -25,6 +25,39 @@ function foldQuotes(s: string): string {
   )
 }
 
+// The editor rewrites a typed `--` into an em dash (the EmDash input rule in
+// TextBlock.tsx), so prose the writer typed stores `—` and a search for `--`
+// would find nothing. Imported/pasted prose can still hold a literal double
+// hyphen, though, so we search BOTH spellings rather than rewriting one into
+// the other. Unlike the quote fold this is not length-preserving — `--` (2) vs
+// `—` (1) — which is why it lives on the query side only: `hay` is never
+// rewritten, so every index below still points at the original text.
+function emDashVariant(query: string): string {
+  return query.replace(/--/g, '—')
+}
+
+// One indexOf sweep for a single spelling of the needle.
+function scan(
+  hay: string,
+  H: string,
+  needle: string,
+  opts: SearchOptions,
+): { index: number; length: number }[] {
+  const len = needle.length
+  const out: { index: number; length: number }[] = []
+  let from = 0
+  while (true) {
+    const i = H.indexOf(needle, from)
+    if (i === -1) break
+    // Word-boundary check runs against the ORIGINAL text (case-irrelevant).
+    if (!opts.wholeWord || (!isWordChar(hay[i - 1]) && !isWordChar(hay[i + len]))) {
+      out.push({ index: i, length: len })
+    }
+    from = i + len
+  }
+  return out
+}
+
 // Every occurrence of `rawQuery` in `hay`, honouring caseSensitive / wholeWord.
 // Whole-word tests the characters flanking the match against a Unicode word
 // class, so "cat" doesn't match inside "category" but does inside "the cat.".
@@ -40,21 +73,26 @@ export function matchRanges(
   // Fold is length-preserving, so indices into `folded` map 1:1 onto `hay` —
   // the word-boundary check below still reads the ORIGINAL flanking chars.
   const folded = foldQuotes(hay)
-  const needle = opts.caseSensitive ? query : query.toLowerCase()
-  const H = opts.caseSensitive ? folded : folded.toLowerCase()
-  const len = needle.length
-  const out: { index: number; length: number }[] = []
-  let from = 0
-  while (true) {
-    const i = H.indexOf(needle, from)
-    if (i === -1) break
-    // Word-boundary check runs against the ORIGINAL text (case-irrelevant).
-    if (!opts.wholeWord || (!isWordChar(hay[i - 1]) && !isWordChar(hay[i + len]))) {
-      out.push({ index: i, length: len })
-    }
-    from = i + len
+  const cased = (s: string) => (opts.caseSensitive ? s : s.toLowerCase())
+  const H = cased(folded)
+  const out = scan(hay, H, cased(query), opts)
+
+  const dashed = emDashVariant(query)
+  if (dashed === query) return out
+  const extra = scan(hay, H, cased(dashed), opts)
+  if (!extra.length) return out
+  // Merge the two spellings' hits into one document-ordered list. A hyphen run
+  // can satisfy both spellings at overlapping offsets (e.g. `---`), so drop any
+  // hit that starts inside one we already kept — the caller's highlight/replace
+  // ranges must not overlap.
+  const merged = [...out, ...extra].sort((a, b) => a.index - b.index || b.length - a.length)
+  const kept: { index: number; length: number }[] = []
+  for (const m of merged) {
+    const last = kept[kept.length - 1]
+    if (last && m.index < last.index + last.length) continue
+    kept.push(m)
   }
-  return out
+  return kept
 }
 
 // Search over a ProseMirror doc that matches ACROSS mark boundaries. Marks

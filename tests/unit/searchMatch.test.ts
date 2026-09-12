@@ -78,3 +78,47 @@ describe('matchRanges — smart-quote folding', () => {
     ).toBe(1)
   })
 })
+
+describe('matchRanges — em-dash folding', () => {
+  // The editor's EmDash input rule rewrites a typed `--` as `—`, so the prose
+  // never contains what the writer types into the search box.
+  it('finds an em dash when the query is a double hyphen', () => {
+    const r = matchRanges('She stopped—then ran.', '--')
+    expect(r).toEqual([{ index: 11, length: 1 }])
+  })
+
+  it('reports the matched span, not the query length', () => {
+    const hay = 'a—b'
+    const [hit] = matchRanges(hay, '--')
+    expect(hay.slice(hit.index, hit.index + hit.length)).toBe('—')
+  })
+
+  it('matches a double hyphen inside a longer phrase', () => {
+    expect(matchRanges('wait—no, listen', 'wait--no').length).toBe(1)
+  })
+
+  it('still finds a literal double hyphen in imported prose', () => {
+    const r = matchRanges('raw -- text', '--')
+    expect(r).toEqual([{ index: 4, length: 2 }])
+  })
+
+  it('finds both spellings in one pass, without overlapping ranges', () => {
+    const r = matchRanges('a--b and c—d', '--')
+    expect(r.map(m => m.index)).toEqual([1, 10])
+    expect(r.map(m => m.length)).toEqual([2, 1])
+  })
+
+  it('does not double-count a hyphen run that satisfies both spellings', () => {
+    expect(matchRanges('a---b', '--').length).toBe(1)
+  })
+
+  it('a literal em-dash query still matches em-dash prose', () => {
+    expect(matchRanges('stop—go', '—').length).toBe(1)
+  })
+
+  it('honours whole-word against the em dash it actually matched', () => {
+    // The em dash is not a word char, so the flanking letters block the match.
+    expect(matchRanges('stop—go', '--', { wholeWord: true }).length).toBe(0)
+    expect(matchRanges('stop — go', '--', { wholeWord: true }).length).toBe(1)
+  })
+})
