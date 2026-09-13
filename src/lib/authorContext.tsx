@@ -12,7 +12,7 @@ type Chapter = {
   // without a separate per-book fetch.
   blocks: { wordCount: number; _count: { choices: number } }[]
 }
-type Book = { id: string; title: string; synopsis: string; order: number; published: boolean; inProgress: boolean; canon: boolean; divergesFromBookId: string | null; coverPath: string | null; chapters: Chapter[] }
+type Book = { id: string; title: string; synopsis: string; order: number; published: boolean; inProgress: boolean; canon: boolean; condition: string | null; divergesFromBookId: string | null; coverPath: string | null; chapters: Chapter[] }
 type Variable = { id: string; name: string; type: string; defaultValue: string }
 export type AuthorSeries = {
   id: string
@@ -35,7 +35,6 @@ export type AuthorContextValue = {
   series: AuthorSeries
   loadSeries: () => Promise<void>
   loadChoices: () => Promise<void>
-  addBook: (title: string) => Promise<void>
   lightMode: boolean
   // Distinct string values written to each variable by any choice in
   // the series. Drives the condition-row datalist autocomplete so a

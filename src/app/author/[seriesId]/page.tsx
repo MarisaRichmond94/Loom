@@ -16,6 +16,7 @@ import PublishBadge from '@/components/series/PublishBadge'
 import { usePublishStatus } from '@/components/series/usePublishStatus'
 import SilentChaptersDialog, { type SilentChapter } from '@/components/series/SilentChaptersDialog'
 import SeriesConfigureModal from '@/components/series/SeriesConfigureModal'
+import BookSettingsModal, { type BookSettingsValues } from '@/components/series/BookSettingsModal'
 import { useRegisterShortcuts, type ShortcutGroup } from '@/lib/shortcuts'
 
 // Both loaded on tab open rather than with the page. Books is the default tab,
@@ -108,49 +109,21 @@ const statusOf = (book: { published: boolean; inProgress: boolean }): BookStatus
  * adding a book lives beside the rest of the Book(s) tab's actions instead of
  * a control fixed to the bottom of the outline.
  */
-function AddBookButton({ onAdd }: { onAdd: (title: string) => Promise<void> }) {
+function AddBookButton({ onOpen }: { onOpen: () => void }) {
   const actionSlot = useSectionActionSlot()
-  const [adding, setAdding] = useState(false)
-  const [title, setTitle] = useState('')
-
-  function cancel() {
-    setAdding(false)
-    setTitle('')
-  }
-
-  function submit(e: React.FormEvent) {
-    e.preventDefault()
-    const trimmed = title.trim()
-    if (!trimmed) return
-    void onAdd(trimmed)
-    cancel()
-  }
-
   if (!actionSlot) return null
 
+  // A trigger, not a form. The inline title field this replaced could set a
+  // title and nothing else, so creating an alt book meant making it and then
+  // fixing it up from three separate controls on its card (LOOM-156).
   return createPortal(
-    adding ? (
-      <form onSubmit={submit} className="flex items-center gap-1">
-        <input
-          autoFocus
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          onKeyDown={e => e.key === 'Escape' && cancel()}
-          placeholder="Title…"
-          className="bg-surface-base border border-accent/20 rounded px-2 py-1 text-xs text-ink outline-none focus:border-accent"
-        />
-        <button type="submit" className="text-accent px-1 py-1"><LuCheck size={13} /></button>
-        <button type="button" onClick={cancel} className="text-ink-faint px-1 py-1"><LuX size={13} /></button>
-      </form>
-    ) : (
-      <button
-        type="button"
-        onClick={() => setAdding(true)}
-        className="flex items-center gap-1.5 rounded bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90"
-      >
-        <LuPlus size={12} /> Add Book
-      </button>
-    ),
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex items-center gap-1.5 rounded bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90"
+    >
+      <LuPlus size={12} /> Add Book
+    </button>,
     actionSlot,
   )
 }
@@ -173,7 +146,7 @@ export default function AuthorSeriesPage() {
   // the chapter banner's "Show all issues" — so the plain series URL keeps
   // opening on Book(s) as LOOM-111 intended.
   const tabParam = useSearchParams()?.get('tab') ?? undefined
-  const { series, loadSeries, addBook } = useAuthor()
+  const { series, loadSeries } = useAuthor()
 
   /**
    * Alt books sort BENEATH every canon book (LOOM-151/152, under LOOM-146).
@@ -390,6 +363,51 @@ export default function AuthorSeriesPage() {
     loadSeries()
   }
 
+  // Which book the settings dialog is open for, if any (LOOM-156).
+  const [bookModal, setBookModal] = useState<{ mode: 'add' } | { mode: 'edit'; bookId: string } | null>(null)
+  const [bookModalBusy, setBookModalBusy] = useState(false)
+  const [bookModalError, setBookModalError] = useState<string | null>(null)
+
+  async function submitBookSettings(values: BookSettingsValues) {
+    setBookModalBusy(true)
+    setBookModalError(null)
+    const payload = {
+      title: values.title,
+      synopsis: values.synopsis,
+      published: values.status === 'published',
+      inProgress: values.status === 'inProgress',
+      canon: values.canon,
+      condition: values.condition,
+      divergesFromBookId: values.divergesFromBookId,
+    }
+    try {
+      const editing = bookModal?.mode === 'edit' ? bookModal.bookId : null
+      const res = await fetch(
+        editing ? `/api/series/${seriesId}/books/${editing}` : `/api/series/${seriesId}/books`,
+        {
+          method: editing ? 'PATCH' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        },
+      )
+      if (!res.ok) {
+        // The server refuses an illegal divergence (a chain, a cross-series
+        // parent, itself). Surfaced in the dialog rather than swallowed —
+        // every one of those failures is silent in its effects.
+        const data = await res.json().catch(() => null)
+        setBookModalError(data?.error ?? 'Could not save the book.')
+        return
+      }
+      setBookModal(null)
+      loadSeries()
+      publish.refresh()
+    } catch {
+      setBookModalError('Could not save the book.')
+    } finally {
+      setBookModalBusy(false)
+    }
+  }
+
   async function setBookCanon(bookId: string, canon: boolean) {
     const book = series.books.find(b => b.id === bookId)
     const ok = canon
@@ -528,7 +546,7 @@ export default function AuthorSeriesPage() {
             label: 'Book(s)',
             content: (
               <>
-        <AddBookButton onAdd={addBook} />
+        <AddBookButton onOpen={() => setBookModal({ mode: 'add' })} />
         {publish.error && (
           <div className="mb-4 px-3 py-2 rounded bg-choice-kill-bg border border-choice-kill-border text-choice-kill text-xs whitespace-pre-wrap">
             {publish.error}
@@ -748,20 +766,19 @@ export default function AuthorSeriesPage() {
                       >
                         <LuDatabaseBackup size={11} /> Backup
                       </a>
-                      {/* The way OUT of canon (LOOM-148). The way back in is
-                          the "Alt" chip beside the title, which only a
-                          non-canon book shows — so this button only offers the
-                          direction that is actually available, rather than
-                          being a toggle whose label you have to read twice. */}
-                      {book.canon && (
-                        <button
-                          onClick={() => void setBookCanon(book.id, false)}
-                          title="Mark this as an alternate timeline: it stops exporting to your manuscript folder, WriteAI stops seeing it, and it is never sent to readers. Nothing you have written is deleted."
-                          className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition"
-                        >
-                          Make non-canon
-                        </button>
-                      )}
+                      {/* Everything about the book in one place (LOOM-156) —
+                          title, description, status, canon, divergence and the
+                          gate. The standalone "Make non-canon" button this
+                          replaced could flip canon but not author the gate that
+                          makes a branch actually reachable, so it only ever did
+                          half the job. */}
+                      <button
+                        onClick={() => setBookModal({ mode: 'edit', bookId: book.id })}
+                        title="Title, description, status, canon vs alt, and who reaches this book."
+                        className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition"
+                      >
+                        Settings
+                      </button>
                       <button
                         onClick={() => setDeleteTarget({ id: book.id, title: book.title })}
                         className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-choice-kill/40 text-choice-kill hover:opacity-80 transition"
@@ -883,6 +900,33 @@ export default function AuthorSeriesPage() {
           onClose={() => setConfigureOpen(false)}
         />
       )}
+
+        {bookModal && (() => {
+          const editing = bookModal.mode === 'edit'
+            ? series.books.find(b => b.id === bookModal.bookId)
+            : undefined
+          return (
+            <BookSettingsModal
+              mode={bookModal.mode}
+              initial={editing && {
+                title: editing.title,
+                synopsis: editing.synopsis,
+                status: statusOf(editing),
+                canon: editing.canon,
+                condition: editing.condition ?? null,
+                divergesFromBookId: editing.divergesFromBookId ?? null,
+              } || undefined}
+              canonBooks={orderedBooks
+                .filter(b => b.canon && b.id !== (editing?.id ?? ''))
+                .map(b => ({ id: b.id, title: b.title, label: bookLabels[b.id]?.readerLabel ?? b.title, canon: true }))}
+              variables={series.variables}
+              busy={bookModalBusy}
+              error={bookModalError}
+              onSubmit={submitBookSettings}
+              onClose={() => { setBookModal(null); setBookModalError(null) }}
+            />
+          )
+        })()}
     </>
   )
 }

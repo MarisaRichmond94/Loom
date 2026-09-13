@@ -130,15 +130,6 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
   useEffect(() => { loadChoices() }, [loadChoices])
   useEffect(() => { loadKnownStringValues() }, [loadKnownStringValues, choiceQuestions])
 
-  async function addBook(title: string) {
-    await fetch(`/api/series/${seriesId}/books`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title }),
-    })
-    loadSeries()
-  }
-
   async function addChapter(forBookId: string, title: string) {
     const res = await fetch(`/api/series/${seriesId}/books/${forBookId}/chapters`, {
       method: 'POST',
@@ -270,7 +261,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
     : null
 
   return (
-    <AuthorProvider value={{ series, loadSeries, loadChoices, addBook, lightMode, knownStringValues }}>
+    <AuthorProvider value={{ series, loadSeries, loadChoices, lightMode, knownStringValues }}>
       <ShortcutsProvider>
       {/* Above the page, not inside it: this owns the one <audio> element, and
           a layout is what Next keeps mounted across client-side navigation —
