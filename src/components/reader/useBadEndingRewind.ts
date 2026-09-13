@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import type { StoryState, HistoryEntry } from '@/lib/storyEngine'
 import type { ChapterLabel } from '@/lib/chapterLabels'
+import { rememberReaderSession } from '@/lib/readerProgress'
 
 type Variable = { id: string; name: string; type: string; defaultValue: string }
 
@@ -31,6 +32,28 @@ export function useBadEndingRewind(opts: {
   const {
     sessionId, seriesId, choiceHistory, variables, chapterLabels = {}, firstChapterId, onApply,
   } = opts
+
+  /**
+   * Follow a fork the server just created (LOOM-154).
+   *
+   * Remembering happens HERE rather than via a callback the caller threads in,
+   * because the hook already holds the seriesId and both call sites below need
+   * identical behaviour — a second copy of this in each of them is a drift
+   * waiting to happen.
+   *
+   * rememberReaderSession keeps the branch being left in the series' branch
+   * list, so it stays in Continue Reading. Overwriting the single id — what the
+   * store did before — is precisely the loss this feature exists to prevent.
+   */
+  function followFork(data: { forked?: boolean; id?: string } | null): boolean {
+    if (!data?.forked || !data.id || data.id === sessionId) return false
+    rememberReaderSession(seriesId, data.id)
+    // A full navigation rather than a state swap: sessionId is a route param
+    // threaded through this whole tree, so continuing in the fork means being
+    // on the fork's URL.
+    window.location.href = `/author/preview/session/${data.id}`
+    return true
+  }
 
   const [choicePoints, setChoicePoints] = useState<ChoicePoint[]>([])
   const [working, setWorking] = useState(false)
@@ -88,6 +111,12 @@ export function useBadEndingRewind(opts: {
       body: JSON.stringify({ storyState: newState, choiceHistory: newHistory }),
     })
     if (!res.ok) { setWorking(false); return }
+
+    // The server forks when a rewind changes which books the reader qualifies
+    // for (LOOM-154): the branch being left is preserved as its own session and
+    // this response is a NEW one. Continuing in the old id would write the new
+    // branch's choices back over the branch we just preserved.
+    if (followFork(await res.json().catch(() => null))) return
     onApply(newState, newHistory, targetCp.chapterId, targetCp.id)
   }
 
@@ -104,6 +133,13 @@ export function useBadEndingRewind(opts: {
       body: JSON.stringify({ storyState: initial, choiceHistory: [] }),
     })
     if (!res.ok) { setWorking(false); return }
+
+    // Starting over empties the history, which is a rewind to before every
+    // choice — so it forks too when the reader had diverged, preserving the run
+    // they are walking away from. Handled here as well as in goTo because the
+    // server did NOT touch the old session in that case: continuing in it would
+    // show the reader their old state back, looking like Start Over did nothing.
+    if (followFork(await res.json().catch(() => null))) return
     onApply(initial, [], firstChapterId)
   }
 

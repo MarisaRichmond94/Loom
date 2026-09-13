@@ -45,6 +45,12 @@ type ResumeEntry = {
   currentChapterOrder: number | null
   hasProgress: boolean
   updatedAt: string
+  // Branch grouping (LOOM-154). Equals sessionId when the session has never
+  // been forked, so grouping is unconditional on the client.
+  branchGroupId: string
+  isFork: boolean
+  /** The choice this branch took at the fork point; null until it is answered. */
+  branchLabel: string | null
 }
 
 // Reader-facing landing. Lists every series with at least one published
@@ -128,11 +134,15 @@ export default function ExplorePage() {
       .then(r => r.ok ? r.json() : [])
       .then((rows: ResumeEntry[]) => {
         if (cancelled) return
-        const returnedIds = new Set(rows.map(r => r.seriesId))
+        // Pruned by SESSION id, not series id (LOOM-154). A series can now
+        // have several sessions — one per branch — so a series-level check
+        // would keep a dead branch alive as long as any sibling survived, and
+        // forget every branch the moment one series went missing.
+        const returnedIds = new Set(rows.map(r => r.sessionId))
         // Drop localStorage entries the server didn't return — usually
         // means the session was deleted.
         for (const c of cached) {
-          if (!returnedIds.has(c.seriesId)) forgetReaderSession(c.seriesId)
+          if (!returnedIds.has(c.sessionId)) forgetReaderSession(c.seriesId, c.sessionId)
         }
         // Most-recently-opened first so the card the reader most likely
         // wants to resume is the leftmost in the horizontal strip.
@@ -211,6 +221,15 @@ export default function ExplorePage() {
 
   const filtersActive = query.trim() !== '' || activeGenres.length > 0
 
+  // How many runs share each branch group, so a card only wears a branch chip
+  // when there is another run to be distinguished FROM (LOOM-154). Without
+  // this, every card in an unforked library would carry a label that
+  // distinguishes it from nothing.
+  const branchGroupSizes = new Map<string, number>()
+  for (const r of resumeEntries) {
+    branchGroupSizes.set(r.branchGroupId, (branchGroupSizes.get(r.branchGroupId) ?? 0) + 1)
+  }
+
   return (
     <div className="h-full px-8 py-10 flex flex-col">
       {resumeEntries.length > 0 && (
@@ -250,6 +269,20 @@ export default function ExplorePage() {
                       </p>
                       {!seriesIsBook && (
                         <p className="text-xs text-ink-faint truncate">{r.seriesTitle}</p>
+                      )}
+                      {/* The branch chip (LOOM-154). Two forks of a series
+                          otherwise render as two cards with the same cover and
+                          title, separable only by chapter. */}
+                      {(branchGroupSizes.get(r.branchGroupId) ?? 0) > 1 && (
+                        <span
+                          title={r.branchLabel
+                            ? `This run took "${r.branchLabel}" where the other went a different way.`
+                            : 'A separate run of this series. You have not reached the choice that separates them yet.'}
+                          className="self-start rounded border border-accent/30 bg-accent/5 px-1.5 py-0.5
+                            text-[10px] uppercase tracking-widest text-ink-muted truncate max-w-full"
+                        >
+                          {r.branchLabel ?? (r.isFork ? 'Other path' : 'Original path')}
+                        </span>
                       )}
                       {r.authorName && (
                         <p className="text-xs text-ink-muted truncate">by: {r.authorName}</p>

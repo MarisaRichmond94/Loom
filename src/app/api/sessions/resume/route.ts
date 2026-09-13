@@ -72,6 +72,55 @@ export async function POST(req: Request) {
     : []
   const blockById = new Map(blocks.map(b => [b.id, b]))
 
+  // ── Branch grouping (LOOM-154, under LOOM-146) ────────────────────────────
+  //
+  // Forks are ordinary sessions, so without this the Continue Reading list
+  // shows two cards with the same cover and title, distinguishable only by
+  // chapter. Grouping them under the series needs two things: which group a
+  // session belongs to, and what to call its branch.
+  //
+  // The label is the CHOICE THIS SESSION MADE at the fork point — resolved from
+  // its own history rather than stored, because at the moment a fork is created
+  // it has not answered that choice point yet. A branch has no name until the
+  // reader has actually taken it, and "unnamed until chosen" is the honest
+  // state rather than a placeholder.
+  const groupOf = (row: { id: string; parentSessionId: string | null }) =>
+    row.parentSessionId ?? row.id
+
+  // Fork points, by group. A fork stores the point it split at; the parent does
+  // not, so the parent inherits its children's.
+  const forkPointByGroup = new Map<string, string>()
+  for (const row of sessions) {
+    if (row.parentSessionId && row.forkedAtChoicePointId) {
+      forkPointByGroup.set(groupOf(row), row.forkedAtChoicePointId)
+    }
+  }
+
+  // choiceId each session took at its group's fork point.
+  const choiceIdBySession = new Map<string, string>()
+  for (const row of sessions) {
+    const point = forkPointByGroup.get(groupOf(row))
+    if (!point) continue
+    try {
+      const history = JSON.parse(row.choiceHistory) as { choicePointId?: string; choiceId?: string }[]
+      const entry = history.find(e => e.choicePointId === point)
+      if (entry?.choiceId) choiceIdBySession.set(row.id, entry.choiceId)
+    } catch { /* malformed history — the branch simply goes unlabelled */ }
+  }
+
+  const branchLabels = new Map<string, string>()
+  if (choiceIdBySession.size > 0) {
+    const rows = await prisma.choice.findMany({
+      where: { id: { in: [...new Set(choiceIdBySession.values())] } },
+      select: { id: true, label: true },
+    })
+    const labelById = new Map(rows.map(r => [r.id, r.label]))
+    for (const [sessionId, choiceId] of choiceIdBySession) {
+      const label = labelById.get(choiceId)
+      if (label) branchLabels.set(sessionId, label)
+    }
+  }
+
   // Pull the global profile once so the per-session fallback path doesn't
   // re-read the file in a loop. Demo series ship their own override.
   const profile = await readProfileSettings()
@@ -110,6 +159,14 @@ export async function POST(req: Request) {
       hasProgress: !!s.currentBlockId || historyLength > 0,
       // Drives "most recently opened first" sort on the client.
       updatedAt: s.updatedAt.toISOString(),
+      // Branch grouping (LOOM-154). `branchGroupId` equals `sessionId` for an
+      // unforked session, so the client can group unconditionally rather than
+      // branching on whether forks exist.
+      branchGroupId: s.parentSessionId ?? s.id,
+      isFork: !!s.parentSessionId,
+      // Null until the reader has actually answered the fork point on this
+      // branch — see the note above.
+      branchLabel: branchLabels.get(s.id) ?? null,
     }
   }))
 }

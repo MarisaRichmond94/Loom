@@ -631,8 +631,27 @@ model ReaderSession {
   currentBlockId String?
   storyState     String   @default("{}")
   choiceHistory  String   @default("[]")
+  // Branch forking (LOOM-154, under LOOM-146).
+  //
+  // Rewinding used to truncate choiceHistory IN PLACE, so the branch being left
+  // was overwritten — exploring an alternative cost you the one you were on.
+  // When a rewind changes which BOOKS the reader qualifies for, it now creates
+  // a new session from the restored state and leaves the original untouched.
+  //
+  // Each fork is an ordinary, complete session: storyState, choiceHistory,
+  // currentBlockId and updatedAt ordering all work unchanged, and the client
+  // already holds a LIST of session ids, so several per series was always a
+  // supported shape. That is what makes this cheap.
+  //
+  // No relation on parentSessionId, matching Book.divergesFromBookId: a self
+  // FK would mean rebuilding ReaderSession. A parent that no longer resolves
+  // degrades to "no parent", which costs a grouping label and nothing else.
+  parentSessionId       String?
+  /** The choice point the fork happened at — names the branch in the UI. */
+  forkedAtChoicePointId String?
   series         Series   @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
   @@index([seriesId])
   @@index([updatedAt])
+  @@index([parentSessionId])
 }
