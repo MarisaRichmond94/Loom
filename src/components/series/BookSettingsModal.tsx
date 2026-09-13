@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { LuX } from 'react-icons/lu'
 import { ConditionRow } from '@/components/editor/conditionUI'
 
@@ -21,6 +20,12 @@ import { ConditionRow } from '@/components/editor/conditionUI'
 // Genres and keywords are absent on purpose: they live on Series and books
 // inherit them, so editing them from a dialog titled "Add Book" would silently
 // change every other book in the series. They stay on the series Configure.
+//
+// ⚠️ RENDERED INLINE, NOT PORTALLED, and that is what makes light mode work.
+// `.light-body` is applied to the author layout's <main>, so it reaches this
+// dialog by inheritance — a portal to document.body escapes that subtree and
+// the dialog stays dark on a cream page while every other modal flips. Same
+// shape as SeriesConfigureModal and this page's delete dialog.
 
 export type BookStatus = 'draft' | 'inProgress' | 'published'
 
@@ -62,8 +67,6 @@ export default function BookSettingsModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  if (typeof document === 'undefined') return null
-
   const canSubmit = title.trim().length > 0 && !busy
 
   function submit(e: React.FormEvent) {
@@ -84,23 +87,35 @@ export default function BookSettingsModal({
   const field = 'w-full bg-surface-base border border-accent/20 rounded px-3 py-2 text-sm text-ink outline-none focus:border-accent transition'
   const labelCls = 'text-xs uppercase tracking-widest text-ink-faint'
 
-  return createPortal(
+  return (
     <div
-      className="fixed inset-0 bg-black/70 flex items-start justify-center z-[70] p-8 overflow-y-auto"
+      // Centred over the CONTENT — excluding the site header and the author
+      // sidebar — not the whole window. `--author-sidebar` comes from the
+      // author layout and tracks the sidebar's live width; 60px is AppHeader's
+      // own height. Same convention as SeriesConfigureModal.
+      className="fixed inset-0 bg-black/60 flex items-start justify-center z-50 p-6"
+      style={{ paddingLeft: 'calc(var(--author-sidebar, 0px) + 1.5rem)', paddingTop: 'calc(60px + 1.5rem)' }}
       onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}
     >
       <form
         onSubmit={submit}
-        className="bg-surface-raised border border-accent/20 rounded-xl p-6 w-full max-w-lg shadow-2xl flex flex-col gap-5 my-auto"
+        onMouseDown={e => e.stopPropagation()}
+        className="bg-surface-raised border border-accent/20 rounded-xl p-8 w-full max-w-lg shadow-2xl relative max-h-[80vh] flex flex-col"
       >
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-ink">
-            {mode === 'add' ? 'Add book' : 'Book settings'}
-          </h2>
-          <button type="button" onClick={onClose} className="text-ink-faint hover:text-ink transition">
-            <LuX size={16} />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-4 right-4 text-ink-faint hover:text-ink transition leading-none"
+        >
+          <LuX size={18} />
+        </button>
+        <h2 className="text-base font-bold text-ink mb-4 pr-6 uppercase tracking-widest">
+          {mode === 'add' ? 'Add book' : 'Book settings'}
+        </h2>
+
+        {/* Scrolls internally rather than growing past the viewport — the
+            condition editor can add rows without number. */}
+        <div className="flex-1 overflow-y-auto -mx-2 px-2 flex flex-col gap-5">
 
         <label className="flex flex-col gap-1.5">
           <span className={labelCls}>Title</span>
@@ -143,8 +158,12 @@ export default function BookSettingsModal({
                 key={String(v)}
                 type="button"
                 onClick={() => setCanon(v)}
+                // text-surface-base, not text-white: it matches the and/or
+                // toggle inside the ConditionRow directly below, and in light
+                // mode surface-base is the cream the rest of the page uses
+                // rather than a white that reads as a different control.
                 className={`flex-1 px-3 py-2 transition ${
-                  canon === v ? 'bg-accent text-white' : 'text-ink-muted hover:text-ink'
+                  canon === v ? 'bg-accent text-surface-base' : 'text-ink-muted hover:text-ink'
                 }`}
               >
                 {v ? 'Canon' : 'Alt (non-canon)'}
@@ -201,9 +220,11 @@ export default function BookSettingsModal({
           </p>
         </div>
 
-        {error && <p className="text-xs text-choice-kill">{error}</p>}
+        </div>
 
-        <div className="flex justify-end gap-2 pt-1">
+        {error && <p className="text-xs text-choice-kill mt-3">{error}</p>}
+
+        <div className="flex justify-end gap-2 pt-4 shrink-0">
           <button
             type="button"
             onClick={onClose}
@@ -220,7 +241,6 @@ export default function BookSettingsModal({
           </button>
         </div>
       </form>
-    </div>,
-    document.body,
+    </div>
   )
 }
