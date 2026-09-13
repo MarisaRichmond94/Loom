@@ -105,3 +105,54 @@ describe('there is only one way to create a book', () => {
     expect(context).not.toContain('addBook')
   })
 })
+
+// ── The dialog must not submit itself (LOOM-156 bugfix) ──────────────────────
+//
+// Reported symptom: "when I try to set anything in Who Reaches This Book, the
+// modal closes without letting me do anything."
+//
+// Cause: `conditionUI.tsx` was written for the chapter page, which is NOT a
+// <form>. Its buttons carried no explicit `type`, and a <button> inside a form
+// defaults to type="submit" — so clicking "add a variable" submitted the dialog
+// and it saved and closed. Nothing errored; it looked like the field was
+// refusing input.
+//
+// This is a shared component, so the fix belongs at the source: any future form
+// embedding it would hit the same thing.
+const conditionUI = readFileSync(
+  path.join(__dirname, '../../src/components/editor/conditionUI.tsx'),
+  'utf8',
+)
+
+describe('conditionUI is safe to embed in a form', () => {
+  it('gives every button an explicit type', () => {
+    const withoutType = (conditionUI.match(/<button\b(?![^>]*\btype=)/g) ?? []).length
+    expect(withoutType).toBe(0)
+  })
+
+  it('has at least one button, so the check above is not vacuous', () => {
+    expect((conditionUI.match(/<button\b/g) ?? []).length).toBeGreaterThan(0)
+  })
+
+  it('swallows Enter in the variable search whether or not it matches', () => {
+    // The old guard only called preventDefault when there WAS a match, so
+    // searching for a variable that did not exist fell through to the form's
+    // implicit submission.
+    const handler = conditionUI.slice(
+      conditionUI.indexOf("if (e.key === 'Enter'"),
+      conditionUI.indexOf('placeholder="Search variables…"'),
+    )
+    expect(handler).toContain('e.preventDefault()')
+    expect(handler.indexOf('e.preventDefault()'))
+      .toBeLessThan(handler.indexOf('filtered.length > 0'))
+  })
+})
+
+describe('the dialog contains Enter inside the condition editor', () => {
+  it('prevents Enter from reaching the form', () => {
+    // ValueSetter's input has no key handling of its own, so typing a condition
+    // value and pressing Enter would otherwise submit the dialog mid-edit.
+    const section = modal.slice(modal.indexOf('Who Reaches This Book'))
+    expect(section).toContain("if (e.key === 'Enter') e.preventDefault()")
+  })
+})

@@ -361,7 +361,7 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
             <div className="w-24">
               <ValueSetter v={v} currentVal={valueByName[v.name]} onChange={val => setVal(v.name, val)} suggestions={knownStringValues[v.name]} />
             </div>
-            <button onClick={() => detach(v.name)} className="text-ink-muted hover:text-choice-kill transition shrink-0">
+            <button type="button" onClick={() => detach(v.name)} className="text-ink-muted hover:text-choice-kill transition shrink-0">
               <LuX size={11} />
             </button>
           </div>
@@ -386,7 +386,7 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
             <span className="text-xs text-ink-muted">
               {typeof c.value === 'string' ? `"${c.value}"` : String(c.value)}
             </span>
-            <button
+            <button type="button"
               onClick={() => detach(c.var)}
               title="Remove this clause"
               className="text-ink-muted transition hover:text-choice-kill shrink-0"
@@ -398,7 +398,7 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
       ))}
       {unattachedVars.length > 0 && (
         <div ref={menuRef} className="relative">
-          <button
+          <button type="button"
             onClick={() => setMenuOpen(o => !o)}
             className="text-ink-muted hover:text-ink transition text-sm leading-none px-1"
           >
@@ -415,9 +415,14 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
                     value={menuQuery}
                     onChange={e => setMenuQuery(e.target.value)}
                     onKeyDown={e => {
-                      if (e.key === 'Enter' && filtered.length > 0) {
+                      // preventDefault runs for Enter WHETHER OR NOT there is a
+                      // match. With no match it used to fall through, and inside
+                      // a <form> (the book settings dialog) a bare Enter in a
+                      // text input submits it — so searching for a variable that
+                      // did not exist saved and closed the dialog.
+                      if (e.key === 'Enter') {
                         e.preventDefault()
-                        attach(filtered[0])
+                        if (filtered.length > 0) attach(filtered[0])
                       }
                     }}
                     placeholder="Search variables…"
@@ -428,7 +433,7 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
                   {filtered.length === 0 ? (
                     <p className="px-4 py-2 text-xs text-ink-faint italic">No matches</p>
                   ) : filtered.map(v => (
-                    <button
+                    <button type="button"
                       key={v.id}
                       onClick={() => attach(v)}
                       className="flex items-center justify-between w-full px-4 py-2 text-sm text-ink-muted hover:text-ink hover:bg-surface-overlay transition text-left gap-4"

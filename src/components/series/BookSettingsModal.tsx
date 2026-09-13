@@ -268,7 +268,19 @@ export default function BookSettingsModal({
             inverse gate. Canon and gated are independent. */}
         <div className="flex flex-col gap-1.5">
           <span className={labelCls}>Who Reaches This Book</span>
-          <div className="rounded border border-accent/10 bg-surface-base/60 p-3">
+          <div
+            className="rounded border border-accent/10 bg-surface-base/60 p-3"
+            // Enter inside the condition editor commits a value or picks a
+            // variable — it must never submit the DIALOG. ValueSetter's input
+            // has no key handling of its own, so without this a bare Enter
+            // after typing a condition value implicitly submits the enclosing
+            // <form> and the dialog saves and closes mid-edit.
+            //
+            // Safe to blanket: the search box calls preventDefault and attaches
+            // its match in its own handler, which has already run by the time
+            // this one sees the event.
+            onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
+          >
             <ConditionRow
               condition={condition}
               variables={variables}
