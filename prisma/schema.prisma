@@ -207,6 +207,56 @@ model Book {
   // should be in progress at a time — enforced in the PATCH endpoint by
   // clearing the flag on every other book in the same series.
   inProgress                   Boolean                 @default(false)
+  // Series-level canon membership (LOOM-148, under LOOM-146).
+  //
+  // A non-canon book is a whole alternate timeline — book 3's CYOA divergence
+  // spawning an alt book 4 rather than continuing into the canon one. It never
+  // runs the canon export, so it is never ingested by WriteAI, so it never
+  // reaches the bibles, the timeline, or the published reader tier.
+  //
+  // ⚠️ DEFAULT true, AND the migration backfills every existing row to true.
+  // Defaulting this false would remove every book from the canon export,
+  // export-status, WriteAI ingest and publish SILENTLY — each of those is a
+  // `where` filter that would simply match nothing. Same reasoning, inverted,
+  // as `published` above.
+  //
+  // Deliberately INDEPENDENT of `condition` below. Canon book 4 is gated AND
+  // canon; the alt book is gated and non-canon. Being conditional says nothing
+  // about being canon.
+  canon                        Boolean                 @default(true)
+  // Reader gate (LOOM-151, under LOOM-146). Same JSON grammar as
+  // Chapter.condition, read by the same matchesCondition, evaluated against the
+  // series-scoped ReaderSession.storyState. Null means "always visible".
+  //
+  // This is Chapter.condition lifted one level: which BOOKS a reader can see is
+  // path-dependent, and canon is simply the set the DEFAULT story state
+  // selects. Hence the invariant the whole epic rests on — the default state
+  // must satisfy every canon book's condition and no non-canon book's, which
+  // LOOM-155 checks rather than trusts.
+  //
+  // Author-side surfaces are never gated by this; the writer always sees every
+  // book. It is a reader-simulation concern only.
+  condition                    String?
+  // The canon book this one branches off (LOOM-147/152, under LOOM-146). Set
+  // on non-canon books; null on canon books and on a non-canon book whose
+  // divergence has not been recorded yet.
+  //
+  // Load-bearing for correctness, not just presentation. Every ordinal rule
+  // over books — a character's first appearance, death, last appearance —
+  // compares `Book.order`, which only means something along ONE line. An alt
+  // book sorts beneath every canon book, so its raw `order` says nothing about
+  // where it sits in the story; this does. See canonPositionOf() in
+  // resolveWriterCharacter.ts.
+  //
+  // ⚠️ A plain String, deliberately NOT a Prisma relation. Adding a foreign key
+  // to an existing SQLite table requires a full table rebuild, and Book is the
+  // spine of a 240MB production database. The same trade the cross-app id
+  // columns make (ChapterEvent.writerEventId and friends), for a different
+  // reason. The referential cleanup an `onDelete: SetNull` would give us is
+  // done explicitly in the book DELETE route instead, where it is visible and
+  // testable; an id that no longer resolves degrades to "divergence unknown"
+  // and is never auto-deleted.
+  divergesFromBookId           String?
   series                       Series                  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   chapters                     Chapter[]
   charactersFirstAppearingHere Character[]             @relation("FirstAppearsIn")

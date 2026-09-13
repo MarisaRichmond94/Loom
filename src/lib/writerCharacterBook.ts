@@ -12,7 +12,11 @@
 
 import { prisma } from '@/lib/prisma'
 import { publicDirFilenames } from '@/lib/publicAssets'
-import { resolveWriterCharacter, type ResolvedWriterCharacter } from '@/lib/resolveWriterCharacter'
+import {
+  resolveWriterCharacter,
+  type BookPosition,
+  type ResolvedWriterCharacter,
+} from '@/lib/resolveWriterCharacter'
 import { byCategoryThenName } from '@/lib/characterSearch'
 
 /**
@@ -31,7 +35,7 @@ export async function resolveWriterCharactersForBook(
 ): Promise<{ error: 'book-not-found' } | { characters: ResolvedWriterCharacter[] }> {
   const book = await prisma.book.findUnique({
     where: { id: bookId },
-    select: { id: true, order: true, seriesId: true },
+    select: { id: true, order: true, seriesId: true, canon: true, divergesFromBookId: true },
   })
   if (!book) return { error: 'book-not-found' }
 
@@ -42,7 +46,10 @@ export async function resolveWriterCharactersForBook(
       where: { bookId },
       include: { meta: { select: { writerCharacterId: true } } },
     }),
-    prisma.book.findMany({ where: { seriesId: book.seriesId }, select: { id: true, order: true } }),
+    prisma.book.findMany({
+      where: { seriesId: book.seriesId },
+      select: { id: true, order: true, canon: true, divergesFromBookId: true },
+    }),
     // Who is actually tagged in this book's chapters. nonCanon tags COUNT
     // here: a character who only appears down a branch is still part of this
     // book's cast as far as the writer is concerned — the exclusion of
@@ -54,7 +61,25 @@ export async function resolveWriterCharactersForBook(
     publicDirFilenames('characters'),
   ])
 
+  // Book positions, not bare orders (LOOM-147): the first/death/last rules need
+  // to know whether a book is canon and where a non-canon one branches off, and
+  // an order carries neither.
   const orderByBookId = new Map(books.map(b => [b.id, b.order]))
+  const positionOf = (id: string | null | undefined): BookPosition | null => {
+    if (!id) return null
+    const b = books.find(x => x.id === id)
+    if (!b) return null
+    return {
+      id: b.id,
+      order: b.order,
+      canon: b.canon,
+      divergesFromOrder: b.divergesFromBookId
+        ? orderByBookId.get(b.divergesFromBookId) ?? null
+        : null,
+    }
+  }
+  const here = positionOf(book.id)!
+
   const metaByWc = new Map(metas.map(m => [m.writerCharacterId, m]))
   const bookMetaByWc = new Map(bookMetas.map(b => [b.meta.writerCharacterId, b]))
   const taggedIds = new Set(tags.map(t => t.writerCharacterId))
@@ -66,10 +91,10 @@ export async function resolveWriterCharactersForBook(
         snapshot,
         meta,
         bookMeta: bookMetaByWc.get(snapshot.writerCharacterId) ?? null,
-        book: { id: book.id, order: book.order },
-        firstBookOrder: meta?.firstBookId ? orderByBookId.get(meta.firstBookId) ?? null : null,
-        deathBookOrder: meta?.deathBookId ? orderByBookId.get(meta.deathBookId) ?? null : null,
-        lastBookOrder: meta?.lastBookId ? orderByBookId.get(meta.lastBookId) ?? null : null,
+        book: here,
+        firstBook: positionOf(meta?.firstBookId),
+        deathBook: positionOf(meta?.deathBookId),
+        lastBook: positionOf(meta?.lastBookId),
         taggedInBook: taggedIds.has(snapshot.writerCharacterId),
         avatarFiles,
       })

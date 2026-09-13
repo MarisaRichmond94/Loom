@@ -40,6 +40,59 @@ export type WriterCharacterBookMetaRow = {
   age: number | null
 }
 
+/**
+ * A book's identity and where it sits in the story — LOOM-147, under LOOM-146.
+ *
+ * Replaces the bare `number` orders these rules used to compare. `Book.order`
+ * is a total order over the series, but it is only a STORY order along one
+ * line: a non-canon book sorts beneath every canon book, so its raw order says
+ * nothing about when it happens.
+ */
+export type BookPosition = {
+  id: string
+  order: number
+  canon: boolean
+  /** `Book.order` of the canon book this one branches off. Null on canon books. */
+  divergesFromOrder: number | null
+}
+
+/**
+ * Where a book sits on the CANON line, which is the only line these ordinal
+ * rules can compare along.
+ *
+ *   - A canon book is at its own order.
+ *   - A non-canon book sits immediately after the canon book it branches off,
+ *     hence the half-step. An alt book 4 branching off book 3 is at 3.5: after
+ *     a death in book 3 (3.5 > 3), before one in canon book 4 (3.5 < 4) — which
+ *     is exactly right, since that death is on the other branch and never
+ *     happened here.
+ *   - A non-canon book whose divergence has not been recorded has no knowable
+ *     position. Null, and callers treat that as "cannot say" rather than
+ *     guessing — guessing is the bug this function exists to remove.
+ */
+export function canonPositionOf(book: BookPosition): number | null {
+  if (book.canon) return book.order
+  if (book.divergesFromOrder == null) return null
+  return book.divergesFromOrder + 0.5
+}
+
+/**
+ * Does a first/death/last pointer at `pointer` say anything about `book`?
+ *
+ * A pointer at a NON-CANON book is a fact about that branch alone. A character
+ * who dies in the alt book is not dead in canon book 5 — that death happened
+ * down a path canon book 5 never took. So such a pointer applies only within
+ * the very book it names.
+ *
+ * Without this, a death in an alternate timeline marks a character deceased in
+ * every canon book ordered after it, because alt books sort last.
+ */
+export function pointerApplies(pointer: BookPosition | null, book: BookPosition): boolean {
+  if (!pointer) return false
+  if (!pointer.canon) return pointer.id === book.id
+  return true
+}
+
 export type ResolvedWriterCharacter = {
   id: string
   name: string
@@ -116,10 +169,12 @@ export function resolveWriterCharacter(opts: {
   snapshot: WriterCharacterSnapshotRow | null
   meta: WriterCharacterMetaRow | null
   bookMeta: WriterCharacterBookMetaRow | null
-  book: { id: string; order: number }
-  firstBookOrder: number | null
-  deathBookOrder: number | null
-  lastBookOrder: number | null
+  book: BookPosition
+  // The books these pointers name, not their bare orders (LOOM-147). The rules
+  // below need to know whether each is canon, which an order cannot carry.
+  firstBook: BookPosition | null
+  deathBook: BookPosition | null
+  lastBook: BookPosition | null
   /** Is this character tagged in a chapter of this book? */
   taggedInBook?: boolean
   // Filenames in /public/characters, listed once per request by the caller
@@ -127,7 +182,7 @@ export function resolveWriterCharacter(opts: {
   // character.
   avatarFiles: Set<string>
 }): ResolvedWriterCharacter | null {
-  const { snapshot, meta, bookMeta, book, firstBookOrder, deathBookOrder, lastBookOrder, avatarFiles } = opts
+  const { snapshot, meta, bookMeta, book, firstBook, deathBook, lastBook, avatarFiles } = opts
   if (!snapshot) return null
 
   const id = snapshot.writerCharacterId
@@ -139,9 +194,24 @@ export function resolveWriterCharacter(opts: {
   // which is exactly right: absence of an overlay is not absence from the
   // story, and the alternative (hiding them) would make every newly created
   // character invisible until someone edited it.
-  const visible = firstBookOrder == null || book.order >= firstBookOrder
-  const deceased = deathBookOrder != null && book.order > deathBookOrder
-  const hidden = lastBookOrder != null && book.order > lastBookOrder
+  // All three rules compare positions on the canon line rather than raw
+  // Book.order (LOOM-147). `here` is null when this is a non-canon book with no
+  // recorded divergence: nothing is knowable about where it sits, so every rule
+  // below falls back to its "no information" answer — visible, not deceased,
+  // not hidden. Under-reporting, deliberately: showing a character who should
+  // be hidden is a cosmetic miss in the author's own grid, while marking a
+  // living character dead is the alternate timeline leaking into canon.
+  const here = canonPositionOf(book)
+  const at = (pointer: BookPosition | null): number | null =>
+    pointerApplies(pointer, book) ? canonPositionOf(pointer!) : null
+
+  const firstAt = at(firstBook)
+  const deathAt = at(deathBook)
+  const lastAt = at(lastBook)
+
+  const visible = firstAt == null || here == null || here >= firstAt
+  const deceased = deathAt != null && here != null && here > deathAt
+  const hidden = lastAt != null && here != null && here > lastAt
 
   return {
     id,
