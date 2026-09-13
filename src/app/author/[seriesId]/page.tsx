@@ -332,6 +332,10 @@ export default function AuthorSeriesPage() {
       }),
     })
     loadSeries()
+    // Publish eligibility is derived from `published` server-side, so the
+    // Publish-to-readers button stays stale (disabled) until this refetch —
+    // `loadSeries` only reloads the books, not the publish snapshot.
+    publish.refresh()
   }
 
   return (
