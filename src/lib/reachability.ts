@@ -29,7 +29,13 @@ import {
 // ── Input rows ───────────────────────────────────────────────────────────────
 // Deliberately structural, not Prisma types: this is a pure function so it can
 // be unit-tested against fixtures without a database.
-export type ReachBook = { id: string; title: string; order: number }
+export type ReachBook = {
+  id: string; title: string; order: number
+  /** Reader gate, same grammar as a chapter's (LOOM-155, under LOOM-146). */
+  condition?: string | null
+  /** Series-level canon membership. */
+  canon?: boolean
+}
 export type ReachChapter = {
   id: string; bookId: string; title: string; order: number; condition: string | null
 }
@@ -73,6 +79,17 @@ export type FindingKind =
   | 'undeclared-write'
   /** A declared variable that no condition anywhere reads. */
   | 'never-read'
+  /** A CANON book the default story state does not qualify for. Breaks the
+   *  invariant the whole non-canon epic rests on: canon is what the default
+   *  state selects, so such a book exports to ~/Writing and publishes to
+   *  readers while being unreachable to every reader. */
+  | 'canon-book-unreachable'
+  /** A NON-CANON book the default story state DOES qualify for — the other
+   *  half of the same invariant. */
+  | 'non-canon-book-in-default-path'
+  /** A book no reachable state satisfies: no reader can ever open it. The
+   *  book-level sibling of 'unreachable-combination'. */
+  | 'book-unreachable'
 
 export type Severity = 'dead' | 'warning'
 
@@ -81,7 +98,7 @@ export type Finding = {
   id: string
   kind: FindingKind
   severity: Severity
-  targetType: 'override' | 'block' | 'chapter' | 'choice' | 'variable'
+  targetType: 'override' | 'block' | 'chapter' | 'choice' | 'variable' | 'book'
   title: string
   /** Plain language: what is wrong and what to do about it. Never "invalid". */
   detail: string
@@ -111,6 +128,7 @@ export type ReachabilityReport = {
     overrides: number
     gatedBlocks: number
     chapterGates: number
+    bookGates: number
     gatedChoices: number
     variables: number
     /** Largest number of distinct live states at any point in the spine. */
@@ -206,6 +224,7 @@ export function analyzeReachability(input: ReachabilityInput): ReachabilityRepor
 
   // Parsed conditions, once.
   const condOf = new Map<string, Condition | null>()
+  for (const bk of books) condOf.set(bk.id, isGate(bk.condition ?? null) ? parseJson<Condition>(bk.condition ?? null, {}) : null)
   for (const ch of spine) condOf.set(ch.id, isGate(ch.condition) ? parseJson<Condition>(ch.condition, {}) : null)
   for (const b of blocks) condOf.set(b.id, isGate(b.condition) ? parseJson<Condition>(b.condition, {}) : null)
   for (const o of overrides) condOf.set(o.id, parseJson<Condition>(o.condition, {}))
@@ -219,6 +238,11 @@ export function analyzeReachability(input: ReachabilityInput): ReachabilityRepor
   // frontier from >200,000 (capped, unsound) to ~152 (exact, milliseconds).
   const readsAt: Set<string>[] = spine.map(ch => {
     const s = new Set<string>()
+    // The BOOK's gate is read at every chapter of that book (LOOM-155). It has
+    // to be, or the live-variable projection would drop the gate's variable as
+    // dead and collapse two states that a book gate distinguishes — silently
+    // turning an exact analysis into a wrong one.
+    for (const v of conditionVars(condOf.get(ch.bookId) ?? null)) s.add(v)
     for (const v of conditionVars(condOf.get(ch.id) ?? null)) s.add(v)
     for (const blk of blocksByChapter.get(ch.id) ?? []) {
       for (const v of conditionVars(condOf.get(blk.id) ?? null)) s.add(v)
@@ -314,15 +338,38 @@ export function analyzeReachability(input: ReachabilityInput): ReachabilityRepor
     // reachable state satisfies its gate.
     let live = new Map<string, StoryState>()
     const skipped = new Map<string, StoryState>()
+
+    // The BOOK gate, checked before the chapter's own (LOOM-155). A state that
+    // fails it skips every chapter in the book — the same "skipped states
+    // continue unchanged" shape a chapter gate already has, one level up.
+    //
+    // Counted once per state per BOOK rather than per chapter: the question a
+    // finding answers is "can any reader open this book", and bumping per
+    // chapter would inflate the evidence by the book's length.
+    const bkGate = condOf.get(ch.bookId) ?? null
+    let entering = frontier
+    if (bkGate) {
+      const firstOfBook = ci === 0 || spine[ci - 1].bookId !== ch.bookId
+      const pass = new Map<string, StoryState>()
+      for (const [k, st] of frontier) {
+        if (firstOfBook) bump(evaluated, ch.bookId)
+        if (matchesCondition(bkGate, st)) {
+          if (firstOfBook) bump(matched, ch.bookId)
+          pass.set(k, st)
+        } else skipped.set(k, st)
+      }
+      entering = pass
+    }
+
     const chGate = condOf.get(ch.id) ?? null
     if (chGate) {
-      for (const [k, st] of frontier) {
+      for (const [k, st] of entering) {
         bump(evaluated, ch.id)
         if (matchesCondition(chGate, st)) { bump(matched, ch.id); live.set(k, st) }
         else skipped.set(k, st)
       }
     } else {
-      live = new Map(frontier)
+      live = new Map(entering)
     }
 
     // States that ended this chapter early rejoin at the chapter boundary.
@@ -409,6 +456,74 @@ export function analyzeReachability(input: ReachabilityInput): ReachabilityRepor
 
   const undeclaredIn = (cond: Condition | null) =>
     conditionVars(cond).filter(v => !declared.has(v))
+
+  // ── Books (LOOM-155, under LOOM-146) ───────────────────────────────────────
+  //
+  // Two of these three check THE INVARIANT the non-canon epic rests on:
+  //
+  //   The default story state must satisfy every canon book's condition,
+  //   and no non-canon book's.
+  //
+  // Canon is defined as "every variable at its default value" — that is what
+  // the canon export walks and what publish ships. A canon book the default
+  // state does not reach therefore exports to ~/Writing and publishes to
+  // readers while being unreachable to every reader, with NO symptom anywhere.
+  // Nothing else in the system notices, which is why it is checked here.
+  for (const bk of books) {
+    const gate = condOf.get(bk.id) ?? null
+    if (!gate) continue
+    const ev = evaluated.get(bk.id) ?? 0
+    const mt = matched.get(bk.id) ?? 0
+    const canon = bk.canon !== false
+    const base = {
+      id: bk.id, targetType: 'book' as const, condition: bk.condition ?? undefined,
+      evaluated: ev, matched: mt, bookId: bk.id, bookTitle: bk.title,
+    }
+
+    const undeclared = undeclaredIn(gate)
+    if (undeclared.length > 0) {
+      findings.push({
+        ...base,
+        kind: 'undeclared-variable',
+        severity: 'dead',
+        title: `"${bk.title}" is gated on a variable that doesn't exist`,
+        detail: `${undeclared.map(v => `"${v}"`).join(', ')} ${undeclared.length > 1 ? 'are' : 'is'} not a story variable, so this gate compares against nothing. Note that an unmatchable book gate makes the book VISIBLE, not hidden — so this book is open to everyone right now.`,
+      })
+      continue
+    }
+
+    // No reachable state at all — the book-level sibling of
+    // 'unreachable-combination'.
+    if (ev > 0 && mt === 0) {
+      findings.push({
+        ...base,
+        kind: 'book-unreachable',
+        severity: 'dead',
+        title: `No reader can open "${bk.title}"`,
+        detail: `Every reachable combination of choices fails this book's gate, so nothing in it is ever readable. ${canon ? 'It still exports to your manuscript folder and publishes to readers as canon.' : "Check the gate against the branch this book is supposed to follow."}`,
+      })
+      continue
+    }
+
+    const defaultQualifies = matchesCondition(gate, initial)
+    if (canon && !defaultQualifies) {
+      findings.push({
+        ...base,
+        kind: 'canon-book-unreachable',
+        severity: 'dead',
+        title: `"${bk.title}" is canon but not on the default path`,
+        detail: 'Canon is whatever the story is with every variable at its default, so this book exports to your manuscript folder and publishes to readers as canon — while no reader starting fresh ever sees it. Either loosen its gate or mark the book non-canon.',
+      })
+    } else if (!canon && defaultQualifies) {
+      findings.push({
+        ...base,
+        kind: 'non-canon-book-in-default-path',
+        severity: 'dead',
+        title: `"${bk.title}" is non-canon but sits on the default path`,
+        detail: 'A reader who makes no diverging choice lands in this alternate timeline, and it is excluded from the manuscript export and from readers — so the default read-through has a hole in it. Tighten its gate so it only opens on the branch it belongs to.',
+      })
+    }
+  }
 
   // Overrides — the richest case, and where all three real bugs live.
   for (const o of overrides) {
@@ -600,6 +715,7 @@ export function analyzeReachability(input: ReachabilityInput): ReachabilityRepor
       overrides: overrides.length,
       gatedBlocks: blocks.filter(b => isGate(b.condition)).length,
       chapterGates: chapters.filter(c => isGate(c.condition)).length,
+      bookGates: books.filter(b => isGate(b.condition ?? null)).length,
       gatedChoices: choices.filter(c => c.order >= 2 && isGate(c.condition)).length,
       variables: variables.length,
       peakStates,

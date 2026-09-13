@@ -239,3 +239,119 @@ describe('analyzeReachability', () => {
     expect(f!.severity).toBe('dead')
   })
 })
+
+// ── LOOM-155: book gates ─────────────────────────────────────────────────────
+//
+// Two of the three findings here check THE INVARIANT the non-canon epic rests
+// on: the default story state must satisfy every canon book's condition and no
+// non-canon book's. Canon is "every variable at its default", which is what the
+// canon export walks and what publish ships — so a canon book off the default
+// path is exported and published as canon while being unreachable to every
+// reader, with no symptom anywhere else in the system.
+
+const gate = (v: boolean) => JSON.stringify({ diverged: v })
+
+/** Books 1-2 ungated, then a fork: canon book 3 vs an alt book. */
+const forkedSeries = (opts: {
+  canonGate?: string | null
+  altGate?: string | null
+  altCanon?: boolean
+} = {}): ReachabilityInput => ({
+  books: [
+    { id: 'bk1', title: 'One', order: 1, canon: true },
+    { id: 'bk3', title: 'Three', order: 3, canon: true, condition: opts.canonGate ?? gate(false) },
+    { id: 'alt', title: 'Undertow', order: 9, canon: opts.altCanon ?? false, condition: opts.altGate ?? gate(true) },
+  ],
+  chapters: [
+    { id: 'ch1', bookId: 'bk1', title: 'Opening', order: 1, condition: null },
+    { id: 'ch3', bookId: 'bk3', title: 'Canon road', order: 1, condition: null },
+    { id: 'chA', bookId: 'alt', title: 'Other road', order: 1, condition: null },
+  ],
+  blocks: [choicePoint('cp1', 'ch1', 1)],
+  choices: [
+    option('opt-stay', 'cp1', 0, 'Stay', { diverged: false }),
+    option('opt-go', 'cp1', 1, 'Diverge', { diverged: true }),
+  ],
+  overrides: [],
+  variables: [{ name: 'diverged', type: 'boolean', defaultValue: 'false' }],
+})
+
+const kinds = (input: ReachabilityInput) =>
+  analyzeReachability(input).findings.map(f => f.kind)
+
+describe('analyzeReachability — book gates', () => {
+  it('reports nothing when the gates are authored correctly', () => {
+    // The default state (diverged=false) opens canon book 3 and not the alt
+    // book. This is the shape every other case below deviates from.
+    expect(kinds(forkedSeries())).toEqual([])
+  })
+
+  it('flags a canon book the default path never reaches', () => {
+    // Gate inverted: canon book 3 now needs diverged=true.
+    const report = analyzeReachability(forkedSeries({ canonGate: gate(true), altGate: gate(false) }))
+    const f = report.findings.find(x => x.kind === 'canon-book-unreachable')
+    expect(f).toBeDefined()
+    expect(f!.bookTitle).toBe('Three')
+    expect(f!.severity).toBe('dead')
+  })
+
+  it('flags a non-canon book sitting on the default path', () => {
+    const report = analyzeReachability(forkedSeries({ canonGate: gate(true), altGate: gate(false) }))
+    const f = report.findings.find(x => x.kind === 'non-canon-book-in-default-path')
+    expect(f).toBeDefined()
+    expect(f!.bookTitle).toBe('Undertow')
+  })
+
+  it('flags a book no reachable state can open', () => {
+    // Nothing sets `diverged` to the string 'maybe', so no reachable state
+    // satisfies this — distinct from "off the default path", which at least
+    // some reader reaches.
+    const report = analyzeReachability(forkedSeries({ altGate: JSON.stringify({ diverged: 'maybe' }) }))
+    const f = report.findings.find(x => x.kind === 'book-unreachable')
+    expect(f).toBeDefined()
+    expect(f!.bookTitle).toBe('Undertow')
+    expect(f!.matched).toBe(0)
+    expect(f!.evaluated).toBeGreaterThan(0)
+  })
+
+  it('flags a gate on an undeclared variable, and says the book is OPEN', () => {
+    // The detail matters: isBookVisible returns TRUE for a gate it cannot
+    // satisfy-check, so the failure mode is a book visible to everyone rather
+    // than a hidden one. A finding that said "hidden" would send the writer
+    // looking for the opposite problem.
+    const report = analyzeReachability(forkedSeries({ altGate: JSON.stringify({ typoed: true }) }))
+    const f = report.findings.find(x => x.targetType === 'book' && x.kind === 'undeclared-variable')
+    expect(f).toBeDefined()
+    expect(f!.detail).toMatch(/open to everyone/)
+  })
+
+  it('counts each book gate once, not once per chapter', () => {
+    // Evidence has to be believable: bumping per chapter would inflate
+    // `evaluated` by the book's length and make a one-state series look like
+    // many.
+    const input = forkedSeries()
+    input.chapters.push(
+      { id: 'ch3b', bookId: 'bk3', title: 'Second', order: 2, condition: null },
+      { id: 'ch3c', bookId: 'bk3', title: 'Third', order: 3, condition: null },
+    )
+    const report = analyzeReachability({ ...input, books: input.books.map(b =>
+      b.id === 'bk3' ? { ...b, condition: JSON.stringify({ diverged: 'never' }) } : b) })
+    const f = report.findings.find(x => x.kind === 'book-unreachable')
+    // Two reachable states reach the fork; the three-chapter book must not
+    // multiply that by three.
+    expect(f!.evaluated).toBe(2)
+  })
+
+  it('ungated books produce no book findings at all', () => {
+    const input = forkedSeries()
+    const report = analyzeReachability({
+      ...input,
+      books: input.books.map(b => ({ ...b, condition: null })),
+    })
+    expect(report.findings.filter(f => f.targetType === 'book')).toEqual([])
+  })
+
+  it('counts gated books in the summary', () => {
+    expect(analyzeReachability(forkedSeries()).summary.bookGates).toBe(2)
+  })
+})

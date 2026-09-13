@@ -21,14 +21,17 @@ export async function GET(_: Request, { params }: Params) {
 
   const books = await prisma.book.findMany({
     where: { seriesId },
-    select: { id: true, title: true, order: true },
+    // condition + canon feed the book-gate findings (LOOM-155). Non-canon books
+    // are NOT filtered out: an alt book with an unreachable or wrongly-open
+    // gate is exactly what this check exists to catch.
+    select: { id: true, title: true, order: true, condition: true, canon: true },
     orderBy: { order: 'asc' },
   })
   if (books.length === 0) {
     return NextResponse.json({
       findings: [],
       summary: {
-        chapters: 0, choicePoints: 0, overrides: 0, gatedBlocks: 0, chapterGates: 0,
+        chapters: 0, choicePoints: 0, overrides: 0, gatedBlocks: 0, chapterGates: 0, bookGates: 0,
         gatedChoices: 0, variables: 0, peakStates: 0, dead: 0, warnings: 0, deadByBook: {},
       },
     })
