@@ -88,6 +88,7 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
     group: 'While Writing',
     items: [
       { keys: '⌥⇧J', label: 'Jump to cursor' },
+      { keys: '⌥⇧L / esc', label: 'Leave text block (frees ⌥⇧← / → for chapters)' },
       { keys: '⌥⇧I', label: 'Toggle paragraph indent' },
       { keys: '⌥⇧+ / -', label: 'Enlarge / shrink text' },
       { keys: '⌥⇧R', label: 'Read aloud from cursor / stop' },
@@ -939,6 +940,17 @@ export default function ChapterEditorPage() {
   const toggleSoundtrackRef = useRef<() => void>(() => {})
 
   useEffect(() => {
+    // Drop focus out of a prose editor and onto the document, which is what
+    // turns ⌥⇧←/→ back into chapter navigation. Contenteditable only: the
+    // find bar and the other inputs already have their own Escape handling,
+    // and stealing focus out of them would undo it. Returns whether it
+    // actually did anything, so Escape elsewhere stays untouched.
+    function blurProse(): boolean {
+      const active = document.activeElement as HTMLElement | null
+      if (!active?.isContentEditable) return false
+      active.blur()
+      return true
+    }
     function handleKeyDown(e: KeyboardEvent) {
       // ⌃⇧Space and ⌃⇧< / ⌃⇧> — the two shortcuts that gave up ⌥⇧ when the
       // soundtrack player went global (it owns ⌥⇧Space and ⌥⇧< / ⌥⇧> app-wide
@@ -956,6 +968,17 @@ export default function ChapterEditorPage() {
       if (e.ctrlKey && e.shiftKey && !e.altKey && localSearchQueryRef.current.trim()) {
         if (e.code === 'ArrowRight') { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'next'); return }
         if (e.code === 'ArrowLeft') { e.preventDefault(); jumpToMatchRef.current?.(localSearchQueryRef.current, 'prev'); return }
+      }
+      // Escape — step out of the text block without reaching for the mouse.
+      // ⌥⇧←/→ only navigates chapters when focus isn't in a text box (see
+      // below), so blurring is what makes "keep writing, then jump chapters"
+      // a keyboard-only move. ⌥⇧L does the same from the switch below; this
+      // is the conventional key, that one is the discoverable one.
+      // defaultPrevented: the variable-suggest popover claims Escape first
+      // (capture-phase listener in TextBlock) to close itself.
+      if (e.code === 'Escape' && !e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.defaultPrevented) {
+        if (blurProse()) e.preventDefault()
+        return
       }
       if (!e.altKey || !e.shiftKey) return
       // ⌥⇧←/→ means "extend selection by word" inside prose, so chapter
@@ -976,6 +999,10 @@ export default function ChapterEditorPage() {
         case 'KeyO': e.preventDefault(); setShowPathConfig(v => !v); break
         case 'KeyF': e.preventDefault(); setTimeout(() => { localSearchInputRef.current?.focus(); localSearchInputRef.current?.select() }, 0); break
         case 'KeyJ': e.preventDefault(); scrollToCursorRef.current?.(); break
+        // ⌥⇧L — "leave" the text block. Always preventDefault, blurred or
+        // not: ⌥⇧L types "Ò" on macOS, and this is meant to be usable
+        // mid-sentence.
+        case 'KeyL': e.preventDefault(); blurProse(); break
         case 'KeyK':
           e.preventDefault()
           setLocalSearchQuery('')
