@@ -348,21 +348,6 @@ export default function AuthorSeriesPage() {
    * the reader tier. Going the other way is equally consequential, so both
    * directions confirm rather than just the one.
    */
-  /**
-   * Which canon book this alt book branches off (LOOM-152).
-   *
-   * No confirm: unlike canon membership this withdraws nothing and publishes
-   * nothing — it only tells Loom where the branch leaves the canon line. Wrong
-   * is fixable by picking again.
-   */
-  async function setBookDivergence(bookId: string, divergesFromBookId: string | null) {
-    await fetch(`/api/series/${seriesId}/books/${bookId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ divergesFromBookId }),
-    })
-    loadSeries()
-  }
 
   // Which book the settings dialog is open for, if any (LOOM-156).
   const [bookModal, setBookModal] = useState<{ mode: 'add' } | { mode: 'edit'; bookId: string } | null>(null)
@@ -425,28 +410,6 @@ export default function AuthorSeriesPage() {
     }
   }
 
-  async function setBookCanon(bookId: string, canon: boolean) {
-    const book = series.books.find(b => b.id === bookId)
-    const ok = canon
-      ? confirm(
-          `Make “${book?.title ?? 'this book'}” canon?\n\n` +
-            'It will start exporting to your manuscript folder and be ingested by ' +
-            'WriteAI as part of the real series.',
-        )
-      : confirm(
-          `Make “${book?.title ?? 'this book'}” non-canon?\n\n` +
-            'It stops exporting to your manuscript folder, WriteAI stops seeing it, ' +
-            'and it will not be sent to readers. Nothing you have written is deleted.',
-        )
-    if (!ok) return
-    await fetch(`/api/series/${seriesId}/books/${bookId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ canon }),
-    })
-    loadSeries()
-    publish.refresh()
-  }
 
   return (
     <>
@@ -655,51 +618,6 @@ export default function AuthorSeriesPage() {
                           <option value="inProgress">In progress</option>
                           <option value="published">Published</option>
                         </select>
-                        {/* Canon membership (LOOM-148). Shown ONLY on a
-                            non-canon book: canon is the overwhelming default,
-                            and a "Canon" chip on every one of five books would
-                            be five chips carrying no information. The way back
-                            is the same chip — it stays clickable. */}
-                        {!book.canon && (
-                          <button
-                            onClick={e => { e.stopPropagation(); setBookCanon(book.id, true) }}
-                            onMouseDown={e => e.stopPropagation()}
-                            title="Non-canon: an alternate timeline. Never exported to your manuscript folder, never ingested by WriteAI, never sent to readers. Click to make it canon."
-                            className="shrink-0 cursor-pointer rounded border border-dashed border-choice-kill-border
-                              bg-choice-kill-bg px-1.5 py-0.5 text-[10px] uppercase tracking-widest
-                              text-choice-kill transition hover:brightness-110"
-                          >
-                            Alt
-                          </button>
-                        )}
-                        {/* Where this branch leaves the canon line (LOOM-152).
-                            Not decoration: the character first/death/last rules
-                            cannot place an alt book on the canon line without
-                            it, and fall back to "cannot say" when it is unset —
-                            so the empty state reads as a prompt, not a blank. */}
-                        {!book.canon && (
-                          <select
-                            value={book.divergesFromBookId ?? ''}
-                            onChange={e => { e.stopPropagation(); void setBookDivergence(book.id, e.target.value || null) }}
-                            onClick={e => e.stopPropagation()}
-                            onMouseDown={e => e.stopPropagation()}
-                            title="The canon book this branch leaves from. Without it, Loom cannot tell where this book sits in the story, and character deaths and first appearances stop resolving inside it."
-                            className={`appearance-none shrink-0 cursor-pointer rounded border px-1.5 py-0.5
-                              text-center text-[10px] uppercase tracking-widest transition
-                              focus:outline-none focus-visible:border-accent/70 ${
-                              book.divergesFromBookId
-                                ? 'border-accent/30 bg-accent/5 text-ink-muted hover:text-ink'
-                                : 'border-dashed border-choice-kill-border bg-choice-kill-bg text-choice-kill'
-                            }`}
-                          >
-                            <option value="">Diverges from…</option>
-                            {orderedBooks.filter(b => b.canon).map(b => (
-                              <option key={b.id} value={b.id}>
-                                After {bookLabels[b.id]?.readerLabel ?? b.title}
-                              </option>
-                            ))}
-                          </select>
-                        )}
                         {/* Sits with the status chips rather than in the stats
                             grid below: those four are all "how much is here",
                             and this is not a size — it is something to fix. */}

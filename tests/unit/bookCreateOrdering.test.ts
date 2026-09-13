@@ -270,3 +270,38 @@ describe('the book routes accept every field the dialog sends', () => {
     expect(patchRoute).toContain('condition !== undefined')
   })
 })
+
+// ── The card carries no duplicate canon controls (LOOM-156) ──────────────────
+//
+// The Alt chip and the "Diverges from…" picker lived on the book card before
+// the settings dialog existed. Both are now in the dialog, and the card already
+// shows "Alt" as the book's LABEL (computeBookLabels returns it in place of
+// "Book N"), so the chip said the same thing twice.
+const seriesPage = readFileSync(
+  path.join(__dirname, '../../src/app/author/[seriesId]/page.tsx'),
+  'utf8',
+)
+
+describe('the book card does not duplicate the dialog', () => {
+  it('has no Alt chip and no divergence picker', () => {
+    expect(seriesPage).not.toContain('Diverges from…')
+    expect(seriesPage).not.toMatch(/>\s*Alt\s*</)
+  })
+
+  it('dropped their handlers rather than leaving them unreachable', () => {
+    // A second write path for canon that nothing renders is the drift hazard
+    // the title-only addBook removal was about.
+    expect(seriesPage).not.toContain('setBookCanon')
+    expect(seriesPage).not.toContain('setBookDivergence')
+  })
+
+  it('still identifies an alt book at a glance', () => {
+    // Removing the chip must not remove the ONLY signal. computeBookLabels
+    // returns "Alt" in place of "Book N", which is what the card renders.
+    expect(seriesPage).toContain('bookLabels[book.id]?.readerLabel')
+  })
+
+  it('still offers a way to reach those settings', () => {
+    expect(seriesPage).toMatch(/setBookModal\(\{ mode: 'edit'/)
+  })
+})
