@@ -136,14 +136,22 @@ export default function BookSettingsModal({
             condition editor can add rows without number. */}
         <div className="flex-1 overflow-y-auto -mx-2 px-2 flex flex-col gap-5">
 
-        {/* Cover beside the title, the way the book card renders them — a
-            2:3 box so what you pick previews at the shape it will be used at
-            rather than at the file's own aspect ratio. */}
+        {/* Cover beside the title, sized the way the BOOKS TAB CARD sizes it:
+            w-28, stretching to the row's height with 9rem as a floor, rather
+            than a fixed ratio. The flex row here stretches by default, and the
+            title+description column beside it is taller than 9rem, so this
+            box ends up at the card's proportions rather than at its floor.
+            
+            Note this is deliberately NOT the `aspect-[2/3]` every reader-facing
+            surface uses (preview roadmap, book landing, Continue Reading). The
+            card is the odd one out and the author's call was to match it here,
+            so the two views a writer moves between agree. */}
         <div className="flex gap-4">
           <label
-            className="relative w-24 shrink-0 aspect-[2/3] rounded overflow-hidden bg-surface-base
+            className="relative w-28 shrink-0 rounded overflow-hidden bg-surface-base
               border border-accent/20 border-dashed flex flex-col items-center justify-center
               gap-1 cursor-pointer hover:border-accent/50 transition"
+            style={{ minHeight: '9rem' }}
             title={existingCoverPath || coverPreview ? 'Replace cover' : 'Add a cover'}
           >
             {coverPreview ? (
@@ -152,7 +160,7 @@ export default function BookSettingsModal({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={coverPreview} alt="" className="absolute inset-0 w-full h-full object-cover" />
             ) : existingCoverPath ? (
-              <Image src={existingCoverPath} alt="" fill sizes="96px" className="object-cover" />
+              <Image src={existingCoverPath} alt="" fill sizes="112px" className="object-cover" />
             ) : (
               <>
                 <LuImage size={18} className="text-ink-faint" />
