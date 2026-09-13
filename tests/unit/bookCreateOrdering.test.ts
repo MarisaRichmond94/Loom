@@ -51,16 +51,30 @@ describe('the book settings dialog', () => {
   it('offers the condition editor for canon books too', () => {
     // Not an oversight: when a divergence splits the story, the CANON
     // continuation carries the inverse gate. Canon and gated are independent,
-    // so the field must not be hidden behind the alt toggle.
-    const gate = modal.slice(modal.indexOf('Who reaches this book'))
+    // so the field must not be conditioned on `canon` at all.
+    const gate = modal.slice(modal.indexOf('Who Reaches This Book'))
     expect(gate).toContain('<ConditionRow')
-    // The `!canon &&` guard wraps the divergence picker ONLY.
+    expect(gate).not.toContain('{!canon')
+  })
+
+  it('keeps the divergence picker visible but disabled for a canon book', () => {
+    // Disabled rather than hidden: a control that vanishes leaves "where did
+    // that go?" unanswered, while a visibly disabled one says a canon book has
+    // no divergence. Same treatment as the series page's Publish button.
     const divergence = modal.slice(
-      modal.indexOf('{!canon && ('),
-      modal.indexOf('Who reaches this book'),
+      modal.indexOf('Diverges From'),
+      modal.indexOf('Who Reaches This Book'),
     )
-    expect(divergence).toContain('Diverges from')
-    expect(divergence).not.toContain('<ConditionRow')
+    expect(divergence).toContain('disabled={canon}')
+    expect(modal).not.toContain('{!canon && (')
+  })
+
+  it('hands the cover back as a file rather than uploading it itself', () => {
+    // The cover endpoint keys the stored filename by book id, and an ADD has
+    // no id until the book exists. Uploading from inside the dialog would have
+    // nothing to key on.
+    expect(modal).toContain('coverFile')
+    expect(modal).not.toContain('/cover')
   })
 
   it('reuses the chapter editor’s condition UI rather than a second one', () => {

@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { LuX } from 'react-icons/lu'
+import Image from 'next/image'
+import { LuImage, LuX } from 'react-icons/lu'
 import { ConditionRow } from '@/components/editor/conditionUI'
 
 // Add or edit a book's settings in one dialog (LOOM-156, under LOOM-146).
@@ -36,15 +37,25 @@ export type BookSettingsValues = {
   canon: boolean
   condition: string | null
   divergesFromBookId: string | null
+  /**
+   * A newly chosen cover, or null to leave the existing one alone.
+   *
+   * Handed back as a FILE rather than uploaded here, because the cover endpoint
+   * keys the stored filename by book id and an add has no id yet. The caller
+   * creates the book first, then uploads — see submitBookSettings.
+   */
+  coverFile: File | null
 }
 
 export type BookChoice = { id: string; title: string; label: string; canon: boolean }
 
 export default function BookSettingsModal({
-  mode, initial, canonBooks, variables, busy, error, onSubmit, onClose,
+  mode, initial, existingCoverPath, canonBooks, variables, busy, error, onSubmit, onClose,
 }: {
   mode: 'add' | 'edit'
   initial?: Partial<BookSettingsValues>
+  /** The book's current cover, shown until a new file is chosen. */
+  existingCoverPath?: string | null
   /** Canon books this one may diverge from — the only legal parents. */
   canonBooks: BookChoice[]
   variables: { id: string; name: string; type: string; defaultValue?: string }[]
@@ -59,6 +70,13 @@ export default function BookSettingsModal({
   const [canon, setCanon] = useState(initial?.canon ?? true)
   const [condition, setCondition] = useState<string | null>(initial?.condition ?? null)
   const [diverges, setDiverges] = useState<string | null>(initial?.divergesFromBookId ?? null)
+  const [coverFile, setCoverFile] = useState<File | null>(null)
+  // Local object URL for the chosen file, so the writer sees what they picked
+  // before anything is uploaded. Revoked on replace/unmount — these leak
+  // otherwise, and a modal that gets opened repeatedly is exactly where that
+  // shows up.
+  const [coverPreview, setCoverPreview] = useState<string | null>(null)
+  useEffect(() => () => { if (coverPreview) URL.revokeObjectURL(coverPreview) }, [coverPreview])
 
   // Escape closes, matching every other dialog here.
   useEffect(() => {
@@ -81,6 +99,7 @@ export default function BookSettingsModal({
       // A canon book has no divergence by definition; sending one would create
       // the stale pointer the PATCH clears.
       divergesFromBookId: canon ? null : diverges,
+      coverFile,
     })
   }
 
@@ -117,6 +136,45 @@ export default function BookSettingsModal({
             condition editor can add rows without number. */}
         <div className="flex-1 overflow-y-auto -mx-2 px-2 flex flex-col gap-5">
 
+        {/* Cover beside the title, the way the book card renders them — a
+            2:3 box so what you pick previews at the shape it will be used at
+            rather than at the file's own aspect ratio. */}
+        <div className="flex gap-4">
+          <label
+            className="relative w-24 shrink-0 aspect-[2/3] rounded overflow-hidden bg-surface-base
+              border border-accent/20 border-dashed flex flex-col items-center justify-center
+              gap-1 cursor-pointer hover:border-accent/50 transition"
+            title={existingCoverPath || coverPreview ? 'Replace cover' : 'Add a cover'}
+          >
+            {coverPreview ? (
+              // Plain <img>: this is a local blob: URL, which the Next image
+              // optimizer cannot fetch.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={coverPreview} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            ) : existingCoverPath ? (
+              <Image src={existingCoverPath} alt="" fill sizes="96px" className="object-cover" />
+            ) : (
+              <>
+                <LuImage size={18} className="text-ink-faint" />
+                <span className="text-[10px] uppercase tracking-widest text-ink-faint">Cover</span>
+              </>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={e => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                if (coverPreview) URL.revokeObjectURL(coverPreview)
+                setCoverFile(file)
+                setCoverPreview(URL.createObjectURL(file))
+                e.target.value = ''
+              }}
+            />
+          </label>
+
+          <div className="flex-1 min-w-0 flex flex-col gap-5">
         <label className="flex flex-col gap-1.5">
           <span className={labelCls}>Title</span>
           <input
@@ -138,20 +196,23 @@ export default function BookSettingsModal({
             className={`${field} resize-y leading-relaxed`}
           />
         </label>
+          </div>
+        </div>
 
         <label className="flex flex-col gap-1.5">
           <span className={labelCls}>Status</span>
           <select value={status} onChange={e => setStatus(e.target.value as BookStatus)} className={field}>
-            <option value="draft">Draft — readers see “Coming Soon”</option>
-            <option value="inProgress">In progress — the one you’re writing</option>
-            <option value="published">Published — eligible to send to readers</option>
+            <option value="draft">Draft</option>
+            <option value="inProgress">In Progress</option>
+            <option value="published">Published</option>
           </select>
         </label>
 
-        {/* Canon membership. A segmented control rather than a checkbox: "canon"
-            and "alt" are two kinds of book, not a property switched off. */}
+        {/* A segmented control rather than a checkbox: "canon" and "alt" are two
+            kinds of book, not a property switched off. No label above it — the
+            options name themselves, so a "Canon" header sat directly on top of
+            a button reading "Canon". */}
         <div className="flex flex-col gap-1.5">
-          <span className={labelCls}>Canon</span>
           <div className="flex rounded border border-accent/20 overflow-hidden text-sm">
             {([true, false] as const).map(v => (
               <button
@@ -166,43 +227,39 @@ export default function BookSettingsModal({
                   canon === v ? 'bg-accent text-surface-base' : 'text-ink-muted hover:text-ink'
                 }`}
               >
-                {v ? 'Canon' : 'Alt (non-canon)'}
+                {v ? 'Canon' : 'Alt (Non-Canon)'}
               </button>
             ))}
           </div>
-          <p className="text-xs text-ink-faint italic leading-relaxed">
-            {canon
-              ? 'Exports to your manuscript folder, ingested by WriteAI, and can be sent to readers.'
-              : 'An alternate timeline. Never exported, never seen by WriteAI, never sent to readers — but fully writable here.'}
-          </p>
         </div>
 
-        {!canon && (
-          <label className="flex flex-col gap-1.5">
-            <span className={labelCls}>Diverges from</span>
-            <select
-              value={diverges ?? ''}
-              onChange={e => setDiverges(e.target.value || null)}
-              className={field}
-            >
-              <option value="">Choose a book…</option>
-              {canonBooks.map(b => (
-                <option key={b.id} value={b.id}>After {b.label} — {b.title}</option>
-              ))}
-            </select>
-            <p className="text-xs text-ink-faint italic leading-relaxed">
-              Where this branch leaves the canon line. Without it, Loom can’t place
-              this book in the story, and character deaths and first appearances
-              stop resolving inside it.
-            </p>
-          </label>
-        )}
+        {/* Always rendered, disabled when canon — a control that vanishes
+            leaves "where did that go?" unanswered, while a visibly disabled one
+            says a canon book has no divergence. Matches the Publish button on
+            the series page, which is disabled with a reason rather than absent. */}
+        <label className="flex flex-col gap-1.5">
+          <span className={`${labelCls} ${canon ? 'opacity-40' : ''}`}>Diverges From</span>
+          <select
+            value={diverges ?? ''}
+            onChange={e => setDiverges(e.target.value || null)}
+            disabled={canon}
+            title={canon
+              ? 'Only an alt book diverges — a canon book sits on the canon line itself.'
+              : 'Where this branch leaves the canon line. Without it, character deaths and first appearances stop resolving inside this book.'}
+            className={`${field} ${canon ? 'opacity-40 cursor-not-allowed' : ''}`}
+          >
+            <option value="">Choose a book…</option>
+            {canonBooks.map(b => (
+              <option key={b.id} value={b.id}>After {b.label} — {b.title}</option>
+            ))}
+          </select>
+        </label>
 
         {/* Shown for canon books too, and that is not an oversight: when a
             divergence splits the story, the CANON continuation needs the
             inverse gate. Canon and gated are independent. */}
         <div className="flex flex-col gap-1.5">
-          <span className={labelCls}>Who reaches this book</span>
+          <span className={labelCls}>Who Reaches This Book</span>
           <div className="rounded border border-accent/10 bg-surface-base/60 p-3">
             <ConditionRow
               condition={condition}
@@ -211,13 +268,6 @@ export default function BookSettingsModal({
               label="Show if:"
             />
           </div>
-          <p className="text-xs text-ink-faint italic leading-relaxed">
-            {condition
-              ? canon
-                ? 'Readers who don’t match won’t see this book. Make sure the default values of these variables DO match, or no one reaches it on a normal read-through.'
-                : 'Only readers matching this reach the alt book. The canon book it replaces usually carries the opposite condition.'
-              : 'No condition — every reader sees this book.'}
-          </p>
         </div>
 
         </div>

@@ -9,6 +9,7 @@ import Image from 'next/image'
 import { useAuthor } from '@/lib/authorContext'
 import { useDocumentTitle } from '@/lib/useDocumentTitle'
 import { bookStats } from '@/lib/bookStats'
+import { uploadBookCover } from '@/lib/coverUpload'
 import { computeBookLabels } from '@/lib/chapterLabels'
 import { useClickOutside } from '@/components/editor/AnchoredPopover'
 import SectionTabs, { useSectionActionSlot } from '@/components/SectionTabs'
@@ -398,6 +399,22 @@ export default function AuthorSeriesPage() {
         setBookModalError(data?.error ?? 'Could not save the book.')
         return
       }
+
+      // The cover goes up AFTER the book exists: the endpoint keys the stored
+      // filename by book id, so an add has nothing to key on until now. On an
+      // add, the id comes from the response.
+      if (values.coverFile) {
+        const saved = await res.json().catch(() => null)
+        const id = editing ?? saved?.id
+        if (id && !(await uploadBookCover(seriesId, id, values.coverFile))) {
+          // The book itself saved — say what did and did not happen rather than
+          // reporting a failure that would send her looking for a lost book.
+          setBookModalError('The book was saved, but the cover could not be uploaded.')
+          loadSeries()
+          return
+        }
+      }
+
       setBookModal(null)
       loadSeries()
       publish.refresh()
@@ -908,6 +925,7 @@ export default function AuthorSeriesPage() {
           return (
             <BookSettingsModal
               mode={bookModal.mode}
+              existingCoverPath={editing?.coverPath ?? null}
               initial={editing && {
                 title: editing.title,
                 synopsis: editing.synopsis,
