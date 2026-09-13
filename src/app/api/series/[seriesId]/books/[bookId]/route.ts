@@ -43,7 +43,7 @@ export async function GET(_: Request, { params }: Params) {
 
 export async function PATCH(req: Request, { params }: Params) {
   const { seriesId, bookId } = await params
-  const { title, order, synopsis, coverPath, published, inProgress, canon, divergesFromBookId } = await req.json()
+  const { title, order, synopsis, coverPath, published, inProgress, canon, condition, divergesFromBookId } = await req.json()
   // `divergesFromBookId` has no foreign key (see the schema comment), so what
   // an FK would refuse is refused here instead (LOOM-152). The rules live in
   // lib/bookDivergence.ts, pure and unit-tested — every one of them fails
@@ -83,6 +83,9 @@ export async function PATCH(req: Request, { params }: Params) {
               ...(coverPath !== undefined && { coverPath }),
               ...(published !== undefined && { published }),
               ...(canon !== undefined && { canon }),
+              // `!== undefined`, not truthiness: null is how the dialog CLEARS
+              // a gate, and a truthy check would silently ignore it.
+              ...(condition !== undefined && { condition }),
               ...(divergesFromBookId !== undefined && { divergesFromBookId }),
             },
           })
@@ -96,6 +99,7 @@ export async function PATCH(req: Request, { params }: Params) {
             ...(coverPath !== undefined && { coverPath }),
             ...(published !== undefined && { published }),
             ...(canon !== undefined && { canon }),
+            ...(condition !== undefined && { condition }),
             ...(divergesFromBookId !== undefined && { divergesFromBookId }),
             // A canon book sits at its own order and has no divergence by
             // definition. Leaving a stale pointer behind would be invisible

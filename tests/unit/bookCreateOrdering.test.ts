@@ -156,3 +156,117 @@ describe('the dialog contains Enter inside the condition editor', () => {
     expect(section).toContain("if (e.key === 'Enter') e.preventDefault()")
   })
 })
+
+// ── The picker must overlay, not displace (LOOM-156 bugfix) ──────────────────
+//
+// Reported: "clicking the + button shifts the whole modal body over."
+//
+// Not a z-index problem, though it looks like one. The picker is absolutely
+// positioned and cannot push siblings. It anchored to the small wrapper around
+// the "+" button with `left-0`, so it opened RIGHTWARD from wherever that
+// button sat — past the right edge of a narrow container. And because CSS
+// computes the other axis to `auto` when one is not `visible`, the dialog's
+// `overflow-y-auto` body was also a horizontal scroller, so the overhang
+// scrolled the body sideways instead of spilling harmlessly the way it does on
+// the chapter page, which has no scroll container.
+describe('the variable picker overlays rather than displacing', () => {
+  it('anchors to the row, not the + button', () => {
+    // The row spans the full width, so a right-anchored menu opens inward and
+    // is always inside the container — including when there are no clauses yet
+    // and "+" is at the far LEFT, where anchoring to the button would overflow
+    // in the other direction.
+    expect(conditionUI).toContain('relative flex items-center gap-2 mb-2 flex-wrap')
+    expect(conditionUI).toMatch(/absolute right-0 bottom-full/)
+    expect(conditionUI).not.toMatch(/absolute left-0 bottom-full/)
+  })
+
+  it('cannot grow wider than the row', () => {
+    // min-w-[220px] has no upper bound of its own, so a long variable name
+    // could re-create the overhang.
+    const menu = conditionUI.slice(conditionUI.indexOf('absolute right-0 bottom-full'))
+    expect(menu.slice(0, 300)).toContain('max-w-full')
+  })
+
+  it('keeps the click-outside ref even though the menu moved anchors', () => {
+    // menuRef is a DOM containment check, unaffected by CSS positioning — but
+    // if the menu ever stopped being a descendant of that div, clicking INSIDE
+    // the picker would count as outside and close it.
+    const wrapper = conditionUI.indexOf('<div ref={menuRef}>')
+    expect(wrapper).toBeGreaterThan(-1)
+    expect(conditionUI.indexOf('absolute right-0 bottom-full')).toBeGreaterThan(wrapper)
+  })
+})
+
+describe('the dialog body refuses horizontal scrolling', () => {
+  it('sets overflowX explicitly', () => {
+    // overflow-y-auto alone makes the element a scroller in BOTH axes.
+    expect(modal).toContain("overflowX: 'clip'")
+  })
+
+  it('does it with an inline style, not a Tailwind class', () => {
+    // Tailwind drops unknown classes silently; a safety net that quietly isn't
+    // there is worse than none.
+    expect(modal).not.toContain('overflow-x-clip')
+  })
+})
+
+// ── Every field the dialog sends must be accepted (LOOM-156 bugfix) ──────────
+//
+// Reported: "when I set conditions to gate on and click save, the conditions
+// aren't actually being applied — Show If is just reverted back to always."
+//
+// Cause: the PATCH route never destructured `condition`. Extending it for
+// `canon` and `divergesFromBookId` simply missed it, so the gate saved on
+// CREATE (the POST route handles it) and was silently dropped on EDIT. The
+// request returned 200 and the dialog closed, so nothing suggested a failure.
+//
+// The specific miss is fixed; this pins the CLASS, because "added a field,
+// forgot one of the two routes" is repeatable and silent every time.
+const patchRoute = readFileSync(
+  path.join(__dirname, '../../src/app/api/series/[seriesId]/books/[bookId]/route.ts'),
+  'utf8',
+)
+
+/** The payload keys submitBookSettings actually sends. */
+const DIALOG_FIELDS = ['title', 'synopsis', 'published', 'inProgress', 'canon', 'condition', 'divergesFromBookId']
+
+describe('the book routes accept every field the dialog sends', () => {
+  const patchDestructure = patchRoute.slice(
+    patchRoute.indexOf('export async function PATCH'),
+    patchRoute.indexOf('await req.json()', patchRoute.indexOf('export async function PATCH')),
+  )
+
+  it.each(DIALOG_FIELDS)('PATCH destructures %s', field => {
+    expect(patchDestructure).toContain(field)
+  })
+
+  it.each(DIALOG_FIELDS)('PATCH writes %s to the database', field => {
+    // Destructuring it is not enough — it has to reach the update.
+    expect(patchRoute).toMatch(new RegExp(`${field}[^\\n]*(?:!== undefined|===)`))
+  })
+
+  it.each(DIALOG_FIELDS)('POST accepts %s', field => {
+    expect(postRoute).toContain(field)
+  })
+
+  it('pins the field list against the dialog itself', () => {
+    // If the dialog grows a field and this list is not updated, the tests above
+    // keep passing while the new field silently does not save — the exact
+    // failure they exist to catch. So the list is checked against the type.
+    const values = modal.slice(
+      modal.indexOf('export type BookSettingsValues'),
+      modal.indexOf('export type BookChoice'),
+    )
+    for (const field of DIALOG_FIELDS) {
+      if (field === 'published' || field === 'inProgress') continue // derived from `status`
+      expect(values).toContain(field)
+    }
+    expect(values).toContain('status')
+  })
+
+  it('clears a gate rather than ignoring the clear', () => {
+    // null is how the dialog removes a condition. A truthiness check would drop
+    // it, leaving the old gate in place with no sign anything was refused.
+    expect(patchRoute).toContain('condition !== undefined')
+  })
+})

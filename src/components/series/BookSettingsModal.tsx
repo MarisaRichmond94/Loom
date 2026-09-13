@@ -133,8 +133,23 @@ export default function BookSettingsModal({
         </h2>
 
         {/* Scrolls internally rather than growing past the viewport — the
-            condition editor can add rows without number. */}
-        <div className="flex-1 overflow-y-auto -mx-2 px-2 flex flex-col gap-5">
+            condition editor can add rows without number.
+            
+            ⚠️ overflowX is set EXPLICITLY, and it is load-bearing. Per CSS, when
+            one axis is not `visible` the other computes to `auto` — so
+            `overflow-y-auto` alone silently made this a HORIZONTAL scroller
+            too, and anything overhanging its right edge (the condition editor's
+            variable picker) shifted the whole dialog sideways instead of
+            overlaying it. `clip` keeps the vertical scrolling and refuses the
+            horizontal, with no scrollbar.
+            
+            An inline style rather than a Tailwind class on purpose: Tailwind
+            DROPS UNKNOWN CLASSES SILENTLY, and a safety net that quietly is not
+            there is worse than none. */}
+        <div
+          className="flex-1 overflow-y-auto -mx-2 px-2 flex flex-col gap-5"
+          style={{ overflowX: 'clip' }}
+        >
 
         {/* Cover beside the title, sized the way the BOOKS TAB CARD sizes it:
             w-28, stretching to the row's height with 9rem as a floor, rather

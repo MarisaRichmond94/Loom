@@ -318,7 +318,11 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
   }
 
   return (
-    <div className="flex items-center gap-2 mb-2 flex-wrap">
+    // `relative` makes this row the containing block for the variable picker
+    // below. It used to anchor to the little wrapper around the "+" button, so
+    // it opened rightward from wherever "+" happened to sit — past the right
+    // edge of any narrow container (LOOM-156).
+    <div className="relative flex items-center gap-2 mb-2 flex-wrap">
       {polarityToggle ? (
         <div className="flex rounded overflow-hidden border border-accent/20 text-xs shrink-0">
           {(['show', 'hide'] as const).map(p => (
@@ -397,7 +401,7 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
         </div>
       ))}
       {unattachedVars.length > 0 && (
-        <div ref={menuRef} className="relative">
+        <div ref={menuRef}>
           <button type="button"
             onClick={() => setMenuOpen(o => !o)}
             className="text-ink-muted hover:text-ink transition text-sm leading-none px-1"
@@ -408,7 +412,7 @@ export function ConditionRow({ condition, variables, onChange, label = 'Show if:
             const q = menuQuery.trim().toLowerCase()
             const filtered = q ? unattachedVars.filter(v => v.name.toLowerCase().includes(q)) : unattachedVars
             return (
-              <div className="absolute left-0 bottom-full mb-1 bg-surface-raised border border-accent/20 rounded-lg shadow-xl z-50 overflow-hidden min-w-[220px]">
+              <div className="absolute right-0 bottom-full mb-1 bg-surface-raised border border-accent/20 rounded-lg shadow-xl z-50 overflow-hidden min-w-[220px] max-w-full">
                 <div className="px-2 py-1.5 border-b border-accent/10">
                   <input
                     ref={searchInputRef}
