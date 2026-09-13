@@ -9,6 +9,7 @@ import Image from 'next/image'
 import { useAuthor } from '@/lib/authorContext'
 import { useDocumentTitle } from '@/lib/useDocumentTitle'
 import { bookStats } from '@/lib/bookStats'
+import { computeBookLabels } from '@/lib/chapterLabels'
 import { useClickOutside } from '@/components/editor/AnchoredPopover'
 import SectionTabs, { useSectionActionSlot } from '@/components/SectionTabs'
 import PublishBadge from '@/components/series/PublishBadge'
@@ -173,6 +174,30 @@ export default function AuthorSeriesPage() {
   // opening on Book(s) as LOOM-111 intended.
   const tabParam = useSearchParams()?.get('tab') ?? undefined
   const { series, loadSeries, addBook } = useAuthor()
+
+  /**
+   * Alt books sort BENEATH every canon book (LOOM-151/152, under LOOM-146).
+   *
+   * Enforced here rather than trusted to `Book.order`. Nothing stops an alt
+   * book being given order 4 alongside canon book 4, and if that happened a
+   * position-based list would interleave them — which is exactly the ambiguity
+   * "alt books sort last" exists to remove. Canon order is preserved within
+   * each group.
+   */
+  const orderedBooks = [...series.books].sort((a, b) =>
+    (a.canon === b.canon) ? a.order - b.order : (a.canon ? -1 : 1),
+  )
+
+  /**
+   * "Book 3" / "Alt". Numbering counts canon books only, so it does not shift
+   * when an alt book is added — and `idx + 1`, which this replaced, did shift:
+   * it numbered by array position, so an alt book anywhere but last renumbered
+   * every book after it.
+   *
+   * Story state is `{}` because the author always sees every book; the gate is
+   * a reader-simulation concern. Only the labels are used here.
+   */
+  const bookLabels = computeBookLabels(orderedBooks, {})
   useDocumentTitle(series.title)
   const [titleDraft, setTitleDraft] = useState(series.title)
   const [descriptionDraft, setDescriptionDraft] = useState(series.description ?? '')
@@ -497,7 +522,7 @@ export default function AuthorSeriesPage() {
           <p className="text-ink-faint text-sm text-center mt-16">No books yet. Add one above.</p>
         ) : (
           <div className="flex flex-col gap-4">
-            {series.books.map((book, idx) => {
+            {orderedBooks.map(book => {
               const stats = bookStats(book)
               return (
                 <div
@@ -535,7 +560,7 @@ export default function AuthorSeriesPage() {
                   <div className="flex-1 min-w-0 flex flex-col justify-between">
                     <div>
                       <div className="flex items-center gap-3 mb-4">
-                        <span className="text-xs text-ink-faint uppercase tracking-widest shrink-0">Book {idx + 1}</span>
+                        <span className="text-xs text-ink-faint uppercase tracking-widest shrink-0">{bookLabels[book.id]?.readerLabel ?? book.title}</span>
                         <span className="font-semibold text-ink text-lg leading-tight">{book.title}</span>
                         {/* The one status control (LOOM-140), styled as the
                             outlined chip it replaced and kept where that chip

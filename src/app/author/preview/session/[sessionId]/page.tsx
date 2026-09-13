@@ -17,6 +17,13 @@ type Block = {
 }
 type SeriesBook = {
   id: string; title: string; order: number
+  // The book-level gate and canon flag (LOOM-151). These flow straight into
+  // computeChapterLabels, which is what makes a chapter in a book this reader
+  // does not qualify for invisible — and therefore what makes the
+  // nearest-visible-chapter fallback below skip the whole book rather than
+  // landing inside it.
+  condition?: string | null
+  canon?: boolean
   chapters: { id: string; title: string; order: number; condition?: string | null; numbered?: boolean }[]
 }
 type Variable = { id: string; name: string; type: string; defaultValue: string }
