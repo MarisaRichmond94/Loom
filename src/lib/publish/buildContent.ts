@@ -185,8 +185,15 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
     ).get(opts.seriesId)
     if (!series) throw new Error(`Series ${opts.seriesId} not found in ${opts.sourcePath}`)
 
+    // `canon` is SELECTED, not filtered in SQL (LOOM-150, under LOOM-146).
+    //
+    // Filtering here would make a non-canon book vanish from the snapshot
+    // silently, and a book readers can currently see disappearing without a
+    // word is the one thing this file is most careful never to do — see the
+    // carry-forward note above. Selecting the flag instead lets the loop skip
+    // the book AND say so when it was previously published.
     books = source.prepare(
-      `SELECT id, seriesId, title, synopsis, coverPath, "order", published FROM Book WHERE seriesId = ? ORDER BY "order"`,
+      `SELECT id, seriesId, title, synopsis, coverPath, "order", published, canon FROM Book WHERE seriesId = ? ORDER BY "order"`,
     ).all(opts.seriesId)
 
     variables = source.prepare(
@@ -211,8 +218,10 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
     for (const book of books) {
       // Drafts are never walked, and neither is a book being carried forward.
       // Not reading a draft's chapters is the strongest form of "they do not
-      // leave Loom".
-      if (!book.published) continue
+      // leave Loom". A non-canon book is the same case, more so: an alternate
+      // timeline has no business being read into memory by the thing that
+      // builds the reader's snapshot (LOOM-150).
+      if (!book.published || !book.canon) continue
       if (!rebuildAll && !wantRebuild.has(book.id)) continue
       chaptersByBook.set(book.id, chapterStmt.all(book.id).map((c: Row) => ({
         id: c.id,
@@ -415,6 +424,24 @@ export function buildContentDb(opts: BuildOptions): PublishResult {
       })
 
       for (const book of books) {
+        // A non-canon book gets NO ROW AT ALL — not even a stub (LOOM-150).
+        //
+        // A stub is the "Coming Soon" treatment, which promises a book that is
+        // on its way. An alternate timeline is never on its way, so a stub
+        // would leave it sitting on the public series landing as a Coming Soon
+        // that never arrives. Absence is the honest representation.
+        if (!book.canon) {
+          // Was it in the snapshot readers currently have? Then this publish is
+          // WITHDRAWING it, and that is said out loud rather than done quietly.
+          if (prevMeta.has(`book:${book.id}:hash`)) {
+            warnings.push(
+              `"${book.title}" is now non-canon and has been removed from the reader snapshot — ` +
+              'readers who had it will no longer see it.',
+            )
+          }
+          continue
+        }
+
         const eligible = !!book.published
         const rebuilding = eligible && (rebuildAll || wantRebuild.has(book.id))
         const carried = !rebuilding && canCarry && prevMeta.has(`book:${book.id}:hash`)

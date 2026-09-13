@@ -24,12 +24,27 @@ function sql(query: string): string[] {
 
 describe('sandbox fixture shape', () => {
   fixtureIt('has a published pair and a draft book that still holds real prose', () => {
-    expect(sql(`SELECT title FROM Book WHERE published=1 ORDER BY "order";`)).toEqual(['Ashfall', 'Tidewater'])
+    expect(sql(`SELECT title FROM Book WHERE published=1 AND canon=1 ORDER BY "order";`))
+      .toEqual(['Ashfall', 'Tidewater'])
     expect(sql(`SELECT title FROM Book WHERE published=0;`)).toEqual(['The Unfinished Book'])
     // The draft must have chapters and prose — otherwise "publish excludes
     // drafts" would pass against a book that had nothing to exclude.
     const draftBlocks = sql(`SELECT COUNT(*) FROM ContentBlock cb JOIN Chapter c ON c.id=cb.chapterId JOIN Book b ON b.id=c.bookId WHERE b.published=0;`)
     expect(Number(draftBlocks[0])).toBeGreaterThan(0)
+  })
+
+  fixtureIt('carries a non-canon book that is PUBLISHED and holds real prose', () => {
+    // Both halves matter (LOOM-150). If the alt book were a draft, "publish
+    // excludes non-canon books" would pass on the `published` check alone and
+    // prove nothing about canon. If it had no prose, the leak assertions would
+    // have nothing to leak.
+    expect(sql(`SELECT title FROM Book WHERE canon=0;`)).toEqual(['Tidewater: Undertow'])
+    expect(sql(`SELECT published FROM Book WHERE canon=0;`)).toEqual(['1'])
+    // And it records where it branches from, which the character book-pointer
+    // rules (LOOM-147) need to place it on the canon line at all.
+    expect(sql(`SELECT divergesFromBookId FROM Book WHERE canon=0;`)).toEqual(['sbx-book-2'])
+    const altBlocks = sql(`SELECT COUNT(*) FROM ContentBlock cb JOIN Chapter c ON c.id=cb.chapterId JOIN Book b ON b.id=c.bookId WHERE b.canon=0;`)
+    expect(Number(altBlocks[0])).toBeGreaterThan(0)
   })
 
   fixtureIt('carries a soundtrack block on a canon chapter (the block type walkBook drops)', () => {

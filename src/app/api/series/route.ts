@@ -14,6 +14,16 @@ export async function GET() {
     orderBy: { createdAt: 'desc' },
     include: {
       books: {
+        // Non-canon books do not count toward the SERIES totals (LOOM-150,
+        // under LOOM-146). "How long is this series" means the real one — an
+        // alternate timeline would inflate the word count of a story nobody
+        // has written that much of. Alt books keep their own per-book stats,
+        // which come from bookStats.ts and are unaffected.
+        //
+        // This also keeps firstBookId right for a standalone: a canon book is
+        // always order 1, but filtering here means an alt book could never
+        // become books[0] through some future reordering.
+        where: { canon: true },
         // id/order feed firstBookId below — a standalone project's landing
         // page is its single book, not the series outline (KAN-18).
         orderBy: { order: 'asc' },

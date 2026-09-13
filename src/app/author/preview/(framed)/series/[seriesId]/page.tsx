@@ -16,6 +16,7 @@ type Book = {
   coverPath: string | null
   order: number
   published: boolean
+  canon: boolean
 }
 
 type Series = {
@@ -99,6 +100,15 @@ export default function PreviewSeriesPage() {
     router.push(`/author/preview/session/${sessionId}`)
   }
 
+  // Non-canon books never appear on a reader-facing surface (LOOM-150, under
+  // LOOM-146). This page is the AUTHOR'S PREVIEW of the reader experience, so
+  // it has to match what the reader tier will actually hold — and the reader
+  // tier gets no row for an alt book at all, not even a "Coming Soon" stub.
+  //
+  // Filtered here rather than in /api/series/[seriesId], which is the author's
+  // own endpoint and must keep returning every book.
+  const canonBooks = series?.books.filter(b => b.canon) ?? []
+
   if (!series) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -129,7 +139,7 @@ export default function PreviewSeriesPage() {
                 </p>
               )}
             </div>
-            {series.books.some(b => b.published) && (
+            {canonBooks.some(b => b.published) && (
               <button
                 onClick={() => startReading()}
                 disabled={working != null}
@@ -163,11 +173,11 @@ export default function PreviewSeriesPage() {
 
       <main className="max-w-4xl mx-auto px-8 pt-6 pb-10">
         <h2 className="text-xs uppercase tracking-widest text-ink-faint mb-4">Books in this series</h2>
-        {series.books.length === 0 ? (
+        {canonBooks.length === 0 ? (
           <p className="text-sm text-ink-faint italic">No books yet.</p>
         ) : (
           <div className="flex flex-col gap-4">
-            {series.books.map((book, idx) => {
+            {canonBooks.map((book, idx) => {
               // Unpublished books still appear in the roadmap so readers see
               // what's coming, but the cover is faded, no synopsis leaks, and
               // the card isn't a link.

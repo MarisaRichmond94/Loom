@@ -16,6 +16,13 @@ export async function GET() {
     include: {
       books: {
         orderBy: { order: 'asc' },
+        // Non-canon books are excluded outright (LOOM-150, under LOOM-146).
+        // Drafts stay, because a draft is a book on its way and its title
+        // surfacing the series is the point; an alternate timeline is not on
+        // its way to this catalogue at all. Filtering here rather than per-use
+        // below also keeps it out of `bookTitles`, so an alt book's title
+        // cannot surface a series through Explore's search either.
+        where: { canon: true },
         // Book titles are included so the Explore search can match a series
         // by any of its books' names ("Nobody's Hero" surfaces the parent
         // series). Drafts are part of this list — we still want a draft

@@ -74,6 +74,7 @@ const SERIES = 'sbx-series'
 const B1 = 'sbx-book-1'
 const B2 = 'sbx-book-2'
 const B3 = 'sbx-book-3-draft'
+const B4 = 'sbx-book-4-alt'
 
 db.transaction(() => {
   insert('Series', {
@@ -108,6 +109,15 @@ db.transaction(() => {
   insert('Book', { id: B1, seriesId: SERIES, title: 'Ashfall', synopsis: 'Book one.', coverPath: '/covers/sbx-book-1.jpg', order: 1, published: 1, inProgress: 0 })
   insert('Book', { id: B2, seriesId: SERIES, title: 'Tidewater', synopsis: 'Book two.', coverPath: '/covers/sbx-book-2.jpg', order: 2, published: 1, inProgress: 1 })
   insert('Book', { id: B3, seriesId: SERIES, title: 'The Unfinished Book', synopsis: 'SPOILER SYNOPSIS — must never reach the reader tier.', coverPath: '/covers/sbx-book-3.jpg', order: 3, published: 0, inProgress: 0 })
+
+  // A NON-CANON book (LOOM-150, under LOOM-146): an alternate timeline
+  // branching off book 2. Deliberately `published: 1` — the interesting case is
+  // a book that is eligible in every other way and must STILL get no row on the
+  // reader tier, not even the "Coming Soon" stub a draft gets. Its prose is
+  // marked so a leak is greppable rather than a judgement call.
+  insert('Book', { id: B4, seriesId: SERIES, title: 'Tidewater: Undertow', synopsis: 'ALT TIMELINE SYNOPSIS — must never reach the reader tier.', coverPath: '/covers/sbx-book-4.jpg', order: 4, published: 1, inProgress: 0, canon: 0, divergesFromBookId: B2 })
+  insert('Chapter', { id: 'sbx-b4-c1', bookId: B4, title: 'The Other Road', order: 1, numbered: 1, pov: 'Mara', date: 'Summer, Year 2' })
+  insert('ContentBlock', { id: 'sbx-b4-c1-b1', chapterId: 'sbx-b4-c1', order: 1, type: 'text', content: doc('ALT TIMELINE PROSE — the branch where Mara never crossed.'), wordCount: 10 })
 
   // ---- Book 1 chapters -----------------------------------------------------
   // numbered:false — the prologue case, which the canon walk labels by title

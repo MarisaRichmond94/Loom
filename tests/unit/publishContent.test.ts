@@ -277,3 +277,57 @@ describe('publish reports rather than refuses', () => {
     expect(read(`SELECT COUNT(*) c FROM ContentBlock`)[0].c).toBe(before)
   })
 })
+
+// ── LOOM-150: non-canon books never reach the reader tier ────────────────────
+//
+// The fixture's book 4 is non-canon AND `published: 1`. That combination is the
+// whole point: a draft is already excluded by the `published` check, so a test
+// using one would pass without the canon rule existing at all.
+describe('publish excludes non-canon books', () => {
+  fixtureIt('gives a non-canon book no row — not even a Coming Soon stub', () => {
+    build()
+    // A draft DOES get a stub, so this is about canon specifically rather than
+    // about eligibility. Both assertions together say: drafts are promised,
+    // alternate timelines are absent.
+    expect(read(`SELECT id FROM Book WHERE id='sbx-book-4-alt'`)).toHaveLength(0)
+    expect(read(`SELECT id FROM Book WHERE id='sbx-book-3-draft'`)).toHaveLength(1)
+  })
+
+  fixtureIt('leaks none of its prose, synopsis or chapters', () => {
+    build()
+    const prose = read(`SELECT content FROM ContentBlock`).map(r => r.content).join(' ')
+    expect(prose).not.toContain('ALT TIMELINE PROSE')
+    const synopses = read(`SELECT synopsis FROM Book`).map(r => r.synopsis).join(' ')
+    expect(synopses).not.toContain('ALT TIMELINE SYNOPSIS')
+    expect(read(`SELECT id FROM Chapter WHERE bookId='sbx-book-4-alt'`)).toHaveLength(0)
+  })
+
+  fixtureIt('does not report it as a published book', () => {
+    const res = build()
+    expect(res.books.map(b => b.id)).not.toContain('sbx-book-4-alt')
+  })
+
+  fixtureIt('says so when a book readers already had becomes non-canon', () => {
+    // The withdrawal case. Publish once with the book canon so it lands in the
+    // snapshot, then flip it and republish: readers lose a book, and this file
+    // treats taking a book away silently as the worst thing it can do.
+    const src = new Database(SANDBOX)
+    try {
+      src.prepare(`UPDATE Book SET canon=1 WHERE id='sbx-book-4-alt'`).run()
+      build()
+      expect(read(`SELECT id FROM Book WHERE id='sbx-book-4-alt'`)).toHaveLength(1)
+
+      src.prepare(`UPDATE Book SET canon=0 WHERE id='sbx-book-4-alt'`).run()
+      const res = build()
+      expect(read(`SELECT id FROM Book WHERE id='sbx-book-4-alt'`)).toHaveLength(0)
+      expect(res.warnings.join(' ')).toContain('Tidewater: Undertow')
+      expect(res.warnings.join(' ')).toContain('no longer see it')
+    } finally {
+      // Leave the fixture exactly as the seed script wrote it — these tests
+      // share one file and an order-dependent fixture is a flake waiting to
+      // happen.
+      src.prepare(`UPDATE Book SET canon=0 WHERE id='sbx-book-4-alt'`).run()
+      src.close()
+    }
+  })
+})
