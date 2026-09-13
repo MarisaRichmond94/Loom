@@ -49,6 +49,23 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'nonCanon must be a boolean' }, { status: 400 })
   }
 
+  // Cannot be marked canon inside a non-canon book (LOOM-149, under LOOM-146).
+  // Without this the POST-side rule is one toggle away from being undone, and
+  // the result — a tag claiming canon in a book the seam hides entirely — is
+  // invisible until the Timeline shows it as canon.
+  if (nonCanon === false) {
+    const chapterBook = await prisma.chapter.findUnique({
+      where: { id: chapterId },
+      select: { book: { select: { canon: true } } },
+    })
+    if (chapterBook?.book.canon === false) {
+      return NextResponse.json(
+        { error: 'This book is non-canon, so every tag in it is non-canon.' },
+        { status: 409 },
+      )
+    }
+  }
+
   const { count } = await prisma.chapterCharacter.updateMany({
     where: { chapterId, writerCharacterId },
     data: { nonCanon },

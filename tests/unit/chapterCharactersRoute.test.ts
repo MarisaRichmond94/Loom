@@ -53,3 +53,24 @@ describe('GET /api/chapter-characters excludes non-canon tags', () => {
     expect(where).toContain('nonCanon: false')
   })
 })
+
+// The book-level half of the same boundary (LOOM-149, under LOOM-146).
+//
+// A tag-level nonCanon flag says "this character appears here only down a
+// branch". It cannot say "this entire BOOK is an alternate timeline" — a
+// non-canon book's tags may be perfectly canon *within that branch* and still
+// must never cross, because WriteAI has never ingested the book they point at.
+//
+// Pinned at source level for the same reason as the rule above: the failure is
+// invisible from the response. WriteAI would render a chapter link into a book
+// it cannot open, and nothing would report it.
+describe('GET /api/chapter-characters excludes non-canon books', () => {
+  it('filters on the book\'s canon flag in the query', () => {
+    expect(routeSrc).toContain('book: { canon: true }')
+  })
+
+  it('filters in the DATABASE, not after the fact', () => {
+    const where = routeSrc.slice(routeSrc.indexOf('findMany'), routeSrc.indexOf('select:'))
+    expect(where).toContain('canon: true')
+  })
+})

@@ -126,8 +126,15 @@ async function statusForBook(
 export async function GET() {
   // Demo series are generated fixtures for the Explore page; they are never
   // exported and must not appear as perpetually-stale books in the log.
+  //
+  // Non-canon books are excluded for exactly the same reason (LOOM-149, under
+  // LOOM-146). They have no folder under the canon root and never will, so they
+  // would report `no-folder` on every run — a WARNING every night, for a book
+  // that is behaving perfectly. That is the precise failure this endpoint's
+  // header describes itself as existing to fix, and re-introducing it here
+  // would make the whole check mean nothing again.
   const books = await prisma.book.findMany({
-    where: { series: { demo: false } },
+    where: { series: { demo: false }, canon: true },
     select: { id: true, seriesId: true, title: true, order: true },
     orderBy: { order: 'asc' },
   })

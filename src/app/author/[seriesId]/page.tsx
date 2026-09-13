@@ -338,6 +338,40 @@ export default function AuthorSeriesPage() {
     publish.refresh()
   }
 
+  /**
+   * Canon membership (LOOM-148, under LOOM-146) — deliberately a SEPARATE
+   * control from the status above, because the two are independent. A canon
+   * book can be a draft; an alt book can be finished. Folding them into one
+   * four-option select would imply a book is either published or non-canon,
+   * which is not what either flag means.
+   *
+   * Turning a book non-canon withdraws it from the canon export, WriteAI and
+   * the reader tier. Going the other way is equally consequential, so both
+   * directions confirm rather than just the one.
+   */
+  async function setBookCanon(bookId: string, canon: boolean) {
+    const book = series.books.find(b => b.id === bookId)
+    const ok = canon
+      ? confirm(
+          `Make “${book?.title ?? 'this book'}” canon?\n\n` +
+            'It will start exporting to your manuscript folder and be ingested by ' +
+            'WriteAI as part of the real series.',
+        )
+      : confirm(
+          `Make “${book?.title ?? 'this book'}” non-canon?\n\n` +
+            'It stops exporting to your manuscript folder, WriteAI stops seeing it, ' +
+            'and it will not be sent to readers. Nothing you have written is deleted.',
+        )
+    if (!ok) return
+    await fetch(`/api/series/${seriesId}/books/${bookId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ canon }),
+    })
+    loadSeries()
+    publish.refresh()
+  }
+
   return (
     <>
       {/* Widened to match the book page (LOOM-105). This was the last page
@@ -545,6 +579,23 @@ export default function AuthorSeriesPage() {
                           <option value="inProgress">In progress</option>
                           <option value="published">Published</option>
                         </select>
+                        {/* Canon membership (LOOM-148). Shown ONLY on a
+                            non-canon book: canon is the overwhelming default,
+                            and a "Canon" chip on every one of five books would
+                            be five chips carrying no information. The way back
+                            is the same chip — it stays clickable. */}
+                        {!book.canon && (
+                          <button
+                            onClick={e => { e.stopPropagation(); setBookCanon(book.id, true) }}
+                            onMouseDown={e => e.stopPropagation()}
+                            title="Non-canon: an alternate timeline. Never exported to your manuscript folder, never ingested by WriteAI, never sent to readers. Click to make it canon."
+                            className="shrink-0 cursor-pointer rounded border border-dashed border-choice-kill-border
+                              bg-choice-kill-bg px-1.5 py-0.5 text-[10px] uppercase tracking-widest
+                              text-choice-kill transition hover:brightness-110"
+                          >
+                            Alt
+                          </button>
+                        )}
                         {/* Sits with the status chips rather than in the stats
                             grid below: those four are all "how much is here",
                             and this is not a size — it is something to fix. */}
@@ -628,6 +679,20 @@ export default function AuthorSeriesPage() {
                       >
                         <LuDatabaseBackup size={11} /> Backup
                       </a>
+                      {/* The way OUT of canon (LOOM-148). The way back in is
+                          the "Alt" chip beside the title, which only a
+                          non-canon book shows — so this button only offers the
+                          direction that is actually available, rather than
+                          being a toggle whose label you have to read twice. */}
+                      {book.canon && (
+                        <button
+                          onClick={() => void setBookCanon(book.id, false)}
+                          title="Mark this as an alternate timeline: it stops exporting to your manuscript folder, WriteAI stops seeing it, and it is never sent to readers. Nothing you have written is deleted."
+                          className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition"
+                        >
+                          Make non-canon
+                        </button>
+                      )}
                       <button
                         onClick={() => setDeleteTarget({ id: book.id, title: book.title })}
                         className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-choice-kill/40 text-choice-kill hover:opacity-80 transition"

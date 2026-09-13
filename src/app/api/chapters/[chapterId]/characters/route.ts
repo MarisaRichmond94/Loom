@@ -95,9 +95,26 @@ export async function POST(req: Request, { params }: Params) {
   // one silently vanishes from it.
   const nonCanon = (payload as { nonCanon?: unknown })?.nonCanon === true
 
+  // A tag in a NON-CANON BOOK is non-canon, whatever the caller asked for
+  // (LOOM-149, under LOOM-146).
+  //
+  // The default above reasons that a mistakenly canon tag is the safe error
+  // because it surfaces in WriteAI where it can be seen and fixed. Inside an
+  // alternate timeline that reasoning inverts: the seam filters the whole book
+  // out, so the tag can never surface anywhere — it would just sit in the
+  // database claiming to be canon, and the Timeline would read it as such.
+  //
+  // Forced here rather than defaulted in the tagging UI, so it holds for every
+  // caller including a replayed request or a future client.
+  const chapterBook = await prisma.chapter.findUnique({
+    where: { id: chapterId },
+    select: { book: { select: { canon: true } } },
+  })
+  const nonCanonEffective = nonCanon || chapterBook?.book.canon === false
+
   try {
     const tag = await prisma.chapterCharacter.create({
-      data: { chapterId, writerCharacterId: parsed.id, nonCanon },
+      data: { chapterId, writerCharacterId: parsed.id, nonCanon: nonCanonEffective },
       select: { writerCharacterId: true, createdAt: true, nonCanon: true },
     })
     return NextResponse.json({

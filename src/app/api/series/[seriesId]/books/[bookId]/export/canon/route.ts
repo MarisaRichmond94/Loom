@@ -61,6 +61,27 @@ export async function POST(req: Request, { params }: Params) {
   const data = await loadManuscriptBook(seriesId, bookId)
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  // A non-canon book never reaches the disk (LOOM-149, under LOOM-146).
+  //
+  // ⚠️ THIS GUARD, NOT A HIDDEN BUTTON. useCanonSave fires this endpoint on
+  // BLUR AUTOSAVE, not only on ⌥⇧E — so without a refusal here, simply editing
+  // an alternate-timeline chapter and clicking away writes that prose into
+  // ~/Writing, where WriteAI ingests it as canon on its next sync. Hiding the
+  // hotkey would leave the autosave path wide open.
+  //
+  // Refusing at the route is also what makes the rest of the seam true by
+  // construction: a book that never exports is never ingested, so it never
+  // reaches WriteAI's bibles, its timeline, or the outline store — no filtering
+  // required downstream, because the data never crosses.
+  if (!data.canon) {
+    return NextResponse.json(
+      {
+        error: `"${data.bookTitle}" is a non-canon book — it is deliberately never exported to your manuscript folder, so WriteAI never ingests it as canon.`,
+      },
+      { status: 409 },
+    )
+  }
+
   const body = await req.json().catch(() => ({})) as { format?: 'pages' | 'docx'; chapterId?: string }
   const format = body.format === 'docx' ? 'docx' : 'pages'
 

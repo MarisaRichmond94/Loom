@@ -12,7 +12,7 @@ type Chapter = {
   // without a separate per-book fetch.
   blocks: { wordCount: number; _count: { choices: number } }[]
 }
-type Book = { id: string; title: string; synopsis: string; order: number; published: boolean; inProgress: boolean; coverPath: string | null; chapters: Chapter[] }
+type Book = { id: string; title: string; synopsis: string; order: number; published: boolean; inProgress: boolean; canon: boolean; divergesFromBookId: string | null; coverPath: string | null; chapters: Chapter[] }
 type Variable = { id: string; name: string; type: string; defaultValue: string }
 export type AuthorSeries = {
   id: string

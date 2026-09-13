@@ -42,7 +42,7 @@ export async function GET(_: Request, { params }: Params) {
 
 export async function PATCH(req: Request, { params }: Params) {
   const { seriesId, bookId } = await params
-  const { title, order, synopsis, coverPath, published, inProgress } = await req.json()
+  const { title, order, synopsis, coverPath, published, inProgress, canon, divergesFromBookId } = await req.json()
   try {
     // A rename breaks every title-keyed consumer (canon-export folder
     // matching, WriteAI ingestion) until folders are renamed to match —
@@ -68,6 +68,8 @@ export async function PATCH(req: Request, { params }: Params) {
               ...(synopsis !== undefined && { synopsis }),
               ...(coverPath !== undefined && { coverPath }),
               ...(published !== undefined && { published }),
+              ...(canon !== undefined && { canon }),
+              ...(divergesFromBookId !== undefined && { divergesFromBookId }),
             },
           })
         })
@@ -79,6 +81,8 @@ export async function PATCH(req: Request, { params }: Params) {
             ...(synopsis !== undefined && { synopsis }),
             ...(coverPath !== undefined && { coverPath }),
             ...(published !== undefined && { published }),
+            ...(canon !== undefined && { canon }),
+            ...(divergesFromBookId !== undefined && { divergesFromBookId }),
             ...(inProgress === false && { inProgress: false }),
           },
         })
@@ -97,7 +101,22 @@ export async function PATCH(req: Request, { params }: Params) {
 export async function DELETE(_: Request, { params }: Params) {
   const { bookId } = await params
   try {
-    await prisma.book.delete({ where: { id: bookId } })
+    // `Book.divergesFromBookId` is a plain String, not a relation — adding a
+    // foreign key to Book would mean rebuilding a table that holds the whole
+    // manuscript (see the schema comment). So the SetNull an FK would have
+    // given us happens here, explicitly, in the same transaction as the delete.
+    //
+    // Without it, deleting a canon book leaves any alt book that branched off
+    // it pointing at nothing — which reads as "divergence unrecorded", and
+    // silently switches that book's character rules to their no-information
+    // answers. A visible cleanup beats an invisible dangling id.
+    await prisma.$transaction([
+      prisma.book.updateMany({
+        where: { divergesFromBookId: bookId },
+        data: { divergesFromBookId: null },
+      }),
+      prisma.book.delete({ where: { id: bookId } }),
+    ])
     return new NextResponse(null, { status: 204 })
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {

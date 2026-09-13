@@ -27,7 +27,17 @@ export async function GET(req: Request) {
     // with a character who appears solely behind a choice point. Filtering at
     // the seam rather than in WriteAI keeps that true by construction: the
     // non-canon story never crosses the app boundary at all.
-    where: { writerCharacterId: { in: ids }, nonCanon: false },
+    //
+    // The book-level half of the same rule (LOOM-149, under LOOM-146): a wholly
+    // non-canon book is an alternate timeline, so every tag inside it is
+    // non-canon whatever the per-tag flag says. Without this, WriteAI's
+    // Characters pane renders "also in Ch. 7" pointing into a book it has never
+    // ingested and cannot open.
+    where: {
+      writerCharacterId: { in: ids },
+      nonCanon: false,
+      chapter: { book: { canon: true } },
+    },
     select: {
       writerCharacterId: true,
       chapterId: true,

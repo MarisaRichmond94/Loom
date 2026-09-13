@@ -9,6 +9,15 @@ import type { ChapterInWalk, VariableIn } from './walk'
 export type ManuscriptBookData = {
   bookTitle: string
   seriesTitle: string
+  /**
+   * Series-level canon membership (LOOM-149, under LOOM-146).
+   *
+   * Returned here because every consumer of this loader is a canon consumer —
+   * the canon export, the export-status check, the cross-app chapter numbering
+   * — and each of them has to refuse or skip a non-canon book. Carrying the
+   * flag alongside the data means none of them needs a second query to find out.
+   */
+  canon: boolean
   chapters: ChapterInWalk[]
   variables: VariableIn[]
 }
@@ -42,6 +51,7 @@ export async function loadManuscriptBook(seriesId: string, bookId: string): Prom
   return {
     bookTitle: book.title,
     seriesTitle: series.title,
+    canon: book.canon,
     variables: series.variables,
     chapters: book.chapters.map(c => ({
       id: c.id,
