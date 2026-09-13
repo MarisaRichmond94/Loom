@@ -1,6 +1,8 @@
 import { resolveWriteaiBook } from '@/lib/writeaiBooks'
 import { callWriteAi, readJson } from '@/lib/writeaiProxy'
 import { isSafeOutlineCardId } from '@/lib/writerOutline'
+import { prisma } from '@/lib/prisma'
+import { localOutlineAddCard, localOutlineDeleteCard } from '../local'
 
 // Add and remove single outline cards (LOOM-95).
 //
@@ -42,9 +44,21 @@ async function bookNumber(req: Request) {
  * the whole-list PUT an omission here is genuinely "use the default" rather than
  * "erase what was there" — there is nothing there yet.
  */
+
+/**
+ * Non-canon books are served locally (LOOM-153, under LOOM-146) — see the note
+ * in ../local.ts. Checked before bookNumber(), which resolves a WriteAI book
+ * number that a never-ingested book does not have.
+ */
+async function localBookId(req: Request): Promise<string | null> {
+  const bookId = new URL(req.url).searchParams.get('bookId')
+  if (!bookId) return null
+  const book = await prisma.book.findUnique({ where: { id: bookId }, select: { canon: true } })
+  return book && !book.canon ? bookId : null
+}
+
 export async function POST(req: Request) {
-  const book = await bookNumber(req)
-  if ('response' in book) return book.response
+  const local = await localBookId(req)
 
   const parsed = await readJson(req)
   if ('response' in parsed) return parsed.response
@@ -57,6 +71,13 @@ export async function POST(req: Request) {
     body[key] === undefined || typeof body[key] === 'string'
   const badField = ['heading', 'pov', 'writer_summary'].find(k => !optionalString(k))
   if (badField) return Response.json({ error: `${badField} must be a string` }, { status: 400 })
+
+  // Dispatched AFTER the shape checks above, deliberately: the local path gets
+  // exactly the same validation rather than a second, drifting copy of it.
+  if (local) return localOutlineAddCard(local, body.position, (body.heading as string) ?? '')
+
+  const book = await bookNumber(req)
+  if ('response' in book) return book.response
 
   const result = await callWriteAi(`/api/plan/outline/${book.number}/chapter`, {
     method: 'POST',
@@ -83,13 +104,18 @@ export async function POST(req: Request) {
  * path, and an id that is not an id has no business being interpolated into one.
  */
 export async function DELETE(req: Request) {
-  const book = await bookNumber(req)
-  if ('response' in book) return book.response
+  const local = await localBookId(req)
 
   const cardId = new URL(req.url).searchParams.get('cardId')
+  // The same guard on both paths. The local ids are shaped to pass it rather
+  // than the guard being relaxed to admit them.
   if (!isSafeOutlineCardId(cardId)) {
     return Response.json({ error: 'a valid cardId is required' }, { status: 400 })
   }
+  if (local) return localOutlineDeleteCard(local, cardId)
+
+  const book = await bookNumber(req)
+  if ('response' in book) return book.response
 
   const result = await callWriteAi(
     `/api/plan/outline/${book.number}/chapter/${encodeURIComponent(cardId)}`,

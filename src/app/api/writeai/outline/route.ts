@@ -1,6 +1,8 @@
 import { resolveWriteaiBook } from '@/lib/writeaiBooks'
 import { callWriteAi, readJson } from '@/lib/writeaiProxy'
 import { validateOutlineCards } from '@/lib/writerOutline'
+import { prisma } from '@/lib/prisma'
+import { localOutlineResponse, localOutlineApply } from './local'
 
 // The book's plan outline, proxied read and write (LOOM-95).
 //
@@ -58,7 +60,27 @@ async function bookNumber(req: Request) {
  * the first time legitimately writes to WriteAI's store, which is worth knowing
  * before you read file mtimes while debugging something else.
  */
+
+/**
+ * Non-canon books take a different path entirely (LOOM-153, under LOOM-146).
+ *
+ * Checked BEFORE bookNumber(), which resolves a WriteAI book number — a book
+ * WriteAI has never ingested has none, so without this the Outline tab for an
+ * alt book renders the "not in WriteAI" empty state instead of a board.
+ *
+ * Returns the bookId when the request should be served locally, else null.
+ */
+async function localBookId(req: Request): Promise<string | null> {
+  const bookId = new URL(req.url).searchParams.get('bookId')
+  if (!bookId) return null
+  const book = await prisma.book.findUnique({ where: { id: bookId }, select: { canon: true } })
+  return book && !book.canon ? bookId : null
+}
+
 export async function GET(req: Request) {
+  const local = await localBookId(req)
+  if (local) return localOutlineResponse(local)
+
   const book = await bookNumber(req)
   if ('response' in book) return book.response
 
@@ -84,6 +106,22 @@ export async function GET(req: Request) {
  * accepted-risk note above.
  */
 export async function PUT(req: Request) {
+  // The local store writes only what changed, so it does not need — and must
+  // NOT apply — validateOutlineCards' completeness rules. Those exist purely
+  // because WriteAI's PUT deletes any field missing from the body; nothing on
+  // this path does, and running them here would reject a legitimate partial
+  // edit for failing to carry fields that have no local meaning.
+  const local = await localBookId(req)
+  if (local) {
+    const parsedLocal = await readJson(req)
+    if ('response' in parsedLocal) return parsedLocal.response
+    const body = parsedLocal.body as { chapters?: unknown }
+    if (!Array.isArray(body?.chapters)) {
+      return Response.json({ error: 'chapters must be an array' }, { status: 400 })
+    }
+    return localOutlineApply(local, body.chapters as Parameters<typeof localOutlineApply>[1])
+  }
+
   const book = await bookNumber(req)
   if ('response' in book) return book.response
 

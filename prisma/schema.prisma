@@ -272,6 +272,8 @@ model Book {
   // Inverse of StoryVariable.originBook — set when this book is the
   // origin for a variable.
   originatingVariables         StoryVariable[]
+  // Planned outline cards, for a non-canon book only (LOOM-153).
+  outlinePlaceholders          BookOutlinePlaceholder[]
 
   @@index([seriesId, order])
 }
@@ -324,6 +326,48 @@ model ChapterSummary {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+}
+
+// A planned outline card with no chapter behind it yet, for a NON-CANON book
+// (LOOM-153, under LOOM-146).
+//
+// Canon books get their outline from WriteAI's `plan_outline.json`, proxied and
+// keyed by Loom's book cuid. A non-canon book is never exported, so never
+// ingested, so `resolveWriteaiBook` returns "unknown book" and there is no
+// store on that side to hold anything. WriteAI must NOT be made to hold it
+// either — it holds canon only.
+//
+// ⚠️ THIS TABLE HOLDS PLACEHOLDERS ONLY, not the whole outline.
+//
+// A non-canon book's outline is DERIVED at read time: one card per chapter,
+// from the chapter itself, with its summary coming from ChapterSummary — the
+// table LOOM-120 added for exactly this case, "a chapter WriteAI cannot
+// describe". Deriving rather than seeding is what keeps the Outline tab a pure
+// read. Seeding cards on GET is what WriteAI's own `get_outline` does, and the
+// three "opened but not used must not write" guards (LOOM-91..97) exist because
+// that behaviour crossed into Loom once already.
+//
+// So the only thing with nowhere else to live is a card for a chapter that does
+// not exist yet — a plan for prose unwritten. That is this table, and nothing
+// more. Anything here that could be derived from a chapter is a bug.
+model BookOutlinePlaceholder {
+  id        String   @id @default(cuid())
+  bookId    String
+  // Fractional on purpose: a card added between positions 3 and 4 is 3.5, and
+  // sorts into place among the derived chapter cards without renumbering them.
+  // Chapter-backed cards take their position from the chapter's own order, so
+  // there is no shared sequence to keep consistent.
+  position  Float
+  heading   String   @default("")
+  pov       String   @default("")
+  date      String?
+  summary   String   @default("")
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([bookId, position])
 }
 
 // The writer's private scratchpad for one chapter — continuity reminders,
