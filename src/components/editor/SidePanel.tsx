@@ -1,9 +1,8 @@
 'use client'
 
 import { useRef, useState, type ReactNode } from 'react'
-import { LuCalendarDays, LuLightbulb, LuMessageSquare, LuPin, LuScanText, LuUsers, LuX } from 'react-icons/lu'
+import { LuCalendarDays, LuLightbulb, LuMessageSquare, LuScanText, LuUsers, LuX } from 'react-icons/lu'
 import { PiNotebookThin } from 'react-icons/pi'
-import { ReferenceList, type PinnedText } from './ReferencePanel'
 import NotesPanel from './NotesPanel'
 import ReviewPanel, { type ReviewSession } from './ReviewPanel'
 import type { ReviewRunner } from './useReviewRunner'
@@ -20,14 +19,14 @@ import type { TaggedCharacter } from './useChapterCharacters'
 import type { ChapterInsights, InsightsReason } from './useChapterInsights'
 import type { CommentsResult } from '@/lib/readerComments'
 
-export type PanelTab = 'notes' | 'refs' | 'review' | 'events' | 'characters' | 'insights' | 'comments'
+export type PanelTab = 'notes' | 'review' | 'events' | 'characters' | 'insights' | 'comments'
 
 const MIN_WIDTH = 280
 
 /** How many tabs the strip renders. Kept beside the tab list rather than
  *  derived from it, because the label-fit calculation needs it before the
  *  buttons are built. Bump when a tab is added. */
-const TAB_COUNT = 7
+const TAB_COUNT = 6
 
 /** Review needs materially more room than notes — it is a document, not a
  *  margin. A third of the viewport is the floor below which it stops being
@@ -41,21 +40,18 @@ export function minWidthForTab(tab: PanelTab, viewport: number): number {
 }
 
 /**
- * The right-hand dock: the chapter's review, its notes, and pinned reference
- * snapshots. Docked rather than overlaid — it's a flex sibling of the writing
- * column, which shrinks to make room.
+ * The right-hand dock: the chapter's review, its story data, and its notes.
+ * Docked rather than overlaid — it's a flex sibling of the writing column,
+ * which shrinks to make room.
  *
- * The three tabs have deliberately different lifetimes: a review is stored in
- * WriteAI, notes are stored per chapter, pins are in-memory and vanish with the
- * chapter. That difference is what each tab's empty state explains — it is not
- * a reason to hide any of them. Pins used to appear only once something was
- * pinned, which left the way to discover pinning to be already doing it.
+ * The tabs have deliberately different lifetimes: a review is stored in
+ * WriteAI, notes are stored per chapter, events/characters/insights are read
+ * across from WriteAI. That difference is what each tab's empty state
+ * explains — it is not a reason to hide any of them.
  */
 export default function SidePanel({
   tab,
   onTabChange,
-  pins,
-  onClearPins,
   notes,
   onNotesChange,
   notesSaving,
@@ -74,8 +70,6 @@ export default function SidePanel({
 }: {
   tab: PanelTab
   onTabChange: (tab: PanelTab) => void
-  pins: PinnedText[]
-  onClearPins: () => void
   notes: string
   onNotesChange: (value: string) => void
   notesSaving: boolean
@@ -162,11 +156,10 @@ export default function SidePanel({
   }
 
   // Labelled where there is room, icon-only where there is not (LOOM-41).
-  // Three destinations is past the point where icons alone are guessable — a
-  // pin and a notebook read as the same kind of thing until you have opened
-  // both — so labels are dropped reluctantly, only once the dock is too narrow
-  // to show them without wrapping. aria-label and title carry the name either
-  // way; collapsing costs the always-on hint, not the affordance.
+  // Three destinations is past the point where icons alone are guessable, so
+  // labels are dropped reluctantly, only once the dock is too narrow to show
+  // them without wrapping. aria-label and title carry the name either way;
+  // collapsing costs the always-on hint, not the affordance.
   //
   // Comments can be switched off in settings (LOOM-138) — the fit math has to
   // count only what actually renders, or a dock with Comments hidden would
@@ -224,8 +217,6 @@ export default function SidePanel({
     )
   }
 
-  const hasPins = pins.length > 0
-
   return (
     <aside
       style={{ width }}
@@ -265,14 +256,11 @@ export default function SidePanel({
           behind. Two nested scrollers made that easy to hit. */}
       <div className="sticky top-0 h-[calc(100vh-3.75rem-var(--loom-footer-h,0px))] overflow-y-auto overscroll-contain flex flex-col">
         <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-3 border-b border-accent/10 shrink-0 bg-surface-raised">
-          {/* All six or seven, always, in the order they are reached for: the
+          {/* All five or six, always, in the order they are reached for: the
               review is the reason the panel is usually open, events, characters
               and insights sit beside it because all four answer "what is this
               chapter" — and beside each other because they are the same kind of
-              cross-app story data, notes are constant
-              company, pins are occasional. Pins used to appear only when
-              something was pinned, which meant the way to discover pinning was
-              to already be doing it.
+              cross-app story data, notes are constant company.
               Insights sits last of the four because it is the only one that is
               read-only: the other three are things you do to a chapter, this is
               something the chapter tells you.
@@ -289,7 +277,6 @@ export default function SidePanel({
             {tabButton('characters', <LuUsers size={13} />, 'Characters', characters.count)}
             {tabButton('insights', <LuLightbulb size={13} />, 'Insights')}
             {tabButton('notes', <PiNotebookThin size={14} />, 'Notes')}
-            {tabButton('refs', <LuPin size={12} />, 'Pins')}
             {/* Comments: a thing the chapter tells you from outside, rather
                 than something you do to it. The badge counts UNRESOLVED and
                 unhidden — a resolved comment is done with, and a hidden one
@@ -306,15 +293,6 @@ export default function SidePanel({
             {tab === 'notes' && notesSaving && (
               <span className="text-[10px] text-ink-faint italic">Saving…</span>
             )}
-            {tab === 'refs' && hasPins && (
-              <button
-                onClick={onClearPins}
-                title="Remove every pinned snapshot"
-                className="text-[10px] uppercase tracking-widest text-ink-faint hover:text-ink transition"
-              >
-                Clear all
-              </button>
-            )}
             <button
               onClick={onClose}
               title="Close panel"
@@ -326,19 +304,17 @@ export default function SidePanel({
           </div>
         </div>
 
-        {tab === 'refs'
-          ? <ReferenceList pins={pins} />
-          : tab === 'review'
-            ? <ReviewPanel data={review} loading={reviewLoading} {...reviewCtx} />
-            : tab === 'events'
-              ? <EventsPanel {...events} bookId={reviewCtx.bookId} seriesId={reviewCtx.seriesId} />
-              : tab === 'characters'
-                ? <CharactersPanel {...characters} bookId={reviewCtx.bookId} pov={chapterPov} />
-                : tab === 'insights'
-                  ? <InsightsPanel {...insights} />
-                  : tab === 'comments'
-                    ? <CommentsPanel {...comments} />
-                    : <NotesPanel value={notes} onChange={onNotesChange} />}
+        {tab === 'review'
+          ? <ReviewPanel data={review} loading={reviewLoading} {...reviewCtx} />
+          : tab === 'events'
+            ? <EventsPanel {...events} bookId={reviewCtx.bookId} seriesId={reviewCtx.seriesId} />
+            : tab === 'characters'
+              ? <CharactersPanel {...characters} bookId={reviewCtx.bookId} pov={chapterPov} />
+              : tab === 'insights'
+                ? <InsightsPanel {...insights} />
+                : tab === 'comments'
+                  ? <CommentsPanel {...comments} />
+                  : <NotesPanel value={notes} onChange={onNotesChange} />}
       </div>
     </aside>
   )

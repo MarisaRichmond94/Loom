@@ -12,7 +12,7 @@ describe('tabsFitLabelled', () => {
   })
 
   it('drops labels for four tabs at the dock floor', () => {
-    // This is the case that forced the ticket: Reviews / Events / Notes / Pins.
+    // This is the case that forced the ticket: Reviews / Events / Characters / Notes.
     expect(tabsFitLabelled(MIN_WIDTH, 4)).toBe(false)
   })
 

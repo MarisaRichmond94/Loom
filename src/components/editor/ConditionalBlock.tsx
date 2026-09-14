@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { LuSplit, LuX, LuPin } from 'react-icons/lu'
+import { LuSplit, LuX } from 'react-icons/lu'
 import TextBlock from './TextBlock'
 import { ConditionRow, parseCondition } from './conditionUI'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -24,7 +24,6 @@ type Props = {
   // Registers each override's prose editor for search jump/replace, keyed by
   // override id (null on unmount).
   onEditorReady?: (overrideId: string, editor: Editor | null) => void
-  onPinText?: (content: string) => void
   onAddOverride: (condition: Record<string, unknown>, content: string) => void
   onUpdateOverride: (overrideId: string, data: Partial<Override>) => void
   onDeleteOverride: (overrideId: string) => void
@@ -39,7 +38,7 @@ type Props = {
 
 const EMPTY = '{"type":"doc","content":[{"type":"paragraph"}]}'
 
-export default function ConditionalBlock({ overrides, variables, characters, lensActive, activeOverrideId, searchQuery, searchOptions, highlightFilterWords, onEditorReady, onPinText, onAddOverride, onUpdateOverride, onDeleteOverride, isNew = false, autoOpenOverrideId = null }: Props) {
+export default function ConditionalBlock({ overrides, variables, characters, lensActive, activeOverrideId, searchQuery, searchOptions, highlightFilterWords, onEditorReady, onAddOverride, onUpdateOverride, onDeleteOverride, isNew = false, autoOpenOverrideId = null }: Props) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const autoAddedRef = useRef(false)
 
@@ -100,15 +99,6 @@ export default function ConditionalBlock({ overrides, variables, characters, len
                   autoOpenMenu={override.id === autoOpenOverrideId}
                 />
               </div>
-              {onPinText && (
-                <button
-                  onClick={() => onPinText(override.content)}
-                  className="text-ink-faint hover:text-accent transition shrink-0 mt-1"
-                  title="Pin to reference panel"
-                >
-                  <LuPin size={13} />
-                </button>
-              )}
               <button
                 onClick={() => setPendingDeleteId(override.id)}
                 className="text-ink-faint hover:text-choice-kill transition shrink-0 mt-1"

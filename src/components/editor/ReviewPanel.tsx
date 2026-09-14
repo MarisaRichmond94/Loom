@@ -541,8 +541,7 @@ export default function ReviewPanel({
           // back into the chapter. It sits on the scroller, not on each
           // message, so a drag can run across turns: mixing user-select:none
           // wrappers between selectable islands makes selection jump siblings
-          // in Chromium/WebKit (same reason it lives on the pin stack root in
-          // ReferencePanel).
+          // in Chromium/WebKit.
           className="flex-1 flex flex-col overflow-y-auto overscroll-contain px-4 py-3 reader-selectable"
           // Turn OFF the browser's scroll anchoring for this scroller.
           //

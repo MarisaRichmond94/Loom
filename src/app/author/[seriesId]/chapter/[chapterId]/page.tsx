@@ -10,7 +10,6 @@ import BlockEditor from '@/components/editor/BlockEditor'
 import SidePanel, { minWidthForTab, type PanelTab } from '@/components/editor/SidePanel'
 import { useChapterReview } from '@/components/editor/ReviewPanel'
 import { useReviewRunner } from '@/components/editor/useReviewRunner'
-import { type PinnedText } from '@/components/editor/ReferencePanel'
 import { useChapterNotes } from '@/components/editor/useChapterNotes'
 import { useChapterEvents } from '@/components/editor/useChapterEvents'
 import { useChapterCharacters } from '@/components/editor/useChapterCharacters'
@@ -118,7 +117,7 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
 // ⌥⇧< / ⌥⇧> step through (LOOM-56). Comments trails the rest (LOOM-138): it's
 // the one tab a writer can switch off in settings, so it lives where its
 // absence doesn't reflow the others.
-const PANEL_TAB_ORDER: PanelTab[] = ['review', 'events', 'characters', 'insights', 'notes', 'refs', 'comments']
+const PANEL_TAB_ORDER: PanelTab[] = ['review', 'events', 'characters', 'insights', 'notes', 'comments']
 
 // Bridges SoundtrackBlockRegistryProvider's context out to the page's own
 // document-level keydown handler, which can't call useSoundtrackBlockRegistry
@@ -182,15 +181,10 @@ export default function ChapterEditorPage() {
   const [showPathConfig, setShowPathConfig] = useState(false)
   const [showIfTooltip, setShowIfTooltip] = useState(false)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
-  // Frozen prose snapshots pinned to the right-hand reference panel. In-memory
-  // only — pinning captures the text as it is now so later edits don't shift it.
-  const [pins, setPins] = useState<PinnedText[]>([])
   // Side-panel width, adjustable via its drag handle. Lifted here so the
   // toast layer and the footer can offset by it and stay over the writing column.
   const [panelWidth, setPanelWidth] = useState(360)
-  // The right-hand dock. Open state is explicit (and persisted) rather than
-  // derived from the pin count, because notes live here too and always exist —
-  // an empty pin list no longer means "nothing to show".
+  // The right-hand dock. Open state is explicit and persisted.
   const [panelOpen, setPanelOpen] = useState(false)
   const [panelTab, setPanelTab] = useState<PanelTab>('notes')
   // Comments tab visibility (LOOM-138) — a settings toggle, not per-chapter
@@ -347,11 +341,6 @@ export default function ChapterEditorPage() {
   const cyclePanelTabRef = useRef(cyclePanelTab)
   cyclePanelTabRef.current = cyclePanelTab
 
-  // Pins is a permanent tab with its own empty state now, so clearing every pin
-  // leaves you looking at that rather than at a tab which no longer exists.
-  // There was an effect here forcing the panel back to notes whenever the pins
-  // ran out — with the tab now always present that would fight the writer,
-  // ejecting her the moment she opened an empty Pins tab.
   // Lifted from BlockEditor so the date-row toggle can flip every block at
   // once. Resets to empty on chapter switch (chapterId is in the dep list
   // below), matching the "all uncollapsed on initial load" rule.
@@ -1088,15 +1077,6 @@ export default function ChapterEditorPage() {
     } catch { return '' }
   }
 
-  function handlePinText(content: string) {
-    // content is already the freshest per-keystroke prose JSON from the
-    // originating text/override/choice; freeze it as its own reference card.
-    setPins(prev => [...prev, { pinId: crypto.randomUUID(), content }])
-    // Pinning is explicit intent to look at the thing, so it always reveals the
-    // panel and claims the tab — even over notes the writer was mid-sentence in.
-    openPanel('refs')
-  }
-
   /**
    * The chapter's rendered story text for the active path.
    *
@@ -1799,7 +1779,6 @@ export default function ChapterEditorPage() {
           scrollToCursorRef={scrollToCursorRef}
           currentBlocksRef={currentBlocksRef}
           onTextBlockBlur={handleTextBlockBlur}
-          onPinText={handlePinText}
         />
         </SoundtrackBlockRegistryProvider>
         </div>
@@ -1961,8 +1940,6 @@ export default function ChapterEditorPage() {
       <SidePanel
         tab={panelTab}
         onTabChange={openPanel}
-        pins={pins}
-        onClearPins={() => setPins([])}
         notes={notes}
         onNotesChange={setNotes}
         notesSaving={notesSaving}
