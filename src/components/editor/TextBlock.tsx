@@ -258,7 +258,14 @@ function stickyInsets() {
   }
   return { top: px('--loom-chapter-header-h'), bottom: px('--loom-footer-h') }
 }
-function keepCaretInView(editor: { view: { coordsAtPos: (pos: number) => { top: number; bottom: number }; dom: HTMLElement; hasFocus: () => boolean }; state: { selection: { head: number } } }) {
+function keepCaretInView(editor: { view: { coordsAtPos: (pos: number) => { top: number; bottom: number }; dom: HTMLElement; hasFocus: () => boolean }; state: { selection: { head: number; empty: boolean } } }) {
+  // Never chase a *range* selection. onSelectionUpdate fires on every frame
+  // of a drag-highlight, where the browser is already auto-scrolling the
+  // container itself — and scrolling under a stationary pointer moves the
+  // text the pointer is hit-testing against, which extends the selection,
+  // which fires us again. That feedback loop is what makes highlighting
+  // near the top/bottom of the page scroll away uncontrollably.
+  if (!editor.state.selection.empty) return
   // Only chase the caret while the writer is actually editing this block.
   // onUpdate/onSelectionUpdate also fire when a block's content is set
   // programmatically on mount (every editor re-applies its stored JSON,
@@ -270,6 +277,9 @@ function keepCaretInView(editor: { view: { coordsAtPos: (pos: number) => { top: 
   // coordsAtPos returns the pre-update caret position and we under-scroll.
   requestAnimationFrame(() => {
     if (!editor.view.hasFocus()) return
+    // Re-check after the frame: a drag-highlight can have grown into a range
+    // between the event and this callback.
+    if (!editor.state.selection.empty) return
     const caret = editor.view.coordsAtPos(editor.state.selection.head)
     // Find the nearest scrolling ancestor by overflow alone; don't require
     // it to be actively overflowing at this instant — it's the container
