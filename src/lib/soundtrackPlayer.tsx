@@ -434,22 +434,20 @@ export function SoundtrackPlayerProvider({
     a.play().catch(() => {})
   }, [])
 
-  // Media-player convention: previous restarts the current track on the
-  // first press; a second press within 1s (an intentional double-tap, not
-  // two separate "start over" clicks) skips back to the prior track
-  // instead. On the first track (no wrap, loop off) there's nowhere to
-  // skip back to, so it just keeps restarting — this is also what fixes
-  // the old "wonky" state, where advance(-1) silently stopped playback
-  // instead of doing anything visible.
-  const lastPreviousAtRef = useRef(0)
+  // Media-player convention, position-based: within the first 2s of a track
+  // "back" means "I picked the wrong song" and skips to the prior track;
+  // past 2s it means "start this one over" and restarts it. On the first
+  // track (no wrap, loop off) there's nowhere to skip back to, so it just
+  // restarts — this is also what fixes the old "wonky" state, where
+  // advance(-1) silently stopped playback instead of doing anything visible.
+  const PREVIOUS_RESTART_AFTER_SECONDS = 2
   const runPrevious = useCallback(() => {
-    const now = Date.now()
-    const isDoubleTap = now - lastPreviousAtRef.current < 1000
-    lastPreviousAtRef.current = now
+    const a = audioRef.current
+    const atStart = !a || a.currentTime < PREVIOUS_RESTART_AFTER_SECONDS
     const seq = order()
     const idx = currentId ? seq.indexOf(currentId) : -1
     const hasPriorTrack = idx > 0 || (idx === 0 && loopMode === 'all' && seq.length > 1)
-    if (isDoubleTap && hasPriorTrack) {
+    if (atStart && hasPriorTrack) {
       advance(-1)
     } else {
       replayCurrent()
