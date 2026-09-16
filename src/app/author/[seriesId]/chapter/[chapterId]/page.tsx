@@ -3,8 +3,10 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers, LuLightbulb, LuChartNoAxesColumn, LuSlidersHorizontal, LuEye, LuEyeOff, LuTrash2 } from 'react-icons/lu'
+import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers, LuLightbulb, LuChartNoAxesColumn, LuSlidersHorizontal, LuEye, LuEyeOff, LuTrash2, LuTextSelect } from 'react-icons/lu'
 import { computeChapterStats } from '@/lib/chapterStats'
+import { countWords } from '@/lib/seriesStats'
+import { useSelectionWordCount, formatSelectionPercent } from '@/components/editor/useSelectionWordCount'
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
 import SidePanel, { minWidthForTab, type PanelTab } from '@/components/editor/SidePanel'
@@ -473,6 +475,9 @@ export default function ChapterEditorPage() {
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const footerRef = useRef<HTMLElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
+  // Wraps the block column. Scopes the selection word count (below) to prose:
+  // a highlight in the reference panel or the title field isn't a scene.
+  const proseRootRef = useRef<HTMLDivElement>(null)
 
   // Publish the sticky chapter header's height as --loom-chapter-header-h.
   // Every scrollIntoView in the editor (new block, deep link, jump to match,
@@ -1136,6 +1141,13 @@ export default function ChapterEditorPage() {
   // re-rendered on every keystroke.
   const buildCanonTextRef = useRef(buildCanonText)
   buildCanonTextRef.current = buildCanonText
+
+  // Live word count for the current highlight (and what share of the chapter
+  // it is), shown over the footer while a selection is up. The denominator is
+  // buildCanonText() so it matches the "N words" the stats button already
+  // shows for the active path.
+  const selectionStats = useSelectionWordCount(proseRootRef, () => countWords(buildCanonTextRef.current()))
+
   copyCanonTextRef.current = copyCanonText
 
   async function handleDeleteChapter() {
@@ -1750,7 +1762,7 @@ export default function ChapterEditorPage() {
             from the right edge of the page than the left. Pulling the rows out
             over the column's right padding lands the card edges symmetrically
             inside px-8 — the space the floating add button used to justify. */}
-        <div className="-mr-[23px]">
+        <div ref={proseRootRef} className="-mr-[23px]">
         <SoundtrackBlockRegistryProvider>
         <SoundtrackHotkeyBridge toggleRef={toggleSoundtrackRef} />
         <BlockEditor
@@ -1803,8 +1815,32 @@ export default function ChapterEditorPage() {
           // ends at the footer's top, so the buttons never collide with it.
           marginRight: panelOpen ? `calc(-2rem - ${panelWidth}px)` : undefined,
         } as React.CSSProperties}
-        className="chrome-dark sticky bottom-0 z-40 -mx-8 px-4 py-4 bg-surface-raised border-t border-accent/10 flex items-center justify-between gap-4"
+        className="chrome-dark sticky bottom-0 z-40 -mx-8 px-4 py-4 bg-surface-raised border-t border-accent/10 flex items-center justify-between gap-4 relative"
       >
+        {/* Selection word count. Parked just above the footer rather than
+            floating by the selection: the mark menu already owns that spot,
+            and a readout that jumps around with every drag is harder to read
+            than one that always appears in the same place. pointer-events-none
+            so it can never intercept a click meant for the prose under it. */}
+        {selectionStats && (
+          <div
+            aria-live="polite"
+            title={`${selectionStats.words.toLocaleString()} of ${selectionStats.totalWords.toLocaleString()} words in this chapter on the active path`}
+            className="pointer-events-none absolute bottom-full left-1/2 mb-3 -translate-x-1/2 flex items-center gap-1.5 whitespace-nowrap rounded-full border border-accent/25 bg-surface-raised px-3 py-1.5 text-xs shadow-xl"
+          >
+            <LuTextSelect size={12} className="text-accent shrink-0" />
+            <span className="font-semibold tabular-nums text-ink">{selectionStats.words.toLocaleString()}</span>
+            <span className="text-ink-muted">{selectionStats.words === 1 ? 'word' : 'words'}</span>
+            {selectionStats.percent !== null && (
+              <>
+                <span aria-hidden className="mx-0.5 h-1 w-1 shrink-0 rounded-full bg-accent/50" />
+                <span className="font-semibold tabular-nums text-accent">{formatSelectionPercent(selectionStats.percent)}%</span>
+                <span className="text-ink-muted">of chapter</span>
+              </>
+            )}
+          </div>
+        )}
+
         {prevChapter ? (
           <button
             onClick={() => router.push(`/author/${seriesId}/chapter/${prevChapter.id}`)}
