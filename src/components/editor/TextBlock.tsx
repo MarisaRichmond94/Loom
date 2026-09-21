@@ -56,6 +56,13 @@ const SectionBreak = Extension.create({
 
 type ReadAloudVariable = { name: string; type: string; defaultValue?: string | null }
 
+// Which block's editor started the speech that is currently playing.
+// speechSynthesis is a window singleton, so a block tearing down has to know
+// whether the voice it is about to cancel is actually its own: collapsing any
+// *other* block unmounts that block's TextBlock, and an unconditional cancel
+// there silenced a read in progress somewhere else on the page.
+let speakingEditor: unknown = null
+
 const ReadAloud = Extension.create<{ getVariables: () => ReadAloudVariable[] }>({
   name: 'readAloud',
   addOptions() {
@@ -67,7 +74,8 @@ const ReadAloud = Extension.create<{ getVariables: () => ReadAloudVariable[] }>(
       'Alt-Shift-r': ({ editor }) => {
         if (!window.speechSynthesis) return false
         if (window.speechSynthesis.speaking) {
-          // cancel() fires the utterance's onend, which clears the highlight.
+          // cancel() fires the utterance's onend, which clears the highlight
+          // and releases ownership.
           window.speechSynthesis.cancel()
           return true
         }
@@ -121,12 +129,14 @@ const ReadAloud = Extension.create<{ getVariables: () => ReadAloudVariable[] }>(
           const to = mapping.map(range.to, 1)
           if (to > from) setRange({ from, to })
         }
-        utterance.onend = () => { stopTracking(); setRange(null) }
-        utterance.onerror = () => { stopTracking(); setRange(null) }
+        const release = () => { if (speakingEditor === editor) speakingEditor = null }
+        utterance.onend = () => { release(); stopTracking(); setRange(null) }
+        utterance.onerror = () => { release(); stopTracking(); setRange(null) }
 
         // Safari and friends may never fire a word boundary. Speech still
         // works; the highlight simply never appears, which is the intended
         // degradation rather than a broken read-aloud.
+        speakingEditor = editor
         window.speechSynthesis.speak(utterance)
         return true
       },
@@ -390,9 +400,15 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
   // deleting the block, or the chapter re-rendering. speechSynthesis is a
   // singleton owned by the window, so without this the voice keeps reading a
   // block that is no longer on screen, and its onend fires against a
-  // destroyed editor.
+  // destroyed editor. Only the block that *started* the read cancels it,
+  // though: every collapse unmounts some other block's TextBlock, and those
+  // must leave an unrelated read alone.
+  const editorRef = useRef(editor)
+  editorRef.current = editor
   useEffect(() => {
     return () => {
+      if (speakingEditor !== editorRef.current) return
+      speakingEditor = null
       if (typeof window !== 'undefined' && window.speechSynthesis?.speaking) {
         window.speechSynthesis.cancel()
       }
