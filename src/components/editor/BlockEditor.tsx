@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useState, useEffect, useMemo, useRef } from 'react'
+import { memo, useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { Editor } from '@tiptap/core'
 import { useSearchParams } from 'next/navigation'
 import { affectsReachability, notifyReachabilityChanged } from '@/lib/reachabilitySync'
@@ -424,12 +424,34 @@ export default function BlockEditor({ chapterId, blocks: initialBlocks, variable
   // Per-block collapsed state is controlled by the parent so the chapter
   // page's expand-all / collapse-all toggle and the per-block chevron
   // operate on the same source of truth.
+  // Set by toggleCollapsed, consumed by the layout effect below.
+  const collapseAnchorRef = useRef<string | null>(null)
   function toggleCollapsed(id: string) {
+    collapseAnchorRef.current = id
     const next = new Set(collapsedIds)
     if (next.has(id)) next.delete(id)
     else next.add(id)
     onCollapsedIdsChange(next)
   }
+  // Collapsing a block removes its whole height at once, and the block's
+  // chrome (chevron, handle) is sticky — so the usual case is collapsing a
+  // long block from somewhere in its *middle*, with thousands of pixels of
+  // it above the viewport. The scroller keeps its scrollTop, so all of that
+  // vanishing height drags the rest of the chapter up past the writer: they
+  // end up somewhere much further down than where they were looking.
+  // Re-anchor on the block that was toggled. `nearest` is deliberate: it
+  // does nothing while the block is already fully in view (collapsing
+  // something below you moves nothing above you), and only pulls the view
+  // back when the block's top has scrolled off — landing it below the
+  // sticky header via [data-block-id]'s scroll-margin-top. Layout effect, so
+  // it runs against the post-collapse layout, before the browser paints.
+  useLayoutEffect(() => {
+    const id = collapseAnchorRef.current
+    collapseAnchorRef.current = null
+    if (!id) return
+    const el = blocksContainerRef.current?.querySelector(`[data-block-id="${window.CSS.escape(id)}"]`)
+    el?.scrollIntoView({ block: 'nearest' })
+  }, [collapsedIds])
   // Pending block-delete confirmation. Storing the whole block (not just
   // the id) keeps the modal's summary text stable even if the underlying
   // list reshuffles during the confirm round-trip.
