@@ -1,12 +1,13 @@
 'use client'
 
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import React, { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers, LuLightbulb, LuChartNoAxesColumn, LuSlidersHorizontal, LuEye, LuEyeOff, LuTrash2, LuTextSelect } from 'react-icons/lu'
 import { computeChapterStats } from '@/lib/chapterStats'
 import { countWords } from '@/lib/seriesStats'
 import { useSelectionWordCount, formatSelectionPercent } from '@/components/editor/useSelectionWordCount'
+import { computeContentProgress, holdsReadingLine, type BlockMetric } from '@/components/editor/contentScrollProgress'
 import { PiCopySimpleThin, PiNotebookThin } from 'react-icons/pi'
 import BlockEditor from '@/components/editor/BlockEditor'
 import SidePanel, { minWidthForTab, type PanelTab } from '@/components/editor/SidePanel'
@@ -348,6 +349,10 @@ export default function ChapterEditorPage() {
   // below), matching the "all uncollapsed on initial load" rule.
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
   useEffect(() => { setCollapsedIds(new Set()) }, [chapterId])
+  // Read by the progress-bar measurement, which must not be re-created (and
+  // so re-subscribe the scroll listener) every time a block folds.
+  const collapsedIdsRef = useRef(collapsedIds)
+  collapsedIdsRef.current = collapsedIds
   // ⌥⇧9 — mirrors the collapse-all button: collapse everything, or expand
   // everything if any block is already collapsed.
   function toggleCollapseAll() {
@@ -402,17 +407,101 @@ export default function ChapterEditorPage() {
     scrollProgressRef.current = p
     if (progressFillRef.current) progressFillRef.current.style.width = `${p * 100}%`
   }
+  // Last height each block had while expanded, so a collapsed block can go
+  // on contributing its real size to the bar (see contentScrollProgress.ts).
+  const expandedHeightsRef = useRef<Map<string, number>>(new Map())
+  // How far into a block the writer had read at the moment they collapsed it.
+  const passedFractionsRef = useRef<Map<string, number>>(new Map())
+  // The measurement behind the current bar reading, kept so that when a block
+  // folds we can still see where the writer was inside it.
+  const lastMeasureRef = useRef<{ line: number; blocks: Map<string, BlockMetric> } | null>(null)
+  // Collapsed set as of the last measurement, to spot what just folded.
+  const measuredCollapsedRef = useRef<Set<string>>(new Set())
+  // [data-block-id]'s scroll-margin-top (globals.css), which is both the
+  // offset scrollIntoView lands a block at and the line we read progress off.
+  // Nulled on chapter change and on every collapse so a resized sticky header
+  // is picked up. All of these are chapter-local, so all reset together.
+  const blockScrollMarginRef = useRef<number | null>(null)
+  useEffect(() => {
+    expandedHeightsRef.current = new Map()
+    passedFractionsRef.current = new Map()
+    lastMeasureRef.current = null
+    measuredCollapsedRef.current = new Set()
+    blockScrollMarginRef.current = null
+  }, [chapterId])
+  // Measures every block, refreshing the expanded-height record for the ones
+  // currently open, and returns the metrics the progress maths needs.
+  const measureBlocks = useCallback((el: Element) => {
+    const nodes = Array.from(el.querySelectorAll<HTMLElement>('[data-block-id]'))
+    if (blockScrollMarginRef.current == null) {
+      blockScrollMarginRef.current = nodes[0]
+        ? parseFloat(window.getComputedStyle(nodes[0]).scrollMarginTop) || 0
+        : 0
+    }
+    const scrollerTop = el.getBoundingClientRect().top - el.scrollTop
+    const line = el.scrollTop + blockScrollMarginRef.current
+    const blocks = nodes.map(node => {
+      const id = node.dataset.blockId!
+      const rect = node.getBoundingClientRect()
+      const collapsed = collapsedIdsRef.current.has(id)
+      if (!collapsed) expandedHeightsRef.current.set(id, rect.height)
+      return {
+        id,
+        top: rect.top - scrollerTop,
+        height: rect.height,
+        expandedHeight: expandedHeightsRef.current.get(id),
+        passedFraction: collapsed ? passedFractionsRef.current.get(id) : undefined,
+      }
+    })
+    return { line, blocks }
+  }, [])
+  const recomputeScrollProgress = useCallback(() => {
+    const el = document.querySelector('main')
+    if (!el) return
+    const { scrollTop, scrollHeight, clientHeight } = el
+    const { line, blocks } = measureBlocks(el)
+    applyScrollProgress(computeContentProgress({ scrollTop, scrollHeight, clientHeight, readingLine: line, blocks }))
+    // Forget a collapse anchor once the reading line has left that stub: the
+    // writer has moved somewhere else in the chapter, and a remembered spot
+    // they have since scrolled away from would only make the bar jump if they
+    // came back to it.
+    for (const b of blocks) {
+      if (b.passedFraction == null) continue
+      if (!holdsReadingLine(b, line)) passedFractionsRef.current.delete(b.id)
+    }
+    lastMeasureRef.current = { line, blocks: new Map(blocks.map(b => [b.id, b])) }
+    measuredCollapsedRef.current = collapsedIdsRef.current
+  }, [measureBlocks])
   useEffect(() => {
     const el = document.querySelector('main')
     if (!el) return
-    function onScroll() {
-      const { scrollTop, scrollHeight, clientHeight } = el!
-      const max = scrollHeight - clientHeight
-      applyScrollProgress(max > 0 ? scrollTop / max : 0)
-    }
+    const onScroll = () => recomputeScrollProgress()
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => el.removeEventListener('scroll', onScroll)
-  }, [])
+  }, [recomputeScrollProgress])
+  // Collapsing doesn't necessarily scroll, so the bar would otherwise keep a
+  // reading from the old layout. Recomputing here is also what keeps the
+  // expanded-height record fresh: this runs on mount and before any block has
+  // been folded, so every block is measured at least once while open.
+  // Layout effect, so it reads the post-collapse layout in the same frame
+  // BlockEditor's re-anchoring scroll happens in.
+  useLayoutEffect(() => {
+    // Whatever just folded: bank where the writer was inside it, from the
+    // measurement taken while it was still open. Without this the bar reads
+    // the re-anchored viewport — parked at the block's top — as "back at the
+    // start of the chapter".
+    const prev = lastMeasureRef.current
+    if (prev) {
+      for (const id of collapsedIds) {
+        if (measuredCollapsedRef.current.has(id)) continue
+        const b = prev.blocks.get(id)
+        if (!b || b.height <= 0) continue
+        passedFractionsRef.current.set(id, Math.min(1, Math.max(0, (prev.line - b.top) / b.height)))
+      }
+    }
+    blockScrollMarginRef.current = null
+    recomputeScrollProgress()
+  }, [collapsedIds, chapter?.id, recomputeScrollProgress])
   const [localSearchQuery, setLocalSearchQuery] = useState('')
   // Highlighting and match-counting run against this debounced copy: each
   // keystroke in the find bar otherwise forces every TipTap editor in the
