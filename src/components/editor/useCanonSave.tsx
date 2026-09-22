@@ -87,7 +87,7 @@ export function useCanonSave(seriesId: string) {
   // lagged stamped fresh summaries with the identities of the chapters they had
   // displaced, and no resync could undo it (LOOM-98/99).
   //
-  // Deleting a chapter and ⌥⇧N are deliberately NOT in that list: both navigate
+  // Deleting a chapter and ⌃⇧N are deliberately NOT in that list: both navigate
   // away from the editor, so the unmount autosave already covers them.
   //
   // Safe to fire on an empty chapter: a heading with no prose produces no

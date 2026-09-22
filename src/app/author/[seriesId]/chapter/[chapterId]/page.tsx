@@ -66,7 +66,7 @@ const CHAPTER_SHORTCUTS: ShortcutGroup[] = [
   {
     group: 'Chapter',
     items: [
-      { keys: '⌥⇧N', label: 'Create next chapter' },
+      { keys: '⌃⇧N', label: 'Create next chapter' },
       { keys: '⌥⇧E', label: 'Export canon' },
       { keys: '⌥⇧P', label: 'Preview chapter' },
       { keys: '⌥⇧X', label: 'Copy canon text' },
@@ -946,7 +946,7 @@ export default function ChapterEditorPage() {
       return true
     }
     function handleKeyDown(e: KeyboardEvent) {
-      // ⌃⇧Space and ⌃⇧< / ⌃⇧> — the two shortcuts that gave up ⌥⇧ when the
+      // ⌃⇧Space and ⌃⇧< / ⌃⇧> — shortcuts that gave up ⌥⇧ when the
       // soundtrack player went global (it owns ⌥⇧Space and ⌥⇧< / ⌥⇧> app-wide
       // now). The dock used to carry one hotkey per tab (⌥⇧2–6), numbered in
       // strip order; that grew unmanageable as tabs kept being added (Events
@@ -956,6 +956,10 @@ export default function ChapterEditorPage() {
         if (e.code === 'Space') { e.preventDefault(); toggleSoundtrackRef.current(); return }
         if (e.code === 'Comma' && panelOpenRef.current) { e.preventDefault(); cyclePanelTabRef.current(-1); return }
         if (e.code === 'Period' && panelOpenRef.current) { e.preventDefault(); cyclePanelTabRef.current(1); return }
+        // ⌃⇧N — was ⌥⇧N, moved off ⌥⇧ because it sits next to the ⌥⇧ block
+        // hotkeys and was being hit by accident; creating a chapter navigates
+        // away, so a stray press is disruptive.
+        if (e.code === 'KeyN') { e.preventDefault(); createNextChapterRef.current(); return }
       }
       // ⌃⇧←/→ steps through search matches — kept off ⌥⇧ (which doubles as
       // chapter navigation below) so the two never fight over the same keys.
@@ -984,7 +988,6 @@ export default function ChapterEditorPage() {
         case 'KeyQ': e.preventDefault(); addChoiceBlockRef.current(); break
         case 'KeyC': e.preventDefault(); addBlockRef.current('conditional_fragment'); break
         case 'KeyS': e.preventDefault(); addBlockRef.current('soundtrack'); break
-        case 'KeyN': e.preventDefault(); createNextChapterRef.current(); break
         case 'KeyE': e.preventDefault(); saveCanonRef.current(); break
         case 'KeyP': e.preventDefault(); startPreviewRef.current(); break
         case 'KeyX': e.preventDefault(); copyCanonTextRef.current(); break
@@ -1868,7 +1871,7 @@ export default function ChapterEditorPage() {
         ) : (
           <button
             onClick={createNextChapter}
-            title="Create next chapter (⌥⇧N)"
+            title="Create next chapter (⌃⇧N)"
             className="shrink-0 flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition"
           >
             Create Next Chapter <LuPlus size={13} />
