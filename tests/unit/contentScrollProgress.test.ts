@@ -116,10 +116,29 @@ test('a folded chapter still runs 0 to 1, and the bar never goes backwards', () 
 })
 
 test('collapse-all keeps the reader somewhere sane rather than at zero', () => {
+  // ⌥⇧9 sets the whole collapsed set at once and never re-anchors; the
+  // scroller just clamps to its new, much shorter, maximum.
   const sim = newSim()
   scrollTo(sim, 3000)                             // deep in the last block
-  for (let i = 0; i < COUNT; i++) collapse(sim, i)
+  const line = sim.scrollTop + MARGIN
+  const open = layout(sim).blocks
+  for (let i = 0; i < COUNT; i++) {
+    sim.collapsed.add(i)
+    sim.anchors.set(i, Math.min(1, Math.max(0, (line - open[i].top) / open[i].height)))
+  }
+  sim.scrollTop = Math.min(layout(sim).maxScroll, sim.scrollTop)
   expect(read(sim)).toBeGreaterThan(0.5)
+})
+
+test('the bar fills at the bottom with a stub in the last screenful', () => {
+  // The reading line stops a viewport short of the end, so it never passes a
+  // stub down there — but the writer has still reached the bottom.
+  for (const folded of [COUNT - 1, COUNT - 2]) {
+    const sim = newSim()
+    scrollTo(sim, folded * OPEN + 100)
+    collapse(sim, folded)
+    expect(scrollTo(sim, 99999)).toBe(1)
+  }
 })
 
 test('a block never seen expanded contributes only its real height', () => {

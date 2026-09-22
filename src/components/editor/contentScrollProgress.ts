@@ -70,26 +70,17 @@ function hiddenHeight(b: BlockMetric): number {
   return full - b.height
 }
 
-export function computeContentProgress({
-  scrollTop,
-  scrollHeight,
-  clientHeight,
-  readingLine,
-  blocks,
-}: ProgressInput): number {
-  let hidden = 0
-  for (const b of blocks) hidden += hiddenHeight(b)
-  // Both terms are in the expanded chapter's coordinates, which don't move
-  // when a block folds: scrollHeight loses exactly what `hidden` gains.
-  const max = scrollHeight - clientHeight + hidden
-  if (max <= 0) return 0
-
+/**
+ * Hidden height the reading line has passed at `readingLine`, i.e. how much
+ * folded-away content is behind it. With `remembered` off it's pure geometry,
+ * ignoring collapse anchors — the shape the denominator needs.
+ */
+function creditedAt(blocks: BlockMetric[], readingLine: number, remembered: boolean): number {
   // The block the reading line is in — the last one starting at or above it.
   let current = blocks.length - 1
   for (let i = 0; i < blocks.length; i++) {
     if (blocks[i].top > readingLine + SLACK) { current = i - 1; break }
   }
-
   let credited = 0
   for (let i = 0; i < blocks.length; i++) {
     const d = hiddenHeight(blocks[i])
@@ -98,10 +89,41 @@ export function computeContentProgress({
     if (i > current) continue                      // still ahead: none of it
     const b = blocks[i]
     const within = b.height > 0 ? clamp01((readingLine - b.top) / b.height) : 1
-    const from = b.passedFraction ?? 0
+    const from = (remembered ? b.passedFraction : undefined) ?? 0
     // Starts at the remembered spot and reaches the whole block by the stub's
     // bottom edge — continuous at both ends, so scrolling never snaps.
     credited += d * (from + (1 - from) * within)
   }
-  return clamp01((scrollTop + credited) / max)
+  return credited
+}
+
+export function computeContentProgress({
+  scrollTop,
+  scrollHeight,
+  clientHeight,
+  readingLine,
+  blocks,
+}: ProgressInput): number {
+  const maxScrollTop = scrollHeight - clientHeight
+  // Scale by what this layout can actually reach, not by the whole expanded
+  // chapter. The reading line stops one viewport short of the end, so any
+  // stub sitting in that last screenful is content it never passes — count
+  // its hidden height in the total and the bar can never fill, however far
+  // down you scroll. Measuring the same way at the bottom of the scroller
+  // makes the two agree there by construction, while still giving collapsed
+  // blocks above that point their full height. With nothing collapsed this
+  // is just scrollTop / (scrollHeight - clientHeight), as before.
+  let reach: number
+  if (maxScrollTop > 0) {
+    reach = maxScrollTop + creditedAt(blocks, readingLine - scrollTop + maxScrollTop, false)
+  } else {
+    // Folded so far that the whole chapter fits on screen — there is no
+    // scrolling left to measure, so fall back to the expanded chapter's
+    // runway and let the collapse anchors say where the writer was.
+    let hidden = 0
+    for (const b of blocks) hidden += hiddenHeight(b)
+    reach = maxScrollTop + hidden
+  }
+  if (reach <= 0) return 0
+  return clamp01((scrollTop + creditedAt(blocks, readingLine, true)) / reach)
 }
