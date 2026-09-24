@@ -208,7 +208,7 @@ export default function ReviewPanel({
   // Loaded in an effect rather than the initializer so the server render and
   // the first client paint agree — localStorage exists only in the browser.
   const [settings, setSettings] = useState<ReviewSettingsState>(
-    { model: null, effort: null, preset: null })
+    { model: null, effort: null, preset: null, excerpts: null })
   useEffect(() => { setSettings(readReviewSettings()) }, [])
   const lastSentRef = useRef<string>('')
 
@@ -420,6 +420,7 @@ export default function ReviewPanel({
       model: settings.model,
       effort: settings.effort,
       preset: settings.preset,
+      excerpts: settings.excerpts,
     })
   }
 

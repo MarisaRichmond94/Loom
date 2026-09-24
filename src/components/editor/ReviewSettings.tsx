@@ -23,6 +23,7 @@ export type ReviewSettingsState = {
   model: string | null    // null = WriteAI default
   effort: string | null   // "none" = uncapped; null = WriteAI default
   preset: string | null   // null = WriteAI default
+  excerpts: number | null // background-prose passages; null = persona/preset default
 }
 
 const STORAGE_KEY = 'loom-review-settings'
@@ -34,9 +35,10 @@ export function readReviewSettings(): ReviewSettingsState {
       model: typeof raw.model === 'string' ? raw.model : null,
       effort: typeof raw.effort === 'string' ? raw.effort : null,
       preset: typeof raw.preset === 'string' ? raw.preset : null,
+      excerpts: typeof raw.excerpts === 'number' ? raw.excerpts : null,
     }
   } catch {
-    return { model: null, effort: null, preset: null }
+    return { model: null, effort: null, preset: null, excerpts: null }
   }
 }
 
@@ -45,6 +47,7 @@ type Options = {
   efforts: string[]
   models: { id: string; label: string }[]
   defaults: { preset: string; effort: string; model: string }
+  excerpts?: { min: number; max: number }
 }
 
 const EFFORT_LABELS: Record<string, string> = {
@@ -119,7 +122,8 @@ export function ReviewSettings({
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch { /* private mode */ }
   }
 
-  const customized = value.model !== null || value.effort !== null || value.preset !== null
+  const customized = value.model !== null || value.effort !== null
+    || value.preset !== null || value.excerpts !== null
   const fieldCls = 'w-full bg-surface-base border border-accent/20 rounded px-2 py-1 text-xs text-ink outline-none focus:border-accent'
   const labelCls = 'mb-0.5 block text-[10px] font-semibold uppercase tracking-wider text-ink-faint'
 
@@ -211,9 +215,30 @@ export function ReviewSettings({
                 )}
               </label>
 
+              <label className="block">
+                <span className={labelCls}>Excerpts (background prose)</span>
+                <select
+                  value={value.excerpts ?? ''}
+                  onChange={e => set({ excerpts: e.target.value ? Number(e.target.value) : null })}
+                  className={fieldCls}
+                >
+                  <option value="">Default (per persona)</option>
+                  {Array.from(
+                    { length: (options.excerpts?.max ?? 17) - (options.excerpts?.min ?? 1) + 1 },
+                    (_, i) => (options.excerpts?.min ?? 1) + i,
+                  ).map(n => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-[10px] leading-snug text-ink-faint">
+                  How many passages of earlier manuscript the reviewer reads
+                  alongside the chapter.
+                </span>
+              </label>
+
               {customized && (
                 <button
-                  onClick={() => set({ model: null, effort: null, preset: null })}
+                  onClick={() => set({ model: null, effort: null, preset: null, excerpts: null })}
                   className="self-start text-[10px] text-ink-faint underline-offset-2 hover:text-ink hover:underline transition"
                 >
                   Reset to defaults

@@ -31,6 +31,7 @@ type Body = {
   model?: string | null
   effort?: string | null
   preset?: string | null
+  excerpts?: number | null
 }
 
 export async function POST(req: Request) {
@@ -82,6 +83,7 @@ export async function POST(req: Request) {
         model: body.model ?? null,
         effort: body.effort ?? null,
         preset: body.preset ?? null,
+        excerpts: body.excerpts ?? null,
       }),
     })
   } catch (err) {

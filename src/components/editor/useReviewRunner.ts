@@ -44,6 +44,7 @@ export type RunArgs = {
   model?: string | null
   effort?: string | null
   preset?: string | null
+  excerpts?: number | null
 }
 
 export function useReviewRunner(onPersisted: (s: ReviewSession) => void) {
@@ -124,6 +125,7 @@ export function useReviewRunner(onPersisted: (s: ReviewSession) => void) {
           model: args.model ?? null,
           effort: args.effort ?? null,
           preset: args.preset ?? null,
+          excerpts: args.excerpts ?? null,
         }),
       })
 
