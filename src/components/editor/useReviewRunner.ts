@@ -40,6 +40,10 @@ export type RunArgs = {
   previousText?: string
   session: ReviewSession | null
   focus: string
+  /** Settings-cog choices; null/absent = WriteAI's server-side default. */
+  model?: string | null
+  effort?: string | null
+  preset?: string | null
 }
 
 export function useReviewRunner(onPersisted: (s: ReviewSession) => void) {
@@ -47,6 +51,10 @@ export function useReviewRunner(onPersisted: (s: ReviewSession) => void) {
   const [streamText, setStreamText] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [cost, setCost] = useState<number | null>(null)
+  // Context warnings WriteAI sends ahead of the reply (retrieval degraded,
+  // chapters missing from the story-so-far notes). Shown with the review,
+  // so the writer weighs the feedback knowing what it was based on.
+  const [notices, setNotices] = useState<string[]>([])
   // The writer's turn, while it is in flight. It is not in the session yet —
   // the session is only written once the reviewer has answered — so without
   // this the panel had nothing to show for the question just asked, and the
@@ -73,6 +81,7 @@ export function useReviewRunner(onPersisted: (s: ReviewSession) => void) {
     setStreamText('')
     setError(null)
     setCost(null)
+    setNotices([])
 
     const askedAt = new Date().toISOString()
     const userMsg: ReviewMessage = {
@@ -112,6 +121,9 @@ export function useReviewRunner(onPersisted: (s: ReviewSession) => void) {
           // a full rewrite is still available from WriteAI's pane via its
           // Ideal Version toggle.
           includeIdeal: false,
+          model: args.model ?? null,
+          effort: args.effort ?? null,
+          preset: args.preset ?? null,
         }),
       })
 
@@ -139,6 +151,8 @@ export function useReviewRunner(onPersisted: (s: ReviewSession) => void) {
           if (ev.type === 'chunk' && ev.content) {
             acc += ev.content
             setStreamText(acc)
+          } else if (ev.type === 'notice' && ev.message) {
+            setNotices(n => [...n, ev.message!])
           } else if (ev.type === 'usage') {
             setCost(ev.cost_usd ?? null)
           } else if (ev.type === 'error') {
@@ -201,7 +215,7 @@ export function useReviewRunner(onPersisted: (s: ReviewSession) => void) {
     }
   }, [onPersisted])
 
-  return { run, cancel, streaming, streamText, error, cost, setError, pending, completions }
+  return { run, cancel, streaming, streamText, error, cost, setError, pending, completions, notices }
 }
 
 export type ReviewRunner = ReturnType<typeof useReviewRunner>

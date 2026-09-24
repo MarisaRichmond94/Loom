@@ -29,6 +29,8 @@ type Body = {
   conversationHistory?: unknown[]
   includeIdeal?: boolean
   model?: string | null
+  effort?: string | null
+  preset?: string | null
 }
 
 export async function POST(req: Request) {
@@ -78,6 +80,8 @@ export async function POST(req: Request) {
         conversation_history: body.conversationHistory ?? [],
         include_ideal: body.includeIdeal ?? false,
         model: body.model ?? null,
+        effort: body.effort ?? null,
+        preset: body.preset ?? null,
       }),
     })
   } catch (err) {

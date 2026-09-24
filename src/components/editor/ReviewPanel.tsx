@@ -5,6 +5,7 @@ import { LuScanText, LuTrash2, LuPlus, LuSend, LuUnplug, LuCircleSlash } from 'r
 import { ReviewMarkdown } from './reviewMarkdown'
 import ReviewAnimation from './ReviewAnimation'
 import { DEFAULT_FOCUS, type ReviewRunner } from './useReviewRunner'
+import { ReviewSettings, readReviewSettings, type ReviewSettingsState } from './ReviewSettings'
 import { buildReviewTurn } from './reviewTurn'
 import { followScrollTop } from './reviewScroll'
 import { PanelEmpty, PanelEmptyState } from './PanelEmptyState'
@@ -203,6 +204,12 @@ export default function ReviewPanel({
   const [busy, setBusy] = useState(false)
   // Explains why a click did nothing — currently only "the draft is unchanged".
   const [notice, setNotice] = useState<string | null>(null)
+  // Settings-cog choices (model / effort / preset; null = WriteAI default).
+  // Loaded in an effect rather than the initializer so the server render and
+  // the first client paint agree — localStorage exists only in the browser.
+  const [settings, setSettings] = useState<ReviewSettingsState>(
+    { model: null, effort: null, preset: null })
+  useEffect(() => { setSettings(readReviewSettings()) }, [])
   const lastSentRef = useRef<string>('')
 
   // Restore what this chapter was last reviewed against, so a revision pass
@@ -410,6 +417,9 @@ export default function ReviewPanel({
       previousText: turn.previousText,
       session: review,
       focus: review?.focus ?? DEFAULT_FOCUS,
+      model: settings.model,
+      effort: settings.effort,
+      preset: settings.preset,
     })
   }
 
@@ -701,6 +711,17 @@ export default function ReviewPanel({
       {/* Action bar. Cost is shown here, at the point of action, rather than
           leaving spend to be found later in WriteAI's Spend pane. */}
       <div className="shrink-0 border-t border-accent/10 px-3 pt-2 pb-3.5">
+        {/* Context warnings from WriteAI (retrieval degraded, chapters
+            missing from the story-so-far notes) — shown with the review, so
+            the writer weighs the feedback knowing what it was based on. */}
+        {runner.notices.map((n, i) => (
+          <div
+            key={i}
+            className="mb-1.5 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[10px] leading-snug text-amber-700 dark:text-amber-400"
+          >
+            {n}
+          </div>
+        ))}
         {runner.cost !== null && (
           <div className="mb-1.5 text-[10px] text-ink-faint">
             last review cost ${runner.cost.toFixed(3)}
@@ -751,6 +772,13 @@ export default function ReviewPanel({
               {review ? (reply.trim() ? 'Send' : 'Re-review') : 'Submit'}
             </button>
           )}
+          {/* Model / effort / preset for the next run — the writer's cost-
+              quality dial, next to the button that spends the money. */}
+          <ReviewSettings
+            value={settings}
+            onChange={setSettings}
+            disabled={runner.streaming}
+          />
           {startingFresh && !runner.streaming && (
             <button
               onClick={() => setStartingFresh(false)}
