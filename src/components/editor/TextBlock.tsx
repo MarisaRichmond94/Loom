@@ -8,6 +8,7 @@ import TextAlign from '@tiptap/extension-text-align'
 import { Extension, InputRule, Mark, mergeAttributes } from '@tiptap/core'
 import { Mapping } from '@tiptap/pm/transform'
 import { buildSpokenDoc, wordRangeAt } from '@/lib/narration/spokenDoc'
+import { claimRead, flushStrandedRead, readOwner, releaseRead, stopRead } from '@/lib/narration/readAloudState'
 import { NarrationHighlight, SET_NARRATION_RANGE } from '@/lib/extensions/narrationHighlight'
 
 // Custom mark — addAttributes() path guarantees color renders in the live editor
@@ -56,12 +57,12 @@ const SectionBreak = Extension.create({
 
 type ReadAloudVariable = { name: string; type: string; defaultValue?: string | null }
 
-// Which block's editor started the speech that is currently playing.
-// speechSynthesis is a window singleton, so a block tearing down has to know
-// whether the voice it is about to cancel is actually its own: collapsing any
-// *other* block unmounts that block's TextBlock, and an unconditional cancel
-// there silenced a read in progress somewhere else on the page.
-let speakingEditor: unknown = null
+// Which block's editor started the speech that is currently playing lives in
+// readAloudState — a block tearing down has to know whether the voice it is
+// about to cancel is actually its own (collapsing any *other* block unmounts
+// that block's TextBlock, and an unconditional cancel there silenced a read in
+// progress somewhere else on the page), and the author layout needs the same
+// answer to stop a read from outside any block.
 
 const ReadAloud = Extension.create<{ getVariables: () => ReadAloudVariable[] }>({
   name: 'readAloud',
@@ -73,12 +74,11 @@ const ReadAloud = Extension.create<{ getVariables: () => ReadAloudVariable[] }>(
     return {
       'Alt-Shift-r': ({ editor }) => {
         if (!window.speechSynthesis) return false
-        if (window.speechSynthesis.speaking) {
-          // cancel() fires the utterance's onend, which clears the highlight
-          // and releases ownership.
-          window.speechSynthesis.cancel()
-          return true
-        }
+        // Stop a read of ours. Deliberately *our* bookkeeping and not the
+        // engine's `speaking` flag: that flag can stick true with nothing
+        // playing, and gating the stop path on it made ⌥⇧R a permanent no-op
+        // — see readAloudState.ts.
+        if (readOwner() !== null) { stopRead(); return true }
         const { from, to, empty } = editor.state.selection
         const readFrom = from
         const readTo = empty ? editor.state.doc.content.size : to
@@ -129,14 +129,18 @@ const ReadAloud = Extension.create<{ getVariables: () => ReadAloudVariable[] }>(
           const to = mapping.map(range.to, 1)
           if (to > from) setRange({ from, to })
         }
-        const release = () => { if (speakingEditor === editor) speakingEditor = null }
-        utterance.onend = () => { release(); stopTracking(); setRange(null) }
-        utterance.onerror = () => { release(); stopTracking(); setRange(null) }
+        // Idempotent: the watchdog in readAloudState can run it for a read the
+        // engine dropped without an `end` event, and then `end` may still
+        // arrive late.
+        const done = () => { stopTracking(); setRange(null) }
+        utterance.onend = () => { releaseRead(editor); done() }
+        utterance.onerror = () => { releaseRead(editor); done() }
 
         // Safari and friends may never fire a word boundary. Speech still
         // works; the highlight simply never appears, which is the intended
         // degradation rather than a broken read-aloud.
-        speakingEditor = editor
+        flushStrandedRead()
+        claimRead(editor, utterance, done)
         window.speechSynthesis.speak(utterance)
         return true
       },
@@ -407,11 +411,8 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
   editorRef.current = editor
   useEffect(() => {
     return () => {
-      if (speakingEditor !== editorRef.current) return
-      speakingEditor = null
-      if (typeof window !== 'undefined' && window.speechSynthesis?.speaking) {
-        window.speechSynthesis.cancel()
-      }
+      if (readOwner() !== editorRef.current) return
+      stopRead()
     }
   }, [])
 

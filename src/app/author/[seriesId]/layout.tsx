@@ -16,12 +16,18 @@ import { AuthorProvider, type AuthorSeries } from '@/lib/authorContext'
 import { SoundtrackPlayerProvider } from '@/lib/soundtrackPlayer'
 import SoundtrackPopover from '@/components/SoundtrackPopover'
 import { ensureMinDuration } from '@/lib/minLoadDuration'
+import { readOwner, stopRead } from '@/lib/narration/readAloudState'
 import { useCanonSave } from '@/components/editor/useCanonSave'
 import ChapterSkeleton from '@/components/editor/ChapterSkeleton'
 import BookSkeleton from '@/components/editor/BookSkeleton'
 import SeriesPageSkeleton from '@/components/editor/SeriesPageSkeleton'
 
 type ChoiceQuestion = { id: string; prompt: string; chapterId: string; chapterTitle: string; bookTitle: string; reachable: boolean }
+
+// How close to the window's left edge the pointer has to get to reveal the
+// collapsed sidebar's handle. Comfortably clears the revealed handle itself
+// (12px wrapper + w-8 button = 44px) so it never flickers out from under you.
+const EDGE_HOVER_PX = 56
 
 export default function AuthorLayout({ children }: { children: ReactNode }) {
   const router = useRouter()
@@ -39,17 +45,38 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
   const [contextOpen, setContextOpen] = useState(false)
   const [edgeHovered, setEdgeHovered] = useState(false)
   const edgeLeaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const edgeHoveredRef = useRef(false)
   useEffect(() => {
     setSidebarCollapsed(localStorage.getItem('loom-sidebar-collapsed') === 'true')
   }, [])
 
   function onEdgeEnter() {
     if (edgeLeaveTimer.current) clearTimeout(edgeLeaveTimer.current)
+    edgeHoveredRef.current = true
     setEdgeHovered(true)
   }
   function onEdgeLeave() {
-    edgeLeaveTimer.current = setTimeout(() => setEdgeHovered(false), 150)
+    if (edgeLeaveTimer.current) clearTimeout(edgeLeaveTimer.current)
+    edgeLeaveTimer.current = setTimeout(() => {
+      edgeHoveredRef.current = false
+      setEdgeHovered(false)
+    }, 150)
   }
+
+  // Collapsed, the only element left at the edge is the w-3 wrapper, so
+  // revealing the handle meant landing the pointer inside a 12px sliver.
+  // Widen the zone by watching how far the pointer is from the window's left
+  // edge rather than by widening an element: a wider invisible strip would
+  // sit on top of the content and swallow clicks near the left margin.
+  useEffect(() => {
+    if (!sidebarCollapsed) return
+    function onMove(e: MouseEvent) {
+      if (e.clientX <= EDGE_HOVER_PX) onEdgeEnter()
+      else if (edgeHoveredRef.current) onEdgeLeave()
+    }
+    window.addEventListener('mousemove', onMove)
+    return () => window.removeEventListener('mousemove', onMove)
+  }, [sidebarCollapsed])
 
   function toggleSidebar() {
     setSidebarCollapsed(prev => {
@@ -78,9 +105,14 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
         // so speech started in a block had no way to be stopped without
         // clicking back into it. Here the key only ever stops: it must not
         // start a read with no cursor to read from.
-        if (typeof window !== 'undefined' && window.speechSynthesis?.speaking) {
+        //
+        // readOwner() first, and only then the engine's `speaking`: the latter
+        // can be stuck true with nothing playing, and stopRead() clears our
+        // own state either way rather than waiting for an `end` event the
+        // engine may never send (readAloudState.ts).
+        if (readOwner() !== null || (typeof window !== 'undefined' && window.speechSynthesis?.speaking)) {
           e.preventDefault()
-          window.speechSynthesis.cancel()
+          stopRead()
         }
       }
     }
@@ -357,7 +389,7 @@ export default function AuthorLayout({ children }: { children: ReactNode }) {
                 onClick={toggleSidebar}
                 title={`${sidebarCollapsed ? 'Expand' : 'Collapse'} sidebar (⌥⇧1)`}
                 aria-label={`${sidebarCollapsed ? 'Expand' : 'Collapse'} sidebar`}
-                className={`flex items-center justify-center bg-surface-raised border border-accent/20 border-l-0 rounded-r-xl shadow-lg text-ink-faint hover:text-ink transition-all duration-300 ease-in-out overflow-hidden h-14 ${edgeHovered ? 'w-7 opacity-100' : 'w-0 opacity-0'}`}
+                className={`flex items-center justify-center bg-surface-raised border border-accent/20 border-l-0 rounded-r-xl shadow-lg text-ink-faint hover:text-ink transition-all duration-300 ease-in-out overflow-hidden h-20 ${edgeHovered ? 'w-8 opacity-100' : 'w-0 opacity-0'}`}
               >
                 {sidebarCollapsed
                   ? <LuChevronRight size={13} className="shrink-0" />
