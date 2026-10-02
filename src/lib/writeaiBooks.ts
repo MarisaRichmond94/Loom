@@ -18,17 +18,13 @@
 
 import { prisma } from './prisma'
 import { callWriteAi } from './writeaiProxy'
+import { normBookTitle } from './bookTitleMatch'
 
-/**
- * Book-title normalisation for the cross-app join.
- *
- * Exported so the Explore scope resolver (LOOM-112) uses the SAME rule rather
- * than a third copy — two book lookups that disagree about what counts as the
- * same title is a bug that shows up on exactly one book, which is how
- * `Nobody's Hero` found it the first time.
- */
-export const normBookTitle = (s: string) =>
-  s.normalize('NFC').replace(/[‘’]/g, "'").trim().toLowerCase()
+// The rule itself moved to lib/bookTitleMatch.ts (LOOM-157), so the ops
+// generate scripts' title join can share it without dragging Prisma in behind
+// it. Re-exported because the Explore scope resolver (LOOM-112) imports it
+// from here, and a third copy of a cross-app join rule is how the two drift.
+export { normBookTitle }
 
 const norm = normBookTitle
 

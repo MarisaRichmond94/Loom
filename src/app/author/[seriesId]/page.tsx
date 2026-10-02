@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuCheck, LuDatabaseBackup, LuEye, LuMenu, LuPencilLine, LuPlus, LuSend, LuSettings, LuX } from 'react-icons/lu'
+import { LuCheck, LuDatabaseBackup, LuEye, LuMenu, LuPencilLine, LuPlus, LuSettings, LuX } from 'react-icons/lu'
 import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import { useAuthor } from '@/lib/authorContext'
@@ -18,6 +18,7 @@ import { usePublishStatus } from '@/components/series/usePublishStatus'
 import SilentChaptersDialog, { type SilentChapter } from '@/components/series/SilentChaptersDialog'
 import SeriesConfigureModal from '@/components/series/SeriesConfigureModal'
 import BookSettingsModal, { type BookSettingsValues } from '@/components/series/BookSettingsModal'
+import BookActionsMenu from '@/components/series/BookActionsMenu'
 import { useRegisterShortcuts, type ShortcutGroup } from '@/lib/shortcuts'
 
 // Both loaded on tab open rather than with the page. Books is the default tab,
@@ -542,7 +543,14 @@ export default function AuthorSeriesPage() {
                 <div
                   key={book.id}
                   onClick={() => router.push(`/author/${seriesId}/book/${book.id}`)}
-                  className="flex gap-5 p-5 rounded-lg bg-accent/25 border border-accent/20 hover:border-accent/40 hover:scale-[1.01] transition-all duration-150 cursor-pointer"
+                  /* `relative` + the has-* z-bump keep the ☰'s dropdown on top
+                     of the cards BELOW this one. The hover scale makes the
+                     hovered card a stacking context, which traps its own
+                     z-50 child inside it — so a later card, untransformed and
+                     later in the DOM, paints straight over the open menu.
+                     Lifting the whole card while its menu is open is the fix;
+                     `aria-expanded=true` exists on exactly that one button. */
+                  className="relative flex gap-5 p-5 rounded-lg bg-accent/25 border border-accent/20 hover:border-accent/40 hover:scale-[1.01] transition-all duration-150 cursor-pointer has-[[aria-expanded=true]]:z-30"
                 >
                   {/* `relative` is load-bearing: it's the containing block for
                       the filled Image below. The box still takes its height
@@ -635,6 +643,27 @@ export default function AuthorSeriesPage() {
                         <span className="ml-auto shrink-0">
                           <PublishBadge status={publish.byId(book.id)} />
                         </span>
+                        {/* Everything you can DO to this book, in one ☰
+                            (LOOM-157) — the same pattern as the series header
+                            above and the book page's own menu. It absorbed the
+                            four-button row that used to sit under the stats,
+                            which had no room for the three actions this adds.
+
+                            Parked here rather than in the old row because the
+                            row is gone: the card's body is now entirely about
+                            what the book IS, and actions live beside the title
+                            where the other two surfaces already put them. */}
+                        <BookActionsMenu
+                          seriesId={seriesId}
+                          bookId={book.id}
+                          bookTitle={book.title}
+                          publishStatus={publish.byId(book.id)}
+                          publishBusy={!!publish.busyBookId}
+                          publishingThis={publish.busyBookId === book.id}
+                          onPublish={() => void publishWithCheck(book.id)}
+                          onSettings={() => setBookModal({ mode: 'edit', bookId: book.id })}
+                          onDelete={() => setDeleteTarget({ id: book.id, title: book.title })}
+                        />
                       </div>
                       <div className="grid grid-cols-4 gap-3">
                         {[
@@ -649,77 +678,6 @@ export default function AuthorSeriesPage() {
                           </div>
                         ))}
                       </div>
-                    </div>
-                    <div className="flex justify-end gap-2 mt-3" onClick={e => e.stopPropagation()}>
-                      {/* Always rendered, including for drafts — disabled with
-                          a reason, rather than absent. A control that vanishes
-                          leaves "how do I send this?" unanswered; one that is
-                          visibly disabled answers it. */}
-                      {(() => {
-                        const st = publish.byId(book.id)
-                        const eligible = st?.eligible ?? false
-                        const needs = !!st && (st.changed || !st.inSnapshot)
-                        const working = publish.busyBookId === book.id
-                        const disabled = !st || !eligible || !!publish.busyBookId
-                        // Hover styling is applied ONLY when the button can
-                        // actually be pressed. Tailwind's hover: variants fire
-                        // regardless of the disabled attribute, so a disabled
-                        // button that still lightens on hover reads as
-                        // enabled-but-unresponsive rather than as disabled.
-                        const look = working
-                          ? 'bg-accent text-white border-accent'
-                          : disabled
-                            ? 'bg-surface-overlay border-accent/20 text-ink-faint opacity-40 cursor-not-allowed'
-                            : needs
-                              ? 'bg-accent text-white border-accent hover:opacity-90'
-                              : 'bg-surface-overlay border-accent/20 text-ink-muted hover:text-ink'
-                        return (
-                          <button
-                            onClick={() => eligible && void publishWithCheck(book.id)}
-                            disabled={disabled}
-                            title={!eligible
-                              ? 'This book is a draft. Mark it as Published first — until then readers only see “Coming Soon”.'
-                              : needs
-                                ? 'Send this book to readers. Every other book keeps exactly what it has.'
-                                : 'Readers already have this version — republishing would change nothing.'}
-                            className={`px-3 py-1.5 rounded text-xs transition flex items-center gap-1.5 border ${look}`}
-                          >
-                            <LuSend size={11} />
-                            {working ? 'Publishing…' : needs ? 'Publish to readers' : 'Republish'}
-                          </button>
-                        )
-                      })()}
-                      {/* Status is a chip beside the TITLE, not a control in
-                          this row — see the card header. It reads as a property
-                          of the book rather than an action you take on it, and
-                          it keeps this row to things you DO. */}
-                      <a
-                        href={`/api/series/${seriesId}/books/${book.id}/export`}
-                        download
-                        title="Back up this book as a .loom.json you can re-import. Covers prose, choices and characters — not chapter notes, narration or cover images. For a readable manuscript, open the book and use Save."
-                        className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition flex items-center gap-1.5"
-                      >
-                        <LuDatabaseBackup size={11} /> Backup
-                      </a>
-                      {/* Everything about the book in one place (LOOM-156) —
-                          title, description, status, canon, divergence and the
-                          gate. The standalone "Make non-canon" button this
-                          replaced could flip canon but not author the gate that
-                          makes a branch actually reachable, so it only ever did
-                          half the job. */}
-                      <button
-                        onClick={() => setBookModal({ mode: 'edit', bookId: book.id })}
-                        title="Title, description, status, canon vs alt, and who reaches this book."
-                        className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-accent/20 text-ink-muted hover:text-ink transition"
-                      >
-                        Settings
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget({ id: book.id, title: book.title })}
-                        className="px-3 py-1.5 rounded text-xs bg-surface-overlay border border-choice-kill/40 text-choice-kill hover:opacity-80 transition"
-                      >
-                        Delete
-                      </button>
                     </div>
                   </div>
                 </div>

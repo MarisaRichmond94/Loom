@@ -45,6 +45,8 @@ export type ExplorePov = {
   bookIds: string[]
 }
 
+import { normBookTitle } from './bookTitleMatch'
+
 export type ExploreScope = {
   books: ExploreBook[]
   povs: ExplorePov[]
@@ -70,13 +72,16 @@ const NOT_A_POV = new Set(['unknown', 'none', 'n/a', ''])
 /**
  * Book-title normalisation for the cross-app join.
  *
- * Same rule as `writeaiBooks.ts` — kept here rather than imported so this
- * module stays free of the prisma import that file carries. The two are pinned
- * as identical by test, because two lookups that disagree about what counts as
- * the same title is a bug that shows up on exactly one book.
+ * This WAS a copy of `writeaiBooks.ts`' rule, kept here rather than imported so
+ * this module stayed free of the prisma import that file carries, with the two
+ * pinned as identical by test. The rule now lives on its own in
+ * `lib/bookTitleMatch.ts` (LOOM-157) — itself import-free, so this file's
+ * purity survives the import and there is no longer a copy to keep in step.
+ *
+ * Re-exported rather than relocated for callers: api/writeai/chat/chapter-link
+ * imports it from here.
  */
-export const normBookTitle = (s: string) =>
-  s.normalize('NFC').replace(/[‘’]/g, "'").trim().toLowerCase()
+export { normBookTitle }
 
 /**
  * Assemble the scope from Loom's books and WriteAI's index.

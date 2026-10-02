@@ -124,18 +124,27 @@ describe('the Explore tab cannot reach a write-on-read endpoint', () => {
 })
 
 describe('the title-normalisation rule does not fork', () => {
-  // exploreScope.ts keeps its own copy so it stays free of prisma (and so it
-  // stays testable). Two lookups that disagree about what counts as the same
-  // title is a bug that surfaces on exactly one book — `Nobody's Hero` found
-  // it the first time — so the copies are pinned as identical here.
-  const rule = (src: string) =>
-    src.match(/normalize\('NFC'\)[^\n]*/)?.[0]?.trim()
+  // exploreScope.ts and writeaiBooks.ts each used to keep their own copy of the
+  // rule — exploreScope to stay free of prisma, and the two pinned as identical
+  // here, because two lookups that disagree about what counts as the same title
+  // is a bug that surfaces on exactly one book (`Nobody's Hero` found it the
+  // first time).
+  //
+  // LOOM-157 ended that: the rule lives in lib/bookTitleMatch.ts, which imports
+  // nothing, so there is no longer a reason for either file to hold a copy. The
+  // test now guards the stronger property — that neither has grown one back.
+  const definesRule = (src: string) => /normalize\('NFC'\)/.test(src)
 
-  it('matches writeaiBooks.ts character for character', () => {
-    const mine = rule(scopeSrc)
-    const theirs = rule(read('lib/writeaiBooks.ts'))
-    expect(mine).toBeTruthy()
-    expect(mine).toEqual(theirs)
+  it('is defined once, in lib/bookTitleMatch.ts', () => {
+    expect(definesRule(read('lib/bookTitleMatch.ts'))).toBe(true)
+  })
+
+  it('is not re-declared by its consumers', () => {
+    expect(definesRule(scopeSrc)).toBe(false)
+    expect(definesRule(read('lib/writeaiBooks.ts'))).toBe(false)
+    // The ops-script title join (LOOM-157) shares the same rule, for the same
+    // reason: a miss there points a regenerate button at no book at all.
+    expect(definesRule(read('lib/writingArtifacts.ts'))).toBe(false)
   })
 })
 
