@@ -294,8 +294,20 @@ export default function ReaderView({
     function onOver(e: MouseEvent) {
       const span = (e.target as Element).closest<HTMLElement>('.character-ref')
       if (!span) { setCharCard(null); return }
+      // Prefer the id — names are not identity, and two characters can share
+      // one. Fall back to the name only when the mark has no id, which is the
+      // shape an HTML round-trip used to leave behind (LOOM-159, fixed at the
+      // source in lib/extensions/character.ts).
+      //
+      // This mirrors the reader app's ChapterView, which has had the fallback
+      // all along. The preview matched on id alone, so any tag that lost its
+      // id was silently unhoverable here while working over there — and a tag
+      // still renders as a tag, so the only symptom is a hover that does
+      // nothing.
       const id = span.dataset.characterId
-      const character = characters.find(c => c.id === id)
+      const name = span.dataset.characterName
+      const character = (id ? characters.find(c => c.id === id) : undefined)
+        ?? (name ? characters.find(c => c.name === name) : undefined)
       if (!character) { setCharCard(null); return }
       const rect = span.getBoundingClientRect()
       const cardW = 300
