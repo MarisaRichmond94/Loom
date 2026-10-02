@@ -461,9 +461,16 @@ export default function NarrationBar({ chapterId, scrollRef, storyState, answere
   // soundtrack block: ghost play button, combined time, a thin progress track.
   // Sticky so it pins to the top of the reading pane on scroll — always within
   // reach to pause/scrub — while still resting between header and body at rest.
+  //
+  // `top-3` is shared with ReaderView's sticky action row (LOOM-158), which
+  // pins to the same band and stays BEHIND this (z-40 over its z-30), so the
+  // pill settles exactly where it did before that row existed. Pushing the
+  // pill below the row instead left a dead band above it — it read as snagged
+  // rather than pinned. Both are transparent apart from their own fills: the
+  // prose scrolling up behind them is wanted, not hidden.
   return (
     <div
-      className={`sticky top-3 z-30 mx-auto w-2/3 min-w-0 mb-8 h-8 px-4 rounded-full bg-surface-raised border border-accent/10 shadow-sm flex items-center gap-2.5 ${
+      className={`sticky top-3 z-40 mx-auto w-2/3 min-w-0 mb-8 h-8 px-4 rounded-full bg-surface-raised border border-accent/10 shadow-sm flex items-center gap-2.5 ${
         phase === 'ready' ? '' : 'justify-center'
       }`}
     >

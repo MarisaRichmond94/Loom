@@ -555,8 +555,24 @@ export default function ReaderView({
       <AppHeader lightMode={lightMode} onToggleLightMode={toggleLightMode} tools={<ShortcutsMenu />} />
 
       <main ref={mainRef} className={`flex-1 overflow-y-auto px-8${lightMode ? ' light-body' : ''}`}>
-        {/* Sticky action row */}
-        <div className="flex justify-end items-center gap-2 pr-6 py-3">
+        {/* Configure + Return, pinned to the top of the reading pane (LOOM-158).
+            They were the one piece of chrome here that scrolled away, which
+            put "get me out of preview" several screens up in a long chapter.
+
+            NO BACKGROUND, deliberately. The row carried an opaque full-bleed
+            one for a while so prose could not scroll through the space around
+            the buttons; that reads as a lid closing over the page, and the
+            prose sliding up behind the controls is the thing worth seeing.
+            The buttons and the narration pill carry their own fills, so each
+            stays legible against whatever passes under it — the same way the
+            pill has always sat over the prose it scrolls past.
+
+            Which makes the stacking the only thing this row needs to get
+            right: it shares `top-3`'s band with the pill and stays behind it
+            (z-30 here, z-40 there), so the pill keeps the resting place it
+            always had. Pushing the pill below the row instead stranded it
+            under a dead strip — the snag in the recording. */}
+        <div className="sticky top-0 z-30 flex items-center justify-end gap-2 py-3 pr-6">
           {isAuthor && (
             <button
               onClick={() => setShowConfig(true)}
