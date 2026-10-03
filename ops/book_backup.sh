@@ -609,8 +609,8 @@ else
 fi
 
 #############################################################################################
-# 5) Update ebooks (clean EPUBs for Apple Books). Reuses the chapter split the audiobook    #
-#    step just refreshed, so it does not re-open Pages. Non-fatal, like the audiobook step.  #
+# 5) Update ebooks (clean EPUBs for Apple Books). Built from Loom's dev.db (read-only), so   #
+#    it does not open Pages; rebuilds only books whose content changed. Non-fatal.          #
 #############################################################################################
 EBOOK_SCRIPT="$HOME/Scripts/generate_ebook.sh"
 EBOOK_LOG="${LOG_DIR}/ebooks_${NOW_DATE}_${NOW_TIME}.log"
