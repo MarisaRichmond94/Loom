@@ -10,7 +10,7 @@ import { chapterReader } from '@/lib/manuscript/readChapters'
 import { defaultStoryState, walkBook, type ChapterInWalk, type VariableIn } from '@/lib/manuscript/walk'
 import { readExportFormatting } from '@/lib/exportFormatting'
 import { buildEbookHtml } from '@/lib/ebook/ebookHtml'
-import { EBOOK_CSS } from '@/lib/ebook/ebookCss'
+import { ebookCss } from '@/lib/ebook/ebookCss'
 
 /**
  * Builds one book's EPUB from Loom's manuscript (the nightly `generate_ebook.sh`).
@@ -31,7 +31,7 @@ import { EBOOK_CSS } from '@/lib/ebook/ebookCss'
  * Bump when the EPUB's look changes, so every book rebuilds once even though
  * its prose did not.
  */
-const FORMAT_VERSION = 'loom-ebook-2'
+const FORMAT_VERSION = 'loom-ebook-3'
 
 export type BuildEpubOptions = {
   /** dev.db path (already resolved). */
@@ -131,7 +131,11 @@ async function patchPandocOutput(epubPath: string, labels: string[]): Promise<vo
   // (Apple Books Asset Guide, "Presentation and Styling"). pandoc's template
   // owns the <html> tag, so it is added here, to every content page.
   for (const name of Object.keys(zip.files).filter(n => /\/text\/[^/]+\.xhtml$/.test(n))) {
-    const page = await zip.file(name)!.async('string')
+    // pandoc also opens each chapter's footnote block with an <hr>, which
+    // reads as a stray line at the end of every chapter that has a footnote.
+    // The notes themselves stay; only the rule goes.
+    const page = (await zip.file(name)!.async('string'))
+      .replace(/(<section id="footnotes"[^>]*>)\s*<hr\s*\/?>/g, '$1')
     const opted = page.replace(/<html(?![^>]*\bclass=)([^>]*)>/, '<html class="ibooks-dark-theme-use-custom-text-color"$1>')
     if (opted === page) throw new Error(`could not tag <html> in ${name} for Apple Books text colors`)
     zip.file(name, opted)
@@ -166,10 +170,11 @@ export async function buildEpub(opts: BuildEpubOptions): Promise<BuildEpubResult
     chapters: walk.chapters,
     sectionBreakText: formatting.sectionBreakText,
   })
+  const css = ebookCss({ pov: formatting.styles.pov.color, date: formatting.styles.date.color })
   const footnotes = (html.match(/role="doc-noteref"/g) ?? []).length
 
   const hash = createHash('sha256')
-  hash.update(JSON.stringify({ FORMAT_VERSION, html, tocLabels, css: EBOOK_CSS, author: opts.author, title: book.title }))
+  hash.update(JSON.stringify({ FORMAT_VERSION, html, tocLabels, css, author: opts.author, title: book.title }))
   if (opts.coverPath && existsSync(opts.coverPath)) hash.update(readFileSync(opts.coverPath))
   const contentHash = hash.digest('hex')
 
@@ -186,7 +191,7 @@ export async function buildEpub(opts: BuildEpubOptions): Promise<BuildEpubResult
     const cssPath = path.join(work, 'book.css')
     const tmpOut = path.join(work, 'book.epub')
     writeFileSync(htmlPath, html)
-    writeFileSync(cssPath, EBOOK_CSS)
+    writeFileSync(cssPath, css)
     const args = [
       htmlPath, '-f', 'html', '-t', 'epub3', '-o', tmpOut,
       '--toc', '--toc-depth=1', '--split-level=1', '--css', cssPath,

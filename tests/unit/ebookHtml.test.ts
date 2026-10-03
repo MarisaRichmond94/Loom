@@ -1,4 +1,5 @@
 import { buildEbookHtml, chapterTocLabel, isThemeColor, DEFAULT_SECTION_BREAK } from '@/lib/ebook/ebookHtml'
+import { ebookCss, lighten } from '@/lib/ebook/ebookCss'
 
 // The nightly EPUB build. Each case is a formatting rule that the old
 // Pages-plain-text pipeline lost silently.
@@ -97,4 +98,19 @@ describe('isThemeColor', () => {
     ['rgb(26, 26, 42)', true], ['#000', true], ['#ffffff', true],
     ['#a1a8ab', false], ['#4f4481', false], ['rgb(16, 185, 129)', false], ['', false],
   ])('%s -> %s', (c, want) => expect(isThemeColor(c)).toBe(want))
+})
+
+describe('ebookCss', () => {
+  it('uses the export POV and date colors, lightened for dark themes', () => {
+    const css = ebookCss({ pov: '#b42029', date: '#535e64' })
+    expect(css).toContain('color: #b42029;')
+    expect(css).toContain('color: #535e64;')
+    expect(css).toContain(`color: ${lighten('#535e64', 0.45)};`)
+  })
+
+  it('lightens toward white and leaves unparseable colors alone', () => {
+    expect(lighten('#000000', 0.5)).toBe('#808080')
+    expect(lighten('#ffffff', 0.5)).toBe('#ffffff')
+    expect(lighten('red', 0.5)).toBe('red')
+  })
 })
