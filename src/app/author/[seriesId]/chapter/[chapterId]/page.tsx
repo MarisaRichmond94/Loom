@@ -1369,14 +1369,6 @@ export default function ChapterEditorPage() {
     <div className="flex min-h-full">
     <div className="flex-1 min-w-0 px-8 min-h-full flex flex-col">
       <div className="pb-3 flex-1">
-        {/* Above the sticky header, so it is the first thing on the page
-            rather than something found on the way to the prose (LOOM-122).
-            Deliberately NOT inside the sticky box: that block publishes its
-            own height as --loom-chapter-header-h for every scroll target on
-            the page, and a banner that expands and collapses inside it would
-            move all of them. Renders nothing when the chapter is clean. */}
-        <ChapterReachabilityBanner seriesId={seriesId} chapterId={chapterId} />
-
         {/* Chapter header — sticky to the top of <main>'s scroll area so the
             title, POV, date, find bar, collapse-all and ☰ action menu stay
             reachable at any depth in the chapter (KAN-30).
@@ -1410,6 +1402,21 @@ export default function ChapterEditorPage() {
               <LuArrowLeft size={11} /> {currentBook.title}
             </Link>
           )}
+
+          {/* Reachability banner — under the back link rather than above it
+              (LOOM-122 originally put it above the whole header). It lives
+              inside the sticky box so the header keeps sticking as one piece;
+              headerRef measures this box, so --loom-chapter-header-h still
+              matches what actually occludes the prose, including the banner.
+              Expanding it does grow that height while open, which nudges every
+              scroll target down by the same amount — intentional, since an
+              expanded banner really is covering that much.
+              -mt-3 cancels the banner's own top margin so the link's mb-4 sets
+              the gap; empty:hidden drops the wrapper (and its mb-4) entirely on
+              a clean chapter, when the banner renders nothing. */}
+          <div className="-mt-3 mb-4 empty:hidden">
+            <ChapterReachabilityBanner seriesId={seriesId} chapterId={chapterId} />
+          </div>
 
           {/* Title + POV — centered */}
           <div className="flex flex-col items-center mb-8">
