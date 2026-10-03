@@ -17,7 +17,9 @@ import type { ManuscriptChapter } from '@/lib/manuscript/walk'
  * their inline style, which is how text color gets through untouched.
  */
 
-export type EbookChapter = Pick<ManuscriptChapter, 'label' | 'numbered' | 'pov' | 'contents' | 'stateByContent'>
+export type EbookChapter = Pick<ManuscriptChapter, 'label' | 'numbered' | 'pov' | 'contents' | 'stateByContent'> & {
+  date?: string | null
+}
 
 export type EbookHtml = {
   html: string
@@ -141,8 +143,22 @@ function adaptProse(body: HTMLElement, sectionBreak: string, notes: string[]): v
     if (!el.getAttribute('style')?.trim()) el.replaceWith(...Array.from(el.childNodes))
   }
 
+  // A deliberate blank line. renderProseHtml keeps empty paragraphs inside a
+  // block (it only trims a block's leading/trailing ones), but pandoc drops an
+  // empty <p> outright — so it gets a non-breaking space to hold the line.
+  for (const p of Array.from(body.querySelectorAll('p'))) {
+    if (p.textContent?.trim() || p.querySelector('img')) continue
+    const div = doc.createElement('div')
+    div.className = 'blank'
+    const filler = doc.createElement('p')
+    filler.textContent = ' '
+    div.appendChild(filler)
+    p.replaceWith(div)
+  }
+
   // Paragraph-level formatting pandoc would otherwise drop.
   for (const p of Array.from(body.querySelectorAll('p'))) {
+    if (p.parentElement?.classList.contains('blank') || p.parentElement?.classList.contains('scene-break')) continue
     const classes: string[] = []
     if (p.classList.contains('no-indent')) classes.push('no-indent')
     const align = (p.getAttribute('style') ?? '').match(ALIGN_RE)?.[1]
@@ -175,6 +191,8 @@ export function buildEbookHtml(opts: {
       parts.push(`<h1 class="chapter">${escapeHtml(chapterHeading(ch))}</h1>`)
       const pov = ch.pov?.trim()
       if (pov) parts.push(`<div class="pov"><p>${escapeHtml(pov)}</p></div>`)
+      const date = ch.date?.trim()
+      if (date) parts.push(`<div class="date"><p>${escapeHtml(date)}</p></div>`)
 
       const body = doc.createElement('div')
       // renderProseHtml THROWS on unrenderable prose rather than returning ''.

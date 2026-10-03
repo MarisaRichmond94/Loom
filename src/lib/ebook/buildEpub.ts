@@ -31,7 +31,7 @@ import { EBOOK_CSS } from '@/lib/ebook/ebookCss'
  * Bump when the EPUB's look changes, so every book rebuilds once even though
  * its prose did not.
  */
-const FORMAT_VERSION = 'loom-ebook-1'
+const FORMAT_VERSION = 'loom-ebook-2'
 
 export type BuildEpubOptions = {
   /** dev.db path (already resolved). */
@@ -93,7 +93,7 @@ function loadCanonBook(dbPath: string, bookTitle: string) {
  * and refused outright if the counts disagree: a TOC whose labels point at the
  * wrong chapters is worse than pandoc's own.
  */
-async function patchTocLabels(epubPath: string, labels: string[]): Promise<void> {
+async function patchPandocOutput(epubPath: string, labels: string[]): Promise<void> {
   const zip = await JSZip.loadAsync(readFileSync(epubPath))
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
@@ -125,6 +125,17 @@ async function patchTocLabels(epubPath: string, labels: string[]): Promise<void>
   )
   if (j !== labels.length) throw new Error(`NCX has ${j} chapter entries, expected ${labels.length}`)
   zip.file(ncxName, patchedNcx)
+
+  // Apple Books turns ALL text white in its dark themes — colored text
+  // included — unless the page opts in with this class on a container
+  // (Apple Books Asset Guide, "Presentation and Styling"). pandoc's template
+  // owns the <html> tag, so it is added here, to every content page.
+  for (const name of Object.keys(zip.files).filter(n => /\/text\/[^/]+\.xhtml$/.test(n))) {
+    const page = await zip.file(name)!.async('string')
+    const opted = page.replace(/<html(?![^>]*\bclass=)([^>]*)>/, '<html class="ibooks-dark-theme-use-custom-text-color"$1>')
+    if (opted === page) throw new Error(`could not tag <html> in ${name} for Apple Books text colors`)
+    zip.file(name, opted)
+  }
 
   // EPUB requires `mimetype` first and uncompressed.
   const mimetype = await zip.file('mimetype')!.async('string')
@@ -188,7 +199,7 @@ export async function buildEpub(opts: BuildEpubOptions): Promise<BuildEpubResult
     if (run.status !== 0 || !existsSync(tmpOut)) {
       throw new Error(`pandoc failed (${run.status}): ${(run.stderr || run.error?.message || '').trim()}`)
     }
-    await patchTocLabels(tmpOut, tocLabels)
+    await patchPandocOutput(tmpOut, tocLabels)
 
     // Swap into place only once the whole file is good — a failed build
     // leaves yesterday's EPUB untouched.

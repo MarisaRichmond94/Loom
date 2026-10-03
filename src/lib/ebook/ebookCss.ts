@@ -1,8 +1,7 @@
 /**
  * The EPUB's stylesheet. Replaces pandoc's default (which gives block
- * paragraphs with a blank line between them) with book typography: indented
- * first lines, no gap, and no indent on the paragraph that opens a chapter or
- * follows a section break.
+ * paragraphs with a blank line between them) with book typography: every
+ * paragraph's first line indented — the opening one too — and no gap.
  *
  * Typeface, size, line height and justification are deliberately left alone —
  * those are the reader's settings in Apple Books, and fixing them here would
@@ -15,7 +14,7 @@ p {
 }
 
 /* Chapter opening: "1." centered, the POV centered beneath it, a touch
-   larger than the body text. */
+   larger than the body text, then the date (below). */
 h1.chapter {
   text-align: center;
   font-size: 1.6em;
@@ -30,12 +29,15 @@ div.pov p {
   margin: 0 0 2.5em;
 }
 
-/* First paragraph of a chapter and after a section break: flush left. */
-h1 + p,
-div.pov + p,
-div.scene-break + p {
+/* In-story date: left, flush, set off from the prose below it. */
+div.date p {
+  text-align: left;
   text-indent: 0;
+  margin: 0 0 1em;
 }
+
+/* A deliberate blank line in the prose. */
+div.blank p { text-indent: 0; }
 
 div.scene-break p {
   text-align: center;

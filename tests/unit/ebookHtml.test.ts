@@ -9,7 +9,7 @@ const t = (text: string, ...marks: unknown[]) => (marks.length ? { type: 'text',
 const italic = { type: 'italic' }
 const note = (content: string) => ({ type: 'footnote', attrs: { content } })
 
-const chapter = (contents: string[], over: Partial<{ label: string; numbered: boolean; pov: string | null }> = {}) => ({
+const chapter = (contents: string[], over: Partial<{ label: string; numbered: boolean; pov: string | null; date: string | null }> = {}) => ({
   label: '1', numbered: true, pov: 'Jared Gatlin', ...over,
   contents, stateByContent: contents.map(() => ({})),
 })
@@ -23,6 +23,18 @@ describe('buildEbookHtml', () => {
     expect(html).toContain('<h1 class="chapter">1.</h1>')
     expect(html).toContain('<div class="pov"><p>Jared Gatlin</p></div>')
     expect(tocLabels).toEqual(['1 - Jared Gatlin'])
+  })
+
+  it('puts the in-story date after the POV, before the prose', () => {
+    const { html } = build([doc(p(t('Hi.')))], { date: 'Monday, November 9th' })
+    expect(html).toContain('<div class="pov"><p>Jared Gatlin</p></div>\n<div class="date"><p>Monday, November 9th</p></div>\n<p>Hi.</p>')
+    expect(build([doc(p(t('Hi.')))]).html).not.toContain('class="date"')
+  })
+
+  it('keeps a deliberate blank line (pandoc drops an empty <p>)', () => {
+    const blankPara = { type: 'paragraph', attrs: { indent: true } }
+    const { html } = build([doc(p(t('a')), blankPara, p(t('b')))])
+    expect(html).toContain('<p>a</p><div class="blank"><p>&nbsp;</p></div><p>b</p>')
   })
 
   it('keeps an unnumbered title as-is', () => {
