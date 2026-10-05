@@ -42,15 +42,33 @@ export async function POST(req: NextRequest) {
   // 2b. Characters (v2+). Preserve original IDs so character marks in block content
   // still resolve and avatar files (named <charId>.jpg) line up after asset restore.
   // firstBookId + overrides are deferred to a second pass once books exist.
+  //
+  // An ID is only preserved when it is free. Importing a series's export back
+  // into the same database (to make a copy of it) finds every ID still owned
+  // by the original, and reusing them failed the whole import on a unique
+  // constraint — after the series and its variables had already been created,
+  // leaving a same-named empty series beside the original. Taken IDs get a
+  // fresh one instead; characterRefMap carries the translation to step 5.
+  const characterRefMap: Record<string, string> = {}
   if (s.characters?.length) {
-    await prisma.character.createMany({
-      data: s.characters.map((c: { _ref: string; name: string; age: number | null }) => ({
-        id: c._ref,
-        seriesId: series.id,
-        name: c.name,
-        age: c.age,
-      })),
-    })
+    const chars = s.characters as { _ref: string; name: string; age: number | null }[]
+    const taken = new Set(
+      (await prisma.character.findMany({
+        where: { id: { in: chars.map(c => c._ref) } },
+        select: { id: true },
+      })).map(c => c.id),
+    )
+    for (const c of chars) {
+      const created = await prisma.character.create({
+        data: {
+          ...(taken.has(c._ref) ? {} : { id: c._ref }),
+          seriesId: series.id,
+          name: c.name,
+          age: c.age,
+        },
+      })
+      characterRefMap[c._ref] = created.id
+    }
   }
 
   // 3. Books + chapters — collect ref→newId maps for choices and character refs
@@ -200,7 +218,7 @@ export async function POST(req: NextRequest) {
     const starred = typeof c.starred === 'boolean' ? c.starred : false
     if (firstBookId || deathBookId || lastBookId || starred) {
       await prisma.character.update({
-        where: { id: c._ref },
+        where: { id: characterRefMap[c._ref] },
         data: {
           ...(firstBookId ? { firstBookId } : {}),
           ...(deathBookId ? { deathBookId } : {}),
@@ -213,7 +231,7 @@ export async function POST(req: NextRequest) {
       const bookId = bookRefMap[o.bookRef]
       // Skip overrides for books not in the import (single-book export edge case).
       if (!bookId) continue
-      overrideRows.push({ characterId: c._ref, bookId, age: o.age ?? null })
+      overrideRows.push({ characterId: characterRefMap[c._ref], bookId, age: o.age ?? null })
     }
   }
   if (overrideRows.length) {
