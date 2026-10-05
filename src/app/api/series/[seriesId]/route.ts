@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@/generated/prisma/client'
+import { forgetSeries } from '@/lib/authorState'
 
 type Params = { params: Promise<{ seriesId: string }> }
 
@@ -76,6 +77,7 @@ export async function DELETE(_: Request, { params }: Params) {
   const { seriesId } = await params
   try {
     await prisma.series.delete({ where: { id: seriesId } })
+    await forgetSeries(seriesId).catch(() => {})
     return new NextResponse(null, { status: 204 })
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {

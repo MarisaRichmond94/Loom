@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { LuCheck, LuDatabaseBackup, LuEye, LuMenu, LuPencilLine, LuPlus, LuSettings, LuX } from 'react-icons/lu'
+import { LuCheck, LuDatabaseBackup, LuEye, LuMenu, LuPencilLine, LuPlus, LuSettings, LuTrash2, LuX } from 'react-icons/lu'
 import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import { useAuthor } from '@/lib/authorContext'
@@ -185,6 +185,8 @@ export default function AuthorSeriesPage() {
   const actionMenuRef = useRef<HTMLDivElement>(null)
   useClickOutside([actionMenuRef], () => setActionMenuOpen(false), actionMenuOpen)
   const [configureOpen, setConfigureOpen] = useState(false)
+  const [deleteSeriesOpen, setDeleteSeriesOpen] = useState(false)
+  const [deleteSeriesError, setDeleteSeriesError] = useState<string | null>(null)
 
   // ⌥⇧U — open the current URL in a new tab.
   useEffect(() => {
@@ -302,6 +304,17 @@ export default function AuthorSeriesPage() {
       body: JSON.stringify(next),
     })
     loadSeries()
+  }
+
+  // Home lists every series; /author would try to resume the last-active one,
+  // which may be the series just deleted.
+  async function handleDeleteSeries() {
+    const res = await fetch(`/api/series/${seriesId}`, { method: 'DELETE' })
+    if (!res.ok) {
+      setDeleteSeriesError(`Delete failed (${res.status}). Nothing was removed.`)
+      return
+    }
+    router.push('/')
   }
 
   async function handleDeleteBook(bookId: string) {
@@ -490,6 +503,15 @@ export default function AuthorSeriesPage() {
                 >
                   <span className="flex w-5 items-center justify-center text-accent"><LuSettings size={14} /></span>
                   <span className="flex-1">Configure</span>
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => { setActionMenuOpen(false); setDeleteSeriesError(null); setDeleteSeriesOpen(true) }}
+                  title="Delete series"
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-choice-kill transition hover:bg-choice-kill/10"
+                >
+                  <span className="flex w-5 items-center justify-center"><LuTrash2 size={14} /></span>
+                  <span className="flex-1">Delete</span>
                 </button>
               </div>
             )}
@@ -724,6 +746,55 @@ export default function AuthorSeriesPage() {
           }]}
         />
       </div>
+
+      {deleteSeriesOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-start justify-center z-50"
+          style={{ paddingTop: 'calc(60px + 10vh)', paddingLeft: '14rem' }}
+          onClick={() => setDeleteSeriesOpen(false)}
+        >
+          <div
+            className="bg-surface-raised border border-accent/20 rounded-xl p-8 max-w-2xl w-full mx-8 shadow-2xl relative"
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setDeleteSeriesOpen(false)}
+              className="absolute top-4 right-4 text-ink-faint hover:text-ink text-lg leading-none"
+            >
+              ✕
+            </button>
+            <h2 className="text-base font-bold text-ink mb-3 pr-6">
+              Are you sure you want to delete "{series.title}"?
+            </h2>
+            {/* The counts are here so two same-named series can't be confused —
+                an import of a series's own export lands beside it under the
+                same title until renamed. */}
+            <p className="text-sm text-ink mb-3">
+              {series.books.length} {series.books.length === 1 ? 'book' : 'books'},{' '}
+              {series.books.reduce((n, b) => n + b.chapters.length, 0)} chapters
+            </p>
+            <p className="text-sm text-ink-muted mb-6 leading-relaxed italic">
+              Deleting this series is permanent and cannot be undone. Every book, chapter, written
+              content, choice, story variable and reader session in it will be removed.
+            </p>
+            {deleteSeriesError && <p className="text-sm text-choice-kill mb-4">{deleteSeriesError}</p>}
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeleteSeriesOpen(false)}
+                className="px-4 py-2 rounded-lg text-ink-muted text-sm hover:text-ink transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteSeries}
+                className="px-4 py-2 rounded-lg bg-choice-kill text-white text-sm font-semibold hover:opacity-90 transition"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Outside the tab strip on purpose: this is a PAGE-level dialog, and a
           modal owned by a tab dies the moment you switch tabs. */}

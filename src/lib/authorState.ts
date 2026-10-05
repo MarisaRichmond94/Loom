@@ -41,3 +41,13 @@ export async function recordLastTouchedChapter(seriesId: string, chapterId: stri
   state.lastActiveSeriesId = seriesId
   await writeState(state)
 }
+
+// Called when a series is deleted. Without it, a bare /author visit (and the
+// WriteAI jump-in) would resume into a series that no longer exists and 404.
+export async function forgetSeries(seriesId: string): Promise<void> {
+  const state = await readState()
+  if (!(seriesId in state.lastTouched) && state.lastActiveSeriesId !== seriesId) return
+  delete state.lastTouched[seriesId]
+  if (state.lastActiveSeriesId === seriesId) state.lastActiveSeriesId = null
+  await writeState(state)
+}
