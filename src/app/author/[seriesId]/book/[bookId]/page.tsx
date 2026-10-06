@@ -53,7 +53,7 @@ const ExplorePanel = dynamic(() => import('@/components/explore/ExplorePanel'), 
 })
 import ExplorePanelSkeleton from '@/components/editor/ExplorePanelSkeleton'
 import { prefetchBookOutline } from '@/components/editor/outlineCache'
-import { prefetchScope } from '@/components/explore/scopeCache'
+import { getCachedScope, prefetchScope } from '@/components/explore/scopeCache'
 import { useBookEvents } from '@/components/timeline/useBookEvents'
 import type { ChapterChoice } from '@/components/editor/EventModal'
 import { writerPortraitUrl } from '@/lib/writerPortrait'
@@ -367,6 +367,22 @@ export default function BookDetailPage() {
     setOutlineNeverIngested(false)
     void prefetchBookOutline(seriesId, bookId).then(r => {
       if (live) setOutlineNeverIngested(r.reason === 'book-not-in-writeai')
+    })
+    return () => { live = false }
+  }, [seriesId, bookId])
+
+  // Explore, by the same rule: dropped only when the scope read says nothing
+  // up to this book is in WriteAI's index ('not-analyzed') — there is nothing
+  // to ask about. Offline/error keep the tab for their own messages. Seeded
+  // from the scope cache so a warm revisit never shows the tab at all.
+  const [exploreNotAnalyzed, setExploreNotAnalyzed] = useState(
+    () => getCachedScope(seriesId, bookId)?.state === 'not-analyzed',
+  )
+  useEffect(() => {
+    let live = true
+    setExploreNotAnalyzed(getCachedScope(seriesId, bookId)?.state === 'not-analyzed')
+    void prefetchScope(seriesId, bookId).then(r => {
+      if (live) setExploreNotAnalyzed(r.state === 'not-analyzed')
     })
     return () => { live = false }
   }, [seriesId, bookId])
@@ -922,7 +938,9 @@ export default function BookDetailPage() {
             id: 'explore',
             label: 'Explore',
             content: <ExplorePanel seriesId={seriesId} bookId={bookId} bookTitle={book.title} fillHeight />,
-          }].filter(s => !(outlineNeverIngested && s.id === 'outline'))}
+          }].filter(s =>
+            !(outlineNeverIngested && s.id === 'outline') &&
+            !(exploreNotAnalyzed && s.id === 'explore'))}
         />
       </div>
 
