@@ -353,6 +353,24 @@ export default function BookDetailPage() {
   useEffect(() => { loadWriterPool() }, [loadWriterPool])
   useEffect(() => { loadFrontMatter() }, [loadFrontMatter])
 
+  // A canon book WriteAI has never ingested has no outline, and won't until it
+  // is (e.g. the Alt series' books, kept out of ~/Writing on purpose) — so the
+  // tab is dropped instead of leading with an empty state, and SectionTabs
+  // falls back to Chapters. Only that answer hides it: while the check is in
+  // flight the tab stays (canon books still open on Outline), and "WriteAI
+  // isn't running" keeps it for its Try again. Non-canon books never get this
+  // answer — the route serves them Loom's local outline (LOOM-153). Same
+  // cached request the Outline tab makes on mount, so this adds no fetch.
+  const [outlineNeverIngested, setOutlineNeverIngested] = useState(false)
+  useEffect(() => {
+    let live = true
+    setOutlineNeverIngested(false)
+    void prefetchBookOutline(seriesId, bookId).then(r => {
+      if (live) setOutlineNeverIngested(r.reason === 'book-not-in-writeai')
+    })
+    return () => { live = false }
+  }, [seriesId, bookId])
+
   // Warms the Outline and Explore tabs' own data (and JS chunks) after the
   // page's own load has settled, so opening either tab usually finds its
   // content already there instead of popping in after the tab strip has
@@ -904,7 +922,7 @@ export default function BookDetailPage() {
             id: 'explore',
             label: 'Explore',
             content: <ExplorePanel seriesId={seriesId} bookId={bookId} bookTitle={book.title} fillHeight />,
-          }]}
+          }].filter(s => !(outlineNeverIngested && s.id === 'outline'))}
         />
       </div>
 
