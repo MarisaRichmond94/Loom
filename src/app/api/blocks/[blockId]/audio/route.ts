@@ -26,8 +26,17 @@ export async function POST(req: Request, { params }: Params) {
 export async function DELETE(_: Request, { params }: Params) {
   const { blockId } = await params
   const block = await prisma.contentBlock.findUnique({ where: { id: blockId } })
+  // A copied series (export → import) shares its source's music files: the
+  // copy's blocks point at the original's /music/<originalBlockId>.mp3. So
+  // the file is only deleted once no other block plays it — otherwise
+  // removing audio in the copy would silence the original.
   if (block?.content) {
-    await unlink(path.join(process.cwd(), 'public', block.content)).catch(() => null)
+    const sharedWith = await prisma.contentBlock.count({
+      where: { content: block.content, id: { not: blockId } },
+    })
+    if (sharedWith === 0) {
+      await unlink(path.join(process.cwd(), 'public', block.content)).catch(() => null)
+    }
   }
   // Sidecar album art lives at /music/<blockId>-art.jpg — without the audio
   // it's orphaned, so clear it too.
