@@ -9,7 +9,10 @@ import type { StoryState } from '@/lib/storyEngine'
 // resolve in the exported OOXML instead of leaking raw {{...}} text.
 
 const DB = path.join(__dirname, '../../dev.db')
-const SERIES_ID = 'cmp8wtcr50000zufxy70xic4e'
+// The Alt Dark Horse Series: the full choose-your-own-adventure manuscript.
+// The original series (cmp8wtcr50000zufxy70xic4e) had its branches, variables
+// and {{templates}} removed on 2026-10-05, so the real templates live only here.
+const SERIES_ID = 'cmuvs53ry00000gfx4cimo81j'
 // The real-manuscript checks need the local dev database; skip them elsewhere
 // (CI) so the portable synthetic case still runs.
 const hasDb = existsSync(DB)
@@ -57,11 +60,11 @@ describe('canon export template resolution (real manuscripts)', () => {
   const storyState = hasDb ? storyStateFromDefaults() : {}
 
   dbIt('no MARK-SPLIT template leaks after the fix (the only residual leaks are single-quote+apostrophe collisions)', () => {
-    const bookTitles = ['Faded', 'The Secrets We Keep']
+    const bookTitles = ['Faded (Alt)', 'The Secrets We Keep (Alt)']
     const idList = bookTitles.map(t => `'${t}'`).join(',')
     const rows = sql(
       `SELECT cb.content FROM ContentBlock cb JOIN Chapter ch ON cb.chapterId=ch.id ` +
-      `JOIN Book b ON ch.bookId=b.id WHERE b.title IN (${idList}) AND cb.type='text' ` +
+      `JOIN Book b ON ch.bookId=b.id WHERE b.seriesId='${SERIES_ID}' AND b.title IN (${idList}) AND cb.type='text' ` +
       `AND cb.content LIKE '%{{%';`,
     ).trim()
     const contents = rows.split('\n').filter(l => l.trim().startsWith('{'))
@@ -83,8 +86,12 @@ describe('canon export template resolution (real manuscripts)', () => {
 
   dbIt('preserves branch formatting: the italic "nearly" survives resolution', () => {
     const content = sql(
-      `SELECT content FROM ContentBlock WHERE content LIKE '%both of his grandparents%' LIMIT 1;`,
+      `SELECT cb.content FROM ContentBlock cb JOIN Chapter ch ON cb.chapterId=ch.id ` +
+      `JOIN Book b ON ch.bookId=b.id WHERE b.seriesId='${SERIES_ID}' ` +
+      `AND cb.content LIKE '%both of his grandparents%' AND cb.content LIKE '%{{%' LIMIT 1;`,
     ).trim()
+    // Without a template in it this would pass while resolving nothing.
+    expect(content).toContain('{{')
     const xml = serializeTipTapDoc(content, opts(storyState), { notes: [] })
     expect(xml).not.toContain('{{')
     // didJaredKillHisGrandpa defaults to true → the TRUE branch renders.
