@@ -85,8 +85,12 @@ synth.write(utt) { (buffer: AVAudioBuffer) in
     rec.frames += Int64(pcm.frameLength)
 }
 
+// Wall-clock cap on synthesis. Synthesis runs ~6x real time, so the 180s
+// default only covers ~18 min of audio; the clean-audiobook build
+// (ops/clean_audio.py) raises it via NARRATE_TIMEOUT_S for whole long chapters.
+let timeoutS = Double(ProcessInfo.processInfo.environment["NARRATE_TIMEOUT_S"] ?? "") ?? 180
 let start = Date()
-while !done && Date().timeIntervalSince(start) < 180 {
+while !done && Date().timeIntervalSince(start) < timeoutS {
     RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
 }
 

@@ -19,6 +19,9 @@
 #     ./generate_audiobook.sh            # interactive menu
 #     ./generate_audiobook.sh 2 5        # build books 2 and 5 directly
 #     ./generate_audiobook.sh all        # build everything
+#     ./generate_audiobook.sh --clean 2  # ALSO build "Faded (Clean)": swear words
+#                                        # in clean_words.txt bleeped out (on
+#                                        # request only; see clean_book below)
 # ============================================================================
 
 ROOT="/Users/marisarichmond/Writing/Audiobooks"
@@ -132,8 +135,8 @@ chapter_title(){  # $1=segment.txt  -> echoes title
 }
 
 # --- 4+5. concat segments -> tagged .m4b with chapters + cover ---------------
-build_m4b(){  # $1=title  $2=pages  $3=track  $4=bookdir(.m4a live here)  $5=txtdir
-  local title="$1" pages="$2" track="$3" bookdir="$4" txtdir="$5"
+build_m4b(){  # $1=title  $2=pages  $3=track  $4=bookdir(.m4a live here)  $5=txtdir  [$6=m4b dir]
+  local title="$1" pages="$2" track="$3" bookdir="$4" txtdir="$5" m4bdir="${6:-$ROOT/m4b}"
   local segs=("$bookdir"/*.m4a(N)); [ ${#segs} -eq 0 ] && { echo "  no audio for $title"; return 1; }
   local work; work=$(mktemp -d)
   local list="$work/list.txt" meta="$work/meta.txt" cover="$work/cover.jpg"
@@ -162,7 +165,7 @@ build_m4b(){  # $1=title  $2=pages  $3=track  $4=bookdir(.m4a live here)  $5=txt
   local front="${pages:h}/Dust Jacket/Front Cover.png"
   [ -f "$front" ] && ffmpeg -y -i "$front" -vf "scale=-2:1600" -q:v 3 -f mjpeg "$cover" >/dev/null 2>&1
 
-  local out="$ROOT/m4b/$title.m4b"; mkdir -p "$ROOT/m4b"; rm -f "$out"
+  local out="$m4bdir/$title.m4b"; mkdir -p "$m4bdir"; rm -f "$out"
   if [ -f "$cover" ]; then
     ( cd "$work" && ffmpeg -y -f concat -safe 0 -i list.txt -i meta.txt -i cover.jpg \
         -map 0:a -map 2:v -map_metadata 1 -c:a copy -c:v copy -disposition:v attached_pic -f mp4 "$out" ) >/dev/null 2>&1
@@ -256,10 +259,42 @@ incremental_book(){  # $1=index
   fi
 }
 
+# --- clean edition: same book, swear words bleeped -----------------------------
+#   On request only — never run by --update/--nightly — and written under
+#   $ROOT/Clean, which book_backup.sh doesn't copy. Narration + bleeping is
+#   ops/clean_audio.py; it caches per chapter, so a rerun only re-narrates
+#   chapters whose text changed, and a clean_words.txt edit only re-bleeps.
+clean_book(){  # $1=index
+  local idx="$1" title="${TITLES[$idx]}" pages="${PAGES[$idx]}" track="${TRACKS[$idx]}"
+  local croot="$ROOT/Clean/$title"
+  local txtdir="$croot/chapters_txt" raw="$ROOT/Clean/text/$(printf '%02d' $track) - $title.txt"
+  echo "=============================================================="
+  echo " $title (Clean)"
+  echo "=============================================================="
+  [ -f "$pages" ] || { echo "  !! source not found: $pages"; return 1; }
+
+  echo "  [1/3] exporting + splitting text from Pages…"
+  mkdir -p "$ROOT/Clean/text" "$txtdir"
+  export_text "$pages" "$raw" || { echo "  !! Pages export failed"; return 1; }
+  find "$txtdir" -maxdepth 1 -name '*.txt' -delete 2>/dev/null
+  split_text "$raw" "$title" "$txtdir"
+
+  echo "  [2/3] narrating + bleeping (only chapters that changed)…"
+  python3 "$SCRIPT_DIR/clean_audio.py" book "$SCRIPT_DIR/clean_words.txt" \
+    "$txtdir" "$croot/work" "$croot/audio" --jobs 3 \
+    || echo "  !! some chapters failed (listed above) — building with the rest"
+
+  echo "  [3/3] building tagged .m4b…"
+  build_m4b "$title (Clean)" "$pages" "$track" "$croot/audio" "$txtdir" "$ROOT/Clean/m4b"
+}
+
 # --- mode + selection --------------------------------------------------------
 #   --update / --nightly : non-interactive incremental mode (for nightly cron)
-INCREMENTAL=0
+#   --clean              : build the bleeped "(Clean)" edition instead
+SCRIPT_DIR="${0:A:h}"
+INCREMENTAL=0 CLEAN=0
 if [[ "$1" == (--update|--nightly|-u) ]]; then INCREMENTAL=1; shift; fi
+if [[ "$1" == --clean ]]; then CLEAN=1; shift; fi
 
 typeset -a sel
 if (( INCREMENTAL )); then
@@ -267,7 +302,8 @@ if (( INCREMENTAL )); then
 elif [ $# -gt 0 ]; then
   args="$*"
 else
-  echo "Which audiobook(s) do you want to generate?"
+  (( CLEAN )) && echo "Which CLEAN audiobook(s) do you want to generate?" \
+              || echo "Which audiobook(s) do you want to generate?"
   for i in {1..${#TITLES}}; do echo "  $i) ${TITLES[$i]}"; done
   echo "  a) ALL"
   printf "Enter number(s) (e.g. 2  or  2 5  or  a): "
@@ -286,13 +322,17 @@ fi
 
 typeset -a selnames; for idx in "${(@)sel}"; do selnames+=("${TITLES[$idx]}"); done
 SECONDS=0
-if (( INCREMENTAL )); then
+if (( CLEAN )); then
+  echo "Will generate clean edition(s): ${(j:, :)selnames}"
+elif (( INCREMENTAL )); then
   echo "[$(date '+%Y-%m-%d %H:%M')] incremental update: ${(j:, :)selnames}"
 else
   echo "Will generate (from scratch): ${(j:, :)selnames}"
 fi
 for idx in "${(@)sel}"; do
-  (( INCREMENTAL )) && incremental_book "$idx" || process_book "$idx"
+  if (( CLEAN )); then clean_book "$idx"
+  else (( INCREMENTAL )) && incremental_book "$idx" || process_book "$idx"; fi
 done
 echo "=============================================================="
-echo "Done in $((SECONDS/60))m $((SECONDS%60))s. Audiobooks in: $ROOT/m4b/"
+(( CLEAN )) && out_dir="$ROOT/Clean/m4b" || out_dir="$ROOT/m4b"
+echo "Done in $((SECONDS/60))m $((SECONDS%60))s. Audiobooks in: $out_dir/"

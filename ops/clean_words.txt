@@ -1,0 +1,57 @@
+# Words bleeped in the "(Clean)" audiobooks — see ops/clean_audio.py.
+#
+# One word or phrase per line, matched case-insensitively as WHOLE words, so
+# "ass" never hits "assume"/"class" and "hell" never hits "hello"/"shell".
+# A "*" matches any letters at that end: "fuck*" covers fucking/fucked/fucker,
+# "*shit*" also covers bullshit/bullshitting. Lines starting with # are ignored.
+# Editing this file makes the next `generate_audiobook.sh --clean` re-bleep
+# every chapter (cheap: the narration itself is cached).
+#
+# A line starting with "!" is an exception: never bleep inside it. Hyphens
+# count as word breaks (so "half-assed" is caught), which also means innocent
+# compounds need listing here.
+
+!pin-prick*
+
+*fuck*
+*shit*
+
+hell
+hells
+hellhole
+
+damn
+damned
+damnit
+dammit
+goddamn*
+
+ass
+asses
+assed
+asshole*
+dumbass*
+jackass*
+badass*
+smartass*
+kickass*
+
+bastard*
+bitch*
+dick
+dicks
+dicking
+dickhead*
+prick
+pricks
+pussy
+pussies
+douche*
+
+boner*
+porn*
+beating off
+condom*
+sex
+sexual
+sexually
