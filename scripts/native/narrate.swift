@@ -85,16 +85,18 @@ synth.write(utt) { (buffer: AVAudioBuffer) in
     rec.frames += Int64(pcm.frameLength)
 }
 
-// Wall-clock cap on synthesis. Synthesis runs ~6x real time, so the 180s
-// default only covers ~18 min of audio; the clean-audiobook build
-// (ops/clean_audio.py) raises it via NARRATE_TIMEOUT_S for whole long chapters.
-let timeoutS = Double(ProcessInfo.processInfo.environment["NARRATE_TIMEOUT_S"] ?? "") ?? 180
+// Wall-clock cap on synthesis — only a backstop for a wedged synthesizer.
+// Synthesis runs ~6-10x real time depending on load, so a 30-min chapter takes
+// ~3-5 min; the old 180s cap silently cut long chapters short under load.
+// Callers can tighten it with NARRATE_TIMEOUT_S. Either way `done` in the JSON
+// says whether the audio is complete — never trust output without it.
+let timeoutS = Double(ProcessInfo.processInfo.environment["NARRATE_TIMEOUT_S"] ?? "") ?? 900
 let start = Date()
 while !done && Date().timeIntervalSince(start) < timeoutS {
     RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
 }
 
-let payload: [String: Any] = ["sampleRate": rec.sampleRate, "frames": rec.frames, "words": rec.words]
+let payload: [String: Any] = ["done": done, "sampleRate": rec.sampleRate, "frames": rec.frames, "words": rec.words]
 let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted])
 try data.write(to: URL(fileURLWithPath: outTimingPath))
 

@@ -87,11 +87,17 @@ export async function synthesize(text: string, voice: string): Promise<SynthResu
       await writeFile(txt, text, 'utf-8')
       await run(NARRATE_BIN, [voice, txt, caf, json], HANG_TIMEOUT_MS)
       const parsed = JSON.parse(await readFile(json, 'utf-8')) as {
-        sampleRate: number; frames: number; words: WordTiming[]
+        done?: boolean; sampleRate: number; frames: number; words: WordTiming[]
       }
       // A watchdog-killed or silent run yields no words/frames — reject so the
       // loop retries rather than persisting a broken track.
       if (!parsed.words?.length || !parsed.frames) throw new Error('empty synthesis output')
+      // The helper writes whatever it has when its own time cap fires, so a
+      // non-empty file can still be a chapter cut off mid-sentence. Segments
+      // are cached by text hash forever, so persisting one would serve the
+      // truncated audio until the prose changed. (A helper built before `done`
+      // existed omits it; ensure-narrate rebuilds it on the next start.)
+      if (parsed.done === false) throw new Error('synthesis cut off before the end of the text')
       await run('ffmpeg', ['-y', '-i', caf, '-c:a', 'aac', '-b:a', '64k', '-ac', '1', m4a], FFMPEG_TIMEOUT_MS)
       const audio = await readFile(m4a)
       const durationMs = Math.round((parsed.frames / parsed.sampleRate) * 1000)
