@@ -71,7 +71,7 @@ MIN_WORD_S = 0.08          # never look for the trailing silence before this
 SUSPECT_LONG_S = 1.6       # bleeps longer than this get flagged in the report
 # Part of every chapter's stamp: bump it when the bleep placement changes so
 # the next run re-bleeps every chapter (from cached narration — seconds each).
-BLEEP_VERSION = 3
+BLEEP_VERSION = 4
 
 
 def log(msg):
@@ -161,7 +161,7 @@ def decode(path):
 def encode(samples, out_path):
     tmp = str(out_path) + ".tmp.m4a"
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(RATE), "-ac", "1",
-                    "-i", "-", "-c:a", "aac", "-b:a", "64k", tmp],
+                    "-i", "-", "-c:a", "aac", "-b:a", "32k", tmp],   # = the regular edition's
                    input=samples.tobytes(), check=True)
     os.replace(tmp, out_path)   # never leave a half-written chapter behind
 
