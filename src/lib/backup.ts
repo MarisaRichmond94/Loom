@@ -137,29 +137,33 @@ export async function runBackup(): Promise<{ ok: boolean; message: string }> {
     return { ok: false, message: 'Backup not configured or disabled.' }
   }
 
+  // Blocks load one chapter at a time, not as one nested include over every
+  // series. Prisma resolves each include level with a single `IN (...)` of the
+  // parent ids, and this SQLite driver caps a query at 999 parameters — so the
+  // choices/overrides level failed (P2029) once the whole database passed 999
+  // blocks (2026-10-05, when the Alt series copy roughly doubled it), and every
+  // nightly backup failed from then on. Per chapter, that list is a chapter's
+  // own blocks: nowhere near the cap however big the series grows.
   const allSeries = await prisma.series.findMany({
     include: {
       variables: true,
       characters: { include: { overrides: true } },
       books: {
         orderBy: { order: 'asc' },
-        include: {
-          chapters: {
-            orderBy: { order: 'asc' },
-            include: {
-              blocks: {
-                orderBy: { order: 'asc' },
-                include: {
-                  choices: { orderBy: { order: 'asc' } },
-                  overrides: { orderBy: { order: 'asc' } },
-                },
-              },
-            },
-          },
-        },
+        include: { chapters: { orderBy: { order: 'asc' } } },
       },
     },
   })
+  async function chapterBlocks(chapterId: string) {
+    return prisma.contentBlock.findMany({
+      where: { chapterId },
+      orderBy: { order: 'asc' },
+      include: {
+        choices: { orderBy: { order: 'asc' } },
+        overrides: { orderBy: { order: 'asc' } },
+      },
+    })
+  }
 
   const dateStamp = new Date().toISOString().slice(0, 10)
   const publicDir = path.join(process.cwd(), 'public')
@@ -174,7 +178,12 @@ export async function runBackup(): Promise<{ ok: boolean; message: string }> {
 
   for (const series of allSeries) {
     const seriesDir = path.join(settings.folder, sanitize(series.title))
-    for (const book of series.books) {
+    for (const bookRow of series.books) {
+      const chapters = []
+      for (const chapter of bookRow.chapters) {
+        chapters.push({ ...chapter, blocks: await chapterBlocks(chapter.id) })
+      }
+      const book = { ...bookRow, chapters }
       const bookDir = path.join(seriesDir, sanitize(book.title))
       await mkdir(bookDir, { recursive: true })
       const baseName = `${sanitize(book.title)}_${dateStamp}`
