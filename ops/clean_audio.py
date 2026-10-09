@@ -19,14 +19,13 @@ inside a multi-word callback as a fallback. Its end is the next word's onset,
 trimmed back to where the audio actually goes quiet, so a swear word at the
 end of a sentence doesn't bleep through the pause that follows.
 
-Per chapter, under <work>/:
-  <stem>.raw.m4a + <stem>.timing.json   unbleeped narration (the slow part,
-                                        ~6x real time), reused until the
-                                        chapter's text changes
-  <stem>.stamp                          text+word-list hash of the current
-                                        <out>/<stem>.m4a; a match skips it
-A word-list edit therefore only re-bleeps (seconds per chapter), never
-re-narrates.
+The audio is compressed exactly once, after bleeping: narration goes to a
+lossless temp file, never to a compressed cache. (Caching it as AAC and
+compressing again after the bleeps stacked two rounds of artifacts and made
+this edition sound noticeably echo-y — 2026-10-09.) So there is no audio cache;
+instead <work>/<stem>.stamp holds a hash of the chapter's text and of exactly
+which words in it get bleeped. A match skips the chapter, so a word-list edit
+only re-narrates the chapters where it changes what's bleeped.
 
 usage:
   clean_audio.py book <words.txt> <chapters_txt_dir> <work_dir> <out_dir> [--jobs N]
@@ -69,9 +68,11 @@ SILENCE_RMS = 0.006        # ~-44 dBFS: "the word is over"
 SILENCE_RUN_S = 0.06
 MIN_WORD_S = 0.08          # never look for the trailing silence before this
 SUSPECT_LONG_S = 1.6       # bleeps longer than this get flagged in the report
-# Part of every chapter's stamp: bump it when the bleep placement changes so
-# the next run re-bleeps every chapter (from cached narration — seconds each).
-BLEEP_VERSION = 4
+# The regular edition's rate (generate_audiobook.sh AAC_BITRATE), same encoder.
+AAC_BITRATE = "48k"
+# Part of every chapter's stamp: bump it when the bleep placement or encoding
+# changes so the next run redoes every chapter.
+BLEEP_VERSION = 5
 
 
 def log(msg):
@@ -127,25 +128,21 @@ def ensure_narrate_bin():
     subprocess.run(["swiftc", "-O", str(NARRATE_SRC), "-o", str(NARRATE_BIN)], check=True)
 
 
-def narrate(txt_path, raw_m4a, timing_json, text_sha):
+def narrate(txt_path, tmp):
+    """(lossless samples, timing) for one chapter."""
     env = dict(os.environ, NARRATE_TIMEOUT_S=str(NARRATE_TIMEOUT_S))
-    with tempfile.TemporaryDirectory() as tmp:
-        caf, js = os.path.join(tmp, "a.caf"), os.path.join(tmp, "a.json")
-        for attempt in range(1, MAX_TRIES + 1):
-            p = subprocess.run([str(NARRATE_BIN), VOICE, str(txt_path), caf, js],
-                               env=env, capture_output=True, text=True)
-            # The helper writes whatever it has even when it gives up, so
-            # done=true is the only proof the audio isn't cut short.
-            if p.returncode == 0 and "done=true" in p.stderr:
-                break
-            log(f"    retry {attempt}: {txt_path.name}: {p.stderr.strip()[-200:]}")
-        else:
-            raise RuntimeError(f"narration failed for {txt_path.name}")
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", caf, "-c:a", "aac", "-b:a", "64k",
-                        str(raw_m4a)], check=True)
-        timing = json.loads(Path(js).read_text())
-    timing["textSha"] = text_sha
-    Path(timing_json).write_text(json.dumps(timing))
+    caf, js = os.path.join(tmp, "a.caf"), os.path.join(tmp, "a.json")
+    for attempt in range(1, MAX_TRIES + 1):
+        p = subprocess.run([str(NARRATE_BIN), VOICE, str(txt_path), caf, js],
+                           env=env, capture_output=True, text=True)
+        # The helper writes whatever it has even when it gives up, so
+        # done=true is the only proof the audio isn't cut short.
+        if p.returncode == 0 and "done=true" in p.stderr:
+            break
+        log(f"    retry {attempt}: {txt_path.name}: {p.stderr.strip()[-200:]}")
+    else:
+        raise RuntimeError(f"narration failed for {txt_path.name}")
+    return decode(caf), json.loads(Path(js).read_text())
 
 
 # --- audio -----------------------------------------------------------------
@@ -161,7 +158,7 @@ def decode(path):
 def encode(samples, out_path):
     tmp = str(out_path) + ".tmp.m4a"
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(RATE), "-ac", "1",
-                    "-i", "-", "-c:a", "aac", "-b:a", "32k", tmp],   # = the regular edition's
+                    "-i", "-", "-c:a", "aac_at", "-b:a", AAC_BITRATE, tmp],
                    input=samples.tobytes(), check=True)
     os.replace(tmp, out_path)   # never leave a half-written chapter behind
 
@@ -225,29 +222,26 @@ def bleep(samples, s, e):
         samples[s + k] = TONE_AMP * env * math.sin(2 * math.pi * TONE_HZ * k / RATE)
 
 
-def clean_chapter(txt_path, rx, words_sha, work, out_dir):
+def clean_chapter(txt_path, rx, work, out_dir):
     stem = txt_path.stem
     text = txt_path.read_text(encoding="utf-8")
+    spans = find_spans(text, rx)
     text_sha = hashlib.sha256(text.encode()).hexdigest()
+    spans_sha = hashlib.sha256(json.dumps(spans).encode()).hexdigest()
     out = out_dir / f"{stem}.m4a"
     stamp = work / f"{stem}.stamp"
-    want = f"{text_sha} {words_sha} v{BLEEP_VERSION}"
+    want = f"{text_sha} {spans_sha} v{BLEEP_VERSION}"
     if out.exists() and stamp.exists() and stamp.read_text() == want:
         return stem, None, "cached"
 
-    raw, tj = work / f"{stem}.raw.m4a", work / f"{stem}.timing.json"
-    narrated = False
-    if not (raw.exists() and tj.exists() and json.loads(tj.read_text()).get("textSha") == text_sha):
-        narrate(txt_path, raw, tj, text_sha)
-        narrated = True
-    timing = json.loads(tj.read_text())
-    samples = decode(raw)
+    with tempfile.TemporaryDirectory() as tmp:
+        samples, timing = narrate(txt_path, tmp)
     total_ms = len(samples) / RATE * 1000
 
     # Locate every span first, then merge overlapping/adjacent bleeps
     # ("fucking asshole") into one continuous tone.
     regions, rows = [], []
-    for span in find_spans(text, rx):
+    for span in spans:
         loc = locate(span, timing["words"], total_ms)
         if loc is None:
             rows.append([stem, span[2], "", "", "unlocated"])
@@ -275,7 +269,7 @@ def clean_chapter(txt_path, rx, words_sha, work, out_dir):
     encode(samples, out)
     (work / f"{stem}.report.tsv").write_text("\n".join("\t".join(r) for r in rows) + ("\n" if rows else ""))
     stamp.write_text(want)
-    return stem, rows, "narrated+bleeped" if narrated else "re-bleeped"
+    return stem, rows, "narrated+bleeped"
 
 
 def cmd_book(words_path, txt_dir, work, out_dir, jobs):
@@ -283,19 +277,20 @@ def cmd_book(words_path, txt_dir, work, out_dir, jobs):
     work.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
     rx = load_words(words_path)
-    words_sha = hashlib.sha256(Path(words_path).read_bytes()).hexdigest()
     ensure_narrate_bin()
 
     txts = sorted(txt_dir.glob("*.txt"))
     live = {t.stem for t in txts}
     for f in list(out_dir.glob("*.m4a")) + list(work.glob("*.*")):
         stem = f.name.split(".")[0]
-        if stem not in live:            # chapter no longer exists in the book
+        # chapter no longer exists in the book, or a leftover of the old
+        # compressed narration cache (before v5)
+        if stem not in live or f.name.endswith((".raw.m4a", ".timing.json")):
             f.unlink()
 
     failed, total_bleeps, flagged = 0, 0, []
     with ThreadPoolExecutor(max_workers=jobs) as pool:
-        futs = {pool.submit(clean_chapter, t, rx, words_sha, work, out_dir): t for t in txts}
+        futs = {pool.submit(clean_chapter, t, rx, work, out_dir): t for t in txts}
         for n, fut in enumerate(as_completed(futs), 1):
             t = futs[fut]
             try:

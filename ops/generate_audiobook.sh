@@ -28,6 +28,12 @@ ROOT="/Users/marisarichmond/Writing/Audiobooks"
 AUTHOR="B.C. Stryker"
 VOICE="Tom (Enhanced)"
 TIMEOUT=90          # seconds before a stuck `say` is killed and retried
+# Speech is compressed exactly once, from say's lossless output. 32 kbps (say's
+# built-in AAC, which ignores --bit-rate) sounded hollow/echo-y; 48 kbps was
+# indistinguishable from uncompressed in an A/B listen (2026-10-09). Chapters
+# below MIN_BITRATE are the old encoding and get re-narrated by --update.
+AAC_BITRATE=48k MIN_BITRATE=40000
+JOBS=3              # chapters narrated at once by --update
 
 # --- book registry (reading order) : title | .pages path | series track ------
 typeset -a TITLES PAGES TRACKS
@@ -102,10 +108,10 @@ split_text(){  # $1=txt  $2=title  $3=outdir
 
 # --- 3. narrate one segment with a watchdog (retries on hang) -----------------
 gen_one(){  # $1=txt  $2=out.m4a  -> 0 on success
-  local try
+  local try aiff="${2:r}.aiff"
   for try in 1 2 3; do
-    rm -f "$2"
-    say -v "$VOICE" -f "$1" -o "$2" --data-format=aac@22050 &
+    rm -f "$2" "$aiff"
+    say -v "$VOICE" -f "$1" -o "$aiff" &
     local pid=$! waited=0 killed=0
     while kill -0 $pid 2>/dev/null; do
       sleep 2; waited=$((waited+2))
@@ -115,10 +121,21 @@ gen_one(){  # $1=txt  $2=out.m4a  -> 0 on success
     # Success = say finished on its own (not watchdog-killed) AND wrote real audio.
     # The size floor (2KB) only rejects empty/failed output; short Part markers
     # are ~40KB, so they pass. A watchdog kill is never accepted (truncated audio).
-    [ $killed -eq 0 ] && [ -f "$2" ] && [ "$(stat -f%z "$2")" -gt 2000 ] && return 0
+    if [ $killed -eq 0 ] && [ -f "$aiff" ] && [ "$(stat -f%z "$aiff")" -gt 2000 ] &&
+       ffmpeg -v error -y -i "$aiff" -c:a aac_at -b:a "$AAC_BITRATE" "$2"; then
+      rm -f "$aiff"; return 0
+    fi
     echo "      retry $try ($([ $killed -eq 1 ] && echo 'stalled — watchdog killed' || echo 'short/failed output')): ${2:t}"
   done
+  rm -f "$2" "$aiff"
   return 1
+}
+
+# --- 1 if a built file is the old low-bitrate encoding (or unreadable) --------
+old_encoding(){  # $1=.m4a/.m4b
+  local br; br=$(ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate -of csv=p=0 "$1" 2>/dev/null)
+  [[ "$br" == <-> ]] && (( br >= MIN_BITRATE )) && return 1
+  return 0
 }
 
 # --- title shown in the chapter list, derived from a segment's first lines ---
@@ -223,7 +240,8 @@ incremental_book(){  # $1=index
   [ -f "$pages" ] || { echo "   !! source not found: $pages"; return 1; }
 
   # level 1 — skip the whole book if .pages is no newer than the built .m4b
-  if [ -f "$mb" ] && [ "$(stat -f%m "$pages")" -le "$(stat -f%m "$mb")" ]; then
+  # (and the .m4b isn't the old low-bitrate encoding)
+  if [ -f "$mb" ] && [ "$(stat -f%m "$pages")" -le "$(stat -f%m "$mb")" ] && ! old_encoding "$mb"; then
     echo "   unchanged since last build — skipped"; return 0
   fi
 
@@ -234,15 +252,22 @@ incremental_book(){  # $1=index
   split_text "$raw" "$title" "$newdir"
 
   local changed=0 nt name live out
-  # additions + modifications (also regenerates if the .m4a is missing)
+  # additions + modifications (also regenerates if the .m4a is missing or is
+  # the old encoding), JOBS chapters at a time; each records its outcome in
+  # $newdir/ok so the count survives the background subshells
+  mkdir -p "$newdir/ok"
+  zmodload zsh/parameter
   for nt in "$newdir"/*.txt(N); do
     name="${nt:t}"; live="$txtdir/$name"; out="$bookdir/${nt:t:r}.m4a"
-    if [ ! -f "$live" ] || ! cmp -s "$nt" "$live" || [ ! -f "$out" ]; then
+    if [ ! -f "$live" ] || ! cmp -s "$nt" "$live" || [ ! -f "$out" ] || old_encoding "$out"; then
       cp "$nt" "$live"
-      if gen_one "$live" "$out"; then echo "     ↻ ${nt:t:r}"; changed=$((changed+1))
-      else echo "     !! failed: ${nt:t:r}"; fi
+      while (( ${#jobstates} >= JOBS )); do sleep 1; done
+      ( if gen_one "$live" "$out"; then echo "     ↻ ${nt:t:r}"; touch "$newdir/ok/$name"
+        else echo "     !! failed: ${nt:t:r}"; fi ) &
     fi
   done
+  wait
+  changed=$(ls "$newdir/ok" | wc -l | tr -d ' ')
   # deletions — segments that no longer exist in the new split
   for live in "$txtdir"/*.txt(N); do
     name="${live:t}"
@@ -262,8 +287,8 @@ incremental_book(){  # $1=index
 # --- clean edition: same book, swear words bleeped -----------------------------
 #   On request only — never run by --update/--nightly — and written under
 #   $ROOT/Clean, which book_backup.sh doesn't copy. Narration + bleeping is
-#   ops/clean_audio.py; it caches per chapter, so a rerun only re-narrates
-#   chapters whose text changed, and a clean_words.txt edit only re-bleeps.
+#   ops/clean_audio.py; it stamps each chapter, so a rerun only re-narrates
+#   chapters whose text, or whose set of bleeped words, changed.
 clean_book(){  # $1=index
   local idx="$1" title="${TITLES[$idx]}" pages="${PAGES[$idx]}" track="${TRACKS[$idx]}"
   local croot="$ROOT/Clean/$title"
@@ -295,6 +320,20 @@ SCRIPT_DIR="${0:A:h}"
 INCREMENTAL=0 CLEAN=0
 if [[ "$1" == (--update|--nightly|-u) ]]; then INCREMENTAL=1; shift; fi
 if [[ "$1" == --clean ]]; then CLEAN=1; shift; fi
+
+# One build at a time: two runs would fight over the same chapter files and
+# both drive Pages' export. A run still going at 22:30 makes the nightly
+# --update skip (it catches up the next night). A lock whose owner has died is
+# taken over.
+LOCK="$ROOT/.generate.lock"
+if ! mkdir "$LOCK" 2>/dev/null; then
+  owner=$(cat "$LOCK/pid" 2>/dev/null)
+  if [[ -n "$owner" ]] && kill -0 "$owner" 2>/dev/null; then
+    echo "Another audiobook build (pid $owner) is running — skipping."; exit 0
+  fi
+fi
+echo $$ > "$LOCK/pid"
+trap 'rm -rf "$LOCK"' EXIT
 
 typeset -a sel
 if (( INCREMENTAL )); then
