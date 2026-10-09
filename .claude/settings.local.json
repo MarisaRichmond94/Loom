@@ -38,5 +38,11 @@
     "deny": [
       "Bash(rm -rf *)"
     ]
+  },
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Restarting the live Loom server with exactly `launchctl kickstart -k gui/501/com.marisarichmond.loom` is allowed: Marisa approved Claude restarting it (2026-10-08). This covers the restart only — NOT launchctl bootout/bootstrap, stopping or killing the service, `npm run build`/`next build` in this checkout, or `npm run dev`; those still need her explicit OK each time."
+    ]
   }
 }
