@@ -65,9 +65,16 @@ export async function POST(req: Request, { params }: Params) {
   // editor that has one of them open — an open editor holds pre-replace prose
   // and would otherwise PATCH it back over the result on the next keystroke.
   const touchedChapterIds = new Set<string>()
+  // Canon books this replace writes to. Returned so the client can re-save
+  // each one to Pages: a replace edits the database behind the editor's back,
+  // so the blur autosave that normally keeps the .pages file current never
+  // fires, and the manuscript silently falls behind Loom. Non-canon books are
+  // left out — they are never exported (LOOM-149), and asking would only fail.
+  const touchedCanonBookIds = new Set<string>()
 
   for (const book of series.books) {
     if (bookFilter && !bookFilter.has(book.id)) continue
+    const chaptersBefore = touchedChapterIds.size
     for (const chapter of book.chapters) {
       for (const block of chapter.blocks) {
         const blockData: { content?: string; prompt?: string; baseContent?: string } = {}
@@ -108,12 +115,13 @@ export async function POST(req: Request, { params }: Params) {
         }
       }
     }
+    if (book.canon && touchedChapterIds.size > chaptersBefore) touchedCanonBookIds.add(book.id)
   }
 
   const total = counts.prose + counts.prompt + counts.choice + counts.override
-  if (dryRun) return NextResponse.json({ total, counts, chapterIds: [] })
+  if (dryRun) return NextResponse.json({ total, counts, chapterIds: [], bookIds: [] })
 
-  if (updates.length === 0) return NextResponse.json({ total: 0, counts, chapterIds: [] })
+  if (updates.length === 0) return NextResponse.json({ total: 0, counts, chapterIds: [], bookIds: [] })
 
   // One transaction so a mid-write failure leaves the series untouched.
   await prisma.$transaction(
@@ -125,5 +133,10 @@ export async function POST(req: Request, { params }: Params) {
   )
   await refreshBlockWordCounts([...touchedBlockIds])
 
-  return NextResponse.json({ total, counts, chapterIds: [...touchedChapterIds] })
+  return NextResponse.json({
+    total,
+    counts,
+    chapterIds: [...touchedChapterIds],
+    bookIds: [...touchedCanonBookIds],
+  })
 }

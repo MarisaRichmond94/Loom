@@ -114,7 +114,18 @@ export async function POST(req: Request, { params }: Params) {
     }
   }
 
+  // The book too, when it is canon, so the client can re-save it to Pages —
+  // see the bulk route for why a replace has to ask for that explicitly.
+  let bookIds: string[] = []
+  if (count > 0 && chapterId) {
+    const chapter = await prisma.chapter.findUnique({
+      where: { id: chapterId },
+      select: { book: { select: { id: true, canon: true } } },
+    })
+    if (chapter?.book.canon) bookIds = [chapter.book.id]
+  }
+
   // Only report the chapter when something actually changed — a no-op
   // replace shouldn't make an open editor reload.
-  return NextResponse.json({ count, chapterIds: count > 0 && chapterId ? [chapterId] : [] })
+  return NextResponse.json({ count, chapterIds: count > 0 && chapterId ? [chapterId] : [], bookIds })
 }

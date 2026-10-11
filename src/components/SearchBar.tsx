@@ -6,6 +6,7 @@ import { LuSearch, LuX, LuReplace, LuCaseSensitive, LuWholeWord, LuSlidersHorizo
 import { FaBookOpen } from 'react-icons/fa'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { flushPendingProse, publishProseReplaced } from '@/lib/proseSync'
+import { useCanonSave } from '@/components/editor/useCanonSave'
 
 type Hit = {
   bookId: string
@@ -86,6 +87,20 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
   const [replacing, setReplacing] = useState(false)
   const [replaceError, setReplaceError] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+
+  // A replace rewrites prose in the database without going through an editor,
+  // so the blur autosave that keeps each book's .pages manuscript current
+  // never fires — the manuscript (and the audiobook built from it) quietly
+  // falls behind Loom. Re-save every canon book the replace touched, under the
+  // same Settings → Export autosave preference as any other unprompted save.
+  //
+  // One book at a time, awaited: useCanonSave coalesces a request made while a
+  // save is running into a single pending slot, so firing them all at once
+  // would keep only the last book and drop the rest.
+  const { saveCanonAfterStructuralChange } = useCanonSave(seriesId)
+  async function resaveBooks(bookIds: string[] | undefined) {
+    for (const bookId of bookIds ?? []) await saveCanonAfterStructuralChange(bookId)
+  }
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Click-outside closes the panel without losing the query — writers
@@ -245,6 +260,7 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
       // Tell any editor holding this chapter to rebuild from the rewritten
       // row, before its stale copy can be PATCHed back over the replacement.
       publishProseReplaced({ seriesId, chapterIds: data.chapterIds ?? [] })
+      void resaveBooks(data.bookIds)
       // Refresh matches so the now-rewritten row drops out of (or
       // updates in) the list.
       runFetch(query, Array.from(bookFilter), matchCase, matchWord)
@@ -274,6 +290,7 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
       // Any editor open on a rewritten chapter still holds pre-replace prose;
       // tell it to rebuild before a keystroke PATCHes that copy back.
       publishProseReplaced({ seriesId, chapterIds: data.chapterIds ?? [] })
+      void resaveBooks(data.bookIds)
       // Refresh the match list so the writer sees the new state.
       runFetch(query, bookIds, matchCase, matchWord)
     } finally { setReplacing(false) }
