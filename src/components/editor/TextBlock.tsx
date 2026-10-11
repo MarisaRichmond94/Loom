@@ -251,7 +251,7 @@ function ToolBtn({ active, onClick, title, children }: {
 // before scrolling, so the writer can't see the line they're typing on.
 // We scroll proactively once the caret enters a margin zone at the top
 // or bottom of the scrolling ancestor.
-const CARET_MARGIN = 96
+const CARET_MARGIN = 48
 // When the caret is *entirely* off-screen — typing into a block that
 // scrolled away, or a dictation/programmatic insert far from the viewport —
 // a minimal nudge would drag it in at whichever edge it left from, showing
@@ -362,6 +362,7 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
   const [varSuggest, setVarSuggest] = useState<{ from: number; query: string; coords: { x: number; y: number } } | null>(null)
   const [varSelectedIdx, setVarSelectedIdx] = useState(0)
 
+  const pointerSelectingRef = useRef(false)
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -388,14 +389,24 @@ export default function TextBlock({ content, onChange, autoFocus, characters = [
       NarrationHighlight,
       ReadAloud.configure({ getVariables: () => variablesRef.current }),
     ],
-    editorProps: { attributes: { spellcheck: 'true' } },
+    editorProps: {
+      attributes: { spellcheck: 'true' },
+      // A click that lands the caret on an already-visible line must not
+      // scroll: the margin zone below exists for typing/arrow keys, and
+      // applying it to clicks nudges a fully-visible line away from where the
+      // writer just pointed. Track the pointer so onSelectionUpdate can tell.
+      handleDOMEvents: {
+        mousedown: () => { pointerSelectingRef.current = true; return false },
+        mouseup: () => { setTimeout(() => { pointerSelectingRef.current = false }, 0); return false },
+      },
+    },
     content: content ? parseContent(content) : JSON.parse(EMPTY),
     onUpdate: ({ editor }) => {
       localEditRef.current = true
       onChange(JSON.stringify(editor.getJSON()))
       keepCaretInView(editor)
     },
-    onSelectionUpdate: ({ editor }) => { keepCaretInView(editor) },
+    onSelectionUpdate: ({ editor }) => { if (!pointerSelectingRef.current) keepCaretInView(editor) },
     onFocus: () => setFocused(true),
     onBlur: ({ editor }) => { setFocused(false); editor.commands.setTextSelection(editor.state.selection.anchor); onBlurPropRef.current?.() },
   })
