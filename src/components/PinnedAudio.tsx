@@ -33,6 +33,7 @@ const PinnedAudio = forwardRef<PinnedAudioHandle, Props>(function PinnedAudio({ 
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [muted, setMuted] = useState(false)
+  const [volume, setVolume] = useState(1)
   const [pinMode, setPinMode] = useState(false)
 
   const hasPin = pinStart != null || pinEnd != null
@@ -105,6 +106,17 @@ const PinnedAudio = forwardRef<PinnedAudioHandle, Props>(function PinnedAudio({ 
     setMuted(a.muted)
   }
 
+  function changeVolume(v: number) {
+    const a = audioRef.current
+    if (!a) return
+    a.volume = v
+    // Dragging up from zero should be audible, and dragging to zero should
+    // read as muted, so the icon and the slider never disagree.
+    a.muted = v === 0
+    setVolume(v)
+    setMuted(a.muted)
+  }
+
   function seekFromEvent(clientX: number, target: HTMLDivElement) {
     const a = audioRef.current
     if (!a || !duration) return
@@ -156,14 +168,27 @@ const PinnedAudio = forwardRef<PinnedAudioHandle, Props>(function PinnedAudio({ 
           style={{ width: `${pct}%` }}
         />
       </div>
-      <button
-        type="button"
-        onClick={() => { onInteract?.(); toggleMute() }}
-        title={muted ? 'Unmute' : 'Mute'}
-        className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-ink hover:bg-accent/10 transition"
-      >
-        {muted ? <LuVolumeX size={14} /> : <LuVolume2 size={14} />}
-      </button>
+      <div className="group shrink-0 flex items-center">
+        <button
+          type="button"
+          onClick={() => { onInteract?.(); toggleMute() }}
+          title={muted ? 'Unmute' : 'Mute'}
+          className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-ink hover:bg-accent/10 transition"
+        >
+          {muted || volume === 0 ? <LuVolumeX size={14} /> : <LuVolume2 size={14} />}
+        </button>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={Math.round((muted ? 0 : volume) * 100)}
+          onChange={e => { onInteract?.(); changeVolume(Number(e.target.value) / 100) }}
+          title={`Volume ${Math.round((muted ? 0 : volume) * 100)}%`}
+          aria-label="Volume"
+          className="w-0 opacity-0 group-hover:w-16 group-hover:opacity-100 group-hover:ml-1 focus:w-16 focus:opacity-100 focus:ml-1 transition-all duration-150 h-1 accent-accent cursor-pointer"
+        />
+      </div>
       {hasPin && (
         <button
           type="button"
