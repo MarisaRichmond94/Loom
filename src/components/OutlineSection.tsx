@@ -392,16 +392,20 @@ export default function OutlineSection({ seriesId, bookId }: { seriesId: string;
     createPortal(
       <div className="flex items-center gap-2">
         {/* A ghost icon, like the Characters tab's refresh: a secondary action
-            beside the primary one. The tooltip carries the detail. */}
-        <button
-          onClick={() => setBulkSyncOpen(true)}
-          disabled={busy || rows.length === 0}
-          title="Sync summaries — replace summaries you wrote with WriteAI’s AI-generated ones. You choose which chapters."
-          aria-label="Sync summaries"
-          className="flex items-center rounded px-2 py-1.5 text-xs text-ink-faint transition hover:text-ink disabled:opacity-50"
-        >
-          <LuRefreshCw size={13} />
-        </button>
+            beside the primary one. The tooltip carries the detail. Hidden
+            outright when WriteAI has no summaries for this book (never
+            analysed, or unreachable) — there is nothing to sync to. */}
+        {aiAvailable && (
+          <button
+            onClick={() => setBulkSyncOpen(true)}
+            disabled={busy || rows.length === 0}
+            title="Sync summaries — replace summaries you wrote with WriteAI’s AI-generated ones. You choose which chapters."
+            aria-label="Sync summaries"
+            className="flex items-center rounded px-2 py-1.5 text-xs text-ink-faint transition hover:text-ink disabled:opacity-50"
+          >
+            <LuRefreshCw size={13} />
+          </button>
+        )}
         <button
           onClick={() => insertAt(appendIndex)}
           disabled={busy || loading}

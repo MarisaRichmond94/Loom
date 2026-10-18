@@ -114,6 +114,8 @@ describe('outline board', () => {
     setup()
     for (const r of ROWS) expect(await screen.findByText(r.title)).toBeInTheDocument()
     expect(screen.queryByText('AI generated')).not.toBeInTheDocument()
+    // Nothing to sync to, so no Sync button at all.
+    expect(screen.queryByRole('button', { name: 'Sync summaries' })).not.toBeInTheDocument()
   })
 
   it('offers Sync only where the writer’s summary covers an AI one', async () => {
