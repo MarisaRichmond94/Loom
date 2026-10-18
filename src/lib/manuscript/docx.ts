@@ -164,7 +164,12 @@ function chapterHeadingXml(chapter: ManuscriptChapter): string {
 
 const PAGE_BREAK_P = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>'
 
-function sectPrXml(f: ExportFormatting, withRefs: boolean): string {
+// `startOnOddPage` marks the section as starting on the next odd (recto)
+// page: the layout engine inserts a blank page only when the previous
+// section would otherwise leave this one on a verso. It must sit on the
+// section that STARTS there — on the preceding section's sectPr, Pages
+// ignores it (verified through a real Pages round-trip).
+function sectPrXml(f: ExportFormatting, withRefs: boolean, startOnOddPage = false): string {
   const refs = withRefs
     ? (f.runningHeaders
         ? '<w:headerReference w:type="default" r:id="rIdHdr1"/><w:headerReference w:type="even" r:id="rIdHdr2"/>'
@@ -175,6 +180,7 @@ function sectPrXml(f: ExportFormatting, withRefs: boolean): string {
     : ''
   return (
     refs +
+    (startOnOddPage ? '<w:type w:val="oddPage"/>' : '') +
     `<w:pgSz w:w="${inTwips(f.page.widthIn)}" w:h="${inTwips(f.page.heightIn)}" w:orient="portrait"/>` +
     `<w:pgMar w:top="${inTwips(f.page.marginTopIn)}" w:right="${inTwips(f.page.marginRightIn)}" ` +
     `w:bottom="${inTwips(f.page.marginBottomIn)}" w:left="${inTwips(f.page.marginLeftIn)}" ` +
@@ -331,7 +337,9 @@ export async function buildManuscriptDocx(opts: BuildManuscriptOptions): Promise
     `${XML_DECL}<w:document ${W_NS}><w:body>` +
     fmSectionXml +
     chaptersXml +
-    `<w:sectPr>${sectPrXml(f, true)}</w:sectPr>` +
+    // The story always opens on a front (recto) page. Without front matter
+    // it already starts on page 1.
+    `<w:sectPr>${sectPrXml(f, true, !!fm)}</w:sectPr>` +
     '</w:body></w:document>'
 
   let stylesXml = buildStylesXml(f, template)
