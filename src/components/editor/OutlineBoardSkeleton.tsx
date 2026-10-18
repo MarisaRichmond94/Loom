@@ -27,11 +27,12 @@ export default function OutlineBoardSkeleton({ cards = 8 }: { cards?: number }) 
   return (
     <div className="flex flex-col gap-3">
       {/* Sticky, matching the real filter bar (LOOM-141) — one field per real
-          filter (Character, POV), plus Clear. Non-interactive here, just the same
+          filter (Character, POV, Event), plus Clear. Non-interactive here, just the same
           footprint so the board doesn't slide up the moment the real filters
           mount. No pb — see the real component for why stacking it with the
           parent's gap-3 is wrong. */}
       <div className="sticky top-0 z-10 bg-surface-base flex flex-wrap items-end gap-3 pb-1">
+        <FieldSkeleton />
         <FieldSkeleton />
         <FieldSkeleton />
         {/* The Clear button, which the real bar always renders (disabled when

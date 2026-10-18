@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   DndContext,
@@ -14,29 +14,55 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { LuPlus } from 'react-icons/lu'
+import { LuPlus, LuRefreshCw } from 'react-icons/lu'
 import ConfirmDialog from './ConfirmDialog'
+import DeleteChapterDialog from './DeleteChapterDialog'
 import { useSectionActionSlot } from './SectionTabs'
-import OutlineCard from './editor/OutlineCard'
 import OutlineBoardSkeleton from './editor/OutlineBoardSkeleton'
 import OutlineStalenessBanner from './editor/OutlineStalenessBanner'
-import { outlineCardLabels } from '@/lib/outlineCards'
-import { useBookOutline } from './editor/useBookOutline'
+import { invalidateOutlineCache, prefetchBookOutline, type OutlineResult } from './editor/outlineCache'
+import { useCanonSave } from './editor/useCanonSave'
+import ChapterOutlineCard, { type KindToggle } from './outline/ChapterOutlineCard'
+import SyncSummariesDialog, { type SyncCandidate } from './outline/SyncSummariesDialog'
 import { useBookChapterTags } from './chapters/useBookChapterTags'
 import { useTimelineData } from './timeline/useTimelineData'
 import TagFilterSelect, { ClearFiltersButton, type FilterOption } from './chapters/TagFilterSelect'
-import type { OutlineCard as Card } from '@/lib/writerOutline'
+import { useAuthor } from '@/lib/authorContext'
+import { matchGaps, type BookChapterRow } from '@/lib/bookChapterTags'
+import { buildAiSummaries, resolveSummary, type AiSummary, type ResolvedSummary } from '@/lib/outlineSummaries'
+import {
+  clampDropIndex,
+  isEpilogueTitle,
+  isPinnedChapter,
+  isPrologueTitle,
+  nextChapterTitle,
+  renumberAfterDrag,
+} from '@/lib/chapterNumbering'
 
-// The book page's Outline section (LOOM-96, editable in LOOM-97).
+// The book page's Outline tab — one board over the book's REAL chapters.
 //
-// The same board WriteAI's plan pane shows, over the same store — a port
-// against a shared spec rather than a shared component, because the two apps
-// are on different React majors and the epic's contract is shared tokens and
-// specs, not components, until Phase B.
+// This replaced two tabs. The old Outline tab was a proxy over WriteAI's
+// `plan_outline.json`, so a book WriteAI had never ingested (a new book, or one
+// deliberately kept out of ~/Writing) had no board at all, and moving or
+// deleting its cards never touched the manuscript. The Chapters tab had Loom's
+// real sequence but was read-only. Here every card IS a Loom chapter:
 //
-// ⚠️ Every content edit is a whole-list PUT — WriteAI has no per-card update —
-// so the hook spreads changes over the existing card rather than rebuilding it,
-// and trusts the response over local state. See useBookOutline.
+//   add       → a blank chapter, titled "Chapter N"; later chapters renumber
+//   drag      → moves the chapter; "Chapter N" titles renumber
+//   delete    → deletes the chapter (the chapter page's own confirmation)
+//   prologue / epilogue → the first / last card's hover toggle
+//   POV, date → the chapter's own columns
+//   summary   → the writer's ChapterSummary, which ALWAYS wins over WriteAI's
+//
+// WriteAI is read here and never written: its generated summaries are joined
+// on (badged "AI generated") wherever the writer has not written one, and Sync
+// switches a card back to WriteAI's text. With WriteAI down or the book never
+// ingested, the board still works completely — only the AI summaries are absent.
+//
+// Every structural change is followed by the same steps the sidebar takes:
+// re-read the rows, reload the sidebar's series, and the canon save (which,
+// with autosave on, re-exports the manuscript so WriteAI's numbering follows —
+// and for a book with no ~/Writing folder, simply does nothing).
 
 /**
  * A drag sensor that refuses to start inside an interactive region.
@@ -45,9 +71,7 @@ import type { OutlineCard as Card } from '@/lib/writerOutline'
  * physical — but the card is also full of inputs, and a text field you cannot
  * click into because the tile stole the pointer is worse than no dragging at
  * all. Anything marked `data-no-dnd="true"` (or inside something marked so)
- * blocks activation.
- *
- * Ported from WriteAI's NoDndPointerSensor for exactly this reason.
+ * blocks activation. Ported from WriteAI's NoDndPointerSensor.
  */
 class NoDndPointerSensor extends PointerSensor {
   static activators = [
@@ -65,26 +89,18 @@ class NoDndPointerSensor extends PointerSensor {
   ]
 }
 
-function SortableOutlineCard(props: {
-  card: Card
-  label: string
-  seriesId: string
-  povSuggestions: string[]
-  onSave: (changes: Partial<Card>) => void
-  onDelete: () => void
-  disabled: boolean
-  active: boolean
-  onToggleActive: () => void
-  faded: boolean
-  highlighted: boolean
-}) {
-  const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
-    id: props.card.id,
-  })
+type CardProps = React.ComponentProps<typeof ChapterOutlineCard>
 
+function SortableCard(props: CardProps & { sortDisabled: boolean }) {
+  const { sortDisabled, ...card } = props
+  const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
+    id: card.chapterId,
+    disabled: sortDisabled,
+  })
   return (
-    <OutlineCard
-      {...props}
+    <ChapterOutlineCard
+      {...card}
+      draggable={!sortDisabled}
       dragRef={setNodeRef}
       dragAttributes={attributes as unknown as Record<string, unknown>}
       dragListeners={listeners as unknown as Record<string, unknown>}
@@ -94,69 +110,307 @@ function SortableOutlineCard(props: {
   )
 }
 
-export default function OutlineSection({
-  seriesId,
-  bookId,
-}: {
-  seriesId: string
-  bookId: string
-}) {
-  // Fetched here rather than in the page because the tab strip mounts only the
-  // active section — so this runs exactly when the Outline tab is opened, and
-  // never for a writer who only came for the cast. The endpoint behind it seeds
-  // and saves on a GET, which makes "only when asked for" worth arranging.
-  const { outline, reason, loading, onRetry, saving, error, editCard, reorder, addCard, deleteCard } =
-    useBookOutline(seriesId, bookId)
+/** The hover toggle each end of the book offers, or null. */
+function kindToggleFor(rows: BookChapterRow[], index: number): KindToggle | null {
+  const row = rows[index]
+  if (index === 0) {
+    return isPrologueTitle(row.title)
+      ? { kind: 'chapter', label: 'Turn the prologue back into Chapter 1' }
+      : { kind: 'prologue', label: 'Make this the prologue' }
+  }
+  if (index === rows.length - 1) {
+    return isEpilogueTitle(row.title)
+      ? { kind: 'chapter', label: 'Turn the epilogue back into a numbered chapter' }
+      : { kind: 'epilogue', label: 'Make this the epilogue' }
+  }
+  return null
+}
 
-  const [pendingDelete, setPendingDelete] = useState<{ card: Card; label: string } | null>(null)
-  const [draggingId, setDraggingId] = useState<string | null>(null)
-  // Only one card open at a time — the board, not the card, owns this.
-  const [activeCardId, setActiveCardId] = useState<string | null>(null)
+async function readError(res: Response): Promise<string> {
+  const data = await res.json().catch(() => null)
+  return (data as { error?: string } | null)?.error ?? `request failed (${res.status})`
+}
+
+export default function OutlineSection({ seriesId, bookId }: { seriesId: string; bookId: string }) {
+  const { chapters: rows, loading, failed, refresh, applyManualSummary, replaceLocal } =
+    useBookChapterTags(seriesId, bookId)
+  const { loadSeries } = useAuthor()
+  const { saveCanonAfterStructuralChange } = useCanonSave(seriesId)
+  // Shared with the Timeline tab through its cache, for the filters' names.
+  const { events, characterPool } = useTimelineData()
   const actionSlot = useSectionActionSlot()
+
+  // ── WriteAI's summaries, read-only ────────────────────────────────────────
+  // Through the shared outline cache, so the page's idle prefetch and this
+  // mount land on one request. That GET is not a pure read on WriteAI's side
+  // (it seeds/reconciles its own store) — the same request the old Outline tab
+  // made on every open, nothing new.
+  const [outlineResult, setOutlineResult] = useState<OutlineResult | null>(null)
+  const loadOutline = useCallback(
+    (fresh = false) => {
+      if (fresh) invalidateOutlineCache(seriesId, bookId)
+      let live = true
+      void prefetchBookOutline(seriesId, bookId).then(r => {
+        if (live) setOutlineResult(r)
+      })
+      return () => {
+        live = false
+      }
+    },
+    [seriesId, bookId],
+  )
+  useEffect(() => loadOutline(), [loadOutline])
+  const ai: Record<string, AiSummary> = useMemo(
+    () => (outlineResult?.outline ? buildAiSummaries(outlineResult.outline.cards) : {}),
+    [outlineResult],
+  )
+  const aiAvailable = Object.values(ai).some(a => a.aiHtml !== null)
+
+  const summaries: Record<string, ResolvedSummary> = useMemo(() => {
+    const out: Record<string, ResolvedSummary> = {}
+    for (const row of rows) out[row.chapterId] = resolveSummary(row.manualSummary, ai[row.chapterId])
+    return out
+  }, [rows, ai])
+
+  // ── Filters (carried over from the Chapters tab) ──────────────────────────
+  const [characterIds, setCharacterIds] = useState<string[]>([])
+  const [pov, setPov] = useState<string | null>(null)
+  const [eventId, setEventId] = useState<string | null>(null)
+  const filtering = characterIds.length > 0 || pov !== null || eventId !== null
+
+  // Only entities actually tagged somewhere in this book — offering the full
+  // cast would fill the list with names whose every selection returns nothing.
+  const characterOptions: FilterOption[] = useMemo(() => {
+    const tagged = new Set(rows.flatMap(c => c.characters).map(e => e.id))
+    return characterPool
+      .filter(c => tagged.has(c.id))
+      .map(c => ({ id: c.id, name: c.name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [rows, characterPool])
+  const eventOptions: FilterOption[] = useMemo(() => {
+    const tagged = new Set(rows.flatMap(c => c.events).map(e => e.id))
+    return events
+      .filter(e => tagged.has(e.id))
+      .map(e => ({ id: e.id, name: e.title }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [rows, events])
+  // Every POV already used in this book — the filter's options and the chip's
+  // autocomplete. Sorted so the list does not reshuffle as chapters move.
+  const povSuggestions = useMemo(
+    () => [...new Set(rows.map(r => r.pov).filter((p): p is string => !!p))].sort((a, b) => a.localeCompare(b)),
+    [rows],
+  )
+  const povOptions: FilterOption[] = povSuggestions.map(p => ({ id: p, name: p }))
+
+  // AND, not OR — across fields and within the character field alike. Adding
+  // a name must never widen the result.
+  const matches = useCallback(
+    (row: BookChapterRow) =>
+      characterIds.every(id => row.characters.some(c => c.id === id)) &&
+      (pov === null || row.pov === pov) &&
+      (eventId === null || row.events.some(e => e.id === eventId)),
+    [characterIds, pov, eventId],
+  )
+  const gaps = useMemo(() => (filtering ? matchGaps(rows, matches) : []), [rows, matches, filtering])
+
+  // ── Board state ───────────────────────────────────────────────────────────
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<BookChapterRow | null>(null)
+  const [pendingSync, setPendingSync] = useState<BookChapterRow | null>(null)
+  const [bulkSyncOpen, setBulkSyncOpen] = useState(false)
+  const boardRef = useRef<HTMLDivElement>(null)
+
+  // Clicking outside the board hands the wheel back from the active card.
+  useEffect(() => {
+    if (activeId === null) return
+    function onDown(e: MouseEvent) {
+      if (!boardRef.current?.contains(e.target as Node)) setActiveId(null)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [activeId])
 
   // A little distance before a drag starts, so a click on the card is still a
   // click and a stray twitch does not reorder the book.
   const sensors = useSensors(useSensor(NoDndPointerSensor, { activationConstraint: { distance: 4 } }))
 
-  // The character filter (LOOM-141) — same behaviour as the Chapters tab's:
-  // Loom's own chapter-character tags, joined onto a card through its
-  // `loom_id`. A planned card with no chapter behind it yet can never match,
-  // same as an off-canon chapter with no tags there.
-  const { chapters: chapterTags } = useBookChapterTags(seriesId, bookId)
-  const { characterPool } = useTimelineData()
-  const [characterIds, setCharacterIds] = useState<string[]>([])
-  const [pov, setPov] = useState<string | null>(null)
-  const charactersByChapterId = useMemo(
-    () => new Map(chapterTags.map(row => [row.chapterId, row.characters])),
-    [chapterTags],
+  /** Run one structural change, then bring every view of the book back in line. */
+  const structural = useCallback(
+    async (work: () => Promise<void>) => {
+      setBusy(true)
+      setError(null)
+      try {
+        await work()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Something went wrong.')
+      } finally {
+        // Re-read even after a failure: the truth is the database, and a
+        // half-believed optimistic state is worse than a refetch.
+        await Promise.all([refresh(), loadSeries()])
+        void saveCanonAfterStructuralChange(bookId)
+        setBusy(false)
+      }
+    },
+    [refresh, loadSeries, saveCanonAfterStructuralChange, bookId],
   )
-  // Only characters actually tagged somewhere in this book — offering the
-  // full cast would fill the list with names whose every selection returns
-  // nothing, the same reasoning ChaptersSection's own filter documents.
-  const characterOptions: FilterOption[] = useMemo(() => {
-    const tagged = new Set(chapterTags.flatMap(c => c.characters).map(e => e.id))
-    return characterPool
-      .filter(c => tagged.has(c.id))
-      .map(c => ({ id: c.id, name: c.name }))
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [chapterTags, characterPool])
-  const filtering = characterIds.length > 0 || pov !== null
-  function cardMatches(card: Card): boolean {
-    // POV lives on the card itself, so it is answerable for a planned card
-    // with no chapter behind it — unlike the character tags below.
-    if (pov !== null && card.pov !== pov) return false
-    if (characterIds.length === 0) return true
-    if (!card.loom_id) return false
-    // AND, not OR: two names means "the cards where they are together".
-    // Adding a name must never widen the result.
-    const tagged = charactersByChapterId.get(card.loom_id) ?? []
-    return characterIds.every(id => tagged.some(c => c.id === id))
+
+  /** Insert a blank chapter so it lands at `index` in the current sequence. */
+  function insertAt(index: number) {
+    const title = nextChapterTitle(rows, index)
+    // Always an explicit position. The route's append path numbers by row
+    // COUNT, which collides with an existing `order` the moment the book's
+    // orders have a gap; an explicit insert shifts what is there instead.
+    const atOrder = index < rows.length ? rows[index].order : (rows.at(-1)?.order ?? 0) + 1
+    void structural(async () => {
+      const res = await fetch(`/api/series/${seriesId}/books/${bookId}/chapters`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, insertAtOrder: atOrder }),
+      })
+      if (!res.ok) throw new Error(`Couldn’t add the chapter: ${await readError(res)}`)
+      const created = (await res.json()) as { id?: string }
+      if (created.id) setActiveId(created.id)
+    })
   }
 
-  // The board's own shape while it loads, not a line of text: the tab is
-  // opened often, and a wait that already looks like the answer is a shorter
-  // wait than one that reflows into it.
-  if (loading && !outline) {
+  /** Where "Add chapter" puts one: the end, or just before the Epilogue. */
+  const appendIndex =
+    rows.length > 0 && isEpilogueTitle(rows[rows.length - 1].title) ? rows.length - 1 : rows.length
+
+  function onDragEnd(event: DragEndEvent) {
+    setDraggingId(null)
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const from = rows.findIndex(r => r.chapterId === active.id)
+    const overIndex = rows.findIndex(r => r.chapterId === over.id)
+    if (from < 0 || overIndex < 0) return
+    const to = clampDropIndex(rows, overIndex)
+    if (to === from) return
+
+    // Same two steps as the sidebar: positional order first, then renumber only
+    // the chapters sharing the moved one's prefix ("Chapter N").
+    const movedTitle = rows[from].title
+    const moved = arrayMove(rows, from, to).map((r, i) => ({ ...r, order: i + 1 }))
+    const renumbered = renumberAfterDrag(moved, movedTitle)
+    replaceLocal(renumbered)
+    void structural(async () => {
+      const res = await fetch(`/api/series/${seriesId}/books/${bookId}/chapters/reorder`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(renumbered.map(r => ({ id: r.chapterId, order: r.order, title: r.title }))),
+      })
+      if (!res.ok) throw new Error(`Couldn’t move the chapter: ${await readError(res)}`)
+    })
+  }
+
+  function toggleKind(row: BookChapterRow, toggle: KindToggle) {
+    void structural(async () => {
+      const res = await fetch(`/api/series/${seriesId}/books/${bookId}/chapters/${row.chapterId}/kind`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: toggle.kind }),
+      })
+      if (!res.ok) throw new Error(`Couldn’t change ${row.title}: ${await readError(res)}`)
+    })
+  }
+
+  function deleteChapter(row: BookChapterRow) {
+    setPendingDelete(null)
+    if (activeId === row.chapterId) setActiveId(null)
+    void structural(async () => {
+      const res = await fetch(`/api/series/${seriesId}/books/${bookId}/chapters/${row.chapterId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error(`Couldn’t delete ${row.title}: ${await readError(res)}`)
+    })
+  }
+
+  /** POV/date are the manuscript's header lines, so they re-export too. */
+  async function saveMeta(row: BookChapterRow, data: { pov?: string; date?: string | null }) {
+    setError(null)
+    const res = await fetch(`/api/series/${seriesId}/books/${bookId}/chapters/${row.chapterId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) {
+      setError(`Couldn’t save ${row.title}: ${await readError(res)}`)
+      return
+    }
+    replaceLocal(rows.map(r => (r.chapterId === row.chapterId ? { ...r, ...data } : r)))
+    void saveCanonAfterStructuralChange(bookId)
+  }
+
+  async function saveSummary(row: BookChapterRow, html: string) {
+    setError(null)
+    const res = await fetch(`/api/chapters/${row.chapterId}/summary`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body: html }),
+    })
+    if (!res.ok) {
+      setError(`Couldn’t save the summary for ${row.title}: ${await readError(res)}`)
+      return
+    }
+    applyManualSummary(row.chapterId, html)
+  }
+
+  async function syncToAi(chapterIds: string[]) {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/series/${seriesId}/books/${bookId}/chapter-summaries/use-ai`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chapterIds }),
+      })
+      if (!res.ok) {
+        setError(`Couldn’t sync: ${await readError(res)} — no summaries were changed.`)
+        return
+      }
+      for (const id of chapterIds) applyManualSummary(id, '')
+    } catch {
+      setError('Couldn’t sync — no summaries were changed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const syncCandidates: SyncCandidate[] = rows.flatMap(row => {
+    const s = summaries[row.chapterId]
+    const aiHtml = ai[row.chapterId]?.aiHtml
+    return s?.canSync && aiHtml ? [{ chapterId: row.chapterId, title: row.title, mineHtml: s.html, aiHtml }] : []
+  })
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  // Beside the tab labels, where "Add Character" already lives — same page,
+  // same kind of action, same place. Portalled up because the handlers need
+  // the state in here.
+  const headerActions =
+    actionSlot &&
+    createPortal(
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setBulkSyncOpen(true)}
+          disabled={busy || rows.length === 0}
+          title="Replace summaries you wrote with WriteAI’s generated ones"
+          className="flex items-center gap-1.5 rounded border border-accent/30 px-3 py-1.5 text-xs font-medium text-ink-muted transition hover:border-accent/60 hover:text-ink disabled:opacity-50"
+        >
+          <LuRefreshCw size={12} /> Sync summaries
+        </button>
+        <button
+          onClick={() => insertAt(appendIndex)}
+          disabled={busy || loading}
+          className="flex items-center gap-1.5 rounded bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+        >
+          <LuPlus size={12} /> Add chapter
+        </button>
+      </div>,
+      actionSlot,
+    )
+
+  if (loading && rows.length === 0) {
     return (
       <div className="animate-pulse">
         <OutlineBoardSkeleton />
@@ -164,114 +418,34 @@ export default function OutlineSection({
     )
   }
 
-  if (!outline) {
+  if (failed) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-accent/20 px-8 py-10 text-center">
-        <p className="text-sm text-ink-faint italic">
-          {reason === 'book-not-in-writeai'
-            ? 'WriteAI hasn’t ingested this book yet, so it has no outline to show.'
-            : 'WriteAI isn’t running, so the outline can’t be loaded. Nothing here is stored in Loom.'}
-        </p>
-        {reason !== 'book-not-in-writeai' && (
-          <button onClick={onRetry} className="text-xs text-accent underline underline-offset-2">
-            Try again
-          </button>
-        )}
+        <p className="text-sm italic text-ink-faint">This book’s chapters couldn’t be loaded.</p>
+        <button onClick={() => void refresh()} className="text-xs text-accent underline underline-offset-2">
+          Try again
+        </button>
       </div>
     )
   }
 
-  // Computed for the whole list at once, because a card's label depends on
-  // every card before it — not on the card itself.
-  const labels = outlineCardLabels(outline.cards)
-  // Every POV already used in this book, for the chip's autocomplete. Sorted so
-  // the list does not reshuffle as cards move.
-  const povSuggestions = [...new Set(outline.cards.map(c => c.pov).filter(Boolean))].sort()
-  // The same set, shaped for the filter — a POV is a free-text name, so it is
-  // its own id.
-  const povOptions: FilterOption[] = povSuggestions.map(p => ({ id: p, name: p }))
-
-  function onDragEnd(event: DragEndEvent) {
-    setDraggingId(null)
-    const { active, over } = event
-    if (!over || active.id === over.id || !outline) return
-
-    const ids = outline.cards.map(c => c.id)
-    const from = ids.indexOf(String(active.id))
-    const to = ids.indexOf(String(over.id))
-    if (from < 0 || to < 0) return
-    // Positions only. A written chapter's NUMBER belongs to the manuscript and
-    // the backend re-derives it; reassigning it here is the bug that shifted
-    // every card by one the moment a prologue was present.
-    void reorder(arrayMove(ids, from, to))
+  const draggingRow = draggingId ? rows.find(r => r.chapterId === draggingId) : null
+  const matchIndex = new Map<string, number>()
+  if (filtering) {
+    let i = 0
+    for (const row of rows) if (matches(row)) matchIndex.set(row.chapterId, i++)
   }
-
-  /**
-   * Insert after card `i`, at the midpoint between it and its neighbour.
-   *
-   * Fractional positions are the whole trick: a card lands between two others
-   * without touching either, so nothing is renumbered and no written chapter's
-   * number is disturbed. At the end there is no neighbour to split with, so it
-   * goes one past the last.
-   *
-   * The card arrives with no date, unlike WriteAI's, which seeds it from the
-   * card before. That is not an oversight: WriteAI inserts by rebuilding the
-   * whole list client-side with an id it invents, while this goes through the
-   * POST endpoint — one card, canonical `plan-…` id, no chance of losing the
-   * book to a partial body. Seeding the date would cost a second write to buy
-   * one click. The calendar is right there.
-   */
-  function insertAfter(i: number) {
-    if (!outline) return
-    const here = outline.cards[i]
-    const next = outline.cards[i + 1]
-    void addCard(next === undefined ? here.position + 1 : (here.position + next.position) / 2, '')
-  }
-
-  const draggingCard = draggingId ? outline.cards.find(c => c.id === draggingId) : null
 
   return (
-    // px/pb here because the tab's scroller (SectionTabs' fillHeight wrapper)
-    // is overflow-y-auto + overflow-x-hidden with no padding of its own, and a
-    // card's selected/matched RING is a box-shadow: it paints outside the
-    // border box and adds nothing to scrollWidth/scrollHeight, so at the
-    // left, right and bottom edges it was simply clipped away — the card read
-    // as unselected exactly where it mattered. The insert "+" between cards
-    // straddles the seam (translate-x-1/2 of w-5 = 10px), so the rightmost
-    // column's button was half-eaten too; 10px of side padding clears both.
-    // The top needs nothing: the sticky filter bar below already holds the
-    // first row clear of the scroller's top edge.
+    // px/pb because the tab's scroller has no padding of its own and a card's
+    // selection ring is a box-shadow — at the edges it was simply clipped. The
+    // insert "+" straddles the seam between cards, so it needs the room too.
     <div className="flex flex-col gap-3 px-2.5 pb-2.5">
-      {/* "Add card" belongs beside the tab labels, where "Add Character"
-          already lives — same page, same kind of action, same place. It is
-          portalled up rather than passed down because the handler needs the
-          hook that lives in here. */}
-      {actionSlot &&
-        createPortal(
-          <button
-            onClick={() => addCard((outline.cards.at(-1)?.position ?? 0) + 1, '')}
-            disabled={saving}
-            className="flex items-center gap-1.5 rounded bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-          >
-            <LuPlus size={12} /> Add card
-          </button>,
-          actionSlot,
-        )}
+      {headerActions}
 
-      {/* Sticky to whatever scrolls this tab — the book page's fillHeight tab
-          content — same treatment as the Chapters tab's own filter bar. No
-          pb here: the parent's own gap-3 already spaces this from whatever
-          comes next, and a sticky element's own bottom padding stacks WITH
-          that gap (it stays part of this box, which never leaves the top of
-          the scroller) rather than replacing it — the double-count was
-          exactly the "little" extra scroll this tab had. pt-1 alone keeps
-          the control off the scroll container's very top edge. */}
-      {/* -mx-2.5 px-2.5 cancels the root's side padding for this bar alone: it
-          is opaque and cards scroll UNDER it, so its background has to reach
-          the scroller's real edges or a 10px strip of moving card shows
-          through on each side. The px puts its own content back in line with
-          the board below. */}
-      <div className="sticky top-0 z-10 -mx-2.5 px-2.5 bg-surface-base flex flex-wrap items-end gap-3 pb-1">
+      {/* Sticky to the tab's scroller; -mx/px so its opaque background reaches
+          the scroller's real edges while cards scroll under it. */}
+      <div className="sticky top-0 z-10 -mx-2.5 flex flex-wrap items-end gap-3 bg-surface-base px-2.5 pb-1">
         <TagFilterSelect
           multiple
           label="Character"
@@ -287,37 +461,61 @@ export default function OutlineSection({
           options={povOptions}
           value={pov}
           onChange={setPov}
-          emptyHint="No card in this book has a POV yet."
+          emptyHint="No chapter in this book has a POV yet."
         />
-
+        <TagFilterSelect
+          label="Event"
+          placeholder="Any event"
+          options={eventOptions}
+          value={eventId}
+          onChange={setEventId}
+          emptyHint="No events tagged in this book yet."
+        />
         <ClearFiltersButton
           disabled={!filtering}
-          onClick={() => { setCharacterIds([]); setPov(null) }}
+          onClick={() => { setCharacterIds([]); setPov(null); setEventId(null) }}
         />
+        {filtering && (
+          <span className="ml-auto pb-2.5 text-[11px] text-ink-faint">
+            {gaps.length} of {rows.length} chapter(s) · dragging is off while filtering
+          </span>
+        )}
       </div>
 
-      {outline.syncState !== 'synced' && (
+      {outlineResult?.outline && outlineResult.outline.syncState !== 'synced' && (
         <OutlineStalenessBanner
           seriesId={seriesId}
           bookId={bookId}
-          writeaiNumber={outline.writeaiNumber}
-          syncState={outline.syncState}
-          onSynced={onRetry}
+          writeaiNumber={outlineResult.outline.writeaiNumber}
+          syncState={outlineResult.outline.syncState}
+          onSynced={() => loadOutline(true)}
         />
       )}
+      {outlineResult?.reason === 'writeai-unavailable' && (
+        <p className="text-[10px] italic text-ink-faint">
+          WriteAI isn’t reachable, so AI-generated summaries aren’t shown. Everything else here is Loom’s and works as normal.
+        </p>
+      )}
 
-      {(saving || error) && (
+      {(busy || error) && (
         <div className="flex flex-wrap items-center gap-2">
-          {saving && <span className="text-[10px] italic text-ink-faint">Saving…</span>}
-          {error && <span className="text-[10px] text-choice-kill">{error}</span>}
+          {busy && <span className="text-[10px] italic text-ink-faint">Saving…</span>}
+          {error && <span role="alert" className="text-[10px] text-choice-kill">{error}</span>}
         </div>
       )}
 
-      {outline.cards.length === 0 ? (
-        <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-accent/20 px-8 py-10">
-          <p className="text-center text-sm text-ink-faint italic">
-            No outline cards yet. Add one, or plan this book in WriteAI.
+      {rows.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-accent/20 px-8 py-10">
+          <p className="text-center text-sm italic text-ink-faint">
+            No chapters yet. Add one to start outlining — each card is a real chapter.
           </p>
+          <button
+            onClick={() => insertAt(0)}
+            disabled={busy}
+            className="flex items-center gap-1.5 rounded bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+          >
+            <LuPlus size={12} /> Add the first chapter
+          </button>
         </div>
       ) : (
         <DndContext
@@ -327,10 +525,9 @@ export default function OutlineSection({
           onDragEnd={onDragEnd}
           onDragCancel={() => setDraggingId(null)}
         >
-          <SortableContext items={outline.cards.map(c => c.id)} strategy={rectSortingStrategy}>
+          <SortableContext items={rows.map(r => r.chapterId)} strategy={rectSortingStrategy}>
             <div
-              // auto-fill rather than a fixed column count: the board reflows
-              // with the window instead of overflowing a laptop.
+              ref={boardRef}
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
@@ -338,50 +535,81 @@ export default function OutlineSection({
                 alignItems: 'start',
               }}
             >
-              {outline.cards.map((card, i) => (
-                // The insert affordance lives on the gap between cards, not on
-                // the card: "add one after this" is about the seam, and a
-                // button floating in the seam is where the eye already is.
-                <div key={card.id} className="group/insert relative">
-                  <SortableOutlineCard
-                    card={card}
-                    label={labels[i]}
-                    seriesId={seriesId}
-                    povSuggestions={povSuggestions}
-                    onSave={changes => void editCard(card.id, changes)}
-                    onDelete={() => setPendingDelete({ card, label: labels[i] })}
-                    disabled={saving}
-                    active={activeCardId === card.id}
-                    onToggleActive={() => setActiveCardId(id => (id === card.id ? null : card.id))}
-                    faded={filtering && !cardMatches(card)}
-                    highlighted={filtering && cardMatches(card)}
-                  />
-                  <button
-                    data-no-dnd="true"
-                    onClick={() => insertAfter(i)}
-                    disabled={saving}
-                    title="Insert a card here"
-                    aria-label={`Insert a card after ${labels[i]}`}
-                    className="absolute right-0 top-1/2 z-20 flex h-5 w-5 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-accent opacity-0 shadow-md transition-opacity hover:bg-accent/80 group-hover/insert:opacity-100 disabled:opacity-0"
-                  >
-                    <LuPlus size={12} className="text-white" />
-                  </button>
-                </div>
-              ))}
+              {rows.map((row, i) => {
+                const matched = filtering && matches(row)
+                const idx = matchIndex.get(row.chapterId)
+                const gap = idx === undefined ? 0 : gaps[idx]
+                const toggle = kindToggleFor(rows, i)
+                const isEpilogue = i === rows.length - 1 && isEpilogueTitle(row.title)
+                return (
+                  // The insert affordance lives on the seam between cards:
+                  // "add one after this" is about the gap, not the card.
+                  <div key={row.chapterId} className="group/insert relative">
+                    <SortableCard
+                      chapterId={row.chapterId}
+                      title={row.title}
+                      seriesId={seriesId}
+                      pov={row.pov}
+                      date={row.date}
+                      summary={summaries[row.chapterId]}
+                      povSuggestions={povSuggestions}
+                      onSavePov={p => void saveMeta(row, { pov: p })}
+                      onSaveDate={d => void saveMeta(row, { date: d })}
+                      onSaveSummary={html => void saveSummary(row, html)}
+                      onSync={() => setPendingSync(row)}
+                      onDelete={() => setPendingDelete(row)}
+                      kindToggle={toggle}
+                      onToggleKind={toggle ? () => toggleKind(row, toggle) : undefined}
+                      disabled={busy}
+                      sortDisabled={busy || filtering || isPinnedChapter(rows, i)}
+                      active={activeId === row.chapterId}
+                      onActivate={() => setActiveId(row.chapterId)}
+                      faded={filtering && !matched}
+                      highlighted={matched}
+                      offCanon={row.offCanon}
+                      footnote={
+                        matched && gap > 0
+                          ? `${gap} chapter(s) ${idx === 0 ? 'before this' : 'since the last'}`
+                          : null
+                      }
+                    />
+                    {/* Nothing goes after the Epilogue — "+" on the card before
+                        it inserts ahead of it instead. */}
+                    {!isEpilogue && (
+                      <button
+                        data-no-dnd="true"
+                        onClick={() => insertAt(i + 1)}
+                        disabled={busy}
+                        title="Insert a chapter here"
+                        aria-label={`Insert a chapter after ${row.title}`}
+                        className="absolute right-0 top-1/2 z-20 flex h-5 w-5 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-accent opacity-0 shadow-md transition-opacity hover:bg-accent/80 group-hover/insert:opacity-100 disabled:opacity-0"
+                      >
+                        <LuPlus size={12} className="text-white" />
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </SortableContext>
 
           {/* The dragged card follows the cursor at full opacity while its slot
               dims, so it is obvious what is moving and where it will land. */}
           <DragOverlay>
-            {draggingCard && (
+            {draggingRow && (
               <div className="w-[260px] opacity-90">
-                <OutlineCard
-                  card={draggingCard}
-                  label={labels[outline.cards.findIndex(c => c.id === draggingCard.id)] ?? ''}
+                <ChapterOutlineCard
+                  chapterId={draggingRow.chapterId}
+                  title={draggingRow.title}
                   seriesId={seriesId}
-                  povSuggestions={povSuggestions}
-                  onSave={() => {}}
+                  pov={draggingRow.pov}
+                  date={draggingRow.date}
+                  summary={summaries[draggingRow.chapterId]}
+                  povSuggestions={[]}
+                  onSavePov={() => {}}
+                  onSaveDate={() => {}}
+                  onSaveSummary={() => {}}
+                  onSync={() => {}}
                   onDelete={() => {}}
                   disabled
                 />
@@ -391,23 +619,39 @@ export default function OutlineSection({
         </DndContext>
       )}
 
+      {pendingDelete && (
+        <DeleteChapterDialog
+          title={pendingDelete.title}
+          busy={busy}
+          onConfirm={() => deleteChapter(pendingDelete)}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
+
       <ConfirmDialog
-        open={pendingDelete !== null}
-        title={`Delete ${pendingDelete?.label ?? 'this card'}?`}
-        // The distinction that matters, spelled out because on screen the card
-        // and the chapter look like one object: this removes the PLANNING card.
-        // The manuscript is Loom's and WriteAI's outline store cannot touch it.
-        message={
-          pendingDelete?.card.status === 'synced'
-            ? 'This removes the outline card only. The chapter itself, and everything you have written in it, stays exactly where it is.'
-            : 'This planned card will be removed from the outline.'
-        }
+        open={pendingSync !== null}
+        title={`Use the AI summary for ${pendingSync?.title ?? 'this chapter'}?`}
+        message="Your summary for this chapter is replaced with WriteAI’s generated one, which keeps updating as WriteAI re-analyses the chapter. Your summary is removed and can’t be brought back."
+        confirmLabel="Replace mine"
         onConfirm={() => {
-          if (pendingDelete) void deleteCard(pendingDelete.card.id)
-          setPendingDelete(null)
+          if (pendingSync) void syncToAi([pendingSync.chapterId])
+          setPendingSync(null)
         }}
-        onCancel={() => setPendingDelete(null)}
+        onCancel={() => setPendingSync(null)}
       />
+
+      {bulkSyncOpen && (
+        <SyncSummariesDialog
+          candidates={syncCandidates}
+          aiAvailable={aiAvailable}
+          busy={busy}
+          onConfirm={ids => {
+            setBulkSyncOpen(false)
+            void syncToAi(ids)
+          }}
+          onCancel={() => setBulkSyncOpen(false)}
+        />
+      )}
     </div>
   )
 }

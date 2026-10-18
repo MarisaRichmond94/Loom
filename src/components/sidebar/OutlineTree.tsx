@@ -9,6 +9,7 @@ import type { DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useCanonSave } from '@/components/editor/useCanonSave'
+import { renumberAfterDrag } from '@/lib/chapterNumbering'
 
 type Chapter = { id: string; title: string; order: number; hasNotes?: boolean }
 type Book = {
@@ -26,32 +27,8 @@ type Props = {
   onInsertChapter: (bookId: string, title: string, atOrder: number) => void
 }
 
-function parseNumberedTitle(title: string): { prefix: string; num: number } | null {
-  const bare = /^(\d+)$/.exec(title)
-  if (bare) return { prefix: '', num: Number(bare[1]) }
-  const m = /^(.+\s)(\d+)$/.exec(title)
-  if (m) return { prefix: m[1], num: Number(m[2]) }
-  return null
-}
-
-// Renumbers ONLY chapters whose prefix matches the dragged chapter's
-// prefix. So dragging "Bonus Chapter 7" re-sequences "Bonus Chapter N"
-// (so it becomes 1, 2, 3, … in the new order) while every "Chapter N"
-// and one-off ("Prologue", "Epilogue") is left untouched — both their
-// titles AND their numbering. Walking every prefix on every drag was
-// the previous behavior and caused unrelated prefixes to silently
-// shift when their on-disk titles didn't already form a clean sequence.
-function renumberAfterDrag<T extends { title: string }>(chapters: T[], movedTitle: string): T[] {
-  const movedParsed = parseNumberedTitle(movedTitle)
-  if (!movedParsed) return chapters
-  let n = 0
-  return chapters.map(c => {
-    const parsed = parseNumberedTitle(c.title)
-    if (!parsed || parsed.prefix !== movedParsed.prefix) return c
-    n++
-    return { ...c, title: `${parsed.prefix}${n}` }
-  })
-}
+// The renumbering rules live in lib/chapterNumbering.ts, shared with the book
+// page's outline board so a drag means the same thing in both places.
 
 function SortableChapter({ chapter, seriesId, isActive, scrollOnDefault, openMenu, onOpenMenu, onInsert, onCloseMenu }: {
   chapter: Chapter

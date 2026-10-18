@@ -3,85 +3,128 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
-import { LuCalendar, LuExternalLink, LuX } from 'react-icons/lu'
-import OutlineRichText from './OutlineRichText'
-import StoryDatePicker from './StoryDatePicker'
+import {
+  LuBookmarkMinus,
+  LuBookmarkPlus,
+  LuCalendar,
+  LuExternalLink,
+  LuRefreshCw,
+  LuSparkles,
+  LuX,
+} from 'react-icons/lu'
+import OutlineRichText from '@/components/editor/OutlineRichText'
+import StoryDatePicker from '@/components/editor/StoryDatePicker'
 import { isSameStoryDay, povColorClass } from '@/lib/storyDate'
-import type { OutlineCard as Card } from '@/lib/writerOutline'
+import type { ChapterKind } from '@/lib/chapterNumbering'
+import type { ResolvedSummary } from '@/lib/outlineSummaries'
+import { OUTLINE_CARD_H } from '@/components/editor/OutlineBoardSkeleton'
 
-// One outline card (LOOM-97), ported from WriteAI's ChapterCard.
+// One card on the book's outline board — one real Loom chapter.
 //
-// Everything is edited in place — POV, story date and summary — because that is
-// how the plan pane works and this is meant to be the same surface, not a
-// second one. There is no edit dialog.
+// The look is the old outline card's (ported from WriteAI's ChapterCard), but
+// everything on it now edits LOOM: POV and date are the chapter's own columns,
+// and the summary is the writer's ChapterSummary. Nothing here writes to
+// WriteAI.
 //
-// **Saves happen on blur, and only when something actually changed.** That is
-// not just tidiness: `writer_summary` is HTML, TipTap re-serialises it on load,
-// and WriteAI decides whether a summary is still machine-written by comparing
-// it to `summary_source` EXACTLY. A card saved merely because it was focused
-// would be marked hand-edited and stop being refreshed — silently, forever.
+// **Saves happen on blur, and only when something actually changed.** A card
+// that was merely clicked into must write nothing: TipTap re-serialises HTML on
+// load, so "the editor's value differs from what I was given" is true of a card
+// nobody edited. The editor's onChange fires only on a real keystroke, so the
+// `dirty` flag below is the honest signal.
 //
 // `data-no-dnd="true"` marks every interactive region. The board's pointer
 // sensor walks up from the pointer target and refuses to start a drag inside
-// one, which is what lets the whole card be a drag handle while the controls on
-// it still behave like controls.
+// one, which lets the whole card be a drag handle while its controls still
+// behave like controls.
 
-export default function OutlineCard({
-  card,
-  label,
+export type KindToggle = { kind: ChapterKind; label: string }
+
+export default function ChapterOutlineCard({
+  chapterId,
+  title,
   seriesId,
+  pov: storedPov,
+  date: storedDate,
+  summary,
   povSuggestions,
-  onSave,
+  onSavePov,
+  onSaveDate,
+  onSaveSummary,
+  onSync,
   onDelete,
+  kindToggle,
+  onToggleKind,
   disabled = false,
   dragRef,
   dragAttributes,
   dragListeners,
   dragStyle,
   isDragging = false,
+  draggable = true,
   active = false,
-  onToggleActive,
+  onActivate,
   faded = false,
   highlighted = false,
+  offCanon = false,
+  footnote,
 }: {
-  card: Card
-  label: string
+  chapterId: string
+  title: string
   seriesId: string
+  pov: string | null
+  date: string | null
+  summary: ResolvedSummary
   /** Names already used as a POV in this book, for the inline combobox. */
   povSuggestions: string[]
-  onSave: (changes: Partial<Card>) => void
+  onSavePov: (pov: string) => void
+  onSaveDate: (date: string | null) => void
+  /** HTML. "" means the writer emptied it — the board stores that as "use the
+   *  AI summary". */
+  onSaveSummary: (html: string) => void
+  onSync: () => void
   onDelete: () => void
+  /** The prologue/epilogue switch, offered on the first and last card only. */
+  kindToggle?: KindToggle | null
+  onToggleKind?: () => void
   disabled?: boolean
   dragRef?: (el: HTMLDivElement | null) => void
   dragAttributes?: Record<string, unknown>
   dragListeners?: Record<string, unknown>
   dragStyle?: React.CSSProperties
   isDragging?: boolean
-  /** Whether this card is the one active card on the board. Owned by the
-   * board, not the card, so opening one closes any other. */
+  /** False for a pinned Prologue/Epilogue, or while the board is filtered. */
+  draggable?: boolean
+  /** Owned by the board, not the card, so opening one closes any other. A
+   *  click anywhere on the card activates it (and lets its summary scroll);
+   *  a click outside the board clears it. */
   active?: boolean
-  onToggleActive?: () => void
-  /** The character filter's non-match — dimmed, never disabled: unlike the
-   *  Chapters board, every field here stays editable while filtering. */
+  onActivate?: () => void
+  /** A filter non-match — dimmed, never disabled. */
   faded?: boolean
-  /** The character filter's match — same ring treatment as the Chapters
-   *  board's matched cards, so the two filters read as one behaviour. */
+  /** A filter match. */
   highlighted?: boolean
+  /** Behind a choice — the canon walk never reaches it. */
+  offCanon?: boolean
+  /** The filter's run-length note ("3 chapter(s) since the last"). */
+  footnote?: string | null
 }) {
-  const [pov, setPov] = useState(card.pov ?? '')
+  const [pov, setPov] = useState(storedPov ?? '')
   const [povFocused, setPovFocused] = useState(false)
-  const [date, setDate] = useState(card.date ?? '')
-  const [summary, setSummary] = useState(card.writer_summary ?? '')
+  const [date, setDate] = useState(storedDate ?? '')
+  const [html, setHtml] = useState(summary.html)
+  const [dirty, setDirty] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null)
   const calendarRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
 
-  // Follow the card when a save comes back from the server — auto-reconcile can
-  // legitimately change what is stored.
-  useEffect(() => setPov(card.pov ?? ''), [card.pov])
-  useEffect(() => setDate(card.date ?? ''), [card.date])
-  useEffect(() => setSummary(card.writer_summary ?? ''), [card.writer_summary])
+  // Follow the stored values when they change underneath (a save, a sync, a
+  // refresh) — but never over an edit in progress.
+  useEffect(() => setPov(storedPov ?? ''), [storedPov])
+  useEffect(() => setDate(storedDate ?? ''), [storedDate])
+  useEffect(() => {
+    if (!dirty) setHtml(summary.html)
+  }, [summary.html, dirty])
 
   // The picker is a portal, so an outside click has to be detected by hand.
   useEffect(() => {
@@ -100,51 +143,81 @@ export default function OutlineCard({
     return () => document.removeEventListener('mousedown', onDown)
   }, [pickerOpen])
 
-  const synced = card.status === 'synced'
-  const href = card.loom_id ? `/author/${seriesId}/chapter/${card.loom_id}` : null
   const povWidth = Math.max((pov || 'Enter POV').length, 4)
+  const isAi = summary.source === 'ai'
 
   return (
     <div
       ref={dragRef}
-      style={dragStyle}
+      style={{ ...dragStyle, height: OUTLINE_CARD_H }}
       {...dragAttributes}
       {...dragListeners}
-      onClick={() => onToggleActive?.()}
-      className={`group relative flex h-[250px] flex-col overflow-hidden rounded-lg transition-[opacity,border-color,box-shadow] ${
-        synced
-          ? 'border border-accent/10 bg-surface-raised hover:border-accent/25'
-          : 'border-2 border-dashed border-accent/40 bg-surface-raised/70 hover:border-accent/60'
+      onClick={() => onActivate?.()}
+      data-testid={`outline-card-${chapterId}`}
+      className={`group relative flex flex-col overflow-hidden rounded-lg bg-surface-raised transition-[opacity,border-color,box-shadow] ${
+        offCanon
+          ? 'border border-dashed border-amber-500/40 hover:border-amber-500/60'
+          : 'border border-accent/10 hover:border-accent/25'
       } ${active ? 'ring-2 ring-purple-400/60' : highlighted ? 'ring-1 ring-accent/40' : ''} ${
-        isDragging ? 'cursor-grabbing opacity-50' : 'cursor-grab'
+        isDragging ? 'cursor-grabbing opacity-50' : draggable ? 'cursor-grab' : ''
       } ${faded ? 'opacity-40' : ''}`}
     >
       <div className="flex min-h-0 flex-1 flex-col px-4 py-3">
-        <div className="flex items-center justify-between">
-          <span
-            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-              synced ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
-            }`}
-          >
-            <span className={`h-1.5 w-1.5 rounded-full ${synced ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-            {synced ? 'Synced' : 'Planned'}
-          </span>
+        {/* Fixed-height row, so a card with no badge lines up with one that has. */}
+        <div className="flex h-5 items-center justify-between">
+          {isAi ? (
+            <span
+              title="WriteAI wrote this summary. Edit it to make it yours."
+              className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400"
+            >
+              <LuSparkles size={10} />
+              AI generated
+            </span>
+          ) : (
+            <span />
+          )}
 
           <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
-            {href && (
-              <Link
+            {kindToggle && onToggleKind && !disabled && (
+              <button
                 data-no-dnd="true"
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                title="Open this chapter in Loom"
-                aria-label={`Open ${label} in Loom`}
+                onClick={e => {
+                  e.stopPropagation()
+                  onToggleKind()
+                }}
+                title={kindToggle.label}
+                aria-label={kindToggle.label}
                 className="rounded p-0.5 text-ink-faint transition hover:text-accent"
               >
-                <LuExternalLink size={13} />
-              </Link>
+                {kindToggle.kind === 'chapter' ? <LuBookmarkMinus size={13} /> : <LuBookmarkPlus size={13} />}
+              </button>
             )}
+            {summary.canSync && !disabled && (
+              <button
+                data-no-dnd="true"
+                onClick={e => {
+                  e.stopPropagation()
+                  onSync()
+                }}
+                title="Replace your summary with the AI-generated one"
+                aria-label={`Sync ${title} with its AI-generated summary`}
+                className="rounded p-0.5 text-ink-faint transition hover:text-accent"
+              >
+                <LuRefreshCw size={13} />
+              </button>
+            )}
+            <Link
+              data-no-dnd="true"
+              href={`/author/${seriesId}/chapter/${chapterId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              title="Open this chapter"
+              aria-label={`Open ${title}`}
+              className="rounded p-0.5 text-ink-faint transition hover:text-accent"
+            >
+              <LuExternalLink size={13} />
+            </Link>
             {!disabled && (
               <button
                 data-no-dnd="true"
@@ -152,8 +225,8 @@ export default function OutlineCard({
                   e.stopPropagation()
                   onDelete()
                 }}
-                title="Delete this card"
-                aria-label={`Delete ${label}`}
+                title="Delete this chapter"
+                aria-label={`Delete ${title}`}
                 className="rounded p-0.5 text-ink-faint transition hover:text-choice-kill"
               >
                 <LuX size={13} />
@@ -163,12 +236,12 @@ export default function OutlineCard({
         </div>
 
         <div className="mt-3 flex min-w-0 items-center gap-2 leading-none">
-          <span className="shrink-0 text-sm font-bold leading-none text-ink">{label}</span>
+          <span className="shrink-0 text-sm font-bold leading-none text-ink">{title}</span>
 
           {/* The POV chip is an input wearing a chip's clothes: it colours
               itself from the name, and the colour is a hash so a character
               keeps theirs when chapters move around. */}
-          <div data-no-dnd="true" className="relative shrink-0">
+          <div data-no-dnd="true" className="relative min-w-0">
             <input
               type="text"
               value={pov}
@@ -181,13 +254,14 @@ export default function OutlineCard({
                 // Delayed so a click on a suggestion lands before the list goes.
                 setTimeout(() => setPovFocused(false), 150)
                 const trimmed = pov.trim()
-                if (!disabled && trimmed !== (card.pov ?? '')) onSave({ pov: trimmed })
+                if (!disabled && trimmed !== (storedPov ?? '')) onSavePov(trimmed)
               }}
               placeholder="Enter POV"
+              aria-label={`POV for ${title}`}
               autoComplete="off"
               disabled={disabled}
               style={{ width: `calc(${povWidth}ch + 18px)` }}
-              className={`cursor-text rounded-full border-none px-2 py-0.5 text-[10px] font-medium outline-none transition focus:ring-1 focus:ring-accent/40 ${
+              className={`max-w-full cursor-text rounded-full border-none px-2 py-0.5 text-[10px] font-medium outline-none transition focus:ring-1 focus:ring-accent/40 ${
                 povFocused ? 'text-left' : 'text-center'
               } ${pov ? povColorClass(pov) : 'bg-surface-overlay text-ink-faint'}`}
             />
@@ -206,7 +280,7 @@ export default function OutlineCard({
                         onMouseDown={() => {
                           setPov(s)
                           setPovFocused(false)
-                          onSave({ pov: s })
+                          if (s !== (storedPov ?? '')) onSavePov(s)
                         }}
                         className="cursor-pointer px-3 py-1.5 text-[11px] text-ink transition hover:bg-surface-overlay"
                       >
@@ -239,11 +313,12 @@ export default function OutlineCard({
                 setPickerOpen(true)
               }}
               title="Pick a story date"
+              aria-label={`Story date for ${title}`}
               className={`transition ${pickerOpen ? 'text-accent' : 'text-ink-faint hover:text-ink-muted'}`}
             >
               <LuCalendar size={13} />
             </button>
-            <span className="text-[11px] text-ink-faint">
+            <span className="truncate text-[11px] text-ink-faint">
               {date || <span className="text-ink-faint/40">No date</span>}
             </span>
           </div>
@@ -262,11 +337,11 @@ export default function OutlineCard({
                     // Picking the day that is already stored must not rewrite
                     // it. The manuscript's weekday comes from the story's own
                     // calendar; ours can only come from a real one, so
-                    // re-formatting an unchanged date turns the writer's
-                    // "Friday, December 4th" into "Tuesday, December 4th".
-                    if (isSameStoryDay(val, card.date)) return
+                    // re-formatting an unchanged date turns "Friday, December
+                    // 4th" into "Tuesday, December 4th".
+                    if (isSameStoryDay(val, storedDate)) return
                     setDate(val)
-                    onSave({ date: val || null })
+                    onSaveDate(val || null)
                   }}
                 />
               </div>,
@@ -276,23 +351,32 @@ export default function OutlineCard({
 
         <div data-no-dnd="true" className="mt-2 flex min-h-0 flex-1 cursor-auto flex-col">
           <OutlineRichText
-            value={summary}
-            onChange={html => {
-              if (!disabled) setSummary(html)
+            value={html}
+            onChange={next => {
+              if (disabled) return
+              setHtml(next)
+              setDirty(true)
             }}
             onBlur={() => {
-              // Compared against the STORED string, so a card that was only
-              // focused saves nothing. See the note at the top of this file.
-              if (!disabled && summary !== (card.writer_summary ?? '')) {
-                onSave({ writer_summary: summary })
-              }
+              if (!dirty) return
+              setDirty(false)
+              if (!disabled && html !== summary.html) onSaveSummary(isEmptyHtml(html) ? '' : html)
             }}
             editable={!disabled}
             placeholder="Plan / summary…"
             scrollable={active}
           />
         </div>
+
+        {footnote && (
+          <span className="shrink-0 truncate pt-1 text-[9px] italic text-ink-faint">{footnote}</span>
+        )}
       </div>
     </div>
   )
+}
+
+/** TipTap's "empty" is `<p></p>`, not "". */
+function isEmptyHtml(html: string): boolean {
+  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim() === ''
 }

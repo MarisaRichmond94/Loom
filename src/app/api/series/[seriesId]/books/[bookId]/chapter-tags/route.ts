@@ -5,7 +5,7 @@ import { groupBookChapterTags, type TagRow } from '@/lib/bookChapterTags'
 
 // The book's chapter sequence with its character and event tags (LOOM-120/121).
 //
-// Serves the Chapters tab. Sibling of .../events (LOOM-101), which answers the
+// Serves the book page's outline board (formerly the Chapters tab). Sibling of .../events (LOOM-101), which answers the
 // same data the other way round — per EVENT, its chapters. This one is per
 // CHAPTER, in book order, because the tickets ask a spatial question ("show me
 // every chapter Chase is in, and the spacing between them") that a per-entity
@@ -55,6 +55,7 @@ export async function GET(_: Request, { params }: Params) {
         order: true,
         pov: true,
         date: true,
+        numbered: true,
         summary: { select: { body: true } },
       },
       orderBy: { order: 'asc' },
@@ -90,6 +91,7 @@ export async function GET(_: Request, { params }: Params) {
         order: c.order,
         pov: c.pov,
         date: c.date,
+        numbered: c.numbered,
         manualSummary: c.summary?.body ?? null,
       })),
       toTagRow(characterRows, 'writerCharacterId'),

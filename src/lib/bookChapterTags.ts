@@ -34,14 +34,16 @@ export type ChapterIn = {
   /** The writer's own summary (ChapterSummary), absent for the great majority
    *  of chapters, which take theirs from WriteAI's outline card instead. */
   manualSummary?: string | null
-  /** Loom's own copy of POV/date, set at import time. For a Bonus Chapter this
-   *  is the ONLY source there will ever be — it has no outline card to join
-   *  against. For a canon chapter it is a snapshot, not live: editing the
-   *  Outline tab's POV/date writes WriteAI's card only, never back to this
-   *  column, so a canon row's card values (joined client-side) take priority
-   *  over these whenever both exist. */
+  /** Loom's own POV/date (Chapter.pov / Chapter.date) — the manuscript's copy,
+   *  which the canon export writes as each chapter's header and WriteAI's
+   *  reconcile copies onto its outline cards. The outline board edits these
+   *  directly. (Verified when the board moved onto them: every card's POV and
+   *  date already matched these columns exactly.) */
   pov?: string | null
   date?: string | null
+  /** Chapter.numbered — false for a Prologue/Epilogue, which the canon walk's
+   *  counter skips. Absent reads as true, the column's own default. */
+  numbered?: boolean
 }
 
 export type TaggedEntity = {
@@ -80,21 +82,19 @@ export type BookChapterRow = {
    */
   offCanon: boolean
   /**
-   * The writer's own summary, or null.
+   * The writer's own summary (ChapterSummary.body), or null when there is no row.
    *
-   * Only branch chapters are expected to carry one — they are the chapters with
-   * no outline card and no way to get one. Kept as its own field rather than
-   * merged with the WriteAI summary on the server, because the client must be
-   * able to tell them apart: one is editable in place and the other is a
-   * read-only join it must never write back through.
+   * Three states, not two — see api/chapters/[chapterId]/summary: null is
+   * "never touched", a non-empty string is the writer's summary (which always
+   * wins over WriteAI's), and "" is "the writer chose the AI summary". Kept
+   * apart from WriteAI's text rather than merged on the server, because the
+   * board must know which one it is showing to badge it and to offer Sync.
    */
   manualSummary: string | null
-  /** Loom's own POV/date (Chapter.pov / Chapter.date). The only source for a
-   *  Bonus Chapter; a stale-tolerated fallback for a canon one, since the
-   *  outline card joined client-side reflects the writer's latest edit and
-   *  this column does not. */
+  /** Loom's own POV/date (Chapter.pov / Chapter.date) — authoritative. */
   pov: string | null
   date: string | null
+  numbered: boolean
   characters: TaggedEntity[]
   events: TaggedEntity[]
 }
@@ -157,6 +157,7 @@ export function groupBookChapterTags(
         manualSummary: c.manualSummary ?? null,
         pov: c.pov ?? null,
         date: c.date ?? null,
+        numbered: c.numbered !== false,
         characters: bucket.characters,
         events: bucket.events,
       }

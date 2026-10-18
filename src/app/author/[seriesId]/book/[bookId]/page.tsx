@@ -41,10 +41,6 @@ const OutlineSection = dynamic(() => import('@/components/OutlineSection'), {
 // Same treatment as the outline: the chart's SVG machinery should not ride in
 // the bundle for the many page visits that only open the cast.
 const TimelineSection = dynamic(() => import('@/components/timeline/TimelineSection'), { ssr: false })
-// Same again: the Chapters tab issues its own read on mount and pulls in the
-// timeline's WriteAI data for names, neither of which a page visit that only
-// opens the cast should pay for (LOOM-120/121).
-const ChaptersSection = dynamic(() => import('@/components/chapters/ChaptersSection'), { ssr: false })
 // Same treatment again, for a sharper reason: the panel pulls in the whole chat
 // surface AND issues its scope read on mount (LOOM-118).
 const ExplorePanel = dynamic(() => import('@/components/explore/ExplorePanel'), {
@@ -353,25 +349,7 @@ export default function BookDetailPage() {
   useEffect(() => { loadWriterPool() }, [loadWriterPool])
   useEffect(() => { loadFrontMatter() }, [loadFrontMatter])
 
-  // A canon book WriteAI has never ingested has no outline, and won't until it
-  // is (e.g. the Alt series' books, kept out of ~/Writing on purpose) — so the
-  // tab is dropped instead of leading with an empty state, and SectionTabs
-  // falls back to Chapters. Only that answer hides it: while the check is in
-  // flight the tab stays (canon books still open on Outline), and "WriteAI
-  // isn't running" keeps it for its Try again. Non-canon books never get this
-  // answer — the route serves them Loom's local outline (LOOM-153). Same
-  // cached request the Outline tab makes on mount, so this adds no fetch.
-  const [outlineNeverIngested, setOutlineNeverIngested] = useState(false)
-  useEffect(() => {
-    let live = true
-    setOutlineNeverIngested(false)
-    void prefetchBookOutline(seriesId, bookId).then(r => {
-      if (live) setOutlineNeverIngested(r.reason === 'book-not-in-writeai')
-    })
-    return () => { live = false }
-  }, [seriesId, bookId])
-
-  // Explore, by the same rule: dropped only when the scope read says nothing
+  // Explore is dropped only when the scope read says nothing
   // up to this book is in WriteAI's index ('not-analyzed') — there is nothing
   // to ask about. Offline/error keep the tab for their own messages. Seeded
   // from the scope cache so a warm revisit never shows the tab at all.
@@ -721,15 +699,6 @@ export default function BookDetailPage() {
             label: 'Outline',
             content: <OutlineSection seriesId={seriesId} bookId={bookId} />,
           }, {
-            // Second, right after Outline, because it answers the same
-            // "what is this book" question from the other side — the planning
-            // board is WriteAI's canon cards, this is Loom's full sequence
-            // including the branch chapters that can never appear there
-            // (LOOM-120/121).
-            id: 'chapters',
-            label: 'Chapters',
-            content: <ChaptersSection seriesId={seriesId} bookId={bookId} />,
-          }, {
             id: 'characters',
             label: 'Character(s)',
             action: (
@@ -938,9 +907,7 @@ export default function BookDetailPage() {
             id: 'explore',
             label: 'Explore',
             content: <ExplorePanel seriesId={seriesId} bookId={bookId} bookTitle={book.title} fillHeight />,
-          }].filter(s =>
-            !(outlineNeverIngested && s.id === 'outline') &&
-            !(exploreNotAnalyzed && s.id === 'explore'))}
+          }].filter(s => !(exploreNotAnalyzed && s.id === 'explore'))}
         />
       </div>
 

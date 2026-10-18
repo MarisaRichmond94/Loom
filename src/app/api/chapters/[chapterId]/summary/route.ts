@@ -3,23 +3,32 @@ import { prisma } from '@/lib/prisma'
 
 type Params = { params: Promise<{ chapterId: string }> }
 
-// The writer's summary for a chapter WriteAI cannot describe (LOOM-120).
+// The writer's own summary for a chapter (LOOM-120; the outline board since
+// the Outline/Chapters merge).
 //
 // Sibling of ../notes, and the same upsert shape — but a different field for a
 // different job. Notes are the private scratchpad; this is the description that
-// renders on the Chapters tab's card, where a branch chapter would otherwise
-// show nothing at all because no outline card exists for it and none can.
+// renders on the outline board's card.
 //
-// The ONLY write in the Chapters tab. Everything else there is a read: the
-// sequence comes from Loom, the summaries for canon chapters are joined from
-// WriteAI's outline read-only, and neither is touched here. This endpoint
-// writes one row in one Loom-owned table and cannot reach the manuscript, the
-// canon export, or WriteAI.
+// The writer's summary ALWAYS wins over WriteAI's generated one. The row has
+// three states, and the board reads all three:
+//
+//   no row         — the writer has never touched this card. It shows WriteAI's
+//                    summary if there is one (the "AI generated" badge).
+//   body non-empty — the writer's summary. Shown instead of WriteAI's, always.
+//   body ""        — the writer chose the AI summary (Sync, or cleared their
+//                    own). Same display as no row, but it also suppresses any
+//                    LEGACY summary the writer once typed into WriteAI's own
+//                    outline card, which the board otherwise treats as theirs.
+//
+// This endpoint writes one row in one Loom-owned table and cannot reach the
+// manuscript, the canon export, or WriteAI.
 
 /** Generous, but not unbounded — a card summary that runs past this is prose
  *  that belongs in the chapter, and an unbounded body is a way to grow the
- *  database from a stuck client. */
-const MAX_BODY = 4000
+ *  database from a stuck client. Sized for HTML: the card editor stores rich
+ *  text, whose markup roughly doubles a summary's length. */
+const MAX_BODY = 20000
 
 export async function GET(_: Request, { params }: Params) {
   const { chapterId } = await params
@@ -50,11 +59,15 @@ export async function PUT(req: Request, { params }: Params) {
   }
 
   try {
-    // Emptying is a DELETE of the row, not a row holding "". Otherwise every
-    // chapter the writer ever clicked into keeps a blank row forever, and
-    // "has a summary" stops being answerable by the row's existence.
+    // Emptying keeps the row, holding "" — the "use the AI summary" state
+    // described above. Deleting it instead would let a legacy WriteAI-side
+    // summary reappear the moment the writer cleared their own.
     if (body.trim() === '') {
-      await prisma.chapterSummary.deleteMany({ where: { chapterId } })
+      await prisma.chapterSummary.upsert({
+        where: { chapterId },
+        create: { chapterId, body: '' },
+        update: { body: '' },
+      })
       return NextResponse.json({ body: '' })
     }
 

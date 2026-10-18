@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BookChapterRow } from '@/lib/bookChapterTags'
 
-// Loom's side of the Chapters tab (LOOM-120/121).
+// Loom's side of the book page's outline board (formerly the Chapters tab,
+// LOOM-120/121).
 //
 // One query plus one canon walk, against Loom's own tables. Deliberately NOT
 // merged with the outline fetch: this must render whether or not WriteAI is up.
@@ -21,8 +22,12 @@ export type BookChapterTags = {
   failed: boolean
   refresh: () => Promise<void>
   /** Record a summary the writer just saved, without re-reading the book — a
-   *  refetch would re-run the canon walk to restate one card's text. */
+   *  refetch would re-run the canon walk to restate one card's text. "" is a
+   *  real value (the writer chose the AI summary), never coerced to null. */
   applyManualSummary: (chapterId: string, body: string) => void
+  /** Show a locally computed sequence at once — a drag lands on screen before
+   *  its PATCH returns. Always followed by a refresh, which is the truth. */
+  replaceLocal: (rows: BookChapterRow[]) => void
 }
 
 export function useBookChapterTags(seriesId: string, bookId: string): BookChapterTags {
@@ -65,9 +70,9 @@ export function useBookChapterTags(seriesId: string, bookId: string): BookChapte
 
   const applyManualSummary = useCallback((chapterId: string, body: string) => {
     setChapters(rows =>
-      rows.map(r => (r.chapterId === chapterId ? { ...r, manualSummary: body || null } : r)),
+      rows.map(r => (r.chapterId === chapterId ? { ...r, manualSummary: body } : r)),
     )
   }, [])
 
-  return { chapters, loading, failed, refresh: load, applyManualSummary }
+  return { chapters, loading, failed, refresh: load, applyManualSummary, replaceLocal: setChapters }
 }

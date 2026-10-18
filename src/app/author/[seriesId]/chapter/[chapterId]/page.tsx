@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from 'react'
+import DeleteChapterDialog from '@/components/DeleteChapterDialog'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { LuPlay, LuPlus, LuMenu, LuScanText, LuSettings, LuCircleHelp, LuX, LuArrowLeft, LuArrowRight, LuChevronsDownUp, LuChevronsUpDown, LuSearch, LuReplace, LuCaseSensitive, LuWholeWord, LuRoute, LuCalendarDays, LuUsers, LuLightbulb, LuChartNoAxesColumn, LuSlidersHorizontal, LuEye, LuEyeOff, LuTrash2, LuTextSelect } from 'react-icons/lu'
@@ -2034,28 +2035,11 @@ export default function ChapterEditorPage() {
       )}
 
       {showDeleteConfirm && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-start justify-center z-50"
-          style={{ paddingTop: 'calc(60px + 10vh)', paddingLeft: '14rem' }}
-          onClick={() => setShowDeleteConfirm(false)}
-        >
-          <div
-            className="bg-surface-raised border border-accent/20 rounded-xl p-8 max-w-2xl w-full mx-8 shadow-2xl relative"
-            onClick={e => e.stopPropagation()}
-          >
-            <button onClick={() => setShowDeleteConfirm(false)} className="absolute top-4 right-4 text-ink-faint hover:text-ink text-lg leading-none">✕</button>
-            <h2 className="text-base font-bold text-ink mb-3 pr-6">Delete "{chapter.title}"?</h2>
-            <p className="text-sm text-ink-muted mb-6 leading-relaxed italic">
-              Deleting this chapter is permanent and cannot be undone. All written content, blocks,
-              and choices will be removed. Any story branches dependent on choices here will fall back
-              to default text. Subsequent chapter numbers will be updated automatically.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setShowDeleteConfirm(false)} className="px-4 py-2 rounded-lg text-ink-muted text-sm hover:text-ink transition">Cancel</button>
-              <button onClick={handleDeleteChapter} className="px-4 py-2 rounded-lg bg-choice-kill text-white text-sm font-semibold hover:opacity-90 transition">Delete</button>
-            </div>
-          </div>
-        </div>
+        <DeleteChapterDialog
+          title={chapter.title}
+          onConfirm={handleDeleteChapter}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
       )}
 
       {showPathConfig && (
