@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { LuCheck, LuChevronDown, LuSearch, LuX } from 'react-icons/lu'
 import { AnchoredPopover, LIST_MAX_HEIGHT, useClickOutside } from '@/components/editor/AnchoredPopover'
 
@@ -61,6 +61,9 @@ type Base = {
   /** Shown in place of the list when nothing is taggable — "no events tagged
    *  in this book yet" is a different state from "your search matched none". */
   emptyHint: string
+  /** Greyed out and inert — for a filter with nothing to offer. The empty hint
+   *  becomes the field's tooltip, so it still says why. */
+  disabled?: boolean
 }
 
 // A discriminated union rather than one `string[]` shape for both: a
@@ -72,7 +75,7 @@ type Props = Base & (
 )
 
 export default function TagFilterSelect(props: Props) {
-  const { label, placeholder, options, emptyHint } = props
+  const { label, placeholder, options, emptyHint, disabled = false } = props
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   // The whole field is the anchor now, not the trigger button — so the popover
@@ -82,6 +85,11 @@ export default function TagFilterSelect(props: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useClickOutside([anchorRef, popRef], () => setOpen(false), open)
+  // A filter disabled while its list is open (its last option went away)
+  // must not leave the list floating.
+  useEffect(() => {
+    if (disabled) setOpen(false)
+  }, [disabled])
 
   const matches = options.filter(o => o.name.toLowerCase().includes(query.trim().toLowerCase()))
   const selectedIds = props.multiple ? props.value : props.value ? [props.value] : []
@@ -140,16 +148,19 @@ export default function TagFilterSelect(props: Props) {
           out in a row, they cannot collide however the label is sized. */}
       <div
         ref={anchorRef}
+        title={disabled ? emptyHint : undefined}
+        aria-disabled={disabled || undefined}
         className={`flex w-52 items-center gap-1 rounded-lg border bg-surface-overlay/40 py-2 pl-3 pr-2 text-sm transition ${
           selectedNames.length > 0 ? 'border-accent/40 text-ink' : 'border-accent/20 text-ink-faint'
-        } hover:border-accent/50`}
+        } ${disabled ? 'cursor-not-allowed opacity-50' : 'hover:border-accent/50'}`}
       >
         <button
           type="button"
+          disabled={disabled}
           onClick={() => { setQuery(''); setOpen(v => !v) }}
           aria-expanded={open}
           aria-haspopup="listbox"
-          className="min-w-0 flex-1 truncate text-left focus:outline-none"
+          className="min-w-0 flex-1 truncate text-left focus:outline-none disabled:cursor-not-allowed"
         >
           {display}
         </button>
@@ -170,16 +181,17 @@ export default function TagFilterSelect(props: Props) {
 
         <button
           type="button"
+          disabled={disabled}
           onClick={() => { setQuery(''); setOpen(v => !v) }}
           aria-label={`Open ${label.toLowerCase()} list`}
           tabIndex={-1}
-          className="shrink-0 rounded p-0.5 text-ink-faint transition hover:text-accent"
+          className="shrink-0 rounded p-0.5 text-ink-faint transition enabled:hover:text-accent"
         >
           <LuChevronDown size={13} />
         </button>
       </div>
 
-      {open && (
+      {open && !disabled && (
         <AnchoredPopover anchorRef={anchorRef} popoverRef={popRef} width={224}>
           <div className="p-2">
             <div className="relative">

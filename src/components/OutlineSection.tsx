@@ -391,20 +391,23 @@ export default function OutlineSection({ seriesId, bookId }: { seriesId: string;
     actionSlot &&
     createPortal(
       <div className="flex items-center gap-2">
+        {/* A ghost icon, like the Characters tab's refresh: a secondary action
+            beside the primary one. The tooltip carries the detail. */}
         <button
           onClick={() => setBulkSyncOpen(true)}
           disabled={busy || rows.length === 0}
-          title="Replace summaries you wrote with WriteAI’s generated ones"
-          className="flex items-center gap-1.5 rounded border border-accent/30 px-3 py-1.5 text-xs font-medium text-ink-muted transition hover:border-accent/60 hover:text-ink disabled:opacity-50"
+          title="Sync summaries — replace summaries you wrote with WriteAI’s AI-generated ones. You choose which chapters."
+          aria-label="Sync summaries"
+          className="flex items-center rounded px-2 py-1.5 text-xs text-ink-faint transition hover:text-ink disabled:opacity-50"
         >
-          <LuRefreshCw size={12} /> Sync summaries
+          <LuRefreshCw size={13} />
         </button>
         <button
           onClick={() => insertAt(appendIndex)}
           disabled={busy || loading}
           className="flex items-center gap-1.5 rounded bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50"
         >
-          <LuPlus size={12} /> Add chapter
+          <LuPlus size={12} /> Add Chapter
         </button>
       </div>,
       actionSlot,
@@ -440,7 +443,10 @@ export default function OutlineSection({ seriesId, bookId }: { seriesId: string;
     // px/pb because the tab's scroller has no padding of its own and a card's
     // selection ring is a box-shadow — at the edges it was simply clipped. The
     // insert "+" straddles the seam between cards, so it needs the room too.
-    <div className="flex flex-col gap-3 px-2.5 pb-2.5">
+    // flex-1: SectionTabs' fillHeight wrapper is a flex column, so this fills
+    // the tab's remaining height — which is what lets the empty state below
+    // reach the bottom of the page instead of sitting in a short box.
+    <div className="flex flex-1 flex-col gap-3 px-2.5 pb-2.5">
       {headerActions}
 
       {/* Sticky to the tab's scroller; -mx/px so its opaque background reaches
@@ -454,6 +460,7 @@ export default function OutlineSection({ seriesId, bookId }: { seriesId: string;
           value={characterIds}
           onChange={setCharacterIds}
           emptyHint="No characters tagged in this book yet."
+          disabled={characterOptions.length === 0}
         />
         <TagFilterSelect
           label="POV"
@@ -462,6 +469,7 @@ export default function OutlineSection({ seriesId, bookId }: { seriesId: string;
           value={pov}
           onChange={setPov}
           emptyHint="No chapter in this book has a POV yet."
+          disabled={povOptions.length === 0}
         />
         <TagFilterSelect
           label="Event"
@@ -470,6 +478,7 @@ export default function OutlineSection({ seriesId, bookId }: { seriesId: string;
           value={eventId}
           onChange={setEventId}
           emptyHint="No events tagged in this book yet."
+          disabled={eventOptions.length === 0}
         />
         <ClearFiltersButton
           disabled={!filtering}
@@ -505,16 +514,16 @@ export default function OutlineSection({ seriesId, bookId }: { seriesId: string;
       )}
 
       {rows.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-accent/20 px-8 py-10">
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-accent/20 px-8 py-10">
           <p className="text-center text-sm italic text-ink-faint">
-            No chapters yet. Add one to start outlining — each card is a real chapter.
+            No chapters yet. Click the Add Chapter button to start outlining.
           </p>
           <button
             onClick={() => insertAt(0)}
             disabled={busy}
             className="flex items-center gap-1.5 rounded bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50"
           >
-            <LuPlus size={12} /> Add the first chapter
+            <LuPlus size={12} /> Add Chapter
           </button>
         </div>
       ) : (

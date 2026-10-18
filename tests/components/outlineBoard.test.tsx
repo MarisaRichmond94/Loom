@@ -169,7 +169,7 @@ describe('outline board', () => {
 
   it('adds a blank "Chapter N" at a real position', async () => {
     setup()
-    await userEvent.click(await screen.findByRole('button', { name: /Add chapter/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /Add Chapter/ }))
     await waitFor(() => expect(calls('POST')).toHaveLength(1))
     const [url, init] = calls('POST')[0]
     expect(url).toBe('/api/series/s1/books/b1/chapters')
@@ -188,7 +188,7 @@ describe('outline board', () => {
     setup()
     await screen.findByText('Epilogue')
     expect(screen.queryByLabelText('Insert a chapter after Epilogue')).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: /Add chapter/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Add Chapter/ }))
     await waitFor(() => expect(calls('POST')).toHaveLength(1))
     expect(JSON.parse(calls('POST')[0][1].body)).toEqual({ title: 'Chapter 4', insertAtOrder: 5 })
   })
@@ -203,6 +203,20 @@ describe('outline board', () => {
     const [url, init] = calls('PATCH')[0]
     expect(url).toBe('/api/series/s1/books/b1/chapters/c3/kind')
     expect(JSON.parse(init.body)).toEqual({ kind: 'epilogue' })
+  })
+
+  it('disables filters with nothing to offer, and fills the empty book', async () => {
+    mockState.chapters = []
+    setup()
+    expect(await screen.findByText('No chapters yet. Click the Add Chapter button to start outlining.')).toBeInTheDocument()
+    for (const label of ['character', 'pov', 'event']) {
+      expect(screen.getByRole('button', { name: `Open ${label} list` })).toBeDisabled()
+    }
+    // Header and body both read "Add Chapter"; the body one is the empty state's.
+    expect(screen.getAllByRole('button', { name: /Add Chapter/ })).toHaveLength(2)
+    await userEvent.click(screen.getAllByRole('button', { name: /Add Chapter/ })[1])
+    await waitFor(() => expect(calls('POST')).toHaveLength(1))
+    expect(JSON.parse(calls('POST')[0][1].body)).toEqual({ title: 'Chapter 1', insertAtOrder: 1 })
   })
 
   it('writes nothing for a card that was only clicked into', async () => {
