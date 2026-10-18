@@ -105,6 +105,8 @@ describe('outline board', () => {
     expect(within(card('c1')).getByLabelText('summary')).toHaveValue('<p>My own plan.</p>')
     expect(within(card('c2')).getByText('AI generated')).toBeInTheDocument()
     expect(within(card('c1')).queryByText('AI generated')).not.toBeInTheDocument()
+    expect(within(card('c1')).getByText('Written by you')).toBeInTheDocument()
+    expect(within(card('c0')).getByText('No summary')).toBeInTheDocument()
   })
 
   it('still shows every chapter when WriteAI has never seen the book', async () => {

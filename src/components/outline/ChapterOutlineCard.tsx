@@ -7,7 +7,9 @@ import {
   LuBookmarkMinus,
   LuBookmarkPlus,
   LuCalendar,
+  LuCircleDashed,
   LuExternalLink,
+  LuPenLine,
   LuRefreshCw,
   LuSparkles,
   LuX,
@@ -165,6 +167,8 @@ export default function ChapterOutlineCard({
       <div className="flex min-h-0 flex-1 flex-col px-4 py-3">
         {/* Fixed-height row, so a card with no badge lines up with one that has. */}
         <div className="flex h-5 items-center justify-between">
+          {/* Every card says whose summary it is — and a blank one says so —
+              so the row is never an empty gap above the title. */}
           {isAi ? (
             <span
               title="WriteAI wrote this summary. Edit it to make it yours."
@@ -173,8 +177,22 @@ export default function ChapterOutlineCard({
               <LuSparkles size={10} />
               AI generated
             </span>
+          ) : summary.source === 'writer' ? (
+            <span
+              title="You wrote this summary. It always wins over WriteAI’s."
+              className="flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent"
+            >
+              <LuPenLine size={10} />
+              Written by you
+            </span>
           ) : (
-            <span />
+            <span
+              title="No summary yet. Type one below, or WriteAI’s will appear here once it has analysed this chapter."
+              className="flex items-center gap-1 rounded-full bg-surface-overlay px-2 py-0.5 text-[10px] font-medium text-ink-faint"
+            >
+              <LuCircleDashed size={10} />
+              No summary
+            </span>
           )}
 
           <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
