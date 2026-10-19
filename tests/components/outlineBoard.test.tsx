@@ -53,7 +53,9 @@ jest.mock('@/components/editor/outlineCache', () => ({
   prefetchBookOutline: () => Promise.resolve(mockState.outline),
   invalidateOutlineCache: jest.fn(),
 }))
-jest.mock('@/lib/authorContext', () => ({ useAuthor: () => ({ loadSeries: mockLoadSeries }) }))
+jest.mock('@/lib/authorContext', () => ({
+  useAuthor: () => ({ series: { books: [{ id: 'b1', title: 'The Next One' }] }, loadSeries: mockLoadSeries }),
+}))
 jest.mock('@/components/editor/useCanonSave', () => ({
   useCanonSave: () => ({ saveCanon: jest.fn(), saveCanonAfterStructuralChange: mockCanonSave }),
 }))
@@ -207,6 +209,37 @@ describe('outline board', () => {
     const [url, init] = calls('PATCH')[0]
     expect(url).toBe('/api/series/s1/books/b1/chapters/c3/kind')
     expect(JSON.parse(init.body)).toEqual({ kind: 'epilogue' })
+  })
+
+  it('downloads the whole book as Markdown without writing anything', async () => {
+    let blob: Blob | null = null
+    const createUrl = jest.fn((b: Blob) => { blob = b; return 'blob:outline' })
+    Object.assign(URL, { createObjectURL: createUrl, revokeObjectURL: jest.fn() })
+    const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.download).toBe('the-next-one-outline.md')
+    })
+    setup()
+    await waitFor(() => expect(within(card('c2')).getByLabelText('summary')).toHaveValue('<p>AI two.</p>'))
+    fetchMock.mockClear()
+    await userEvent.click(screen.getByRole('button', { name: 'Download outline' }))
+    expect(click).toHaveBeenCalledTimes(1)
+    expect(fetchMock).not.toHaveBeenCalled()
+    const text = await new Promise<string>(resolve => {
+      const r = new FileReader()
+      r.onload = () => resolve(r.result as string)
+      r.readAsText(blob!)
+    })
+    expect(text).toContain('# The Next One — Outline')
+    for (const r of ROWS) expect(text).toContain(`## ${r.title}`)
+    expect(text).toContain('My own plan.')
+    expect(text).toContain('AI two.\n\n_(AI-generated summary)_')
+    click.mockRestore()
+  })
+
+  it('cannot download an empty book', async () => {
+    mockState.chapters = []
+    setup()
+    expect(await screen.findByRole('button', { name: 'Download outline' })).toBeDisabled()
   })
 
   it('disables filters with nothing to offer, and fills the empty book', async () => {

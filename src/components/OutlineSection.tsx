@@ -14,7 +14,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { LuPlus, LuRefreshCw } from 'react-icons/lu'
+import { LuDownload, LuPlus, LuRefreshCw } from 'react-icons/lu'
 import ConfirmDialog from './ConfirmDialog'
 import DeleteChapterDialog from './DeleteChapterDialog'
 import { useSectionActionSlot } from './SectionTabs'
@@ -29,6 +29,7 @@ import { useTimelineData } from './timeline/useTimelineData'
 import TagFilterSelect, { ClearFiltersButton, type FilterOption } from './chapters/TagFilterSelect'
 import { useAuthor } from '@/lib/authorContext'
 import { matchGaps, type BookChapterRow } from '@/lib/bookChapterTags'
+import { outlineFileName, outlineToMarkdown } from '@/lib/outlineExport'
 import { buildAiSummaries, resolveSummary, type AiSummary, type ResolvedSummary } from '@/lib/outlineSummaries'
 import {
   clampDropIndex,
@@ -134,7 +135,8 @@ async function readError(res: Response): Promise<string> {
 export default function OutlineSection({ seriesId, bookId }: { seriesId: string; bookId: string }) {
   const { chapters: rows, loading, failed, refresh, applyManualSummary, replaceLocal } =
     useBookChapterTags(seriesId, bookId)
-  const { loadSeries } = useAuthor()
+  const { series, loadSeries } = useAuthor()
+  const bookTitle = series.books.find(b => b.id === bookId)?.title ?? 'Untitled'
   const { saveCanonAfterStructuralChange } = useCanonSave(seriesId)
   // Shared with the Timeline tab through its cache, for the filters' names.
   const { events, characterPool } = useTimelineData()
@@ -383,6 +385,24 @@ export default function OutlineSection({ seriesId, bookId }: { seriesId: string;
     return s?.canSync && aiHtml ? [{ chapterId: row.chapterId, title: row.title, mineHtml: s.html, aiHtml }] : []
   })
 
+  /** The whole book as Markdown, built from what the board shows — a read, nothing saved. */
+  function downloadOutline() {
+    const markdown = outlineToMarkdown({
+      bookTitle,
+      rows,
+      summaries,
+      characterNames: Object.fromEntries(characterPool.map(c => [c.id, c.name])),
+      eventNames: Object.fromEntries(events.map(e => [e.id, e.title])),
+      exportedOn: new Date().toLocaleDateString('en-CA'),
+    })
+    const href = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }))
+    const a = document.createElement('a')
+    a.href = href
+    a.download = outlineFileName(bookTitle)
+    a.click()
+    URL.revokeObjectURL(href)
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
   // Beside the tab labels, where "Add Character" already lives — same page,
   // same kind of action, same place. Portalled up because the handlers need
@@ -395,6 +415,15 @@ export default function OutlineSection({ seriesId, bookId }: { seriesId: string;
             beside the primary one. The tooltip carries the detail. Hidden
             outright when WriteAI has no summaries for this book (never
             analysed, or unreachable) — there is nothing to sync to. */}
+        <button
+          onClick={downloadOutline}
+          disabled={loading || rows.length === 0}
+          title="Download outline — every chapter’s summary, POV, date and tags as a Markdown file. Always the whole book, even while filtered."
+          aria-label="Download outline"
+          className="flex items-center rounded px-2 py-1.5 text-xs text-ink-faint transition hover:text-ink disabled:opacity-50"
+        >
+          <LuDownload size={13} />
+        </button>
         {aiAvailable && (
           <button
             onClick={() => setBulkSyncOpen(true)}
