@@ -112,6 +112,7 @@ export default function SidePanel({
   insights: {
     insights: ChapterInsights | null
     reason: InsightsReason | null
+    outlineSummary: string | null
     loading: boolean
     onRetry: () => void
   }

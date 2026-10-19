@@ -23,6 +23,26 @@ export type ChapterInsights = {
 
 export type InsightsReason = 'chapter-not-addressable' | 'not-analyzed' | 'writeai-unavailable'
 
+/**
+ * The summary the writer wrote on the Outline tab (ChapterSummary), or null.
+ *
+ * Read only when WriteAI has nothing for the chapter: the tab then shows what
+ * she planned instead of an empty state — the normal case for a chapter in a
+ * book WriteAI has never seen. Loom's own table, so it is there even when
+ * WriteAI is down. "" (she chose the AI summary) reads as none: the AI summary
+ * it points at is WriteAI's, which is exactly what is missing.
+ */
+async function readOutlineSummary(chapterId: string): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/chapters/${chapterId}/summary`)
+    if (!res.ok) return null
+    const data = (await res.json()) as { body?: string }
+    return data.body?.trim() ? data.body : null
+  } catch {
+    return null
+  }
+}
+
 export function useChapterInsights(
   seriesId: string,
   bookId: string | undefined,
@@ -32,6 +52,7 @@ export function useChapterInsights(
 ) {
   const [insights, setInsights] = useState<ChapterInsights | null>(null)
   const [reason, setReason] = useState<InsightsReason | null>(null)
+  const [outlineSummary, setOutlineSummary] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   // Guards against a response for the previous chapter landing in the current
@@ -48,9 +69,15 @@ export function useChapterInsights(
         // unaddressable case rather than an error, because it is the same fact.
         setInsights(null)
         setReason('chapter-not-addressable')
+        const own = await readOutlineSummary(id)
+        if (chapterIdRef.current === id) setOutlineSummary(own)
         return
       }
       setLoading(true)
+      // Cleared up front, so a previous chapter's summary never shows under
+      // this one's empty state.
+      setOutlineSummary(null)
+      let empty = true
       try {
         const res = await fetch(
           `/api/writeai/insights?seriesId=${seriesId}&bookId=${bookId}&chapterId=${id}`,
@@ -65,6 +92,7 @@ export function useChapterInsights(
           setReason('writeai-unavailable')
           return
         }
+        empty = !data?.insights
         setInsights(data?.insights ?? null)
         setReason(data?.insights ? null : (data?.reason ?? 'not-analyzed'))
       } catch {
@@ -72,6 +100,10 @@ export function useChapterInsights(
         setInsights(null)
         setReason('writeai-unavailable')
       } finally {
+        if (empty && chapterIdRef.current === id) {
+          const own = await readOutlineSummary(id)
+          if (chapterIdRef.current === id) setOutlineSummary(own)
+        }
         if (chapterIdRef.current === id) setLoading(false)
       }
     },
@@ -91,5 +123,5 @@ export function useChapterInsights(
     void load(chapterIdRef.current)
   }, [load])
 
-  return { insights, reason, loading, onRetry }
+  return { insights, reason, outlineSummary, loading, onRetry }
 }

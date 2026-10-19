@@ -3,6 +3,7 @@
 import { LuLightbulb } from 'react-icons/lu'
 import { PanelEmpty, PanelEmptyState } from './PanelEmptyState'
 import type { ChapterInsights, InsightsReason } from './useChapterInsights'
+import { htmlToParagraphs } from '@/lib/outlineCards'
 
 // The Insights tab (LOOM-92): what WriteAI extracted for this chapter.
 //
@@ -47,17 +48,54 @@ function Line({ children }: { children: React.ReactNode }) {
 export default function InsightsPanel({
   insights,
   reason,
+  outlineSummary,
   loading,
   onRetry,
 }: {
   insights: ChapterInsights | null
   reason: InsightsReason | null
+  /** Her Outline-tab summary — shown only when WriteAI has nothing. */
+  outlineSummary: string | null
   loading: boolean
   onRetry: () => void
 }) {
   function body() {
     if (loading && !insights) {
       return <PanelEmptyState icon={<LuLightbulb size={26} />} title="Loading insights…" />
+    }
+
+    if (!insights && outlineSummary) {
+      // WriteAI has nothing, but the writer outlined this chapter: show the
+      // plan rather than an empty state. Labelled as hers, and the footer
+      // still says why WriteAI's reading is missing — the same three reasons
+      // as below, one line each, because the summary is the content now.
+      const paragraphs = htmlToParagraphs(outlineSummary)
+      return (
+        <div className="flex flex-col" style={{ fontSize: 'calc(var(--loom-prose-scale, 1) * 0.8125rem)' }}>
+          <Section title="Outline summary">
+            <div className="flex flex-col gap-2">
+              {paragraphs.map((p, i) => (
+                <p key={i} className="leading-relaxed text-ink-muted">{p}</p>
+              ))}
+            </div>
+          </Section>
+          <p className="px-4 py-3 text-[10px] italic leading-relaxed text-ink-faint/70">
+            Your summary from the Outline tab.{' '}
+            {reason === 'writeai-unavailable' ? (
+              <>
+                WriteAI isn’t running, so its insights can’t be shown.{' '}
+                <button onClick={onRetry} className="not-italic text-accent underline underline-offset-2">
+                  Try again
+                </button>
+              </>
+            ) : reason === 'chapter-not-addressable' ? (
+              'WriteAI only analyses numbered chapters and the prologue.'
+            ) : (
+              'WriteAI hasn’t analysed this chapter yet — its insights appear here after the next sync and enrichment pass.'
+            )}
+          </p>
+        </div>
+      )
     }
 
     if (!insights) {
