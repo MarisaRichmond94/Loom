@@ -97,9 +97,12 @@ export default function OutlineRichText({
         )}
       </div>
 
+      {/* `overscroll-contain` only while scrollable: an `overflow-hidden` box
+          is still a scroll container, so containing it would swallow the wheel
+          and stop the board scrolling under an inactive card. */}
       <div
-        className={`relative min-h-0 flex-1 overscroll-contain px-1.5 py-1 ${
-          scrollable ? 'overflow-y-auto' : 'overflow-hidden'
+        className={`relative min-h-0 flex-1 px-1.5 py-1 ${
+          scrollable ? 'overflow-y-auto overscroll-contain' : 'overflow-hidden'
         }`}
       >
         {editor.isEmpty && placeholder && (
