@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import {
@@ -116,7 +116,10 @@ export default function ChapterOutlineCard({
   const [html, setHtml] = useState(summary.html)
   const [dirty, setDirty] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null)
+  // `top` when the picker hangs below its button, `bottom` when it sits above
+  // it — anchored by its bottom edge, so a month with a sixth row of days
+  // grows away from the button instead of over it.
+  const [pickerPos, setPickerPos] = useState<{ top?: number; bottom?: number; left: number } | null>(null)
   const calendarRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
 
@@ -127,6 +130,31 @@ export default function ChapterOutlineCard({
   useEffect(() => {
     if (!dirty) setHtml(summary.html)
   }, [summary.html, dirty])
+
+  // Keep the picker on screen. It opens below its button; a card near the
+  // bottom of the viewport would push the later days off the edge, where the
+  // fixed popover can't be scrolled to — so flip it above when it doesn't fit
+  // below and there's more room up there, and pull it in from the right edge.
+  useLayoutEffect(() => {
+    if (!pickerOpen) return
+    const anchor = calendarRef.current?.getBoundingClientRect()
+    const pop = popoverRef.current?.getBoundingClientRect()
+    if (!anchor || !pop) return
+    const GAP = 6
+    const MARGIN = 8
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const left = Math.max(MARGIN, Math.min(anchor.left, vw - pop.width - MARGIN))
+    const spaceBelow = vh - anchor.bottom - GAP - MARGIN
+    const spaceAbove = anchor.top - GAP - MARGIN
+    const next =
+      pop.height > spaceBelow && spaceAbove > spaceBelow
+        ? { bottom: vh - anchor.top + GAP, left }
+        : { top: anchor.bottom + GAP, left }
+    setPickerPos(prev =>
+      prev && prev.top === next.top && prev.bottom === next.bottom && prev.left === next.left ? prev : next,
+    )
+  }, [pickerOpen])
 
   // The picker is a portal, so an outside click has to be detected by hand.
   useEffect(() => {
@@ -325,7 +353,8 @@ export default function ChapterOutlineCard({
                 }
                 // Positioned from the button's rect and portalled to the body:
                 // the card clips its own overflow, so an in-flow popover would
-                // be cut off by the tile it belongs to.
+                // be cut off by the tile it belongs to. The layout effect above
+                // then flips it above the button if it won't fit below.
                 const rect = calendarRef.current?.getBoundingClientRect()
                 if (rect) setPickerPos({ top: rect.bottom + 6, left: rect.left })
                 setPickerOpen(true)
@@ -347,7 +376,7 @@ export default function ChapterOutlineCard({
               <div
                 ref={popoverRef}
                 className="fixed z-50 rounded-lg border border-accent/20 bg-surface-raised p-3 shadow-xl"
-                style={{ top: pickerPos.top, left: pickerPos.left }}
+                style={pickerPos}
               >
                 <StoryDatePicker
                   value={date}
