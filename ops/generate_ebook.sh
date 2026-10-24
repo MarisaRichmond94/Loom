@@ -41,6 +41,7 @@ add_book "Faded"               "/Users/marisarichmond/Writing/2. Faded/Faded.pag
 add_book "The Secrets We Keep" "/Users/marisarichmond/Writing/3. The Secrets We Keep/The Secrets We Keep.pages" 3
 add_book "The Secrets We Bury" "/Users/marisarichmond/Writing/4. The Secrets We Bury/The Secrets We Bury.pages" 4
 add_book "Split"               "/Users/marisarichmond/Writing/5. Split/Split.pages"                            5
+add_book "Boy, Interrupted"    "/Users/marisarichmond/Writing/Boy, Interrupted/Boy, Interrupted.pages"         7
 
 for tool in pandoc ffmpeg node; do
   command -v "$tool" >/dev/null || { echo "ERROR: '$tool' not found. Run: brew install pandoc ffmpeg node@24"; exit 1; }
