@@ -72,7 +72,7 @@ verify_db_snapshot() {
   return 0
 }
 
-# verify_loom_json <loom-json-dir> <path/to/check_loom_json.py>
+# verify_loom_json <loom-json-dir> <path/to/check_loom_json.py> [<path/to/dev.db>]
 #
 # The .loom.json snapshots are the ONLY backup carrying CYOA branch structure —
 # the .pages/.txt/.docx exports are linear and drop choices entirely. The script
@@ -84,6 +84,7 @@ verify_db_snapshot() {
 verify_loom_json() {
   local dir="$1"
   local checker="$2"
+  local db="${3:-}"   # lets a book with no chapters yet pass; see check_loom_json.py
   local py out rc
 
   [[ -d "$dir" ]] || { echo "no loom-json directory at $dir"; return 1; }
@@ -92,7 +93,7 @@ verify_loom_json() {
   py="$(command -v python3 2>/dev/null || true)"
   [[ -n "$py" ]] || { echo "python3 not found — cannot validate .loom.json snapshots"; return 1; }
 
-  out="$("$py" "$checker" "$dir" 2>&1)"
+  out="$("$py" "$checker" "$dir" ${db:+"$db"} 2>&1)"
   rc=$?
   [[ -n "$out" ]] && echo "$out"
   return $rc

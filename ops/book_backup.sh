@@ -15,6 +15,9 @@ BOOK_FILES=(
   "$LOCAL_ROOT/3. The Secrets We Keep/The Secrets We Keep.pages"
   "$LOCAL_ROOT/4. The Secrets We Bury/The Secrets We Bury.pages"
   "$LOCAL_ROOT/5. Split/Split.pages"
+  # Unnumbered on purpose: WriteAI only ingests "N. " folders, and this one
+  # stays out of it until the first draft is done. Backing up is unaffected.
+  "$LOCAL_ROOT/Boy, Interrupted/Boy, Interrupted.pages"
 )
 
 # iCloud Drive destination for your Mac mini RAG to index:
@@ -343,7 +346,7 @@ if [[ -d "$LOOM_SNAPSHOT_DIR" ]]; then
     # emitting empty or malformed JSON, the old code copied it, counted it, and
     # logged success.
     if [[ "$VERIFY_AVAILABLE" == 1 ]]; then
-      if lj_out="$(verify_loom_json "$RUN_DIR_LOCAL/loom-json" "$LOOM_JSON_CHECKER")"; then
+      if lj_out="$(verify_loom_json "$RUN_DIR_LOCAL/loom-json" "$LOOM_JSON_CHECKER" "$LOOM_DB")"; then
         lj_ok=1
       else
         lj_ok=0

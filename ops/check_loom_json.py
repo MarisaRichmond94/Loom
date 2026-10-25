@@ -3,10 +3,19 @@
 These are the only backup of the CYOA branch structure outside the DB — the
 .pages/.txt/.docx exports don't represent choices at all. So "does it parse"
 is not enough; we count chapters, choices, and words.
+
+Usage: check_loom_json.py <loom-json-dir> [<path/to/dev.db>]
+
+An export with no chapters is a failure, EXCEPT when Loom's database agrees
+the book has none (a book created ahead of being written). That needs the db:
+without it, or when the book can't be found there, an empty export still fails.
+Checked against the db rather than waved through, because "the export dropped
+every chapter" also comes out as chapters=0, and must keep failing.
 """
 import glob
 import json
 import os
+import sqlite3
 import sys
 
 
@@ -51,7 +60,37 @@ def count_key(node, key):
     return n
 
 
+def db_chapter_counts(db_path):
+    """book id -> chapter count, from Loom's db (read-only), or None if unreadable.
+
+    Read-only with a short timeout: a reader holds dev.db's rollback journal
+    lock, so this must stay one small query and never wait on the editor.
+    """
+    if not db_path or not os.path.exists(db_path):
+        return None
+    try:
+        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5)
+        try:
+            rows = con.execute(
+                "SELECT b.id, COUNT(c.id) FROM Book b LEFT JOIN Chapter c ON c.bookId = b.id GROUP BY b.id"
+            ).fetchall()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return None
+    return dict(rows)
+
+
+def unwritten(doc, counts):
+    """True if every book in this export has no chapters in the db either."""
+    if counts is None:
+        return False
+    books = (doc.get("series") or {}).get("books") or []
+    return bool(books) and all(counts.get(b.get("_ref")) == 0 for b in books)
+
+
 root = sys.argv[1]
+counts = db_chapter_counts(sys.argv[2] if len(sys.argv) > 2 else None)
 files = sorted(glob.glob(os.path.join(root, "*", "*.loom.json")))
 if not files:
     sys.exit("no .loom.json files found under " + root)
@@ -73,8 +112,12 @@ for path in files:
     version = doc.get("loomVersion")
     exported = doc.get("exportedAt", "?")[:19]
 
-    status = "ok  " if chapters and words else "WARN"
-    if not (chapters and words):
+    if chapters and words:
+        status = "ok  "
+    elif chapters == 0 and unwritten(doc, counts):
+        status = "empty"  # no chapters written yet, and the db agrees
+    else:
+        status = "WARN"
         failures += 1
     print(
         f"{status}  {name[:42]:44} v{version}  exported={exported}  "
