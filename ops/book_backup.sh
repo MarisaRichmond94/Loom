@@ -586,8 +586,18 @@ fi
 if [[ "$KEEP_LOCAL_DAYS" -gt 0 ]]; then
   if [[ "$VALIDATION_OK" == 1 ]]; then
     log "Cleaning up local backups older than ${KEEP_LOCAL_DAYS} days..."
-    find "$LOCAL_BACKUP_ROOT" -maxdepth 1 -type d -name "20??-??-??" -mtime +"$KEEP_LOCAL_DAYS" -print -exec rm -rf {} \; \
-      | tee -a "$LOG_FILE" || true
+    # Age comes from the folder's NAME, not its mtime: a folder's mtime moves
+    # whenever anything inside it is touched, and on 2026-10-01 every older
+    # folder was bumped at once — so `find -mtime` would have kept a month of
+    # them past their date. YYYY-MM-DD compares correctly as a string.
+    cutoff="$(date -v-"${KEEP_LOCAL_DAYS}"d +%Y-%m-%d)"
+    for d in "$LOCAL_BACKUP_ROOT"/20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]; do
+      [[ -d "$d" ]] || continue
+      if [[ "$(basename "$d")" < "$cutoff" ]]; then
+        log "  removing $d"
+        rm -rf "$d"
+      fi
+    done
   else
     log "SKIPPING the ${KEEP_LOCAL_DAYS}-day cleanup: tonight's outputs failed verification, so old backups are being kept."
   fi
