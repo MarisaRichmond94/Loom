@@ -141,12 +141,18 @@ export default function SearchBar({ seriesId, books }: { seriesId: string; books
   // A full reset, not just the query: book filter, match case/word, and
   // replace mode all go back to their defaults too, so the hotkey leaves
   // search in the same state a first-time visitor would see.
+  // Through a ref: this listener registers once, but SearchBar lives in the
+  // layout and outlives chapter navigation, so calling clearQuery directly
+  // would use the pathname/params from first mount — and router.replace
+  // back to that stale chapter.
+  const clearQueryRef = useRef(clearQuery)
+  clearQueryRef.current = clearQuery
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!e.altKey || !e.shiftKey) return
       if (e.code !== 'KeyK') return
       e.preventDefault()
-      clearQuery()
+      clearQueryRef.current()
       setBookFilter(new Set())
       setMatchCase(false)
       localStorage.setItem('loom-search-case', 'false')
